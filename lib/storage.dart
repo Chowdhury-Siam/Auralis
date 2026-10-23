@@ -142,7 +142,9 @@ class AppSettings {
 
   void applyJson(Map<String, dynamic> json) {
     listening = ListeningStats.fromJson(json['listening']);
-    reducedMotion = json['reducedMotion'] == true;
+    // Retire the app-specific toggle, including settings restored from old backups.
+    // The platform accessibility preference is still respected by the UI.
+    reducedMotion = false;
     automaticUpdates = json['automaticUpdates'] != false;
     volume = (json['volume'] as num? ?? 70).toDouble().clamp(0, 100);
     librarySort = LibrarySort.values.firstWhere(
@@ -177,7 +179,8 @@ class AppSettings {
   }
 
   Map<String, dynamic> toJson() => {
-    'reducedMotion': reducedMotion,
+    // Preserve the version-1 backup schema without persisting the retired toggle.
+    'reducedMotion': false,
     'automaticUpdates': automaticUpdates,
     'volume': volume,
     'librarySort': librarySort.name,
