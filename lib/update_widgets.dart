@@ -138,7 +138,7 @@ Future<void> confirmUpdate(BuildContext context, AppUpdater updater) async {
       title: const Text('Install update and restart?'),
       content: Text(
         'The ${updater.available?.version} installer passed its SHA-256 checksum check. '
-        'Auralis will close, install the update, and reopen. Your settings and Telegram session stay on this device.',
+        'Auralis will close and open the Windows installer. Complete its steps to install and reopen Auralis. Your settings and Telegram session stay on this device.',
       ),
       actions: [
         TextButton(
