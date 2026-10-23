@@ -48,8 +48,8 @@ def publish(root, env):
     signed = env.get("SIGNED", "false")
     if signed not in ("true", "false") or abi not in ("arm64-v8a", "x86_64"):
         raise ValueError("A valid signing state and supported Android ABI are required.")
-    mode = "release" if signed == "true" else "debug"
-    suffix = "" if mode == "release" else "-debug"
+    mode = "release" if signed == "true" else "development-release"
+    suffix = "" if signed == "true" else "-development"
 
     dist = root / "dist/android"
     apk = dist / f"auralis-{version}-android-{abi}-{mode}.apk"
