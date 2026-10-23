@@ -267,7 +267,7 @@ GitHub Actions has separate **Windows** and **Android APK build** workflows. Suc
 - Android verifies its APK, ABI, native alignment, and signing before attaching the APK, checksums, and native provenance to the matching release.
 - If Android finishes first, it creates a draft; the Windows publisher completes publication.
 - Custom Android signing is optional. Leave all four signing secrets unset for a development APK, or configure all four for a persistent release key.
-- Pull requests and other branches produce build artifacts without publishing releases. Published assets and tags are not overwritten.
+- Pull requests and other branches produce build artifacts without publishing releases. Published assets and tags are not overwritten; unpublished Android draft files can be refreshed on retries.
 
 The Windows app checks stable releases, verifies downloaded installers, and asks before installing and restarting. Android has no in-app updater or Play Store upload flow in this source.
 
@@ -298,7 +298,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.43+44**; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.44+45**; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
