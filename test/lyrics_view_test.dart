@@ -378,6 +378,7 @@ void main() {
       final slider = tester.widget<Slider>(
         find.byKey(const ValueKey('playback-seek')),
       );
+      expect(slider.secondaryTrackValue, isNull);
       slider.onChanged!(.5);
       await tester.pumpAndSettle();
       expect(player.audio.position, const Duration(seconds: 150));
@@ -641,6 +642,16 @@ void main() {
       await tester.tap(find.text('Lyrics').first);
       await tester.pumpAndSettle();
       expect(find.byType(LyricsView), findsOneWidget);
+      final backdrop = find.byKey(const ValueKey('now-playing-backdrop'));
+      expect(backdrop, findsOneWidget);
+      expect(
+        tester
+            .widget<Material>(find.byKey(const ValueKey('lyrics-immersive')))
+            .color,
+        Colors.transparent,
+        reason:
+            'The full-page artwork background remains visible behind lyrics',
+      );
       expect(find.byType(NavigationBar), findsNothing);
       expect(find.byKey(const ValueKey('player-bar')), findsNothing);
       expect(find.byKey(const ValueKey('lyrics-song-pill')), findsOneWidget);
@@ -662,6 +673,31 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: '$size');
         expect(find.text('Synced'), findsOneWidget);
+        expect(
+          tester.getRect(backdrop),
+          tester.getRect(find.byKey(const ValueKey('lyrics-immersive'))),
+          reason: '$size artwork fills the entire immersive lyrics view',
+        );
+        expect(
+          tester
+              .widget<ImageFiltered>(
+                find.byKey(const ValueKey('lyric-focus-2')),
+              )
+              .enabled,
+          isFalse,
+        );
+        expect(
+          tester
+              .widget<ImageFiltered>(
+                find.byKey(const ValueKey('lyric-focus-1')),
+              )
+              .enabled,
+          isTrue,
+        );
+        expect(
+          find.byKey(const ValueKey('lyrics-motion-blur')),
+          findsOneWidget,
+        );
         expect(
           find.byKey(const ValueKey('lyric-2')).hitTestable(),
           findsOneWidget,
