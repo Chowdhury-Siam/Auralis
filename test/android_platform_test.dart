@@ -202,7 +202,10 @@ void main() {
       // split output matching the requested native TDLib architecture.
       expect(build['run'], contains('--split-per-abi'));
       expect(build['run'], contains('--target-platform "\$target"'));
-      expect(build['run'], contains('app-\$ABI-\$mode.apk'));
+      expect(build['run'], contains('app-\$ABI-release.apk'));
+      expect(build['run'], contains('flutter build apk --release'));
+      expect(build['run'], contains('manifest debuggable'));
+      expect(build['run'], isNot(contains('mode=debug')));
       expect(build['run'], isNot(contains('app-\$mode.apk"')));
       expect(build['run'], contains('verify-android.py'));
       expect(build['run'], isNot(contains('publish-release')));
