@@ -2320,20 +2320,6 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _playerPanel({
-    required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(12),
-    double radius = 24,
-  }) => Container(
-    padding: padding,
-    decoration: BoxDecoration(
-      color: const Color(0xFF201C28),
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: const Color(0xFF332D3F)),
-    ),
-    child: child,
-  );
-
   Widget _volumeControl(bool narrow, {bool tight = false}) => Listener(
     key: const ValueKey('volume-control'),
     onPointerSignal: (event) {
