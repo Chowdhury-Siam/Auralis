@@ -158,10 +158,7 @@ class _PlayerShellState extends State<PlayerShell>
     });
   }
 
-  Widget _playerSurface({
-    required bool immersiveLyrics,
-    required Widget child,
-  }) => ClipRect(
+  Widget _playerSurface({required Widget child}) => ClipRect(
     child: SlideTransition(
       key: const ValueKey('now-playing-dismiss'),
       position: destination == 3
@@ -172,7 +169,7 @@ class _PlayerShellState extends State<PlayerShell>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (destination == 3 && !immersiveLyrics)
+            if (destination == 3)
               NowPlayingBackdrop(
                 key: const ValueKey('now-playing-backdrop'),
                 identity: (
@@ -270,7 +267,6 @@ class _PlayerShellState extends State<PlayerShell>
                             _navigation(narrow, short: short),
                           Expanded(
                             child: _playerSurface(
-                              immersiveLyrics: immersiveLyrics,
                               child: Padding(
                                 padding: immersiveLyrics
                                     ? EdgeInsets.zero
@@ -330,6 +326,8 @@ class _PlayerShellState extends State<PlayerShell>
                                             _ =>
                                               showLyrics
                                                   ? LyricsView(
+                                                      backgroundColor:
+                                                          Colors.transparent,
                                                       player: player,
                                                       repository: lyrics,
                                                       files: widget.dataFiles,
@@ -1660,9 +1658,6 @@ class _PlayerShellState extends State<PlayerShell>
     final progress = duration <= 0
         ? 0.0
         : (audio.position.inMilliseconds / duration).clamp(0.0, 1.0);
-    final buffered = duration <= 0
-        ? 0.0
-        : (audio.buffered.inMilliseconds / duration).clamp(0.0, 1.0);
     final nextIndex = player.index + 1;
     final hasNext = player.index >= 0 && nextIndex < player.queue.length;
     final favorite = player.settings.favoriteIds.contains(track?.id);
@@ -1882,7 +1877,6 @@ class _PlayerShellState extends State<PlayerShell>
             children: [
               WaveSeekBar(
                 value: progress,
-                buffered: buffered,
                 playing: audio.playing && !audio.buffering && track != null,
                 reducedMotion: player.settings.reducedMotion,
                 format: (v) =>
@@ -2387,9 +2381,6 @@ class _PlayerShellState extends State<PlayerShell>
     final progress = duration <= 0
         ? 0.0
         : (audio.position.inMilliseconds / duration).clamp(0.0, 1.0);
-    final buffer = duration <= 0
-        ? 0.0
-        : (audio.buffered.inMilliseconds / duration).clamp(0.0, 1.0);
     final preview = Material(
       color: Colors.transparent,
       child: InkWell(
@@ -2532,7 +2523,6 @@ class _PlayerShellState extends State<PlayerShell>
         Expanded(
           child: WaveSeekBar(
             value: progress,
-            buffered: buffer,
             playing:
                 audio.playing && !audio.buffering && player.current != null,
             reducedMotion: player.settings.reducedMotion,
@@ -2736,7 +2726,7 @@ class _PlayerShellState extends State<PlayerShell>
                   const Divider(),
                 ],
                 Text(
-                  'Auralis ${widget.updater?.currentVersion ?? '0.1.49'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+                  'Auralis ${widget.updater?.currentVersion ?? '0.1.51'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
                   style: const TextStyle(
                     color: muted,
                     fontSize: 12,
@@ -2779,7 +2769,7 @@ class _PlayerShellState extends State<PlayerShell>
             onPressed: () => showLicensePage(
               context: context,
               applicationName: 'Auralis',
-              applicationVersion: widget.updater?.currentVersion ?? '0.1.49',
+              applicationVersion: widget.updater?.currentVersion ?? '0.1.51',
             ),
             child: const Text('Licenses'),
           ),
