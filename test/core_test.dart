@@ -147,7 +147,14 @@ void main() {
     final restored = AppSettings(file);
     await restored.load();
     expect(restored.volume, 45);
-    expect(restored.reducedMotion, isTrue);
+    expect(restored.reducedMotion, isFalse);
+    expect(restored.toJson()['reducedMotion'], isFalse);
+    restored.applyJson({...restored.toJson(), 'reducedMotion': true});
+    expect(
+      restored.reducedMotion,
+      isFalse,
+      reason: 'Old preferences and backups cannot disable player effects',
+    );
     expect(restored.librarySort, LibrarySort.artist);
     expect(restored.selectedChannels.map((c) => c.id), [-20, -30]);
     expect(restored.selectedChannels.map((c) => c.title), ['Music', 'Albums']);
