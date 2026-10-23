@@ -75,7 +75,7 @@ Add and reorder tracks, use Play next, shuffle upcoming songs, and repeat the qu
 
 ### 📝 Lyrics with the Music
 
-Follow line-synced lyrics with a brief motion-blur transition, click a line to seek, or read static lyrics. Reduced motion keeps transitions instant and sharp. Read supported embedded tags, import an `.lrc` file, paste lyrics, or request a match from LRCLIB.
+Follow line-synced lyrics with the highlighted line sharp and all other lines softly blurred. Line advances retain a brief motion-blur transition; reduced motion skips that animation. Click a line to seek, or switch to Static for clear selectable lyrics. Read supported embedded tags, import an `.lrc` file, paste lyrics, or request a match from LRCLIB.
 
 ### 🖼️ Artwork Where It Belongs
 
@@ -165,6 +165,8 @@ Use **Load more** in Telegram to discover more accessible channels and **Refresh
 | **Recently played** | The last 100 unique successfully opened tracks |
 | **Play queue** | The current playback order, including Play next and reordering |
 
+Track/channel counts and icon-only Refresh/Sort controls sit in the Library header. On narrow screens, the counts appear beneath the title. Choose channels in Telegram; listening stats remain in Settings.
+
 Use a track's actions to favorite it, play it next, or add it to a playlist. Library sorting leaves saved playlist order unchanged. Deleting a playlist removes the collection, not files from Telegram.
 
 Saved collections hold channel/message references. To play those tracks later, sign into the appropriate account, select the source channels, and load their messages. There is no cloud playlist sync, and the queue is session-only.
@@ -201,14 +203,14 @@ See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality note
 
 | Task | Where to go |
 | --- | --- |
-| View listening time, rankings, and daily activity | **Settings → Listening stats**, or the chart icon |
+| View listening time, rankings, and daily activity | **Settings → Listening stats** |
 | Export stats as CSV or JSON | **Listening stats → Export CSV / Export JSON** |
 | Create or restore a backup | **Settings → Backup & Restore** |
 | Recover the data replaced by the last restore | **Restore recovery copy** in the backup section |
 
 A backup includes listening stats, favorites, playlists, recent music, channel selections, and preferences. **Include Telegram account** is enabled when connected: it adds your Telegram session, API details and database key inside a password-encrypted backup. Music files, artwork, lyrics, the queue and sleep timers are excluded.
 
-Restoring previews the backup, then **replaces** saved local data and clears playback after confirmation. A recovery copy of the previous settings is saved first. Account backups require your backup password to restore; the session is re-encrypted for the destination device. Older settings-only JSON backups remain supported. Telegram may require a new login if a restored session has expired or been revoked.
+Restoring previews the backup, then **replaces** saved local data and clears playback after confirmation. A recovery copy of the previous settings is saved first. Account backups require your backup password to restore; the session is re-encrypted for the destination device. The restore preview explicitly reports whether Telegram sign-in is included. Older settings-only JSON backups remain supported, but cannot restore an account; create a password-protected backup with **Include Telegram account** enabled on the signed-in device. Telegram may require a new login if a restored session has expired or been revoked.
 
 See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for validation, recovery, and stats counting.
 
@@ -285,6 +287,7 @@ See [Windows releases and updates](docs/UPDATES.md), [Android publishing and sig
 | A saved playlist track will not play | Select its source channel and reload its messages using the appropriate account |
 | Cover or embedded lyrics are missing | The file may lack supported tags, or metadata may not be buffered yet; retry after more of the track downloads |
 | Lyrics lookup finds no match | Check title/artist metadata, import `.lrc`, or paste lyrics |
+| Seeking into uncached music buffers | The new position fetches its own byte range; update older versions that block new seeks behind abandoned requests |
 | Android APK will not update | Confirm the same app ID and signing key; back up data before uninstalling a development build |
 | Windows portable app cannot start | Keep the complete extracted folder and install the Visual C++ x64 runtime |
 | A second instance cannot open Telegram | Close the first instance; a session lock protects the account database |
@@ -298,7 +301,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.44+45**; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.47+48**; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
