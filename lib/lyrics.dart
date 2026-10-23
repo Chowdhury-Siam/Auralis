@@ -204,7 +204,7 @@ class LyricsRepository {
         request.headers.set('Accept', 'application/json');
         request.headers.set(
           'User-Agent',
-          'Auralis (https://github.com/SiamTest/Auralis)',
+          'Auralis (https://github.com/Chowdhury-Siam/Auralis)',
         );
         final response = await request.close();
         if (response.statusCode == 404) return null;
