@@ -343,14 +343,21 @@ void main() {
         );
         final line = tester.getRect(find.byKey(const ValueKey('lyric-1')));
         expect(line.center.dy, closeTo(viewport.center.dy, 1), reason: '$size');
-        expect(
+        expect(find.byKey(const ValueKey('lyric-focus-1')), findsOneWidget);
+        // Check materialized rows without forcing the lazy list to build
+        // offscreen lines in short phone viewports.
+        for (final filter in tester.widgetList<ImageFiltered>(
           find.descendant(
             of: find.byKey(const ValueKey('synced-lyrics')),
             matching: find.byType(ImageFiltered),
           ),
-          findsNothing,
-          reason: 'Inactive lyrics stay sharp and readable',
-        );
+        )) {
+          expect(
+            filter.enabled,
+            filter.key != const ValueKey('lyric-focus-1'),
+            reason: 'Only the highlighted line stays sharp at $size',
+          );
+        }
         final neighbor = tester.widget<AnimatedDefaultTextStyle>(
           find.descendant(
             of: find.byKey(const ValueKey('lyric-2')),
@@ -377,6 +384,47 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+
+  testWidgets('focus blur follows the highlight and static lyrics stay clear', (
+    tester,
+  ) async {
+    final player = controller();
+    final repository = LyricsRepository()
+      ..save(
+        song,
+        Lyrics.parse(
+          '[00:08]Opening words\n[00:16]The highlighted middle line\n[00:24]Closing words',
+        ),
+      );
+    addTearDown(player.shutdown);
+    addTearDown(repository.close);
+    await tester.pumpWidget(view(player, repository));
+    await tester.pumpAndSettle();
+    bool softened(int index) => tester
+        .widget<ImageFiltered>(find.byKey(ValueKey('lyric-focus-$index')))
+        .enabled;
+    // There is no highlighted line before the first timestamp.
+    for (var index = 0; index < 3; index++) {
+      expect(softened(index), isFalse);
+    }
+    await player.audio.seek(const Duration(seconds: 8));
+    await tester.pumpAndSettle();
+    expect(softened(0), isFalse);
+    expect(softened(1), isTrue);
+    expect(softened(2), isTrue);
+    await player.audio.seek(const Duration(seconds: 16));
+    await tester.pumpAndSettle();
+    expect(softened(0), isTrue);
+    expect(softened(1), isFalse);
+    expect(softened(2), isTrue);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.tap(find.text('Static'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SelectableText), findsOneWidget);
+    expect(find.byKey(const ValueKey('lyric-focus-1')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets(
     'lyrics remain usable with large text and system reduced motion',
@@ -433,6 +481,11 @@ void main() {
           )
           .enabled;
       expect(blurred(), isFalse);
+      bool softened(int index) => tester
+          .widget<ImageFiltered>(find.byKey(ValueKey('lyric-focus-$index')))
+          .enabled;
+      expect(softened(0), isFalse);
+      expect(softened(1), isTrue);
 
       await player.audio.seek(const Duration(seconds: 8));
       await tester.pump();
@@ -445,6 +498,9 @@ void main() {
       expect(blurred(), isTrue);
       await tester.pumpAndSettle();
       expect(blurred(), isFalse);
+      expect(softened(2), isFalse);
+      expect(softened(1), isTrue);
+      expect(softened(3), isTrue);
       final viewport = tester.getRect(
         find.byKey(const ValueKey('synced-lyrics')),
       );
@@ -462,6 +518,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(blurred(), isFalse);
+      expect(softened(3), isFalse);
+      expect(softened(2), isTrue);
       expect(find.text('Follow song'), findsOneWidget);
       await tester.tap(find.text('Follow song'));
       await tester.pumpAndSettle();
@@ -470,6 +528,8 @@ void main() {
       await player.audio.seek(const Duration(seconds: 32));
       await tester.pumpAndSettle();
       expect(blurred(), isFalse);
+      expect(softened(4), isFalse);
+      expect(softened(3), isTrue);
       expect(tester.binding.hasScheduledFrame, isFalse);
 
       player.settings.reducedMotion = false;
@@ -481,6 +541,8 @@ void main() {
       await player.audio.seek(const Duration(seconds: 40));
       await tester.pumpAndSettle();
       expect(blurred(), isFalse);
+      expect(softened(5), isFalse);
+      expect(softened(4), isTrue);
       expect(tester.binding.hasScheduledFrame, isFalse);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
@@ -620,7 +682,10 @@ void main() {
       expect(find.byType(LyricsView), findsNothing);
       expect(find.byType(NavigationBar), findsNothing);
       expect(find.byKey(const ValueKey('player-bar')), findsNothing);
-      expect(find.byKey(const ValueKey('now-playing-play-pause')).hitTestable(), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('now-playing-play-pause')).hitTestable(),
+        findsOneWidget,
+      );
       await tester.tap(find.byTooltip('Back to Library'));
       await tester.pumpAndSettle();
       expect(find.byType(NavigationBar), findsOneWidget);
