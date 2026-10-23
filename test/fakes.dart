@@ -4,6 +4,12 @@ import 'dart:io';
 import 'package:auralis/player.dart';
 import 'package:auralis/storage.dart';
 import 'package:auralis/telegram/td_transport.dart';
+import 'package:path/path.dart' as p;
+
+// Use a native absolute path outside the fixture settings folder. Dart's
+// File.absolute treats a leading forward slash differently on Windows.
+String testExportPath(String name) =>
+    p.join(Directory.systemTemp.path, 'auralis-test-exports', name);
 
 class FakeAudio extends AudioBackend {
   String? uri;
