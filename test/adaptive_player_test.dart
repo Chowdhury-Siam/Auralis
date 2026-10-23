@@ -64,6 +64,77 @@ void main() {
     ),
   );
 
+  testWidgets(
+    'player dock hides without a current track and stays while paused',
+    (tester) async {
+      final audio = FakeAudio();
+      final player = PlayerController(
+        audio,
+        TelegramStreamProxy((_) async => {}),
+        MemorySettings()..reducedMotion = true,
+      );
+      final telegram = TelegramService(
+        Directory('unused'),
+        MemoryVault(),
+        transport: FakeTd(),
+      );
+      addTearDown(player.shutdown);
+      addTearDown(telegram.shutdown);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final dock = find.byKey(const ValueKey('player-bar'));
+
+      for (final size in [const Size(390, 844), const Size(1280, 800)]) {
+        tester.view.physicalSize = size;
+        await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+        await tester.pumpAndSettle();
+        expect(dock, findsNothing, reason: '$size idle');
+
+        player.queue.add(
+          const Track(
+            id: 'dock-track',
+            title: 'A quiet start',
+            artist: 'Test artist',
+            source: 'Music channel',
+          ),
+        );
+        player.notifyListeners();
+        await tester.pumpAndSettle();
+        expect(
+          dock,
+          findsNothing,
+          reason: 'Queued songs are not a current track',
+        );
+
+        player.index = 0;
+        player.notifyListeners();
+        await tester.pumpAndSettle();
+        expect(dock, findsOneWidget, reason: '$size loaded and paused');
+        await tester.tap(
+          find.descendant(of: dock, matching: find.byTooltip('Play')),
+        );
+        await tester.pumpAndSettle();
+        expect(audio.playing, isTrue);
+        expect(dock, findsOneWidget);
+
+        await tester.tap(
+          find.descendant(of: dock, matching: find.byTooltip('Pause')),
+        );
+        await tester.pumpAndSettle();
+        expect(audio.playing, isFalse);
+        expect(dock, findsOneWidget, reason: 'Paused music can be resumed');
+
+        await player.clear();
+        await tester.pumpAndSettle();
+        expect(player.current, isNull);
+        expect(dock, findsNothing, reason: '$size queue cleared');
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   testWidgets('wave animates only during playback and freezes when paused', (
     tester,
   ) async {
@@ -156,6 +227,7 @@ void main() {
                     'Evening waves — a longer track title for the fixed player',
                 artist: 'Auralis test artist',
                 source: 'Music channel',
+                mime: 'audio/x-flac',
                 coverPreview: art,
               ),
             )
@@ -200,6 +272,7 @@ void main() {
         const Size(900, 480),
         const Size(1000, 700),
         const Size(1018, 680),
+        const Size(1280, 714),
         const Size(1280, 800),
         const Size(1920, 1080),
       ];
@@ -247,6 +320,7 @@ void main() {
           'Now playing',
         );
         expect(audio.playing, isTrue);
+        expect(find.text('FLAC'), findsOneWidget);
         expect(tester.takeException(), isNull, reason: '$size Now Playing');
         final layout = find.byKey(const ValueKey('now-playing-layout'));
         final pageBounds = tester.getRect(layout).inflate(.1);
@@ -312,6 +386,14 @@ void main() {
             greaterThanOrEqualTo(180),
             reason: '$size gives the cover room rather than a tiny thumbnail',
           );
+          expect(
+            tester
+                .widget<Text>(find.byKey(const ValueKey('now-playing-title')))
+                .style!
+                .fontSize,
+            greaterThanOrEqualTo(28),
+            reason: '$size keeps the desktop title readable',
+          );
         }
         await tester.tap(find.byKey(const ValueKey('now-playing-play-pause')));
         await tester.pumpAndSettle();
@@ -354,7 +436,10 @@ void main() {
             final bytes = await image.toByteData(
               format: ui.ImageByteFormat.png,
             );
-            await File('docs/screenshots/now-playing-${size.width.toInt()}.png')
+            final suffix = size == const Size(1280, 714)
+                ? '1280-714'
+                : '${size.width.toInt()}';
+            await File('docs/screenshots/now-playing-$suffix.png')
                 .writeAsBytes(bytes!.buffer.asUint8List());
             image.dispose();
           });
