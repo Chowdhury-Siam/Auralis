@@ -94,8 +94,8 @@ def publish(root, env):
                 git(root, "cat-file", "-e", tagged + "^{commit}")
             except subprocess.CalledProcessError:
                 git(root, "fetch", "--no-tags", "--depth=1", "origin", tagged)
-            # Allow this publishing-only fix to fill the existing v0.1.37
-            # release, but never attach a different app under an old version.
+            # CI-only fixes may complete an existing version; app changes
+            # require a new version and must never reuse another app's tag.
             git(root, "diff", "--exit-code", tagged, "HEAD", "--", "lib", "android",
                 "assets", "third_party", "pubspec.yaml", "pubspec.lock",
                 "tool/build-tdlib-android.sh", "THIRD_PARTY_NOTICES.md", "LICENSE")
@@ -119,16 +119,30 @@ def publish(root, env):
         return release
 
     release = metadata()
-    missing = []
+    uploads = []
+    replace_draft = False
     for path in files:
         assets = [asset for asset in release["assets"] if asset["name"] == path.name]
         if not assets:
-            missing.append(str(path))
-        elif (len(assets) != 1 or assets[0].get("digest") != "sha256:" + digest(path) or
+            uploads.append(str(path))
+        elif len(assets) != 1:
+            raise ValueError(f"Duplicate release asset: {path.name}. No assets were changed.")
+        elif (assets[0].get("digest") != "sha256:" + digest(path) or
               assets[0].get("size") != path.stat().st_size):
-            raise ValueError(f"Existing asset differs: {path.name}. Published files are never replaced.")
-    if missing:
-        gh("release", "upload", tag, *missing, "--repo", repo)
+            if not release["draft"]:
+                raise ValueError(f"Existing asset differs: {path.name}. Published files are never replaced. "
+                                 "Bump pubspec.yaml and push the new version to main.")
+            uploads.append(str(path))
+            replace_draft = True
+    if uploads:
+        # Both platform publishers share one workflow concurrency group. Check
+        # again immediately before any destructive draft-only replacement.
+        current = metadata()
+        if replace_draft and not current["draft"]:
+            raise ValueError("Release was published before draft refresh. No assets were replaced; "
+                             "bump pubspec.yaml for a new release.")
+        gh("release", "upload", tag, *uploads, "--repo", repo,
+           *(["--clobber"] if replace_draft else []))
     release = metadata()
     for path in files:
         assets = [asset for asset in release["assets"] if asset["name"] == path.name]
