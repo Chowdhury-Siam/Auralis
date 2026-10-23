@@ -1063,22 +1063,30 @@ class _SyncedLyricsState extends State<_SyncedLyrics>
                                 horizontal: 24,
                                 vertical: 14,
                               ),
-                              child: AnimatedDefaultTextStyle(
-                                duration: Duration(
-                                  milliseconds: reduced ? 0 : 240,
+                              child: ImageFiltered(
+                                key: ValueKey('lyric-focus-$index'),
+                                enabled: active >= 0 && !current,
+                                imageFilter: ui.ImageFilter.blur(
+                                  sigmaX: 2.2,
+                                  sigmaY: 2.2,
                                 ),
-                                curve: Curves.easeOutCubic,
-                                style: style.copyWith(
-                                  color: current
-                                      ? lyricsHighlight
-                                      : Colors.white.withValues(
-                                          alpha: !_follow
-                                              ? .72
-                                              : (distance <= 1 ? .56 : .32),
-                                        ),
-                                ),
-                                child: Text(
-                                  line.text.isEmpty ? '♪' : line.text,
+                                child: AnimatedDefaultTextStyle(
+                                  duration: Duration(
+                                    milliseconds: reduced ? 0 : 240,
+                                  ),
+                                  curve: Curves.easeOutCubic,
+                                  style: style.copyWith(
+                                    color: current
+                                        ? lyricsHighlight
+                                        : Colors.white.withValues(
+                                            alpha: !_follow
+                                                ? .72
+                                                : (distance <= 1 ? .56 : .32),
+                                          ),
+                                  ),
+                                  child: Text(
+                                    line.text.isEmpty ? '♪' : line.text,
+                                  ),
                                 ),
                               ),
                             ),
