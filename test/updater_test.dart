@@ -262,11 +262,12 @@ void main() {
         expect(await file.readAsBytes(), installerBytes);
         expect(version, '0.2.0');
         expect(digest, sha256.convert(installerBytes).toString());
-        if (attempts == 1)
+        if (attempts == 1) {
           throw PlatformException(
             code: 'permission',
             message: 'Allow installs from Auralis.',
           );
+        }
       },
     );
     addTearDown(updates.dispose);
