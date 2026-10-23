@@ -462,6 +462,10 @@ void main() {
         DateTime.now(),
       ).encode();
       await click('Restore backup');
+      expect(
+        find.textContaining('Telegram sign-in: not included.'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(settings.favoriteIds, {song.id});
@@ -471,6 +475,10 @@ void main() {
       expect(settings.favoriteIds, {'-9:9'});
       expect(settings.volume, 55);
       expect(settings.recovery, isNotNull);
+      expect(
+        find.textContaining('This backup has no Telegram sign-in'),
+        findsOneWidget,
+      );
       files.contents[files.chosenOpen!] = '{broken';
       await click('Restore backup');
       expect(settings.favoriteIds, {'-9:9'});
@@ -479,63 +487,66 @@ void main() {
     },
   );
 
-  testWidgets('listening stats is reachable from the compact player header', (
-    tester,
-  ) async {
-    final settings = MemoryDataSettings()..reducedMotion = true;
-    final player = PlayerController(
-      FakeAudio(),
-      TelegramStreamProxy((_) async => {}),
-      settings,
-    );
-    final td = TelegramService(
-      Directory('unused'),
-      MemoryVault(),
-      transport: FakeTd(),
-    );
-    addTearDown(player.shutdown);
-    addTearDown(td.shutdown);
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(360, 480);
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final boundary = GlobalKey();
-    await tester.pumpWidget(
-      RepaintBoundary(
-        key: boundary,
-        child: AuralisApp(
-          player: player,
-          telegram: td,
-          dataFiles: ChosenFiles(),
+  testWidgets(
+    'listening stats and backup remain reachable from compact Settings',
+    (tester) async {
+      final settings = MemoryDataSettings()..reducedMotion = true;
+      final player = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy((_) async => {}),
+        settings,
+      );
+      final td = TelegramService(
+        Directory('unused'),
+        MemoryVault(),
+        transport: FakeTd(),
+      );
+      addTearDown(player.shutdown);
+      addTearDown(td.shutdown);
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 480);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final boundary = GlobalKey();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: boundary,
+          child: AuralisApp(
+            player: player,
+            telegram: td,
+            dataFiles: ChosenFiles(),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Listening stats'));
-    await tester.pumpAndSettle();
-    expect(find.byType(StatsDataDialog), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    await tester.tap(find.byTooltip('Close'));
-    await tester.pumpAndSettle();
-    expect(find.byType(StatsDataDialog), findsNothing);
-    await tester.tap(find.byTooltip('Settings').first);
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Backup & Restore'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Backup & Restore'));
-    await tester.pumpAndSettle();
-    expect(find.text('Create backup').hitTestable(), findsOneWidget);
-    expect(find.text('Restore backup').hitTestable(), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    await tester.runAsync(() async {
-      final render =
-          boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-      final image = await render.toImage();
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      await File('docs/screenshots/backup-360.png')
-          .writeAsBytes(bytes!.buffer.asUint8List());
-      image.dispose();
-    });
-    await tester.pumpWidget(const SizedBox());
-  });
+      );
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Listening stats'), findsNothing);
+      await tester.tap(find.byTooltip('Settings').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Listening stats'));
+      await tester.pumpAndSettle();
+      expect(find.byType(StatsDataDialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      expect(find.byType(StatsDataDialog), findsNothing);
+      await tester.ensureVisible(find.text('Backup & Restore'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Backup & Restore'));
+      await tester.pumpAndSettle();
+      expect(find.text('Create backup').hitTestable(), findsOneWidget);
+      expect(find.text('Restore backup').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.runAsync(() async {
+        final render =
+            boundary.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary;
+        final image = await render.toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await File('docs/screenshots/backup-360.png')
+            .writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 }
