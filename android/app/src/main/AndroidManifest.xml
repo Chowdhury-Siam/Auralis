@@ -3,6 +3,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application android:label="Auralis" android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher" android:allowBackup="false"
         android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules"
@@ -25,6 +26,11 @@
         <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MEDIA_BUTTON" /></intent-filter>
         </receiver>
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
+        </provider>
         <meta-data android:name="flutterEmbedding" android:value="2" />
     </application>
     <queries><intent><action android:name="android.intent.action.PROCESS_TEXT" /><data android:mimeType="text/plain" /></intent></queries>
