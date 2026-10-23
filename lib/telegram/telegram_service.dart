@@ -35,6 +35,7 @@ class TelegramService extends ChangeNotifier {
   String state = 'disconnected';
   String? error;
   bool busy = false;
+  bool credentialRecoveryRequired = false;
   final Map<int, MusicChat> _channels = {};
   List<MusicChat> get channels => _channels.values.toList()
     ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
@@ -235,9 +236,11 @@ class TelegramService extends ChangeNotifier {
       }
       try {
         _secrets = await vault.read();
+        credentialRecoveryRequired = false;
       } catch (_) {
+        credentialRecoveryRequired = true;
         throw const FormatException(
-          'Saved Telegram credentials cannot be unlocked on this device. Restore a password-protected account backup to recover your sign-in.',
+          'Saved Telegram credentials cannot be unlocked on this device. Restore a password-protected account backup to recover your sign-in, or choose Sign in again to create a new local session.',
         );
       }
       if (apiId == null &&
@@ -398,7 +401,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.51',
+          'application_version': '0.1.52',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -595,6 +598,43 @@ class TelegramService extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Explicit recovery only: keep unreadable files, then start a new sign-in.
+  Future<void> recoverLocalSession() => action(() async {
+    if (!credentialRecoveryRequired || state != 'disconnected') {
+      throw StateError(
+        'A fresh sign-in is only available for an unreadable local session.',
+      );
+    }
+    await shutdown();
+    await directory.create(recursive: true);
+    final recovery = await directory.createTemp('unreadable-session-');
+    final database = Directory(p.join(directory.path, 'database'));
+    final savedDatabase = Directory(p.join(recovery.path, 'database'));
+    final savedVault = File(p.join(recovery.path, 'credentials.protected'));
+    var movedDatabase = false, movedVault = false;
+    try {
+      if (await database.exists()) {
+        await database.rename(savedDatabase.path);
+        movedDatabase = true;
+      }
+      if (await vault.file.exists()) {
+        await vault.file.rename(savedVault.path);
+        movedVault = true;
+      }
+      await vault.resetProtection();
+    } catch (_) {
+      if (movedVault) await savedVault.rename(vault.file.path);
+      if (movedDatabase) await savedDatabase.rename(database.path);
+      rethrow;
+    }
+    _secrets = {};
+    _channels.clear();
+    clearImageCache();
+    credentialRecoveryRequired = false;
+    state = 'disconnected';
+    connection = 'Offline';
+  });
 
   Future<void> logout() => action(() async {
     await transport.request({'@type': 'logOut'});
