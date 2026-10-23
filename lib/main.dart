@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
 import 'android_audio.dart';
+import 'android_updater.dart';
 import 'data_files.dart';
 import 'player.dart';
 import 'storage.dart';
@@ -59,7 +60,7 @@ Future<void> main() async {
         ? await AudioService.init(
             builder: () => AndroidAudioHandler(player),
             config: const AudioServiceConfig(
-              androidNotificationChannelId: 'app.auralis.playback',
+              androidNotificationChannelId: 'com.auralis.siam.playback',
               androidNotificationChannelName: 'Music playback',
               androidNotificationIcon: 'drawable/ic_stat_music',
               androidStopForegroundOnPause: false,
@@ -84,7 +85,25 @@ Future<void> main() async {
       }
       updater?.dispose();
     }();
-    if (Platform.isWindows) {
+    if (Platform.isAndroid) {
+      try {
+        const bridge = AndroidUpdateBridge();
+        final info = await bridge.info();
+        updater = AppUpdater(
+          currentVersion: package.version,
+          directory: info.directory,
+          settings: settings,
+          target: UpdateTarget.android,
+          androidAbi: info.abi,
+          installAndroid: bridge.install,
+        );
+      } catch (_) {
+        warning = [
+          if (warning != null) warning,
+          'Android updates could not initialize. Restart Auralis to retry.',
+        ].join(' ');
+      }
+    } else if (Platform.isWindows) {
       updater = AppUpdater(
         currentVersion: package.version,
         directory: Directory(p.join(root.path, 'updates')),
@@ -93,6 +112,7 @@ Future<void> main() async {
       );
     }
     AppLifecycleListener(
+      onResume: () => updater?.checkOnResume(),
       onPause: () => unawaited(player.flushListeningStats()),
       onExitRequested: () async {
         await shutdown();
