@@ -60,13 +60,23 @@ def verify_source(root):
     manifest = ET.parse(android / "app/src/main/AndroidManifest.xml").getroot()
     ns = "{http://schemas.android.com/apk/res/android}"
     permissions = {node.get(ns + "name") for node in manifest.findall("uses-permission")}
+    assert "android.permission.REQUEST_INSTALL_PACKAGES" in permissions
+    build = (android / "app/build.gradle.kts").read_text()
+    assert 'applicationId = "com.auralis.siam"' in build
+    assert 'namespace = "com.auralis.siam"' in build
+    provider = manifest.find("application/provider")
+    assert provider is not None and provider.get(ns + "exported") == "false"
+    assert provider.get(ns + "authorities") == "${applicationId}.updates"
+    paths = ET.parse(android / "app/src/main/res/xml/update_paths.xml").getroot()
+    assert [(node.tag, node.get("path")) for node in paths] == [("cache-path", "auralis-updates/")]
     assert "android.permission.INTERNET" in permissions
     assert "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" in permissions
     assert not any(p in permissions for p in ("android.permission.MANAGE_EXTERNAL_STORAGE", "android.permission.READ_EXTERNAL_STORAGE"))
     assert manifest.find("application").get(ns + "allowBackup") == "false"
     assert (android / "gradle/wrapper/gradle-wrapper.jar").stat().st_size > 1000
-    for name in ("gradlew", "gradlew.bat", "app/src/main/kotlin/app/auralis/auralis/MainActivity.kt",
-                 "app/src/main/kotlin/app/auralis/auralis/VaultCipher.kt"):
+    for name in ("gradlew", "gradlew.bat", "app/src/main/kotlin/com/auralis/siam/MainActivity.kt",
+                 "app/src/main/kotlin/com/auralis/siam/VaultCipher.kt",
+                 "app/src/main/kotlin/com/auralis/siam/AndroidUpdateInstaller.kt"):
         assert (android / name).is_file(), name
     assert b"\r\n" not in (android / "gradlew").read_bytes()
     for name in ("key.properties", "auralis-release.jks"):
