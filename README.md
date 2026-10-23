@@ -301,7 +301,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.51+52**; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.52+53**; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
@@ -344,3 +344,10 @@ Auralis is independently authored. [mpvRx](https://github.com/Riteshp2001/mpvRx)
 Third-party libraries retain their own licenses, including Flutter's generated host code and the vendored playback runtime. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the [upstream audit](docs/UPSTREAM_AUDIT.md) for notices, corresponding-source obligations, and outstanding native distribution review.
 
 <p align="center"><sub>Your music. Your space.</sub></p>
+
+
+Android 0.1.52 uses the package ID `com.auralis.siam` and includes automatic
+update checks/downloads with Android-confirmed installation. This package needs
+one manual install because the ID changed. Keep your existing app until your
+available backups have been restored. See [Android setup and migration](docs/ANDROID.md)
+for signing, updates, and unreadable Telegram credential recovery.
