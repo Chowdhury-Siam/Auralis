@@ -14,7 +14,7 @@ Download **auralis-android-arm64-v8a-development** or **auralis-android-arm64-v8
 
 1. Commit this complete source to `main`. Run the signing setup below once for automatic retained-key signing, or keep an existing custom key. Without either, compilation still uses release mode with an explicitly labelled development signature.
 2. Open **Actions → Android APK build → Run workflow**, choose `main`, and keep **arm64-v8a** for a phone APK. A push to `main` also runs it automatically. Re-running an old commit still uses that commit's old workflow.
-3. Once analysis, tests, native checks, and APK signature/alignment verification succeed, the separate publishing job attaches the built APK to `v<pubspec version>`. An existing version can be completed by a publishing-only change when the Android app sources still match its tag. Different app sources require a new version; tags are never moved. This recovery source uses **0.1.48+49** to avoid the existing 0.1.43 assets/tag.
+3. Once analysis, tests, native checks, and APK signature/alignment verification succeed, the separate publishing job attaches the built APK to `v<pubspec version>`. An existing version can be completed by a publishing-only change when the Android app sources still match its tag. Different app sources require a new version; tags are never moved. This recovery source uses **0.1.49+50** to avoid the existing 0.1.43 assets/tag.
 
 If Android finishes first for a new version, it creates a **draft**, uploads and verifies its Android assets, and leaves publication to the existing Windows publisher. If Windows finishes first, Android appends its assets to the published release. Both publishing jobs use the same concurrency group. For a brand-new version started manually only on Android, also run the Windows workflow for that same commit to publish the shared draft.
 
@@ -28,7 +28,7 @@ The APK build keeps read-only repository permission. Only the guarded publishing
 
 1. Create a [fine-grained GitHub token](https://github.com/settings/personal-access-tokens/new), restricted to **Chowdhury-Siam/Auralis**, with repository **Secrets: Read and write**. Add it to this repository's **Settings → Secrets and variables → Actions** as `ANDROID_SIGNING_SETUP_TOKEN`.
 2. Commit this complete source to `main`, then open **Actions → Set up Android signing → Run workflow** on `main`.
-3. The action generates a private RSA-4096 key with a random password and saves the key/alias/password together in the encrypted `ANDROID_SIGNING_IDENTITY` repository secret. It then starts a fresh **Android APK build** on `main`, which reads that identity and produces `auralis-0.1.48-android-arm64-v8a-release.apk`. Future builds reuse it automatically. No manual keytool command or four-secret setup is needed.
+3. The action generates a private RSA-4096 key with a random password and saves the key/alias/password together in the encrypted `ANDROID_SIGNING_IDENTITY` repository secret. It then starts a fresh **Android APK build** on `main`, which reads that identity and produces `auralis-0.1.49-android-arm64-v8a-release.apk`. Future builds reuse it automatically. No manual keytool command or four-secret setup is needed.
 
 You can remove or revoke `ANDROID_SIGNING_SETUP_TOKEN` after successful setup; normal builds only need the saved identity. GitHub's default workflow token cannot manage repository secrets, so that one-time Secrets permission is needed. See [GitHub's repository secret API](https://docs.github.com/en/rest/actions/secrets#create-or-update-a-repository-secret). A separate build is queued after setup because repository secrets are read when a workflow is queued, as documented in [Secrets reference](https://docs.github.com/en/actions/reference/security/secrets).
 
@@ -113,4 +113,19 @@ This is a packaging/CI-only correction; the application version is unchanged.
 
 `Existing asset differs: auralis-0.1.43-android-arm64-v8a-debug.apk` means that a file with that version/ABI/signing name already exists with different bytes. Rebuilding identical source is not guaranteed to reproduce APK bytes, especially when a fresh runner generates a different development signing key. The former publisher rejected this in drafts as well as published releases.
 
-Commit the complete **0.1.48+49** source to `main` and let both workflows run for that commit. It targets a new `v0.1.48` release without deleting or moving `v0.1.43`. Re-running an old 0.1.43 job still uses its old script/version. The corrected publisher can also refresh only its own conflicting Android assets while a release remains a draft, with local checksum/provenance validation and post-upload GitHub digest/size checks. Published downloads remain protected. Signing stays optional; the draft retry fix does not make development keys consistent between runners. Use a persistent release key for Android updates that preserve installed app data.
+Commit the complete **0.1.49+50** source to `main` and let both workflows run for that commit. It targets a new `v0.1.49` release without deleting or moving `v0.1.43`. Re-running an old 0.1.43 job still uses its old script/version. The corrected publisher can also refresh only its own conflicting Android assets while a release remains a draft, with local checksum/provenance validation and post-upload GitHub digest/size checks. Published downloads remain protected. Signing stays optional; the draft retry fix does not make development keys consistent between runners. Use a persistent release key for Android updates that preserve installed app data.
+
+
+## 0.1.49 source update
+
+The 0.1.49+50 source includes the explicit loopback-domain attributes required by
+Android release lint, the Now Playing control and artwork effects update, and
+cached artwork backdrops. The Reduce motion setting is retired; its old saved
+value no longer disables the visuals. Platform accessibility preferences still
+apply. Existing backups remain compatible.
+
+Commit this complete source to main and start a fresh workflow run. A new run
+builds and targets v0.1.49; retrying an old 0.1.48 job still runs its old checkout.
+The Android publisher now explains a source/tag conflict and asks for a version
+bump, rather than reporting a raw git diff traceback. Existing releases and tags
+are preserved.
