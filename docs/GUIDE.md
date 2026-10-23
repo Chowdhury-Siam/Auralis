@@ -52,9 +52,11 @@ Use **Paste lyrics** for plain text or line-timed LRC. It supports fractional se
 
 The bottom seek line has an independently drawn traveling wave on its played portion. It animates only for an active, unbuffered track with a known duration, freezes when paused and uses a straight line with user/system reduced motion. The animation is decorative; it does not sample audio or claim to display the file's waveform/spectrum. The seek thumb, buffered segment, timestamps, mouse seeking and focused-slider keyboard controls remain available. A localized repaint boundary keeps the animation inside the seek control. Click the bottom cover/title/artist area to open the current Now Playing page; seeking and transport buttons retain their own actions.
 
+The bottom player dock appears on other pages only when a current track is loaded. It stays visible when that track is paused so it can be resumed, and disappears when playback is cleared or signed out. Merely adding tracks to the queue does not show the dock.
+
 Now Playing has its own full-size seek bar, previous/play/next pills, grouped shuffle/repeat/favorite controls, and lyrics, playlist, sleep, and volume actions. The normal bottom player dock is hidden on this page. Phones also hide bottom navigation here; the header's back button returns to Library, Settings remains accessible in the phone header, and Queue opens the complete queue.
 
-Below 700 logical pixels of available page width, the player stacks artwork and details above the controls. Short phone windows place a smaller cover beside the details to keep every control reachable. Wider pages place the cover beside the details and playback controls. A sliver of the next cover is available in roomy layouts; click or tap it to play that queued track. Medium and larger layouts reserve space for an Up Next row before sizing the hero. The page itself does not scroll.
+Below 700 logical pixels of available page width, the player stacks artwork and details above the controls. Short phone windows place a smaller cover beside the details to keep every control reachable. Wider pages balance a framed cover beside larger track details and playback controls. When space allows, the controls sit in a bordered card with a labeled Lyrics action and a more prominent play/pause pill. A sliver of the next cover is available in roomy phone layouts; click or tap it to play that queued track. Medium and larger layouts reserve space for an Up Next row before sizing the hero. The page itself does not scroll.
 
 The rest of the app retains bottom navigation below 900 logical pixels, an icon rail from 900–1179, and an expanded sidebar from 1180. The companion Now Playing panel appears only on other pages at 1220+ width and 620+ height. User/system reduced motion disables the decorative seek wave and automatic lyric transition blur.
 
@@ -102,7 +104,7 @@ Run the app with `flutter run -d windows` after native setup, or launch `build/w
 
 `pwsh ./tool/package.ps1 -Installer` additionally requires Inno Setup 6 and produces an unsigned per-user installer. It requests no administrator privileges and preserves application data during uninstall. Neither packaging mode has been tested with a built executable in this environment.
 
-Packaging derives asset names and the installer version from `pubspec.yaml`. Commit the source first: the source ZIP is produced from Git `HEAD`. Release tags must match the version exactly (for example, `0.1.39+40` → `v0.1.39`). Packaging/tag validation has been tested with harmless fixture files; the current revision's installer compilation/installation is still outstanding.
+Packaging derives asset names and the installer version from `pubspec.yaml`. Commit the source first: the source ZIP is produced from Git `HEAD`. Release tags must match the version exactly (for example, `0.1.42+43` → `v0.1.42`). Packaging/tag validation has been tested with harmless fixture files; the current revision's installer compilation/installation is still outstanding.
 
 ## Connect Telegram
 
