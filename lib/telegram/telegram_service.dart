@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../models.dart';
+import '../account_backup.dart';
 import '../lyrics.dart';
 import '../storage.dart';
 import 'td_transport.dart';
@@ -378,7 +379,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.42',
+          'application_version': '0.1.43',
         });
       } catch (_) {
         _parametersSent = false;
@@ -482,6 +483,91 @@ class TelegramService extends ChangeNotifier {
     );
   }
 
+  Future<TelegramAccount> backupAccount() async {
+    if (!ready || busy) {
+      throw const FormatException(
+        'Connect Telegram before backing up the account.',
+      );
+    }
+    busy = true;
+    notifyListeners();
+    try {
+      await shutdown(); // close must finish successfully before reading the database.
+      _clientClosed = true;
+      return await TelegramAccount.capture(
+        Directory(p.join(directory.path, 'database')),
+        {
+          for (final key in ['apiId', 'apiHash', 'databaseKey'])
+            key: _secrets[key],
+        },
+      );
+    } finally {
+      busy = false;
+      await start();
+    }
+  }
+
+  Future<void> restoreAccount(
+    TelegramAccount account,
+    Future<void> Function() restoreData,
+  ) async {
+    // Validate all paths and credentials before closing the current account.
+    final checked = TelegramAccount.fromJson(account.toJson());
+    if (busy) {
+      throw const FormatException(
+        'Wait for Telegram to finish its current operation.',
+      );
+    }
+    final previous = await vault.read();
+    await directory.create(recursive: true);
+    final stage = await directory.createTemp('restore-');
+    final database = Directory(p.join(directory.path, 'database'));
+    final old = Directory(p.join(stage.path, 'previous'));
+    final incoming = Directory(p.join(stage.path, 'incoming'));
+    var moved = false, installed = false, safeToRestart = true;
+    busy = true;
+    notifyListeners();
+    try {
+      await checked.write(incoming);
+      // A device-protected recovery copy remains if a filesystem rollback fails.
+      if (await vault.file.exists()) {
+        await vault.file.copy(p.join(stage.path, p.basename(vault.file.path)));
+      }
+      await shutdown();
+      _clientClosed = true;
+      if (await database.exists()) {
+        await database.rename(old.path);
+        moved = true;
+      }
+      safeToRestart = false;
+      await incoming.rename(database.path);
+      installed = true;
+      await vault.write(checked.credentials);
+      await restoreData();
+      safeToRestart = true;
+      _channels.clear();
+    } catch (_) {
+      if (installed) await database.delete(recursive: true);
+      if (moved) await old.rename(database.path);
+      await vault.write(previous);
+      safeToRestart = true;
+      rethrow;
+    } finally {
+      // Only this operation's staging folder is removed, never caches/music.
+      // Preserve a failed rollback's previous database for manual recovery.
+      if (safeToRestart) {
+        try {
+          await stage.delete(recursive: true);
+        } on FileSystemException {
+          /* Retry cleanup later. */
+        }
+      }
+      busy = false;
+      if (safeToRestart && _clientClosed) await start();
+      notifyListeners();
+    }
+  }
+
   Future<void> logout() => action(() async {
     await transport.request({'@type': 'logOut'});
     state = _clientClosed ? 'disconnected' : 'authorizationStateLoggingOut';
@@ -526,6 +612,13 @@ class TelegramService extends ChangeNotifier {
     state = 'disconnected';
     clearImageCache();
     await _subscription?.cancel();
-    await transport.close();
+    try {
+      await transport.close();
+    } finally {
+      _clientClosed = true;
+      _parametersSent = false;
+      connection = 'Offline';
+      notifyListeners();
+    }
   }
 }
