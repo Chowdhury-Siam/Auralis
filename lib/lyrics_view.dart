@@ -23,6 +23,7 @@ class LyricsView extends StatefulWidget {
     required this.repository,
     required this.artwork,
     required this.onBack,
+    this.backgroundColor = lyricsBackground,
     this.loadEmbedded,
     this.files = const DataFiles(),
   });
@@ -31,6 +32,8 @@ class LyricsView extends StatefulWidget {
   final LyricsRepository repository;
   final Widget artwork;
   final VoidCallback onBack;
+  // The player shell supplies the artwork backdrop behind immersive lyrics.
+  final Color backgroundColor;
   final Future<Lyrics?> Function(Track)? loadEmbedded;
   @override
   State<LyricsView> createState() => _LyricsViewState();
@@ -435,15 +438,15 @@ class _LyricsViewState extends State<LyricsView> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
               side: BorderSide(
-                color: selected
-                    ? Colors.transparent
-                    : const Color(0xFF302B39),
+                color: selected ? Colors.transparent : const Color(0xFF302B39),
               ),
             ),
-            padding: EdgeInsets.symmetric(horizontal: largeText ? 6 : 12, vertical: 8),
-            textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w700,
+            padding: EdgeInsets.symmetric(
+              horizontal: largeText ? 6 : 12,
+              vertical: 8,
             ),
+            textStyle: Theme.of(context).textTheme.labelLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           onPressed: synced && _lyrics!.lines.isEmpty
               ? null
@@ -456,7 +459,11 @@ class _LyricsViewState extends State<LyricsView> {
                 const SizedBox(width: 8),
               ],
               Flexible(
-                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -504,7 +511,10 @@ class _LyricsViewState extends State<LyricsView> {
                 _track?.title ?? 'Nothing playing',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 3),
               Text(
@@ -528,9 +538,6 @@ class _LyricsViewState extends State<LyricsView> {
     final progress = duration <= 0
         ? 0.0
         : (audio.position.inMilliseconds / duration).clamp(0.0, 1.0);
-    final buffered = duration <= 0
-        ? 0.0
-        : (audio.buffered.inMilliseconds / duration).clamp(0.0, 1.0);
     const size = 44.0;
     return Row(
       children: [
@@ -611,7 +618,6 @@ class _LyricsViewState extends State<LyricsView> {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: WaveSeekBar(
                 value: progress,
-                buffered: buffered,
                 playing: audio.playing && !audio.buffering && _track != null,
                 reducedMotion: reduced,
                 format: (value) => clockText(
@@ -653,7 +659,6 @@ class _LyricsViewState extends State<LyricsView> {
     );
   }
 
-
   Widget _transportDock({
     required bool reduced,
     required bool showModeSelector,
@@ -663,7 +668,9 @@ class _LyricsViewState extends State<LyricsView> {
     child: LayoutBuilder(
       builder: (context, box) {
         final modes = showModeSelector
-            ? Row(children: [_mode(true), const SizedBox(width: 8), _mode(false)])
+            ? Row(
+                children: [_mode(true), const SizedBox(width: 8), _mode(false)],
+              )
             : const SizedBox.shrink();
         if (box.maxWidth >= 700) {
           return Row(
@@ -759,7 +766,7 @@ class _LyricsViewState extends State<LyricsView> {
       ),
       child: Material(
         key: const ValueKey('lyrics-immersive'),
-        color: lyricsBackground,
+        color: widget.backgroundColor,
         child: LayoutBuilder(
           builder: (context, box) {
             final short = box.maxHeight < 620;
@@ -767,7 +774,12 @@ class _LyricsViewState extends State<LyricsView> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1080),
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(16, short ? 8 : 16, 16, short ? 8 : 16),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    short ? 8 : 16,
+                    16,
+                    short ? 8 : 16,
+                  ),
                   child: _layout(short: short, reduced: reduced),
                 ),
               ),
@@ -777,9 +789,7 @@ class _LyricsViewState extends State<LyricsView> {
       ),
     );
   }
-
 }
-
 
 class _LyricsMenuEntry extends StatelessWidget {
   const _LyricsMenuEntry({
@@ -803,9 +813,7 @@ class _LyricsMenuEntry extends StatelessWidget {
         ? const Color(0xFFB8B1C8)
         : const Color(0xFF676170);
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       child: Row(
         children: [
