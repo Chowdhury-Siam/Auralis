@@ -206,9 +206,9 @@ See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality note
 | Create or restore a backup | **Settings → Backup & Restore** |
 | Recover the data replaced by the last restore | **Restore recovery copy** in the backup section |
 
-A backup includes listening stats, favorites, playlists, recent music, channel selections, and preferences. Credentials, Telegram sessions, music files, artwork, lyrics, the queue, and sleep timers are excluded.
+A backup includes listening stats, favorites, playlists, recent music, channel selections, and preferences. **Include Telegram account** is enabled when connected: it adds your Telegram session, API details and database key inside a password-encrypted backup. Music files, artwork, lyrics, the queue and sleep timers are excluded.
 
-Restoring previews the backup, then **replaces** saved local data and clears playback after confirmation. A recovery copy of the previous data is saved first. Backups are plain JSON with an integrity check; keep them private.
+Restoring previews the backup, then **replaces** saved local data and clears playback after confirmation. A recovery copy of the previous settings is saved first. Account backups require your backup password to restore; the session is re-encrypted for the destination device. Older settings-only JSON backups remain supported. Telegram may require a new login if a restored session has expired or been revoked.
 
 See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for validation, recovery, and stats counting.
 
@@ -222,7 +222,7 @@ See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for val
 | --- | --- |
 | **Reduce motion** | Use instant transitions and a straight seek line |
 | **Listening stats** | Review listening activity and export data |
-| **Backup & Restore** | Save and recover collections, stats, and preferences |
+| **Backup & Restore** | Save and recover your Telegram account, collections, stats, and preferences |
 | **Windows update controls** | Check stable releases and choose whether to install |
 | **Sign out of Telegram** | Stop playback, clear queue/channel selections, and forget saved API credentials after successful logout |
 
@@ -298,7 +298,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.42+43**; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.43+44**; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
