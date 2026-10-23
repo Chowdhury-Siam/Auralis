@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:auralis/account_backup.dart';
 import 'package:auralis/data_backup.dart';
 import 'package:auralis/storage.dart';
 import 'package:auralis/telegram/telegram_service.dart';
+import 'package:auralis/telegram/td_transport.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
@@ -30,6 +33,16 @@ class SnapshotTd extends FakeTd {
   Future<void> close() async {
     await onClose();
     await super.close();
+  }
+}
+
+class FileVault extends SecretVault {
+  FileVault(super.file);
+  bool rejectRead = false;
+  @override
+  Future<Uint8List> transform(List<int> bytes, {required bool encrypt}) async {
+    if (!encrypt && rejectRead) throw StateError('Device key unavailable');
+    return Uint8List.fromList(bytes.map((byte) => byte ^ 0xff).toList());
   }
 }
 
@@ -108,6 +121,13 @@ void main() {
       }),
       throwsFormatException,
     );
+    expect(
+      () => TelegramAccount.fromJson({
+        'credentials': credentials,
+        'files': {'td.sqlite': 'AQ=='},
+      }),
+      throwsFormatException,
+    );
   });
 
   test(
@@ -155,7 +175,8 @@ void main() {
       await cache.parent.create();
       await cache.writeAsString('keep music');
       final oldCredentials = {...credentials, 'apiId': 98765};
-      final vault = MemoryVault()..data = oldCredentials;
+      final vault = FileVault(File('${root.path}/credentials.aesgcm'));
+      await vault.write(oldCredentials);
       final next = FakeTd();
       final service = TelegramService(
         root,
@@ -166,7 +187,7 @@ void main() {
       await service.start();
       Future<void> restore() =>
           service.restoreAccount(account('new database'), () async {
-            expect(vault.data, credentials);
+            expect(await vault.read(), credentials);
             if (fail) throw const FileSystemException('settings disk failure');
           });
       if (fail) {
@@ -178,7 +199,7 @@ void main() {
         await File('${db.path}/td.binlog').readAsString(),
         fail ? 'previous database' : 'new database',
       );
-      expect(vault.data, fail ? oldCredentials : credentials);
+      expect(await vault.read(), fail ? oldCredentials : credentials);
       expect(await cache.readAsString(), 'keep music');
       expect(service.busy, isFalse);
       expect(
@@ -189,5 +210,76 @@ void main() {
       );
       await service.shutdown();
     }
+  });
+
+  test('account restore replaces an unreadable device vault and preserves its exact bytes on rollback', () async {
+    for (final fail in [true, false]) {
+      final root = Directory('${dir.path}/lost-key-$fail');
+      await root.create();
+      final vault = FileVault(File('${root.path}/credentials.aesgcm'));
+      await vault.file.writeAsBytes([5, 4, 3, 2, 1]);
+      vault.rejectRead = true;
+      final service = TelegramService(
+        root,
+        vault,
+        transport: FakeTd(),
+        createTransport: FakeTd.new,
+      );
+      Future<void> restore() => service.restoreAccount(account(), () async {
+        if (fail) throw const FileSystemException('settings disk failure');
+        vault.rejectRead = false;
+      });
+      if (fail) {
+        await expectLater(restore(), throwsA(isA<FileSystemException>()));
+        expect(await vault.file.readAsBytes(), [5, 4, 3, 2, 1]);
+        expect(service.error, contains('cannot be unlocked'));
+      } else {
+        await restore();
+        expect(await vault.read(), credentials);
+        expect(service.error, isNull);
+        expect(service.state, 'authorizationStateWaitTdlibParameters');
+      }
+      await service.shutdown();
+    }
+  });
+
+  test('concurrent authorization update cannot hide a failed session initialization; retry uses a fresh client', () async {
+    final failure = Completer<Map<String, dynamic>>();
+    final entered = Completer<void>();
+    final td = FakeTd();
+    td.onRequest = (request) async {
+      if (request['@type'] == 'getAuthorizationState') {
+        td.auth('authorizationStateWaitTdlibParameters');
+      }
+      if (request['@type'] == 'setTdlibParameters') {
+        entered.complete();
+        return failure.future;
+      }
+      return null;
+    };
+    final next = FakeTd();
+    final service = TelegramService(
+      dir,
+      MemoryVault()..data = {...credentials},
+      transport: td,
+      createTransport: () => next,
+    );
+    var finished = false;
+    final start = service.start().then((_) => finished = true);
+    await entered.future;
+    await Future<void>.delayed(Duration.zero);
+    expect(finished, isFalse);
+    failure.completeError(TdException(400, 'Private native diagnostic'));
+    await start;
+    expect(service.error, contains('TDLib 400'));
+    expect(service.error, isNot(contains('Private native diagnostic')));
+    expect(service.state, 'disconnected');
+    await service.start();
+    expect(
+      next.requests.where((r) => r['@type'] == 'setTdlibParameters'),
+      hasLength(1),
+    );
+    expect(service.error, isNull);
+    await service.shutdown();
   });
 }
