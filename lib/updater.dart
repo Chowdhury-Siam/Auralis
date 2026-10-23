@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'storage.dart';
 
@@ -43,6 +44,13 @@ class StableVersion implements Comparable<StableVersion> {
   String toString() => '$major.$minor.$patch';
 }
 
+enum UpdateTarget { windows, android }
+
+class UpdateAssetUnavailable implements Exception {
+  const UpdateAssetUnavailable(this.message);
+  final String message;
+}
+
 class ReleaseUpdate {
   const ReleaseUpdate(this.version, this.url, this.sha256, this.size);
   final StableVersion version;
@@ -52,18 +60,31 @@ class ReleaseUpdate {
   static ReleaseUpdate? fromJson(
     Map<String, dynamic> json,
     String repository,
-    StableVersion installed,
-  ) {
+    StableVersion installed, {
+    UpdateTarget target = UpdateTarget.windows,
+    String? androidAbi,
+  }) {
     if (json['draft'] != false || json['prerelease'] != false) return null;
     final version = StableVersion.parse(json['tag_name'] as String);
     if (version.compareTo(installed) <= 0) return null;
-    final name = 'auralis-$version-windows-x64-setup.exe';
+    if (target == UpdateTarget.android &&
+        !const ['arm64-v8a', 'x86_64'].contains(androidAbi)) {
+      throw const FormatException('Unsupported Android update architecture');
+    }
+    final name = target == UpdateTarget.android
+        ? 'auralis-$version-android-$androidAbi-release.apk'
+        : 'auralis-$version-windows-x64-setup.exe';
     final assets = (json['assets'] as List)
         .whereType<Map>()
         .where((a) => a['name'] == name)
         .toList();
     if (assets.length != 1) {
-      throw const FormatException('Release has no unique Windows installer');
+      if (target == UpdateTarget.android && assets.isEmpty) {
+        throw UpdateAssetUnavailable(
+          'The signed Android $androidAbi update is not available in this release yet. Check again later.',
+        );
+      }
+      throw const FormatException('Release has no unique platform installer');
     }
     final asset = assets.single;
     final digest = asset['digest'] as String? ?? '';
@@ -98,6 +119,9 @@ class AppUpdater extends ChangeNotifier {
     HttpClient? client,
     this.launchInstaller,
     this.requestExit,
+    this.target = UpdateTarget.windows,
+    this.androidAbi,
+    this.installAndroid,
   }) : _client = client ?? HttpClient() {
     if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}$')
             .hasMatch(repository) ||
@@ -105,9 +129,19 @@ class AppUpdater extends ChangeNotifier {
       throw ArgumentError('Invalid GitHub repository');
     }
     StableVersion.parse(currentVersion);
+    if (target == UpdateTarget.android &&
+        !const ['arm64-v8a', 'x86_64'].contains(androidAbi)) {
+      throw ArgumentError('A supported Android ABI is required');
+    }
     _client.connectionTimeout = const Duration(seconds: 15);
   }
   final String currentVersion, repository;
+  final UpdateTarget target;
+  final String? androidAbi;
+  final Future<void> Function(File, String, String)? installAndroid;
+  bool get isAndroid => target == UpdateTarget.android;
+  String get installLabel =>
+      isAndroid ? 'Install update' : 'Install and restart';
   final Directory directory;
   final AppSettings settings;
   final HttpClient _client;
@@ -122,14 +156,43 @@ class AppUpdater extends ChangeNotifier {
   double progress = 0;
   Timer? _timer, _initial;
   bool _disposed = false;
+  DateTime? _lastAutomaticCheck;
 
   void start() {
     _initial ??= Timer(const Duration(seconds: 10), () {
-      if (settings.automaticUpdates) unawaited(check());
+      if (settings.automaticUpdates) checkOnResume();
     });
     _timer ??= Timer.periodic(const Duration(hours: 6), (_) {
-      if (settings.automaticUpdates) unawaited(check());
+      if (settings.automaticUpdates) unawaited(_automaticCheck());
     });
+  }
+
+  Future<void> _automaticCheck() async {
+    if (_disposed ||
+        !settings.automaticUpdates ||
+        checking ||
+        downloading ||
+        installing) {
+      return;
+    }
+    _lastAutomaticCheck = DateTime.now();
+    await check();
+    if (isAndroid &&
+        !_disposed &&
+        settings.automaticUpdates &&
+        available != null &&
+        downloaded == null &&
+        error == null) {
+      await download();
+    }
+  }
+
+  void checkOnResume() {
+    if (_lastAutomaticCheck == null ||
+        DateTime.now().difference(_lastAutomaticCheck!) >=
+            const Duration(hours: 6)) {
+      unawaited(_automaticCheck());
+    }
   }
 
   Future<void> setAutomatic(bool enabled) async {
@@ -137,6 +200,7 @@ class AppUpdater extends ChangeNotifier {
     _changed();
     try {
       await settings.save();
+      if (enabled && isAndroid) unawaited(_automaticCheck());
     } catch (_) {
       error = 'Could not save the update preference.';
       _changed();
@@ -215,6 +279,8 @@ class AppUpdater extends ChangeNotifier {
         jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>,
         repository,
         StableVersion.parse(currentVersion),
+        target: target,
+        androidAbi: androidAbi,
       );
       if (available?.version.toString() != release?.version.toString() ||
           available?.sha256 != release?.sha256) {
@@ -224,6 +290,10 @@ class AppUpdater extends ChangeNotifier {
       status = release == null
           ? 'You have the latest stable version.'
           : 'Version ${release.version} is available.';
+    } on UpdateAssetUnavailable catch (unavailable) {
+      available = null;
+      downloaded = null;
+      status = unavailable.message;
     } catch (_) {
       error =
           'Could not check for updates. Check your connection and try again.';
@@ -249,9 +319,7 @@ class AppUpdater extends ChangeNotifier {
     try {
       await directory.create(recursive: true);
       final folder = await directory.createTemp('release-');
-      final installer = File(
-        '${folder.path}/auralis-${release.version}-windows-x64-setup.exe',
-      );
+      final installer = File('${folder.path}/${release.url.pathSegments.last}');
       partial = File('${installer.path}.part');
       final response = await _get(release.url);
       if (response.statusCode != 200 ||
@@ -306,7 +374,9 @@ class AppUpdater extends ChangeNotifier {
     if (release == null ||
         installer == null ||
         installing ||
-        requestExit == null ||
+        checking ||
+        downloading ||
+        (isAndroid ? installAndroid == null : requestExit == null) ||
         _disposed) {
       return;
     }
@@ -316,10 +386,21 @@ class AppUpdater extends ChangeNotifier {
     _changed();
     var launched = false;
     try {
-      if ((await sha256.bind(installer.openRead()).first).toString() !=
-          release.sha256) {
+      if (!await installer.exists() ||
+          await installer.length() != release.size ||
+          (await sha256.bind(installer.openRead()).first).toString() !=
+              release.sha256) {
         downloaded = null;
         throw const FormatException('Installer changed after verification');
+      }
+      if (isAndroid) {
+        await installAndroid!(
+          installer,
+          release.version.toString(),
+          release.sha256,
+        );
+        status = 'Android installer opened. Confirm the update on your device.';
+        return;
       }
       // Yutaka's direct executable handoff: no PowerShell policy or ready file.
       // The installer waits for this PID before accessing installed files.
@@ -339,10 +420,15 @@ class AppUpdater extends ChangeNotifier {
       status = 'Closing Auralis. Continue in the update installer…';
       _changed();
       if (!await requestExit!()) throw StateError('Application exit cancelled');
-    } catch (_) {
+    } catch (failure) {
       status = 'Update installation could not start.';
       error = downloaded == null
           ? 'The installer changed after verification. Download the update again.'
+          : isAndroid
+          ? failure is PlatformException
+                ? failure.message ??
+                      'Android could not open the update installer. Try again.'
+                : 'Android could not open the update installer. Your download is kept; try again.'
           : launched
           ? 'Auralis could not finish closing. Cancel the installer, restart Auralis and retry. Download folder: ${installer.parent.path}'
           : 'Windows could not open the installer. Auralis has stayed open. Close it and run the downloaded installer manually. Download folder: ${installer.parent.path}';
