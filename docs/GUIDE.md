@@ -112,7 +112,7 @@ Run the app with `flutter run -d windows` after native setup, or launch `build/w
 
 `pwsh ./tool/package.ps1 -Installer` additionally requires Inno Setup 6 and produces an unsigned per-user installer. It requests no administrator privileges and preserves application data during uninstall. Neither packaging mode has been tested with a built executable in this environment.
 
-Packaging derives asset names and the installer version from `pubspec.yaml`. Commit the source first: the source ZIP is produced from Git `HEAD`. Release tags must match the version exactly (for example, `0.1.47+48` → `v0.1.47`). Packaging/tag validation has been tested with harmless fixture files; the current revision's installer compilation/installation is still outstanding.
+Packaging derives asset names and the installer version from `pubspec.yaml`. Commit the source first: the source ZIP is produced from Git `HEAD`. Release tags must match the version exactly (for example, `0.1.48+49` → `v0.1.48`). Packaging/tag validation has been tested with harmless fixture files; the current revision's installer compilation/installation is still outstanding.
 
 ## Connect Telegram
 
