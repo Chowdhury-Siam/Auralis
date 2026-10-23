@@ -233,7 +233,13 @@ class TelegramService extends ChangeNotifier {
       if (state != 'disconnected') {
         throw StateError('Finish signing out before entering new API details.');
       }
-      _secrets = await vault.read();
+      try {
+        _secrets = await vault.read();
+      } catch (_) {
+        throw const FormatException(
+          'Saved Telegram credentials cannot be unlocked on this device. Restore a password-protected account backup to recover your sign-in.',
+        );
+      }
       if (apiId == null &&
           apiHash == null &&
           !_secrets.containsKey('apiId') &&
@@ -258,7 +264,7 @@ class TelegramService extends ChangeNotifier {
         await _transport.close();
         _transport = _createTransport();
         _clientClosed = false;
-        _parametersSent = false;
+        _parametersRequest = null;
       }
       _subscription = transport.updates.listen(_onUpdate);
       final native = Platform.isAndroid
@@ -268,10 +274,22 @@ class TelegramService extends ChangeNotifier {
               'native',
               'tdjson.dll',
             );
-      await transport.start(native);
-      state = 'connecting';
-      final auth = await transport.request({'@type': 'getAuthorizationState'});
-      await _onAuthorization(auth);
+      try {
+        await transport.start(native);
+        state = 'connecting';
+        final auth = await transport.request({
+          '@type': 'getAuthorizationState',
+        });
+        await _onAuthorization(auth);
+      } catch (_) {
+        // A retry must create a fresh client, including after partial startup.
+        try {
+          await shutdown();
+        } catch (_) {
+          /* Preserve the original initialization error. */
+        }
+        rethrow;
+      }
     });
   }
 
@@ -280,8 +298,8 @@ class TelegramService extends ChangeNotifier {
       case 'updateAuthorizationState':
         unawaited(
           _onAuthorization(json['authorization_state'] as Json)
-              .catchError((Object _) {
-                error = 'Telegram initialization failed. Check your API credentials and network.';
+              .catchError((Object e) {
+                error = e is FormatException ? e.message : 'Telegram initialization failed. Check your API credentials and network.';
                 notifyListeners();
               }),
         );
@@ -340,12 +358,12 @@ class TelegramService extends ChangeNotifier {
     }
   }
 
-  bool _parametersSent = false;
+  Future<Json>? _parametersRequest;
   Future<void> _onAuthorization(Json auth) async {
     state = auth['@type'] as String;
     if (state == 'authorizationStateClosed') {
       _clientClosed = true;
-      _parametersSent = false;
+      _parametersRequest = null;
       connection = 'Offline';
       _channels.clear();
       state = 'disconnected';
@@ -359,10 +377,11 @@ class TelegramService extends ChangeNotifier {
     }
     error = null;
     notifyListeners();
-    if (state == 'authorizationStateWaitTdlibParameters' && !_parametersSent) {
-      _parametersSent = true;
+    if (state == 'authorizationStateWaitTdlibParameters') {
       try {
-        await transport.request({
+        // The update and getAuthorizationState response can arrive together.
+        // Both callers must await the same initialization result.
+        await (_parametersRequest ??= transport.request({
           '@type': 'setTdlibParameters',
           'use_test_dc': false,
           'database_directory': p.join(directory.path, 'database'),
@@ -379,11 +398,12 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.44',
-        });
-      } catch (_) {
-        _parametersSent = false;
-        rethrow;
+          'application_version': '0.1.47',
+        }));
+      } on TdException catch (e) {
+        throw FormatException(
+          'Telegram could not open the saved session (TDLib ${e.code}). Restore a valid account backup or retry connecting.',
+        );
       }
     } else if (ready) {
       await refreshChats();
@@ -518,12 +538,13 @@ class TelegramService extends ChangeNotifier {
         'Wait for Telegram to finish its current operation.',
       );
     }
-    final previous = await vault.read();
     await directory.create(recursive: true);
     final stage = await directory.createTemp('restore-');
     final database = Directory(p.join(directory.path, 'database'));
     final old = Directory(p.join(stage.path, 'previous'));
     final incoming = Directory(p.join(stage.path, 'incoming'));
+    final previousVault = File(p.join(stage.path, 'previous-vault'));
+    var savedVault = false;
     var moved = false, installed = false, safeToRestart = true;
     busy = true;
     notifyListeners();
@@ -531,7 +552,8 @@ class TelegramService extends ChangeNotifier {
       await checked.write(incoming);
       // A device-protected recovery copy remains if a filesystem rollback fails.
       if (await vault.file.exists()) {
-        await vault.file.copy(p.join(stage.path, p.basename(vault.file.path)));
+        await vault.file.copy(previousVault.path);
+        savedVault = true;
       }
       await shutdown();
       _clientClosed = true;
@@ -549,7 +571,13 @@ class TelegramService extends ChangeNotifier {
     } catch (_) {
       if (installed) await database.delete(recursive: true);
       if (moved) await old.rename(database.path);
-      await vault.write(previous);
+      // Roll back the original protected bytes. Reading them would prevent
+      // recovery when this device cannot decrypt a stale/imported vault.
+      if (savedVault) {
+        await atomicWrite(vault.file, await previousVault.readAsBytes());
+      } else if (installed && await vault.file.exists()) {
+        await vault.file.delete();
+      }
       safeToRestart = true;
       rethrow;
     } finally {
@@ -599,6 +627,8 @@ class TelegramService extends ChangeNotifier {
           ? e.message
           : e is TdException
           ? 'Telegram rejected the request (${e.code}). Check the value and try again; Telegram may require a wait.'
+          : e is TimeoutException
+          ? 'Telegram did not respond in time. Check your connection and retry.'
           : e is StateError
           ? e.message.toString()
           : 'Could not connect. Check the installed native libraries, credentials, and network.';
@@ -616,7 +646,7 @@ class TelegramService extends ChangeNotifier {
       await transport.close();
     } finally {
       _clientClosed = true;
-      _parametersSent = false;
+      _parametersRequest = null;
       connection = 'Offline';
       notifyListeners();
     }
