@@ -207,6 +207,21 @@ void main() {
       expect(find.byTooltip('Add Song -1 to queue'), findsOneWidget);
       expect(find.byTooltip('Add Song -2 to queue'), findsOneWidget);
       expect(find.text('Choose audio files'), findsNothing);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('library-counts'))).data,
+        '2 tracks · 2 channels',
+      );
+      final scansBeforeRefresh = td.requests
+          .where((r) => r['@type'] == 'searchChatMessages')
+          .length;
+      await tester.tap(find.byKey(const ValueKey('library-refresh')));
+      await tester.pumpAndSettle();
+      expect(
+        td.requests.where((r) => r['@type'] == 'searchChatMessages').length,
+        greaterThan(scansBeforeRefresh),
+      );
+      expect(find.byTooltip('Add Song -1 to queue'), findsOneWidget);
+      expect(find.byTooltip('Add Song -2 to queue'), findsOneWidget);
       await tester.tap(find.byTooltip('Sort Library'));
       await tester.pumpAndSettle();
       expectSortPosition();
