@@ -40,6 +40,11 @@ class FileVault extends SecretVault {
   FileVault(super.file);
   bool rejectRead = false;
   @override
+  Future<void> resetProtection() async {
+    rejectRead = false;
+  }
+
+  @override
   Future<Uint8List> transform(List<int> bytes, {required bool encrypt}) async {
     if (!encrypt && rejectRead) throw StateError('Device key unavailable');
     return Uint8List.fromList(bytes.map((byte) => byte ^ 0xff).toList());
@@ -211,6 +216,61 @@ void main() {
       await service.shutdown();
     }
   });
+
+  test(
+    'lost device credentials can be set aside for an explicit fresh sign-in',
+    () async {
+      final root = Directory('${dir.path}/fresh-sign-in');
+      final database = Directory('${root.path}/database');
+      await database.create(recursive: true);
+      await File('${database.path}/td.binlog')
+          .writeAsString('Existing encrypted session');
+      final vault = FileVault(File('${root.path}/credentials.aesgcm'));
+      await vault.file.writeAsBytes([5, 4, 3, 2, 1]);
+      vault.rejectRead = true;
+      final service = TelegramService(
+        root,
+        vault,
+        transport: FakeTd(),
+        createTransport: FakeTd.new,
+      );
+      addTearDown(service.shutdown);
+      await service.start();
+      expect(service.credentialRecoveryRequired, isTrue);
+      await service.recoverLocalSession();
+      expect(service.error, isNull);
+      expect(service.credentialRecoveryRequired, isFalse);
+      expect(await vault.file.exists(), isFalse);
+      expect(await database.exists(), isFalse);
+      final saved =
+          (await root
+                  .list()
+                  .where(
+                    (e) =>
+                        e is Directory &&
+                        e.path.contains('unreadable-session-'),
+                  )
+                  .toList())
+              .single;
+      expect(await File('${saved.path}/credentials.protected').readAsBytes(), [
+        5,
+        4,
+        3,
+        2,
+        1,
+      ]);
+      expect(
+        await File('${saved.path}/database/td.binlog').readAsString(),
+        'Existing encrypted session',
+      );
+      await service.start(
+        apiId: credentials['apiId'] as int,
+        apiHash: credentials['apiHash'] as String,
+      );
+      expect(service.credentialRecoveryRequired, isFalse);
+      expect((await vault.read())['apiId'], credentials['apiId']);
+    },
+  );
 
   test('account restore replaces an unreadable device vault and preserves its exact bytes on rollback', () async {
     for (final fail in [true, false]) {
