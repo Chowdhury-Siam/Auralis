@@ -80,9 +80,10 @@ jobs:
           path: |
             android/app/src/main/jniLibs/
             native/android/
-      - name: Configure optional release signing
+      - name: Configure automatic APK signing
         id: signing
         env:
+          SIGNING_IDENTITY: ${{ github.event_name != 'pull_request' && secrets.ANDROID_SIGNING_IDENTITY || '' }}
           KEYSTORE: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
           STORE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
           KEY_ALIAS: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_ALIAS || '' }}
@@ -94,18 +95,19 @@ jobs:
           SIGNED: ${{ steps.signing.outputs.signed }}
         run: |
           if [ "$ABI" = arm64-v8a ]; then target=android-arm64; else target=android-x64; fi
-          if [ "$SIGNED" = true ]; then mode=release; else mode=debug; fi
+          if [ "$SIGNED" = true ]; then flavor=release; else flavor=development-release; fi
           # --target-platform alone can leave third-party native libraries for
           # other ABIs in the APK; Flutter's ABI split enforces a single ABI.
-          flutter build apk --"$mode" --no-pub --split-per-abi --target-platform "$target"
+          flutter build apk --release --no-pub --split-per-abi --target-platform "$target"
           mkdir -p dist/android
           version=$(sed -n 's/^version: \([^+]*\)+.*/\1/p' pubspec.yaml)
-          source_apk="build/app/outputs/flutter-apk/app-$ABI-$mode.apk"
+          source_apk="build/app/outputs/flutter-apk/app-$ABI-release.apk"
           test -f "$source_apk" || { echo "Missing split APK: $source_apk" >&2; exit 1; }
-          cp "$source_apk" "dist/android/auralis-$version-android-$ABI-$mode.apk"
-          python3 tool/verify-android.py "dist/android/auralis-$version-android-$ABI-$mode.apk" "$ABI"
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "dist/android/auralis-$version-android-$ABI-$mode.apk"
-          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "dist/android/auralis-$version-android-$ABI-$mode.apk"
+          cp "$source_apk" "dist/android/auralis-$version-android-$ABI-$flavor.apk"
+          python3 tool/verify-android.py "dist/android/auralis-$version-android-$ABI-$flavor.apk" "$ABI"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "dist/android/auralis-$version-android-$ABI-$flavor.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "dist/android/auralis-$version-android-$ABI-$flavor.apk"
+          test "$(apkanalyzer manifest debuggable "dist/android/auralis-$version-android-$ABI-$flavor.apk")" = false
           cp -r native/android/licenses dist/android/
           cp native/android/build-manifest.json dist/android/
           cp THIRD_PARTY_NOTICES.md docs/ANDROID.md dist/android/
@@ -126,7 +128,7 @@ jobs:
           if [ "$SIGNED" = true ]; then
             echo 'Signed APK saved. Main and stable-tag builds also attach it to GitHub Releases.' >> "$GITHUB_STEP_SUMMARY"
           else
-            echo 'No custom signing key configured: development APK saved. Main and stable-tag builds also publish it with a debug filename. Configure the optional ANDROID signing secrets for release-key upgrades.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Optimized release APK saved with a temporary development signature. Run Set up Android signing once for automatic signing with a retained key.' >> "$GITHUB_STEP_SUMMARY"
           fi
   publish:
     name: Attach Android APK to release
