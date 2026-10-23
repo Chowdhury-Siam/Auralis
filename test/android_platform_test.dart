@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:auralis/android_audio.dart';
+import 'package:auralis/android_updater.dart';
 import 'package:auralis/data_files.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
@@ -44,7 +45,7 @@ void main() {
     final saved = await vault.file.readAsBytes();
     expect(saved, isNot(utf8.encode(jsonEncode(secrets))));
     expect(await vault.read(), secrets);
-    expect(calls, ['encrypt', 'decrypt']);
+    expect(calls, ['encrypt', 'decrypt', 'decrypt']);
     fail = true;
     await expectLater(
       vault.write({'apiId': 456}),
@@ -53,6 +54,52 @@ void main() {
     expect(await vault.file.readAsBytes(), saved);
     await expectLater(vault.read(), throwsA(isA<PlatformException>()));
   });
+
+  test('Android update bridge sends only the verified APK handoff', () async {
+    final calls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      if (call.method == 'updateInfo') {
+        return {'abi': 'arm64-v8a', 'directory': '/private/auralis-updates'};
+      }
+      return true;
+    });
+    const bridge = AndroidUpdateBridge();
+    final info = await bridge.info();
+    expect(info.abi, 'arm64-v8a');
+    expect(info.directory.path, '/private/auralis-updates');
+    await bridge.install(
+      File('/private/auralis-updates/update.apk'),
+      '0.2.0',
+      'a' * 64,
+    );
+    expect(calls.last.method, 'installUpdate');
+    expect(calls.last.arguments['version'], '0.2.0');
+    expect(calls.last.arguments['sha256'], 'a' * 64);
+  });
+
+  test(
+    'Android rejects unreadable encrypted writes before replacing the vault',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'auralis-vault-readback',
+      );
+      addTearDown(() => dir.delete(recursive: true));
+      final vault = AndroidSecretVault(File('${dir.path}/vault.aesgcm'));
+      final original = [1, 2, 3, 4];
+      await vault.file.writeAsBytes(original);
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'decrypt')
+          throw PlatformException(code: 'key_invalidated');
+        return Uint8List.fromList([4, 5, 6]);
+      });
+      await expectLater(
+        vault.write({'apiId': 123}),
+        throwsA(isA<PlatformException>()),
+      );
+      expect(await vault.file.readAsBytes(), original);
+    },
+  );
 
   test('Android exports use content URIs, preserve Unicode and handle cancellation', () async {
     const files = AndroidDataFiles();
@@ -170,9 +217,18 @@ void main() {
       expect(workflow['permissions']['contents'], 'read');
       expect(jobs['publish']['needs'], 'build');
       expect(jobs['publish']['permissions']['contents'], 'write');
-      expect(jobs['publish']['if'], isNot(contains('needs.build.outputs.signed')));
-      expect(jobs['publish']['env']['SIGNED'], r'${{ needs.build.outputs.signed }}');
-      expect(jobs['publish']['if'], contains("github.event_name != 'pull_request'"));
+      expect(
+        jobs['publish']['if'],
+        isNot(contains('needs.build.outputs.signed')),
+      );
+      expect(
+        jobs['publish']['env']['SIGNED'],
+        r'${{ needs.build.outputs.signed }}',
+      );
+      expect(
+        jobs['publish']['if'],
+        contains("github.event_name != 'pull_request'"),
+      );
       expect(
         jobs['publish']['concurrency']['group'],
         r'stable-release-${{ github.repository }}',
