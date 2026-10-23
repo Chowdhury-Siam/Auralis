@@ -12,7 +12,7 @@ val releaseKey = Properties().apply {
 }
 
 android {
-    namespace = "app.auralis.auralis"
+    namespace = "com.auralis.siam"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
     compileOptions {
@@ -20,7 +20,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     defaultConfig {
-        applicationId = "app.auralis.auralis"
+        applicationId = "com.auralis.siam"
         minSdk = 24
         targetSdk = 36
         versionCode = flutter.versionCode
@@ -48,6 +48,7 @@ kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget
 flutter { source = "../.." }
 
 dependencies {
+    implementation("androidx.core:core:1.17.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
 }
