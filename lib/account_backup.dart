@@ -69,6 +69,11 @@ class TelegramAccount {
     if (files.isEmpty || files.length > 2048) {
       throw const FormatException('Invalid Telegram database files.');
     }
+    if (!files.containsKey('td.binlog') || files['td.binlog']!.isEmpty) {
+      throw const FormatException(
+        'Telegram sign-in database is missing from this backup.',
+      );
+    }
     var size = 0;
     final seen = <String>{};
     for (final entry in files.entries) {
