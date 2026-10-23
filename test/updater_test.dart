@@ -6,6 +6,7 @@ import 'package:auralis/storage.dart';
 import 'package:auralis/updater.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 
 class Headers implements HttpHeaders {
   final values = <String, String>{};
@@ -189,6 +190,146 @@ void main() {
   });
   tearDown(() async {
     await dir.delete(recursive: true);
+  });
+
+  Map<String, dynamic> androidRelease({String abi = 'arm64-v8a'}) {
+    final json = release();
+    final name = 'auralis-0.2.0-android-$abi-release.apk';
+    (json['assets'] as List).add({
+      'name': name,
+      'size': installerBytes.length,
+      'digest': 'sha256:${sha256.convert(installerBytes)}',
+      'browser_download_url':
+          'https://github.com/$repository/releases/download/v0.2.0/$name',
+    });
+    return json;
+  }
+
+  test(
+    'Android selects only the signed APK for the installed architecture',
+    () {
+      for (final abi in ['arm64-v8a', 'x86_64']) {
+        final json = androidRelease(abi: abi);
+        final update = ReleaseUpdate.fromJson(
+          json,
+          repository,
+          StableVersion.parse('0.1.0'),
+          target: UpdateTarget.android,
+          androidAbi: abi,
+        )!;
+        expect(update.url.path, endsWith('android-$abi-release.apk'));
+        expect(
+          () => ReleaseUpdate.fromJson(
+            release(),
+            repository,
+            StableVersion.parse('0.1.0'),
+            target: UpdateTarget.android,
+            androidAbi: abi,
+          ),
+          throwsA(isA<UpdateAssetUnavailable>()),
+        );
+        json['assets'].add(json['assets'].last);
+        expect(
+          () => ReleaseUpdate.fromJson(
+            json,
+            repository,
+            StableVersion.parse('0.1.0'),
+            target: UpdateTarget.android,
+            androidAbi: abi,
+          ),
+          throwsFormatException,
+        );
+      }
+    },
+  );
+
+  test('Android verifies APK downloads and retries install permission without exiting', () async {
+    var attempts = 0, exited = false;
+    final updates = AppUpdater(
+      currentVersion: '0.1.0',
+      directory: Directory('${dir.path}/android'),
+      settings: settings,
+      client: Client([metadata(androidRelease()), Response(installerBytes)]),
+      target: UpdateTarget.android,
+      androidAbi: 'arm64-v8a',
+      requestExit: () async {
+        exited = true;
+        return true;
+      },
+      installAndroid: (file, version, digest) async {
+        attempts++;
+        expect(file.path, endsWith('.apk'));
+        expect(await file.readAsBytes(), installerBytes);
+        expect(version, '0.2.0');
+        expect(digest, sha256.convert(installerBytes).toString());
+        if (attempts == 1)
+          throw PlatformException(
+            code: 'permission',
+            message: 'Allow installs from Auralis.',
+          );
+      },
+    );
+    addTearDown(updates.dispose);
+    await updates.check();
+    await updates.download();
+    expect(updates.downloaded, isNotNull);
+    await updates.install();
+    expect(updates.error, contains('Allow installs'));
+    expect(updates.downloaded, isNotNull);
+    await updates.install();
+    expect(updates.error, isNull);
+    expect(updates.status, contains('Android installer opened'));
+    expect(exited, isFalse);
+    expect(attempts, 2);
+  });
+
+  test(
+    'Android automatically downloads verified updates but never auto-installs',
+    () async {
+      settings.automaticUpdates = false;
+      var installed = false;
+      final client = Client([
+        metadata(androidRelease()),
+        Response(installerBytes),
+      ]);
+      final updates = AppUpdater(
+        currentVersion: '0.1.0',
+        directory: Directory('${dir.path}/automatic'),
+        settings: settings,
+        client: client,
+        target: UpdateTarget.android,
+        androidAbi: 'arm64-v8a',
+        installAndroid: (_, _, _) async {
+          installed = true;
+        },
+      );
+      addTearDown(updates.dispose);
+      final ready = Completer<void>();
+      updates.addListener(() {
+        if (updates.downloaded != null && !ready.isCompleted) ready.complete();
+      });
+      await updates.setAutomatic(true);
+      await ready.future.timeout(const Duration(seconds: 5));
+      expect(client.requests, hasLength(2));
+      expect(installed, isFalse);
+      expect(await updates.downloaded!.readAsBytes(), installerBytes);
+    },
+  );
+
+  test('Android missing APK reports publishing delay instead of claiming latest version', () async {
+    final updates = AppUpdater(
+      currentVersion: '0.1.0',
+      directory: dir,
+      settings: settings,
+      client: Client([metadata()]),
+      target: UpdateTarget.android,
+      androidAbi: 'arm64-v8a',
+    );
+    addTearDown(updates.dispose);
+    await updates.check();
+    expect(updates.available, isNull);
+    expect(updates.error, isNull);
+    expect(updates.status, contains('not available'));
   });
 
   AppUpdater updater(
