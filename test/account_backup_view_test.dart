@@ -43,13 +43,11 @@ void main() {
   testWidgets(
     'account option and password validation fit phone and desktop; cancellation preserves sign-in',
     (tester) async {
+      final directory = (await tester.runAsync(
+        () => Directory.systemTemp.createTemp('auralis-backup-view-'),
+      ))!;
       final td = FakeTd();
-      final service = TelegramService(
-        Directory('unused-telegram'),
-        MemoryVault(),
-        transport: td,
-      );
-      service.state = 'authorizationStateReady';
+      final service = TelegramService(directory, MemoryVault(), transport: td);
       final player = PlayerController(
         FakeAudio(),
         TelegramStreamProxy((_) async => {}),
@@ -78,6 +76,21 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+        isFalse,
+      );
+      // A dialog opened during reconnect must include the account by default
+      // once Telegram becomes ready, without reopening the dialog.
+      await tester.runAsync(
+        () => service.start(
+          apiId: 12345,
+          apiHash: 'abcdef0123456789abcdef0123456789',
+        ),
+      );
+      td.auth('authorizationStateReady');
+      await tester.pumpAndSettle();
       for (final size in [const Size(1280, 800), const Size(360, 640)]) {
         tester.view.physicalSize = size;
         await tester.pumpAndSettle();
@@ -98,6 +111,7 @@ void main() {
           image.dispose();
         });
       }
+      td.requests.clear();
       final create = find.text('Create backup');
       await tester.ensureVisible(create);
       await tester.tap(create);
@@ -123,6 +137,7 @@ void main() {
       await tester.runAsync(() async {
         await player.shutdown();
         await service.shutdown();
+        await directory.delete(recursive: true);
       });
       service.dispose();
     },
