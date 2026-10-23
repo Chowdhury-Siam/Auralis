@@ -52,6 +52,10 @@ Future<void> main(List<String> arguments) async {
     final native = player.platform as NativePlayer;
     // Null audio output permits playback verification on headless CI workers.
     await native.setProperty('ao', 'null');
+    await native.setProperty('network-timeout', '60');
+    if (double.tryParse(await native.getProperty('network-timeout')) != 60) {
+      throw StateError('Streaming timeout was not applied');
+    }
     // Exercise WASAPI device monitoring even with null audio output on CI.
     final devices = await native.getProperty('audio-device-list');
     if (devices.isEmpty) throw StateError('Native audio-device query failed');
@@ -86,16 +90,30 @@ Future<void> main(List<String> arguments) async {
       'seekPositionMs': player.state.position.inMilliseconds,
       'output': 'null (muted)',
     };
-    final bytes = await wave.readAsBytes();
+    // Longer than the decoder cache: middle/end seeks must fetch new ranges.
+    final bytes = makeWave(seconds: 180);
     var requests = 0;
+    final downloadOffsets = <int>[];
+    var coldSeek = false;
+    DateTime? readyAt;
     proxy = TelegramStreamProxy((json) async {
       requests++;
       switch (json['@type']) {
         case 'downloadFile':
+          final offset = json['offset'] as int;
+          downloadOffsets.add(offset);
+          if (coldSeek && offset > 0) {
+            coldSeek = false;
+            readyAt = DateTime.now().add(const Duration(seconds: 6));
+          }
           return {};
         case 'getFileDownloadedPrefixSize':
+          if (readyAt != null && DateTime.now().isBefore(readyAt!)) {
+            return {'size': 0};
+          }
           return {'size': bytes.length - (json['offset'] as int)};
         case 'readFilePart':
+          await Future<void>.delayed(const Duration(milliseconds: 30));
           final offset = json['offset'] as int;
           return {
             'data': base64Encode(
@@ -119,10 +137,29 @@ Future<void> main(List<String> arguments) async {
     );
     await player.open(Media(uri.toString()));
     await waitFor(() => player!.state.position.inMilliseconds > 200);
-    await player.seek(const Duration(seconds: 4));
-    await waitFor(() => player!.state.position.inMilliseconds >= 3900);
+    coldSeek = true;
+    final seekPositions = <int>[];
+    for (final seconds in [90, 170, 12]) {
+      await player.seek(Duration(seconds: seconds));
+      await waitFor(
+        () =>
+            player!.state.position.inMilliseconds >= seconds * 1000 + 300 &&
+            player.state.position.inMilliseconds < seconds * 1000 + 8000 &&
+            !player.state.buffering,
+      );
+      seekPositions.add(player.state.position.inMilliseconds);
+    }
+    if (!downloadOffsets.any((offset) => offset > bytes.length * .8) ||
+        coldSeek) {
+      throw StateError(
+        'Native seek smoke did not exercise an uncached tail range',
+      );
+    }
     report['loopbackPlayback'] = {
       'tdSource': 'simulated cache (no account)',
+      'coldSeekDelaySeconds': 6,
+      'seekPositionsMs': seekPositions,
+      'downloadOffsets': downloadOffsets,
       'requests': requests,
       'seekPositionMs': player.state.position.inMilliseconds,
     };
@@ -160,8 +197,9 @@ Future<void> waitFor(bool Function() condition) async {
   }
 }
 
-Uint8List makeWave() {
-  const rate = 44100, samples = rate * 12;
+Uint8List makeWave({int seconds = 12}) {
+  const rate = 44100;
+  final samples = rate * seconds;
   final bytes = Uint8List(44 + samples * 2), data = ByteData(44 + samples * 2);
   void text(int offset, String value) =>
       bytes.setAll(offset, ascii.encode(value));
