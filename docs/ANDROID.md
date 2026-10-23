@@ -14,7 +14,7 @@ Download **auralis-android-arm64-v8a-development** or **auralis-android-arm64-v8
 
 1. Commit this complete source to `main`. Run the signing setup below once for automatic retained-key signing, or keep an existing custom key. Without either, compilation still uses release mode with an explicitly labelled development signature.
 2. Open **Actions → Android APK build → Run workflow**, choose `main`, and keep **arm64-v8a** for a phone APK. A push to `main` also runs it automatically. Re-running an old commit still uses that commit's old workflow.
-3. Once analysis, tests, native checks, and APK signature/alignment verification succeed, the separate publishing job attaches the built APK to `v<pubspec version>`. An existing version can be completed by a publishing-only change when the Android app sources still match its tag. Different app sources require a new version; tags are never moved. This recovery source uses **0.1.53+54** to avoid the existing 0.1.43 assets/tag.
+3. Once analysis, tests, native checks, and APK signature/alignment verification succeed, the separate publishing job attaches the built APK to `v<pubspec version>`. An existing version can be completed by a publishing-only change when the Android app sources still match its tag. Different app sources require a new version; tags are never moved. This recovery source uses **0.1.56+57** to avoid the existing 0.1.43 assets/tag.
 
 If Android finishes first for a new version, it creates a **draft**, uploads and verifies its Android assets, and leaves publication to the existing Windows publisher. If Windows finishes first, Android appends its assets to the published release. Both publishing jobs use the same concurrency group. For a brand-new version started manually only on Android, also run the Windows workflow for that same commit to publish the shared draft.
 
@@ -28,7 +28,7 @@ The APK build keeps read-only repository permission. Only the guarded publishing
 
 1. Create a [fine-grained GitHub token](https://github.com/settings/personal-access-tokens/new), restricted to **Chowdhury-Siam/Auralis**, with repository **Secrets: Read and write**. Add it to this repository's **Settings → Secrets and variables → Actions** as `ANDROID_SIGNING_SETUP_TOKEN`.
 2. Commit this complete source to `main`, then open **Actions → Set up Android signing → Run workflow** on `main`.
-3. The action generates a private RSA-4096 key with a random password and saves the key/alias/password together in the encrypted `ANDROID_SIGNING_IDENTITY` repository secret. It then starts a fresh **Android APK build** on `main`, which reads that identity and produces `auralis-0.1.53-android-arm64-v8a-release.apk`. Future builds reuse it automatically. No manual keytool command or four-secret setup is needed.
+3. The action generates a private RSA-4096 key with a random password and saves the key/alias/password together in the encrypted `ANDROID_SIGNING_IDENTITY` repository secret. It then starts a fresh **Android APK build** on `main`, which reads that identity and produces `auralis-0.1.56-android-arm64-v8a-release.apk`. Future builds reuse it automatically. No manual keytool command or four-secret setup is needed.
 
 You can remove or revoke `ANDROID_SIGNING_SETUP_TOKEN` after successful setup; normal builds only need the saved identity. GitHub's default workflow token cannot manage repository secrets, so that one-time Secrets permission is needed. See [GitHub's repository secret API](https://docs.github.com/en/rest/actions/secrets#create-or-update-a-repository-secret). A separate build is queued after setup because repository secrets are read when a workflow is queued, as documented in [Secrets reference](https://docs.github.com/en/actions/reference/security/secrets).
 
@@ -113,7 +113,7 @@ This is a packaging/CI-only correction; the application version is unchanged.
 
 `Existing asset differs: auralis-0.1.43-android-arm64-v8a-debug.apk` means that a file with that version/ABI/signing name already exists with different bytes. Rebuilding identical source is not guaranteed to reproduce APK bytes, especially when a fresh runner generates a different development signing key. The former publisher rejected this in drafts as well as published releases.
 
-Commit the complete **0.1.53+54** source to `main` and let both workflows run for that commit. It targets a new `v0.1.53` release without deleting or moving `v0.1.43`. Re-running an old 0.1.43 job still uses its old script/version. The corrected publisher can also refresh only its own conflicting Android assets while a release remains a draft, with local checksum/provenance validation and post-upload GitHub digest/size checks. Published downloads remain protected. Signing stays optional; the draft retry fix does not make development keys consistent between runners. Use a persistent release key for Android updates that preserve installed app data.
+Commit the complete **0.1.56+57** source to `main` and let both workflows run for that commit. It targets a new `v0.1.56` release without deleting or moving `v0.1.43`. Re-running an old 0.1.43 job still uses its old script/version. The corrected publisher can also refresh only its own conflicting Android assets while a release remains a draft, with local checksum/provenance validation and post-upload GitHub digest/size checks. Published downloads remain protected. Signing stays optional; the draft retry fix does not make development keys consistent between runners. Use a persistent release key for Android updates that preserve installed app data.
 
 
 ## 0.1.49 source update
@@ -147,6 +147,18 @@ Playing, the lyrics view, or the player dock. The played waveform, seek thumb,
 timestamps, and seeking remain. Audio buffering and all artwork/lyric blur and
 motion effects are preserved. This source targets v0.1.51.
 
+
+## 0.1.56 artwork theme and desktop player
+
+- Desktop Now Playing keeps the open artwork-and-controls layout without adding an opaque controls card on larger windows; narrow windows retain the responsive stacked layout. Shuffle, repeat and favorite use compact circular controls; active modes use the artwork accent.
+- The application derives a dark Material color scheme from the current cover preview and then the resolved cover. Library, navigation, queue, settings, dialogs, playback controls and lyrics share the scheme. Extraction is cached for eight image buffers; stale asynchronous results cannot recolor a later track. Missing or damaged artwork falls back to the purple theme.
+- Dart syntax parsing and Android source/resource checks passed. Flutter analysis, widget tests, APK builds and live desktop visual checks remain unrun because the editing environment has no Flutter SDK. Regression tests were added for palette changes, late covers, app/dialog theme propagation and compact mode controls.
+
+## 0.1.54 restore recovery
+
+- A confirmed password-protected account restore renews a device credential key only when startup has marked the existing vault unreadable. Healthy keys are retained, and a failed restore retains the previous protected vault bytes and database through the existing rollback path.
+- Restore reports Android document permission, missing-file, size-limit and provider failures. A Library refresh error after settings are committed is reported as a refresh issue rather than a failed restore.
+- Android source verification and all 33 Python Android tooling tests passed for this update. New Flutter regressions cover invalidated-key recovery/rollback and content-URI restore/error reporting; Flutter analysis, Flutter tests and Android device tests could not be run in the editing environment. The screenshot's exact failure cannot be confirmed without reproducing it on the device.
 
 ## 0.1.52 Android identity, updates, and credential recovery
 
