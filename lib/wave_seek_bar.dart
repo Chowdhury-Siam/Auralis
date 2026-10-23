@@ -7,13 +7,12 @@ class WaveSeekBar extends StatefulWidget {
   const WaveSeekBar({
     super.key,
     required this.value,
-    required this.buffered,
     required this.playing,
     required this.reducedMotion,
     required this.format,
     this.onChanged,
   });
-  final double value, buffered;
+  final double value;
   final bool playing, reducedMotion;
   final String Function(double) format;
   final ValueChanged<double>? onChanged;
@@ -79,7 +78,6 @@ class _WaveSeekBarState extends State<WaveSeekBar>
           child: Slider(
             key: const ValueKey('playback-seek'),
             value: widget.value,
-            secondaryTrackValue: math.max(widget.value, widget.buffered),
             semanticFormatterCallback: widget.format,
             onChanged: widget.onChanged,
           ),
@@ -128,14 +126,6 @@ class WaveTrack extends SliderTrackShape with BaseSliderTrackShape {
       paint,
     );
     final start = textDirection == TextDirection.ltr ? rect.left : rect.right;
-    if (secondaryOffset != null) {
-      paint.color = sliderTheme.secondaryActiveTrackColor!;
-      canvas.drawLine(
-        Offset(start, rect.center.dy),
-        Offset(secondaryOffset.dx.clamp(rect.left, rect.right), rect.center.dy),
-        paint,
-      );
-    }
     paint.color = Color.lerp(
       sliderTheme.disabledActiveTrackColor,
       sliderTheme.activeTrackColor,
