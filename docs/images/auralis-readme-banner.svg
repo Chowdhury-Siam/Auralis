@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="520" viewBox="0 0 1440 520" role="img" aria-label="Auralis — your music, your space">
+<defs>
+<linearGradient id="bg" x2="1" y2=".7"><stop stop-color="#17131F"/><stop offset=".55" stop-color="#21192D"/><stop offset="1" stop-color="#302143"/></linearGradient>
+<radialGradient id="glow"><stop stop-color="#A273E9" stop-opacity=".24"/><stop offset="1" stop-color="#A273E9" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="1440" height="520" rx="28" fill="url(#bg)"/>
+<ellipse cx="1110" cy="230" rx="400" ry="290" fill="url(#glow)"/>
+<g fill="none" stroke="#C8AEFF" stroke-opacity=".10"><circle cx="1130" cy="260" r="186"/><circle cx="1130" cy="260" r="232"/><circle cx="1130" cy="260" r="278"/></g>
+<text x="72" y="74" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="600" letter-spacing="4" fill="#BFA8E5">A LITTLE CLOSER TO MUSIC</text>
+<svg x="62" y="116" width="152" height="152" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="icon-background" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#302638"/>
+      <stop offset="1" stop-color="#151219"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="0.7" y2="1">
+      <stop stop-color="#D1B4FF"/>
+      <stop offset="1" stop-color="#A778F4"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="236" height="236" rx="56" fill="url(#icon-background)" stroke="#554264" stroke-width="3"/>
+  <path d="M67 185 116 69 Q128 43 140 69 L189 185" fill="none" stroke="url(#accent)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M111 119 Q111 113 117 117 L155 139 Q161 143 155 147 L117 169 Q111 173 111 167Z" fill="#F5EDFF"/>
+</svg>
+<text x="234" y="220" font-family="DejaVu Sans, sans-serif" font-size="88" font-weight="700" letter-spacing="-5" fill="#F5EDFF">Auralis</text>
+<text x="76" y="314" font-family="DejaVu Sans, sans-serif" font-size="34" fill="#D9C5FC">Your music. Your space.</text>
+<text x="76" y="357" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#B6A9C6">Telegram channels. One music library.</text>
+<g transform="translate(40 40)"><rect x="740" y="174.5" width="5" height="51.0" rx="2.5" fill="#C8AEFF" opacity="0.31"/><rect x="753" y="167.6" width="5" height="64.9" rx="2.5" fill="#C8AEFF" opacity="0.38"/><rect x="766" y="161.1" width="5" height="77.9" rx="2.5" fill="#C8AEFF" opacity="0.44"/><rect x="779" y="158.3" width="5" height="83.5" rx="2.5" fill="#C8AEFF" opacity="0.50"/><rect x="792" y="160.0" width="5" height="80.0" rx="2.5" fill="#C8AEFF" opacity="0.55"/><rect x="805" y="166.7" width="5" height="66.6" rx="2.5" fill="#C8AEFF" opacity="0.60"/><rect x="818" y="174.6" width="5" height="50.9" rx="2.5" fill="#C8AEFF" opacity="0.65"/><rect x="831" y="181.0" width="5" height="38.0" rx="2.5" fill="#C8AEFF" opacity="0.69"/><rect x="844" y="182.0" width="5" height="36.0" rx="2.5" fill="#C8AEFF" opacity="0.73"/><rect x="857" y="178.2" width="5" height="43.5" rx="2.5" fill="#C8AEFF" opacity="0.76"/><rect x="870" y="171.5" width="5" height="56.9" rx="2.5" fill="#C8AEFF" opacity="0.78"/><rect x="883" y="165.5" width="5" height="69.1" rx="2.5" fill="#C8AEFF" opacity="0.79"/><rect x="896" y="163.1" width="5" height="73.7" rx="2.5" fill="#C8AEFF" opacity="0.80"/><rect x="909" y="165.0" width="5" height="70.0" rx="2.5" fill="#C8AEFF" opacity="0.80"/><rect x="922" y="169.8" width="5" height="60.4" rx="2.5" fill="#C8AEFF" opacity="0.79"/><rect x="935" y="175.4" width="5" height="49.2" rx="2.5" fill="#C8AEFF" opacity="0.78"/><rect x="948" y="179.6" width="5" height="40.9" rx="2.5" fill="#C8AEFF" opacity="0.76"/><rect x="961" y="181.6" width="5" height="36.8" rx="2.5" fill="#C8AEFF" opacity="0.73"/><rect x="974" y="182.0" width="5" height="36.0" rx="2.5" fill="#C8AEFF" opacity="0.69"/><rect x="987" y="181.9" width="5" height="36.1" rx="2.5" fill="#C8AEFF" opacity="0.65"/><rect x="1000" y="182.0" width="5" height="36.1" rx="2.5" fill="#C8AEFF" opacity="0.60"/><rect x="1013" y="181.9" width="5" height="36.1" rx="2.5" fill="#C8AEFF" opacity="0.55"/><rect x="1026" y="181.2" width="5" height="37.6" rx="2.5" fill="#C8AEFF" opacity="0.50"/><rect x="1039" y="179.6" width="5" height="40.8" rx="2.5" fill="#C8AEFF" opacity="0.44"/><rect x="1052" y="177.7" width="5" height="44.6" rx="2.5" fill="#C8AEFF" opacity="0.38"/><rect x="1065" y="176.7" width="5" height="46.6" rx="2.5" fill="#C8AEFF" opacity="0.31"/><rect x="1078" y="177.6" width="5" height="44.8" rx="2.5" fill="#C8AEFF" opacity="0.25"/></g>
+<g font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="600" fill="#DCD0EE">
+<rect x="76" y="406" width="124" height="40" rx="20" fill="#35283F" stroke="#59436F"/><text x="138" y="432" text-anchor="middle">ANDROID</text>
+<rect x="212" y="406" width="128" height="40" rx="20" fill="#35283F" stroke="#59436F"/><text x="276" y="432" text-anchor="middle">WINDOWS</text>
+<text x="370" y="432" fill="#9E8CAF" font-size="14" letter-spacing="2">INDEPENDENT · OPEN SOURCE</text>
+</g>
+<path d="M760 342 C790 310 820 374 850 342 S910 310 940 342 S1000 374 1030 342 S1090 310 1120 342 S1180 374 1210 342 S1270 310 1300 342" fill="none" stroke="#BFA5F5" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+<circle cx="1120" cy="342" r="6" fill="#DFCFFF"/>
+</svg>
