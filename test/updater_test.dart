@@ -193,7 +193,7 @@ void main() {
 
   AppUpdater updater(
     Client client, {
-    Future<Process> Function(File, File, String)? launch,
+    Future<Process> Function(File, List<String>)? launch,
     Future<bool> Function()? exit,
   }) {
     final result = AppUpdater(
@@ -201,55 +201,24 @@ void main() {
       directory: Directory('${dir.path}/updates'),
       settings: settings,
       client: client,
-      launchHelper: launch == null
-          ? null
-          : (script, installer, digest) async {
-              final helper = await launch(script, installer, digest);
-              await File('${installer.parent.path}/update-helper.ready')
-                  .writeAsString('${helper.pid}');
-              return helper;
-            },
+      launchInstaller: launch,
       requestExit: exit,
     );
     addTearDown(result.dispose);
     return result;
   }
 
-  test('helper readiness rejects missing or wrong acknowledgements and early failure', () async {
-    final ready = File('${dir.path}/ready'),
-        failure = File('${dir.path}/error');
-    await expectLater(
-      waitForUpdateHelper(ready, failure, 4242, timeout: Duration.zero),
-      throwsA(isA<TimeoutException>()),
-    );
-    await ready.writeAsString('1111');
-    await expectLater(
-      waitForUpdateHelper(ready, failure, 4242, timeout: Duration.zero),
-      throwsA(isA<TimeoutException>()),
-    );
-    await ready.writeAsString('4242');
-    await waitForUpdateHelper(ready, failure, 4242, timeout: Duration.zero);
-    await failure.writeAsString('early startup failure');
-    await expectLater(
-      waitForUpdateHelper(ready, failure, 4242),
-      throwsStateError,
-    );
-  });
-
   test(
-    'an early helper error leaves the app running and allows retry',
+    'direct installer launch failure keeps the app open and permits retry',
     () async {
-      var exited = false;
-      final helper = Helper();
-      var fail = true;
+      var exited = false, fail = true;
       final updates = updater(
         Client([metadata(), Response(installerBytes)]),
-        launch: (_, installer, _) async {
+        launch: (_, _) async {
           if (fail) {
-            await File('${installer.parent.path}/update-error.txt')
-                .writeAsString('fixture error');
+            throw const ProcessException('setup.exe', [], 'fixture failure');
           }
-          return helper;
+          return Helper();
         },
         exit: () async {
           exited = true;
@@ -260,9 +229,8 @@ void main() {
       await updates.download();
       await updates.install();
       expect(exited, isFalse);
-      expect(helper.killed, isTrue);
-      expect(updates.installing, isFalse);
       expect(updates.error, contains('stayed open'));
+      expect(updates.downloaded, isNotNull);
       fail = false;
       await updates.install();
       expect(exited, isTrue);
@@ -270,15 +238,21 @@ void main() {
     },
   );
 
-  test('successful download matches GitHub digest; helper starts before graceful exit', () async {
+  test('verified installer starts directly before graceful exit', () async {
     final events = <String>[];
     final client = Client([metadata(), Response(installerBytes)]);
     final updates = updater(
       client,
-      launch: (script, file, digest) async {
+      launch: (file, arguments) async {
         events.add('helper');
-        expect(await script.readAsString(), contains('WaitForExit(90000)'));
-        expect(digest, sha256.convert(installerBytes).toString());
+        expect(arguments, contains('/AURALISUPDATE=1'));
+        expect(arguments, contains('/AURALISPID=$pid'));
+        expect(arguments.any((arg) => arg.startsWith('/DIR=')), isTrue);
+        expect(arguments.any((arg) => arg.startsWith('/LOG=')), isTrue);
+        expect(
+          await file.parent.list().any((file) => file.path.endsWith('.ps1')),
+          isFalse,
+        );
         expect(await file.readAsBytes(), installerBytes);
         return Helper();
       },
@@ -323,12 +297,12 @@ void main() {
     },
   );
   test(
-    'installer is hashed again before launch; cancelled exit stops the helper',
+    'installer is hashed again before launch; cancelled exit reports recovery',
     () async {
       var launched = false;
       final updates = updater(
         Client([metadata(), Response(installerBytes)]),
-        launch: (_, _, _) async {
+        launch: (_, _) async {
           launched = true;
           return Helper();
         },
@@ -343,14 +317,13 @@ void main() {
       final helper = Helper();
       final cancelled = updater(
         Client([metadata(), Response(installerBytes)]),
-        launch: (_, _, _) async => helper,
+        launch: (_, _) async => helper,
         exit: () async => false,
       );
       await cancelled.check();
       await cancelled.download();
       await cancelled.install();
-      expect(helper.killed, isTrue);
-      expect(cancelled.error, isNotNull);
+      expect(cancelled.error, contains('Cancel the installer'));
     },
   );
   test('404 is a normal no-release state; rate limits surface without quitting the app', () async {
@@ -364,14 +337,14 @@ void main() {
     expect(limited.checking, isFalse);
   });
   test(
-    'launch and cleanup failures offer manual recovery and stop the helper',
+    'launch and cleanup failures retain the verified installer for recovery',
     () async {
       for (final duringCleanup in [false, true]) {
         final helper = Helper();
         var exitCalled = false;
         final updates = updater(
           Client([metadata(), Response(installerBytes)]),
-          launch: (_, _, _) async {
+          launch: (_, _) async {
             if (!duringCleanup) {
               throw const ProcessException(
                 'powershell.exe',
@@ -392,13 +365,12 @@ void main() {
         await updates.install();
         expect(
           updates.error,
-          contains(duringCleanup ? 'finish closing' : 'installer helper'),
+          contains(duringCleanup ? 'finish closing' : 'could not open'),
         );
-        expect(updates.error, contains('manually'));
+        expect(updates.error, contains('Download folder'));
         expect(updates.downloaded, isNotNull);
         expect(updates.installing, isFalse);
         expect(exitCalled, duringCleanup);
-        expect(helper.killed, duringCleanup);
       }
     },
   );
