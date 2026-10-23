@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Original A/play paths, centered inside the adaptive icon safe zone. -->
+    <group android:scaleX="0.32" android:scaleY="0.32"
+        android:translateX="13.04" android:translateY="13.04">
+        <path android:pathData="M67,185 L116,69 Q128,43 140,69 L189,185"
+            android:fillColor="@android:color/transparent"
+            android:strokeWidth="24" android:strokeLineCap="round"
+            android:strokeLineJoin="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient android:type="linear"
+                    android:startX="55" android:startY="44"
+                    android:endX="157" android:endY="197"
+                    android:startColor="#D1B4FF" android:endColor="#A778F4" />
+            </aapt:attr>
+        </path>
+        <path android:pathData="M111,119 Q111,113 117,117 L155,139 Q161,143 155,147 L117,169 Q111,173 111,167 Z"
+            android:fillColor="#F5EDFF" />
+    </group>
+</vector>
