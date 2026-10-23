@@ -467,151 +467,163 @@ class _PlayerShellState extends State<PlayerShell> {
     ),
   );
 
-  Widget _header(bool narrow, {bool short = false}) => destination == 3
-      ? Row(
-          children: [
-            IconButton.filledTonal(
-              tooltip: 'Back to Library',
-              onPressed: () => setState(() {
-                destination = 0;
-              }),
-              icon: const Icon(Icons.keyboard_arrow_down_rounded),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Now playing',
-                key: ValueKey('page-title'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-              ),
-            ),
-            IconButton(
-              onPressed: MediaQuery.sizeOf(context).width < 900 ? _settings : _stats,
-              tooltip: MediaQuery.sizeOf(context).width < 900 ? 'Settings' : 'Listening stats',
-              icon: Icon(MediaQuery.sizeOf(context).width < 900
-                ? Icons.tune_rounded : Icons.bar_chart_rounded),
-            ),
-            IconButton.filledTonal(
-              key: const ValueKey('now-playing-queue'),
-              tooltip: 'Queue',
-              onPressed: () => setState(() {
-                destination = 2;
-                showLyrics = false;
-              }),
-              icon: const Icon(Icons.queue_music_rounded),
-            ),
-          ],
-        )
-      : Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (!short)
-                    Text(
-                      [
-                        'YOUR COLLECTION',
-                        'MUSIC IN YOUR CHANNELS',
-                        'KEEP THE GOOD ONES GOING',
-                        'IN THE MOMENT',
-                      ][destination],
-                      style: const TextStyle(
-                        fontSize: 9,
-                        letterSpacing: 1.7,
-                        color: accent,
-                      ),
-                    ),
-                  if (!short) const SizedBox(height: 7),
-                  Text(
-                    key: const ValueKey('page-title'),
-                    [
-                      'Library',
-                      'Telegram',
-                      'Play queue',
-                      'Now playing',
-                    ][destination],
-                    style: TextStyle(
-                      fontSize: short
-                          ? 24
-                          : narrow
-                          ? 28
-                          : 36,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -1.4,
-                    ),
+  Widget _header(bool narrow, {bool short = false}) => LayoutBuilder(
+    builder: (context, box) {
+      final inlineCounts =
+          box.maxWidth >= 560 &&
+          MediaQuery.textScalerOf(context).scale(12) <= 16;
+      return destination == 3
+          ? Row(
+              children: [
+                IconButton.filledTonal(
+                  tooltip: 'Back to Library',
+                  onPressed: () => setState(() {
+                    destination = 0;
+                  }),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Now playing',
+                    key: ValueKey('page-title'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                // Full-screen phones need these routes while navigation is hidden.
+                if (MediaQuery.sizeOf(context).width < 900) ...[
+                  IconButton(
+                    onPressed: _settings,
+                    tooltip: 'Settings',
+                    icon: const Icon(Icons.tune_rounded),
+                  ),
+                  IconButton.filledTonal(
+                    key: const ValueKey('now-playing-queue'),
+                    tooltip: 'Queue',
+                    onPressed: () => setState(() {
+                      destination = 2;
+                      showLyrics = false;
+                    }),
+                    icon: const Icon(Icons.queue_music_rounded),
                   ),
                 ],
-              ),
-            ),
-            IconButton(
-              onPressed: _stats,
-              tooltip: 'Listening stats',
-              icon: const Icon(Icons.bar_chart_rounded),
-            ),
-            if (destination == 0) ...[
-              if (short)
-                IconButton(
-                  tooltip: 'Refresh Library',
-                  onPressed: !telegram.ready || library.saving
-                      ? null
-                      : () {
-                          telegram.clearImageCache();
-                          unawaited(library.refresh());
-                        },
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-              PopupMenuButton<LibrarySort>(
-                tooltip: 'Sort Library',
-                icon: const Icon(Icons.sort_rounded),
-                position: PopupMenuPosition.under,
-                offset: const Offset(0, 6),
-                color: surface,
-                surfaceTintColor: Colors.transparent,
-                elevation: 4,
-                shadowColor: const Color(0x40000000),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Color(0xFF302B39)),
-                ),
-                clipBehavior: Clip.antiAlias,
-                itemBuilder: (context) => [
-                  for (final sort in LibrarySort.values)
-                    CheckedPopupMenuItem(
-                      value: sort,
-                      checked: player.settings.librarySort == sort,
-                      child: Text(
-                        sort.label,
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!short)
+                        Text(
+                          [
+                            'YOUR COLLECTION',
+                            'MUSIC IN YOUR CHANNELS',
+                            'KEEP THE GOOD ONES GOING',
+                            'IN THE MOMENT',
+                          ][destination],
+                          style: const TextStyle(
+                            fontSize: 9,
+                            letterSpacing: 1.7,
+                            color: accent,
+                          ),
+                        ),
+                      if (!short) const SizedBox(height: 7),
+                      Text(
+                        key: const ValueKey('page-title'),
+                        [
+                          'Library',
+                          'Telegram',
+                          'Play queue',
+                          'Now playing',
+                        ][destination],
                         style: TextStyle(
-                          color: player.settings.librarySort == sort
-                              ? accent
-                              : null,
-                          fontSize: 13,
+                          fontSize: short
+                              ? 24
+                              : narrow
+                              ? 28
+                              : 36,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -1.4,
                         ),
                       ),
+                      if (destination == 0 && !inlineCounts) ...[
+                        const SizedBox(height: 3),
+                        _libraryCounts(),
+                      ],
+                    ],
+                  ),
+                ),
+                if (destination == 0) ...[
+                  if (inlineCounts)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 230),
+                        child: _libraryCounts(),
+                      ),
                     ),
+                  IconButton(
+                    key: const ValueKey('library-refresh'),
+                    tooltip: 'Refresh library',
+                    onPressed:
+                        !telegram.ready || library.saving || library.loading
+                        ? null
+                        : () {
+                            telegram.clearImageCache();
+                            unawaited(library.refresh());
+                          },
+                    icon: const Icon(Icons.refresh_rounded, size: 20),
+                  ),
+                  PopupMenuButton<LibrarySort>(
+                    tooltip: 'Sort Library',
+                    icon: const Icon(Icons.sort_rounded),
+                    position: PopupMenuPosition.under,
+                    offset: const Offset(0, 6),
+                    color: surface,
+                    surfaceTintColor: Colors.transparent,
+                    elevation: 4,
+                    shadowColor: const Color(0x40000000),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: Color(0xFF302B39)),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    itemBuilder: (context) => [
+                      for (final sort in LibrarySort.values)
+                        CheckedPopupMenuItem(
+                          value: sort,
+                          checked: player.settings.librarySort == sort,
+                          child: Text(
+                            sort.label,
+                            style: TextStyle(
+                              color: player.settings.librarySort == sort
+                                  ? accent
+                                  : null,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                    ],
+                    onSelected: (sort) async {
+                      setState(() => player.settings.librarySort = sort);
+                      try {
+                        await player.settings.save();
+                      } catch (_) {
+                        _notice(
+                          'Sort changed for this session. Could not save your preference.',
+                        );
+                      }
+                    },
+                  ),
                 ],
-                onSelected: (sort) async {
-                  setState(() => player.settings.librarySort = sort);
-                  try {
-                    await player.settings.save();
-                  } catch (_) {
-                    _notice(
-                      'Sort changed for this session. Could not save your preference.',
-                    );
-                  }
-                },
-              ),
-              IconButton(
-                onPressed: _openTelegram,
-                tooltip: 'Choose channels',
-                icon: const Icon(Icons.playlist_add_rounded),
-              ),
-            ],
-          ],
-        );
+              ],
+            );
+    },
+  );
   Widget _banner(String text) => Container(
     margin: const EdgeInsets.only(bottom: 12),
     padding: const EdgeInsets.all(12),
@@ -980,114 +992,32 @@ class _PlayerShellState extends State<PlayerShell> {
   }
 
 
-  Widget _libraryBadge(IconData icon, String text) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: const Color(0xFF211D29),
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: const Color(0xFF342F3E)),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: accent),
-        const SizedBox(width: 8),
-        Text(
-          text,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-        ),
-      ],
-    ),
-  );
-
-  Widget _librarySummaryBar({
-    required bool compact,
-    required int trackCount,
-    required int savedCount,
-    required bool allSongs,
-    required bool recent,
-  }) {
-    final trackText = allSongs
-        ? '$trackCount ${trackCount == 1 ? 'track' : 'tracks'}'
-        : '$trackCount of $savedCount loaded';
-    final channelCount = player.settings.selectedChannels.length;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF17141D),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFF302B39)),
+  Widget _libraryCounts() {
+    final tracks = _collectionTracks();
+    final savedCount = collection == 'Favorites'
+        ? player.settings.favoriteIds.length
+        : collection == 'Recently played'
+        ? player.settings.recentIds.length
+        : selectedPlaylist != null
+        ? player.settings.playlists[selectedPlaylist]?.length ?? 0
+        : tracks.length;
+    final trackText = collection == 'Playlists' && selectedPlaylist == null
+        ? '${player.settings.playlists.length} playlists'
+        : collection == 'All songs'
+        ? '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'}'
+        : '${tracks.length} of $savedCount loaded';
+    final channels = player.settings.selectedChannels.length;
+    final label =
+        '$trackText · $channels ${channels == 1 ? 'channel' : 'channels'}';
+    return Tooltip(
+      message: label,
+      child: Text(
+        label,
+        key: const ValueKey('library-counts'),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: muted, fontSize: 11),
       ),
-      child: compact
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _libraryBadge(Icons.music_note_rounded, trackText),
-                    _libraryBadge(
-                      Icons.campaign_rounded,
-                      '$channelCount ${channelCount == 1 ? 'channel' : 'channels'}',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    if (recent && player.settings.recentIds.isNotEmpty)
-                      Expanded(
-                        child: TextButton(
-                          onPressed: player.clearRecent,
-                          child: const Text('Clear history'),
-                        ),
-                      ),
-                    if (recent && player.settings.recentIds.isNotEmpty)
-                      const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: !telegram.ready || library.saving
-                            ? null
-                            : () {
-                                telegram.clearImageCache();
-                                unawaited(library.refresh());
-                              },
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
-                        label: const Text('Refresh library'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                _libraryBadge(Icons.music_note_rounded, trackText),
-                const SizedBox(width: 8),
-                _libraryBadge(
-                  Icons.campaign_rounded,
-                  '$channelCount ${channelCount == 1 ? 'channel' : 'channels'}',
-                ),
-                const Spacer(),
-                if (recent && player.settings.recentIds.isNotEmpty)
-                  TextButton(
-                    onPressed: player.clearRecent,
-                    child: const Text('Clear history'),
-                  ),
-                const SizedBox(width: 8),
-                FilledButton.tonalIcon(
-                  onPressed: !telegram.ready || library.saving
-                      ? null
-                      : () {
-                          telegram.clearImageCache();
-                          unawaited(library.refresh());
-                        },
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('Refresh library'),
-                ),
-              ],
-            ),
     );
   }
 
@@ -1095,13 +1025,6 @@ class _PlayerShellState extends State<PlayerShell> {
     builder: (context, box) {
       final compact = box.maxHeight < 330;
       final tracks = _collectionTracks();
-      final savedCount = collection == 'Favorites'
-          ? player.settings.favoriteIds.length
-          : collection == 'Recently played'
-          ? player.settings.recentIds.length
-          : selectedPlaylist != null
-          ? player.settings.playlists[selectedPlaylist]?.length ?? 0
-          : tracks.length;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1134,8 +1057,7 @@ class _PlayerShellState extends State<PlayerShell> {
                         }),
                       ),
                     ),
-                  if (compact &&
-                      collection == 'Recently played' &&
+                  if (collection == 'Recently played' &&
                       player.settings.recentIds.isNotEmpty)
                     TextButton(
                       onPressed: player.clearRecent,
@@ -1181,16 +1103,6 @@ class _PlayerShellState extends State<PlayerShell> {
                 ),
               ],
             ),
-          if (!compact) ...[
-            const SizedBox(height: 10),
-            _librarySummaryBar(
-              compact: box.maxWidth < 680,
-              trackCount: tracks.length,
-              savedCount: savedCount,
-              allSongs: collection == 'All songs',
-              recent: collection == 'Recently played',
-            ),
-          ],
           if (library.error != null) _banner(library.error!),
           if (library.loading) ...[
             const LinearProgressIndicator(minHeight: 2),
@@ -2716,7 +2628,7 @@ class _PlayerShellState extends State<PlayerShell> {
                   const Divider(),
                 ],
                 Text(
-                  'Auralis ${widget.updater?.currentVersion ?? '0.1.44'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+                  'Auralis ${widget.updater?.currentVersion ?? '0.1.47'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
                   style: const TextStyle(
                     color: muted,
                     fontSize: 12,
@@ -2759,7 +2671,7 @@ class _PlayerShellState extends State<PlayerShell> {
             onPressed: () => showLicensePage(
               context: context,
               applicationName: 'Auralis',
-              applicationVersion: widget.updater?.currentVersion ?? '0.1.44',
+              applicationVersion: widget.updater?.currentVersion ?? '0.1.47',
             ),
             child: const Text('Licenses'),
           ),
