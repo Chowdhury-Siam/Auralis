@@ -49,8 +49,7 @@ class TelegramStreamProxy {
     List.generate(32, (_) => Random.secure().nextInt(256)),
   );
   final Map<String, Track> _tracks = {};
-  final Map<int, Future<void>> _locks = {};
-  final Map<int, int> _ranges = {};
+  final Map<int, Completer<void>> _ranges = {};
   final _errors = StreamController<String>.broadcast();
   Stream<String> get errors => _errors.stream;
   int _sequence = 0;
@@ -137,47 +136,65 @@ class TelegramStreamProxy {
     }
 
     final fileId = track.fileId!;
-    final generation = (_ranges[fileId] ?? 0) + 1;
-    _ranges[fileId] = generation;
+    // A seek owns the new download offset immediately. An abandoned socket or
+    // pending cache read from an old range must never hold up the new request.
+    final previous = _ranges[fileId];
+    if (previous != null && !previous.isCompleted) previous.complete();
+    final cancelled = Completer<void>();
+    _ranges[fileId] = cancelled;
+    void cancel() {
+      if (!cancelled.isCompleted) cancelled.complete();
+    }
+
     var disconnected = false;
     unawaited(
       response.done.then<void>(
         (_) {
           disconnected = true;
+          cancel();
         },
         onError: (Object _) {
           disconnected = true;
+          cancel();
         },
       ),
     );
     bool active() =>
         !disconnected &&
         !_closing &&
-        _ranges[fileId] == generation &&
+        !cancelled.isCompleted &&
+        _ranges[fileId] == cancelled &&
         _tracks[segments[1]] != null;
-    final released = Completer<void>();
-    final previous = _locks[fileId] ?? Future.value();
-    _locks[fileId] = released.future;
+    Future<T> current<T>(Future<T> operation) => Future.any([
+      operation,
+      cancelled.future.then<T>(
+        (_) => throw StateError('Playback range superseded'),
+      ),
+    ]);
     try {
-      // TDLib has one active download offset per file. Serialize libmpv's ranges.
-      await previous;
-      if (!active()) return;
-      await request({
-        '@type': 'downloadFile',
-        'file_id': fileId,
-        'priority': 32,
-        'offset': range.start,
-        'limit': range.length,
-        'synchronous': false,
-      });
+      // TDLib's newest downloadFile offset replaces the previous one. Old reads
+      // may finish later, but cannot retarget the download or report a seek error.
+      await current(
+        request({
+          '@type': 'downloadFile',
+          'file_id': fileId,
+          'priority': 32,
+          'offset': range.start,
+          'limit': range.length,
+          'synchronous': false,
+        }),
+      );
       var offset = range.start;
       var deadline = DateTime.now().add(stallTimeout);
       while (offset <= range.end && active()) {
-        final prefix = await request({
-          '@type': 'getFileDownloadedPrefixSize',
-          'file_id': fileId,
-          'offset': offset,
-        });
+        final prefix = await current(
+          request({
+            '@type': 'getFileDownloadedPrefixSize',
+            'file_id': fileId,
+            'offset': offset,
+          }),
+        );
+        if (!active()) break;
         final available = (prefix['size'] as num).toInt();
         if (available <= 0) {
           if (DateTime.now().isAfter(deadline)) {
@@ -187,18 +204,21 @@ class TelegramStreamProxy {
           continue;
         }
         final count = min(128 * 1024, min(available, range.end - offset + 1));
-        final data = await request({
-          '@type': 'readFilePart',
-          'file_id': fileId,
-          'offset': offset,
-          'count': count,
-        });
+        final data = await current(
+          request({
+            '@type': 'readFilePart',
+            'file_id': fileId,
+            'offset': offset,
+            'count': count,
+          }),
+        );
+        if (!active()) break;
         final bytes = base64Decode(data['data'] as String);
         if (bytes.length != count) {
           throw StateError('Incomplete Telegram cache read');
         }
         response.add(bytes);
-        await response.flush();
+        await current(response.flush());
         offset += count;
         deadline = DateTime.now().add(stallTimeout);
       }
@@ -207,17 +227,14 @@ class TelegramStreamProxy {
     } on HttpException {
       // A disconnected playback request must not stop the server.
     } catch (_) {
-      if (!_errors.isClosed) {
+      if (active() && !_errors.isClosed) {
         _errors.add(
           'Telegram could not fill the audio buffer. Try the track again.',
         );
       }
     } finally {
-      released.complete();
-      if (_locks[fileId] == released.future) {
-        _locks.remove(fileId);
-        _ranges.remove(fileId);
-      }
+      cancel();
+      if (_ranges[fileId] == cancelled) _ranges.remove(fileId);
       try {
         await response.close();
       } catch (_) {
@@ -241,6 +258,10 @@ class TelegramStreamProxy {
   Future<void> _stopDownloads() async {
     final files = _tracks.values.map((t) => t.fileId).whereType<int>().toSet();
     _tracks.clear();
+    for (final cancelled in _ranges.values) {
+      if (!cancelled.isCompleted) cancelled.complete();
+    }
+    _ranges.clear();
     for (final id in files) {
       try {
         await request({
