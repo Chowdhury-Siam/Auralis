@@ -141,14 +141,14 @@ class AndroidPublishTest(unittest.TestCase):
         self.assertTrue(self.github.release["draft"])
         self.assertEqual([args[:2] for args in self.mutations()], [("release", "upload")])
 
-    def test_rebuilt_debug_apk_refreshes_only_owned_assets_in_unpublished_draft(self):
-        self.debug_artifact()
+    def test_rebuilt_development_apk_refreshes_only_owned_assets_in_unpublished_draft(self):
+        self.development_artifact()
         self.github.release["draft"] = True
         self.run_publish(SIGNED="false")
         windows = copy.deepcopy(self.github.release["assets"][:1])
         original_tag = self.github.tag
         self.github.calls.clear()
-        self.apk.write_bytes(b"Another CI debug signing key/build; harmless fixture")
+        self.apk.write_bytes(b"Another CI development signing key/build; harmless fixture")
         self.checksum()
         (self.dist / "build-manifest.json").write_text("Fresh native build provenance\n")
         self.run_publish(SIGNED="false")
@@ -159,7 +159,7 @@ class AndroidPublishTest(unittest.TestCase):
         upload, = self.mutations()
         self.assertIn("--clobber", upload)
         self.assertEqual(len(upload[3:upload.index("--repo")]), 3)
-        for path in self.dist.glob("*debug*"):
+        for path in self.dist.glob("*development*"):
             asset, = [a for a in self.github.release["assets"] if a["name"] == path.name]
             self.assertEqual(asset["digest"], "sha256:" + publisher.digest(path))
             self.assertEqual(asset["size"], path.stat().st_size)
@@ -255,31 +255,31 @@ class AndroidPublishTest(unittest.TestCase):
                 self.run_publish(**env)
         self.assertEqual(self.github.calls, [])
 
-    def debug_artifact(self):
-        target = self.apk.with_name(self.apk.name.replace('-release.apk', '-debug.apk'))
+    def development_artifact(self):
+        target = self.apk.with_name(self.apk.name.replace('-release.apk', '-development-release.apk'))
         self.apk.rename(target)
         self.apk = target
         self.checksum()
 
-    def test_debug_apk_is_published_without_custom_signing(self):
-        self.debug_artifact()
+    def test_development_apk_is_published_without_custom_signing(self):
+        self.development_artifact()
         self.run_publish(SIGNED="false")
         names = {asset['name'] for asset in self.github.release['assets']}
         self.assertIn(self.apk.name, names)
-        self.assertIn('SHA256SUMS-android-arm64-v8a-debug.txt', names)
-        self.assertIn('auralis-0.9.0-android-arm64-v8a-debug-provenance.zip', names)
-        self.assertFalse(any(name.endswith('-release.apk') for name in names))
+        self.assertIn('SHA256SUMS-android-arm64-v8a-development.txt', names)
+        self.assertIn('auralis-0.9.0-android-arm64-v8a-development-provenance.zip', names)
+        self.assertNotIn('auralis-0.9.0-android-arm64-v8a-release.apk', names)
 
-    def test_absent_signing_state_defaults_to_debug(self):
-        self.debug_artifact()
+    def test_absent_signing_state_defaults_to_development(self):
+        self.development_artifact()
         self.env.pop('SIGNED')
         self.run_publish()
         self.assertIn(self.apk.name, {asset['name'] for asset in self.github.release['assets']})
 
-    def test_debug_and_release_assets_coexist_without_replacing_each_other(self):
+    def test_development_and_release_assets_coexist_without_replacing_each_other(self):
         self.run_publish()
         before = copy.deepcopy(self.github.release['assets'])
-        self.debug_artifact()
+        self.development_artifact()
         self.run_publish(SIGNED="false")
         self.assertEqual(self.github.release['assets'][:len(before)], before)
         self.assertEqual(len(self.github.release['assets']), 7)
