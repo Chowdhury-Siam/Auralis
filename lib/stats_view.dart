@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'data_backup.dart';
@@ -59,7 +60,10 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
   void _snapshot() =>
       _stats = ListeningStats.fromJson(player.settings.listening.toJson());
 
-  Future<void> _run(Future<void> Function() action) async {
+  Future<void> _run(
+    Future<void> Function() action, {
+    String operation = 'Operation',
+  }) async {
     if (_busy) return;
     setState(() {
       _busy = true;
@@ -75,11 +79,36 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
           _status = e.message;
         });
       }
-    } catch (_) {
+    } on PlatformException catch (e) {
       if (mounted) {
         setState(() {
           _error = true;
-          _status = 'Could not complete the operation. Check the file location and available storage.';
+          _status = '$operation failed (${e.code}). '
+              '${e.message ?? 'Choose the file again and retry.'}';
+        });
+      }
+    } on MissingPluginException {
+      if (mounted) {
+        setState(() {
+          _error = true;
+          _status = '$operation failed. Restart Auralis after installing the '
+              'latest update so Android file access is available.';
+        });
+      }
+    } on FileSystemException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = true;
+          _status = '$operation failed while accessing local storage '
+              '(OS error ${e.osError?.errorCode ?? 'unknown'}). '
+              'Check available storage and choose the file again.';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = true;
+          _status = '$operation failed (${e.runtimeType}). Please retry.';
         });
       }
     } finally {
@@ -309,7 +338,14 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     } else {
       await player.restoreBackup(backup);
     }
-    await widget.onRestored?.call();
+    var refreshFailed = false;
+    try {
+      await widget.onRestored?.call();
+    } catch (_) {
+      // The restore is already committed; a refresh failure must not report
+      // that the backup itself failed or encourage a second replacement.
+      refreshFailed = true;
+    }
     if (mounted) {
       setState(() {
         final telegram = widget.telegram;
@@ -321,9 +357,12 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
             : telegram.ready
             ? 'Settings and Telegram sign-in restored.'
             : 'Settings and Telegram session restored. Reconnecting; check the Telegram screen for connection or sign-in progress.';
+        if (refreshFailed) {
+          _status = '$_status Reopen the Library to refresh your music.';
+        }
       });
     }
-  });
+  }, operation: 'Restore');
 
   @override
   Widget build(BuildContext context) {
