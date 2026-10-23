@@ -202,7 +202,7 @@ void main() {
         tester
             .widget<Material>(find.byKey(const ValueKey('lyrics-immersive')))
             .color,
-        const Color(0xFF111015),
+        Theme.of(tester.element(find.byType(LyricsView))).colorScheme.surface,
       );
       expect(lyricsHighlight, accent);
     },
@@ -289,7 +289,10 @@ void main() {
             )
             .first,
       );
-      expect(active.style.color, lyricsHighlight);
+      expect(
+        active.style.color,
+        Theme.of(tester.element(find.byType(LyricsView))).colorScheme.primary,
+      );
       await tester.tap(find.byKey(const ValueKey('lyric-21')));
       await tester.pumpAndSettle();
       expect(player.audio.position, const Duration(seconds: 168));
