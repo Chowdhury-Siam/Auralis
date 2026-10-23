@@ -89,8 +89,9 @@ void main() {
       final original = [1, 2, 3, 4];
       await vault.file.writeAsBytes(original);
       messenger.setMockMethodCallHandler(channel, (call) async {
-        if (call.method == 'decrypt')
+        if (call.method == 'decrypt') {
           throw PlatformException(code: 'key_invalidated');
+        }
         return Uint8List.fromList([4, 5, 6]);
       });
       await expectLater(
