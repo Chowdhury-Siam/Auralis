@@ -1,6 +1,6 @@
 # GitHub Releases and application updates
 
-Configured repository: **[Chowdhury-Siam/Auralis](https://github.com/Chowdhury-Siam/Auralis)**. Current source target is **v0.1.47**, including focused synced lyrics with blurred surrounding lines, visible Up Next previews in medium windows, the Android Gradle compatibility fix, the Yutaka-style direct Windows installer handoff and encrypted Telegram account backup, the plain-Dart native smoke compilation fix, .lrc file import, embedded music-file lyrics, the app-matching lyrics theme, the fixed one-page Now Playing layout, Android platform support and a separate Android APK workflow, listening stats, CSV/JSON export, Backup & Restore, favorites, persistent playlists and recently played, Play next, repeat one, duration/end-of-track sleep timers, the reference-style immersive lyrics page and all earlier fixes. Commit the complete source to main to run the updated Windows build and stable publisher; rerunning an older commit cannot apply it. No source or release was pushed/published from this workspace.
+Configured repository: **[Chowdhury-Siam/Auralis](https://github.com/Chowdhury-Siam/Auralis)**. Current source target is **v0.1.48**, including focused synced lyrics with blurred surrounding lines, visible Up Next previews in medium windows, the Android Gradle compatibility fix, the Yutaka-style direct Windows installer handoff and encrypted Telegram account backup, the plain-Dart native smoke compilation fix, .lrc file import, embedded music-file lyrics, the app-matching lyrics theme, the fixed one-page Now Playing layout, Android platform support and a separate Android APK workflow, listening stats, CSV/JSON export, Backup & Restore, favorites, persistent playlists and recently played, Play next, repeat one, duration/end-of-track sleep timers, the reference-style immersive lyrics page and all earlier fixes. Commit the complete source to main to run the updated Windows build and stable publisher; rerunning an older commit cannot apply it. No source or release was pushed/published from this workspace.
 
 The Windows release flow below remains independent. Android builds run in `.github/workflows/android.yml` and upload APK artifacts; see [ANDROID.md](ANDROID.md). They do not edit Windows tags/releases or run the Windows publisher.
 
@@ -10,25 +10,25 @@ The canonical repository changed to `Chowdhury-Siam/Auralis` on 23 October 2026.
 
 1. Upload the complete project as the repository root, including `.github`, `pubspec.lock`, tests, native notices and the vendored runtime. A push to `main` runs the Windows build/test/package job and, after success, the stable publisher. A manual run on `main` does the same. Other branches and pull requests produce artifacts only.
 2. Analysis, automated tests, native smoke tests and installer packaging must succeed. The job packages a portable ZIP, per-user Inno Setup installer, application source ZIP from the committed revision, and `SHA256SUMS.txt`.
-3. The publisher reads the stable version from `pubspec.yaml`. For the current `0.1.47+48`, it creates `v0.1.47` at the exact tested commit if that tag is absent. No manual tag is required. An existing tag must already resolve to the tested commit; it is never moved. Explicit stable tag builds remain supported and must match `pubspec.yaml`.
+3. The publisher reads the stable version from `pubspec.yaml`. For the current `0.1.48+49`, it creates `v0.1.48` at the exact tested commit if that tag is absent. No manual tag is required. An existing tag must already resolve to the tested commit; it is never moved. Explicit stable tag builds remain supported and must match `pubspec.yaml`.
 4. Using the publishing job's `GITHUB_TOKEN` with `contents: write`, it creates an unpublished draft with `--prerelease=false`. It resolves the draft-aware CLI lookup's numeric `databaseId`, checks that the corresponding REST release has the intended tag and remains a non-prerelease draft, then uploads all four assets. It refreshes metadata by numeric ID, verifies GitHub's SHA-256 asset digests, then publishes with `--draft=false --prerelease=false`. It never uses the published-only by-tag REST route to verify a draft. The newest stable version is marked Latest; releasing an older version preserves a newer Latest. Build permissions remain read-only, and publishing jobs serialize to avoid concurrent tag/asset updates.
-5. Published versions are immutable. A later push with the same version reports that it is already stable and skips release mutation. For the next app update, bump `pubspec.yaml` to a new stable version, such as `0.1.48+49`, and commit to `main`; it automatically publishes `v0.1.48` after successful checks. A build-number-only change does not create a new stable release. An existing published prerelease is not silently overwritten; use a new stable version.
+5. Published versions are immutable. A later push with the same version reports that it is already stable and skips release mutation. For the next app update, bump `pubspec.yaml` to a new stable version, such as `0.1.49+50`, and commit to `main`; it automatically publishes `v0.1.49` after successful checks. A build-number-only change does not create a new stable release. An existing published prerelease is not silently overwritten; use a new stable version.
 
 Optional tag-based release after completing the native distribution audit:
 
 ```powershell
-git tag v0.1.47
-git push origin v0.1.47
+git tag v0.1.48
+git push origin v0.1.48
 ```
 
-Tags such as `v0.1.3-beta`, mismatched versions, pull requests, other branches and mismatched checkout commits cannot publish. Existing drafts may resume only at their original tested tag/commit; a failed digest check leaves the draft unpublished. GitHub API permission/network errors fail explicitly instead of being treated as a missing release. An `untagged-…` URL is normal for an unpublished draft; it is not a reason to delete or move the version tag. Historical failed drafts may remain. This recovery source uses `v0.1.44`, preserving the existing `v0.1.43` tag and its assets.
+Tags such as `v0.1.3-beta`, mismatched versions, pull requests, other branches and mismatched checkout commits cannot publish. Existing drafts may resume only at their original tested tag/commit; a failed digest check leaves the draft unpublished. GitHub API permission/network errors fail explicitly instead of being treated as a missing release. An `untagged-…` URL is normal for an unpublished draft; it is not a reason to delete or move the version tag. Historical failed drafts may remain. The current source uses `v0.1.48`, preserving previous tags and published assets.
 
-Expected assets for `v0.1.47`:
+Expected assets for `v0.1.48`:
 
 ```text
-auralis-0.1.47-windows-x64.zip
-auralis-0.1.47-windows-x64-setup.exe
-auralis-0.1.47-source.zip
+auralis-0.1.48-windows-x64.zip
+auralis-0.1.48-windows-x64-setup.exe
+auralis-0.1.48-source.zip
 SHA256SUMS.txt
 ```
 
@@ -65,7 +65,7 @@ Update files are stored under the app support directory's `updates/release-*` fo
 
 ## Trust and current limits
 
-GitHub's digest detects corrupted/mismatched downloads; it is **not** an independent publisher signature. A compromised repository/release publisher can publish a malicious installer and matching hash. Releases are currently unsigned; Authenticode signing and a separate signed update manifest are not implemented. Keep repository release permissions and GitHub accounts secure. The updater does not embed a GitHub token and supports public repositories only.
+GitHub's digest detects corrupted/mismatched downloads; it is **not** an independent publisher signature. A compromised repository/release publisher can publish a malicious installer and matching hash. Windows installers are currently unsigned; Authenticode signing and a separate signed update manifest are not implemented. Keep repository release permissions and GitHub accounts secure. The updater does not embed a GitHub token and supports public repositories only.
 
 The default update source is `Chowdhury-Siam/Auralis`. CI explicitly builds with `--dart-define=AURALIS_RELEASE_REPOSITORY=$env:GITHUB_REPOSITORY`, so an intentional fork uses its own repository; local builds default to Chowdhury-Siam/Auralis. Changing the source requires rebuilding the app. Users cannot enter arbitrary executable URLs in Settings.
 
