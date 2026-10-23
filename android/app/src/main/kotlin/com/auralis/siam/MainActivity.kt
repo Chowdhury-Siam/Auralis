@@ -45,12 +45,14 @@ class MainActivity : AudioServiceActivity() {
                         } catch (_: Exception) { pending = null; result.error("picker", "No document picker is available.", null) }
                     }
                 }
-                "readDocument" -> work(result) {
+                "readDocument" -> work(result, "document_read") {
                     val uri = Uri.parse(call.argument<String>("uri"))
                     require(uri == selectedRead) { "Choose the file first" }
                     val maxBytes = (call.argument<Number>("maxBytes")?.toInt() ?: (64 * 1024 * 1024))
                     require(maxBytes in 1..(64 * 1024 * 1024)) { "Invalid read limit" }
-                    contentResolver.openInputStream(uri)!!.use { input ->
+                    val stream = contentResolver.openInputStream(uri)
+                        ?: throw java.io.IOException("Document provider is unavailable")
+                    stream.use { input ->
                         val output = java.io.ByteArrayOutputStream()
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
@@ -76,10 +78,26 @@ class MainActivity : AudioServiceActivity() {
         }
     }
 
-    private fun work(result: MethodChannel.Result, action: () -> Any?) {
+    private fun work(result: MethodChannel.Result, operation: String = "storage", action: () -> Any?) {
         io.execute {
             try { val value = action(); runOnUiThread { result.success(value) } }
-            catch (_: Exception) { runOnUiThread { result.error("storage", "Could not access the selected file or device credential key.", null) } }
+            catch (error: Exception) {
+                val (code, message) = if (operation == "document_read") {
+                    when (error) {
+                        is SecurityException -> "document_permission" to
+                            "Android could not read this backup. Select it again using the system file picker, or copy it to Downloads first."
+                        is java.io.FileNotFoundException -> "document_missing" to
+                            "The backup is missing or its provider cannot open it. Download it to this device and select it again."
+                        is IllegalArgumentException -> "document_invalid" to
+                            "${error.message}. Select an Auralis backup no larger than 64 MiB."
+                        else -> "document_read" to
+                            "The document provider could not read this backup. Download or copy it to Downloads, then select it again."
+                    }
+                } else {
+                    "storage" to "Could not access local storage or the device credential key."
+                }
+                runOnUiThread { result.error(code, message, null) }
+            }
         }
     }
 
