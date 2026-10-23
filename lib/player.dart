@@ -71,6 +71,9 @@ class MpvBackend extends AudioBackend {
   @override
   Future<void> open(String uri) async {
     await _focus();
+    // media_kit defaults to five seconds. An uncached Telegram seek can need
+    // longer before the loopback proxy receives its first bytes.
+    await (_player.platform as NativePlayer).setProperty('network-timeout', '60');
     error = null;
     position = Duration.zero;
     duration = Duration.zero;
