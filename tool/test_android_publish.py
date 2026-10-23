@@ -242,7 +242,7 @@ class AndroidPublishTest(unittest.TestCase):
         publisher.git(self.root, "add", "lib/main.dart")
         self.commit()
         self.env["GITHUB_SHA"] = publisher.git(self.root, "rev-parse", "HEAD")
-        with self.assertRaises(subprocess.CalledProcessError):
+        with self.assertRaisesRegex(ValueError, "Bump the version and build number"):
             self.run_publish()
         self.assertEqual(self.mutations(), [])
 
@@ -254,6 +254,23 @@ class AndroidPublishTest(unittest.TestCase):
             with self.subTest(env=env), self.assertRaises(ValueError):
                 self.run_publish(**env)
         self.assertEqual(self.github.calls, [])
+
+    def test_android_source_conflict_explains_version_bump_without_changing_release(self):
+        original_tag = self.github.tag
+        original_release = copy.deepcopy(self.github.release)
+        config = self.root / "android/app/src/main/res/xml/network_security_config.xml"
+        config.parent.mkdir(parents=True)
+        config.write_text('<network-security-config />\n')
+        publisher.git(self.root, "add", "android")
+        self.commit()
+        self.env["GITHUB_SHA"] = publisher.git(self.root, "rev-parse", "HEAD")
+        with self.assertRaisesRegex(ValueError, "v0.9.0 already points to different app sources") as result:
+            self.run_publish()
+        self.assertIn("pubspec.yaml", str(result.exception))
+        self.assertIn("network_security_config.xml", str(result.exception))
+        self.assertEqual(self.github.tag, original_tag)
+        self.assertEqual(self.github.release, original_release)
+        self.assertEqual(self.mutations(), [])
 
     def development_artifact(self):
         target = self.apk.with_name(self.apk.name.replace('-release.apk', '-development-release.apk'))
