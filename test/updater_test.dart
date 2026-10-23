@@ -92,7 +92,7 @@ class Helper extends Fake implements Process {
   }
 }
 
-const repository = 'SiamTest/Auralis';
+const repository = 'Chowdhury-Siam/Auralis';
 final installerBytes = utf8.encode(
   'MZ synthetic installer fixture; never executed',
 );
@@ -114,6 +114,11 @@ Response metadata([Map<String, dynamic>? json]) =>
     Response(utf8.encode(jsonEncode(json ?? release())));
 
 void main() {
+  test('default updater targets the canonical Auralis repository', () {
+    if (!const bool.hasEnvironment('AURALIS_RELEASE_REPOSITORY')) {
+      expect(releaseRepository, repository);
+    }
+  });
   test(
     'stable numeric version comparison rejects prereleases and malformed tags',
     () {
