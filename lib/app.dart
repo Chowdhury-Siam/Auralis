@@ -2726,7 +2726,7 @@ class _PlayerShellState extends State<PlayerShell>
                   const Divider(),
                 ],
                 Text(
-                  'Auralis ${widget.updater?.currentVersion ?? '0.1.51'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+                  'Auralis ${widget.updater?.currentVersion ?? '0.1.52'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
                   style: const TextStyle(
                     color: muted,
                     fontSize: 12,
@@ -2769,7 +2769,7 @@ class _PlayerShellState extends State<PlayerShell>
             onPressed: () => showLicensePage(
               context: context,
               applicationName: 'Auralis',
-              applicationVersion: widget.updater?.currentVersion ?? '0.1.51',
+              applicationVersion: widget.updater?.currentVersion ?? '0.1.52',
             ),
             child: const Text('Licenses'),
           ),
@@ -2888,6 +2888,46 @@ class _AuthFormState extends State<AuthForm> {
             child: Text(
               td.error!,
               style: const TextStyle(color: Color(0xFFFFB4C8), fontSize: 12),
+            ),
+          ),
+        if (td.credentialRecoveryRequired)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.login_rounded),
+              label: const Text('Sign in again'),
+              onPressed: td.busy
+                  ? null
+                  : () async {
+                      final accepted = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('Start a new Telegram sign-in?'),
+                          content: const Text(
+                            'Your music and app settings stay. The unreadable local Telegram files will be set aside. You will need your API details and Telegram verification to sign in again. To keep the old sign-in, restore a password-protected account backup instead.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, false),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, true),
+                              child: const Text('Sign in again'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (accepted == true) {
+                        await td.recoverLocalSession();
+                        if (mounted && td.error == null) {
+                          apiId.clear();
+                          apiHash.clear();
+                        }
+                      }
+                    },
             ),
           ),
         const SizedBox(height: 18),
