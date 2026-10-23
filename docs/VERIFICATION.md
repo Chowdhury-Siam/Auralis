@@ -534,3 +534,26 @@ Validation in a Linux editing environment with Flutter 3.47.1 / Dart 3.13.1:
 - Updated Now Playing screenshots at 360, 390, 844, 1000, 1280, and 1920 pixels wide are automated test renders with synthetic tracks and original fixture artwork. Representative compact phone, tall phone, landscape, and desktop frames were visually inspected.
 
 These checks do not build an APK/EXE or verify a live Telegram account, native device playback, or frame-time performance on physical hardware. Run the existing platform CI workflows to build v0.1.39. Optional Android signing and release publishing are unchanged.
+
+
+## 0.1.40+41 canonical repository update — 23 October 2026
+
+The canonical repository is now Chowdhury-Siam/Auralis. The default updater target, LRCLIB client identification URL, README download/issue/clone links and badges, and current setup/release instructions use the new repository. Historical build/release evidence retains its original URLs. Existing CI workflows already derive publication targets and the Windows updater build override from GITHUB_REPOSITORY and require no workflow changes.
+
+Version/About/Telegram metadata is 0.1.40+41 / 0.1.40. The updater fixture now uses the canonical repository, and an assertion guards the default target when no explicit build override is supplied. Source checks confirm that active links/runtime targets use the new owner and workflow targets remain dynamic. No dependency, playback, UI, data, or credential behavior changes. ZIP integrity and exact scope checks passed. The Flutter SDK from the prior turn is unavailable in this editing runtime, so the Flutter suite/analyzer was not rerun for this URL-only change; the 119-test pass above applies to v0.1.39. No APK/EXE was built or remote repository modified.
+
+
+## 0.1.41+42 hide the idle bottom player dock — 23 October 2026
+
+The shared bottom player dock is mounted only when PlayerController.current is non-null, in addition to the existing full Now Playing/lyrics exclusion. It is absent on launch and when songs are queued without an active track, and disappears when clearing playback or signing out. A loaded paused track retains the dock so playback can resume. This is a single shared visibility guard for phone and desktop layouts; playback and account logic are unchanged.
+
+The new adaptive regression checks idle, queued-only, loaded-paused, playing, paused-again, and cleared states at 390×844 and 1280×800. Volume-control fixtures now include an active track. The logout regression checks that clearing playback hides the dock and waits for the rejected-logout snackbar dismissal before opening Settings again, so its tap is not blocked by the closing snackbar.
+
+Validation with Flutter 3.47.1 / Dart 3.13.1 on Linux: locked dependencies unchanged; static analysis with --no-pub --fatal-infos clean; full Flutter suite 121 passed, 23 existing Windows-only cases skipped, zero failures. The regenerated idle desktop Library test frame was visually inspected and includes no bottom dock. Version/About/Telegram metadata is 0.1.41+42 / 0.1.41. Canonical repository remains Chowdhury-Siam/Auralis. No APK/EXE or live-device playback was built/tested for this change.
+
+
+## 0.1.42+43 Now Playing visual refinement — 23 October 2026
+
+The desktop player balances a smaller framed cover against a wider controls column. Moderate desktop windows retain a larger, two-line track heading instead of shrinking to the compact phone type size. Where space allows, a subtly bordered control card groups metadata, seeking, transport, playback modes, Lyrics, playlist/sleep actions, and volume. The central play/pause pill is wider than previous/next, and the repeat selection uses a quieter tonal fill. Phones retain their stacked layout and next-cover peek; desktop drops the narrow next-cover sliver. The Up Next card now uses a real thumbnail/placeholder, clearer track hierarchy, and a visible play affordance. Known audio MIME labels display concise names such as FLAC, MP3, and M4A, without inventing bitrate/sample-rate data.
+
+Validation on Flutter 3.47.1 / Dart 3.13.1, Linux: --no-pub --fatal-infos analysis clean; complete Flutter suite 121 passed with 23 existing Windows-only cases skipped, zero failures. The adaptive regression now also covers 1280×714, matching the supplied desktop screenshot's proportions, and asserts readable desktop title sizing plus the audio/x-flac → FLAC label. Existing artwork/control bounds, hit testing, no-scrolling, phone/landscape, 130–200% text, playback actions, lyrics blur, idle-dock, queue, settings and account regressions remain enabled. Updated phone, medium desktop, full desktop and 1280×714 test renders were visually inspected. Dependencies, workflows, native playback, lyric motion blur and canonical repository settings are unchanged. No APK/EXE or physical-device test is claimed.
