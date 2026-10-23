@@ -98,6 +98,9 @@ class SecretVault {
   Future<Uint8List> transform(List<int> bytes, {required bool encrypt}) async =>
       protector.transform(bytes, encrypt: encrypt);
 
+  // Called only after the user chooses a fresh sign-in for an unreadable vault.
+  Future<void> resetProtection() async {}
+
   static String newDatabaseKey() =>
       base64Encode(List.generate(32, (_) => Random.secure().nextInt(256)));
 }
