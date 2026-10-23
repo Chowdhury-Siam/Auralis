@@ -17,7 +17,7 @@ class Files extends DataFiles {
   int writes = 0;
   @override
   Future<String?> savePath(String name, String extension) async =>
-      '/virtual/backup.json';
+      testExportPath('backup.json');
   @override
   Future<void> write(String path, String text) async {
     writes++;
