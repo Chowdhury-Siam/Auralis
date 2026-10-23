@@ -54,7 +54,6 @@ void main() {
       child: Scaffold(
         body: WaveSeekBar(
           value: .6,
-          buffered: .8,
           playing: playing,
           reducedMotion: reduced,
           format: (v) => '$v',
@@ -307,6 +306,12 @@ void main() {
         );
         expect(find.byKey(const ValueKey('volume-slider')), findsOneWidget);
         final seek = find.byKey(const ValueKey('playback-seek'));
+        expect(
+          tester.widget<Slider>(seek).secondaryTrackValue,
+          isNull,
+          reason:
+              'Only played progress is shown, even with audio buffered ahead',
+        );
         await tester.tapAt(tester.getCenter(seek) + const Offset(18, 0));
         await tester.pumpAndSettle();
         expect(audio.position, greaterThan(const Duration(minutes: 2)));
@@ -428,6 +433,7 @@ void main() {
         final fullSeek = tester.widget<Slider>(
           find.byKey(const ValueKey('playback-seek')),
         );
+        expect(fullSeek.secondaryTrackValue, isNull);
         fullSeek.onChanged!(.25);
         await tester.pumpAndSettle();
         expect(audio.position, const Duration(minutes: 1));
