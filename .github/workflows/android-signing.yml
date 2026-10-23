@@ -1,0 +1,35 @@
+name: Set up Android signing
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: android-signing-setup-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  setup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Generate and retain the signing key once
+        env:
+          GH_TOKEN: ${{ secrets.ANDROID_SIGNING_SETUP_TOKEN }}
+        run: python3 tool/setup-android-signing.py
+      # Repository secrets are read when a workflow is queued. Start a new run
+      # after saving the identity so that the build can read the new secret.
+      - name: Start the signed Android release build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run android.yml --repo "$GITHUB_REPOSITORY" --ref main
+      - name: Setup complete
+        run: echo 'Android signing is configured. You can remove ANDROID_SIGNING_SETUP_TOKEN; future builds only need the saved signing identity.' >> "$GITHUB_STEP_SUMMARY"
