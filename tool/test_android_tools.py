@@ -69,9 +69,11 @@ class AndroidToolsTest(unittest.TestCase):
 
     def test_github_workflow_builds_single_abi_split_apk(self):
         workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/android.yml').read_text()
-        self.assertIn('flutter build apk --"$mode" --no-pub --split-per-abi --target-platform "$target"', workflow)
-        self.assertIn('source_apk="build/app/outputs/flutter-apk/app-$ABI-$mode.apk"', workflow)
-        self.assertIn('cp "$source_apk" "dist/android/auralis-$version-android-$ABI-$mode.apk"', workflow)
+        self.assertIn('flutter build apk --release --no-pub --split-per-abi --target-platform "$target"', workflow)
+        self.assertIn('source_apk="build/app/outputs/flutter-apk/app-$ABI-release.apk"', workflow)
+        self.assertIn('cp "$source_apk" "dist/android/auralis-$version-android-$ABI-$flavor.apk"', workflow)
+        self.assertIn('manifest debuggable', workflow)
+        self.assertNotIn('mode=debug', workflow)
         self.assertNotIn('cp "build/app/outputs/flutter-apk/app-$mode.apk"', workflow)
 
     def test_apk_rejects_any_extra_architecture_even_when_target_libraries_exist(self):
