@@ -1,0 +1,144 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
+
+import 'dart:ui' show AppExitResponse, AppExitType;
+
+import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+import 'app.dart';
+import 'android_audio.dart';
+import 'data_files.dart';
+import 'player.dart';
+import 'storage.dart';
+import 'android_storage.dart';
+import 'telegram/stream_proxy.dart';
+import 'telegram/telegram_service.dart';
+import 'updater.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  RandomAccessFile? lock;
+  try {
+    final root = await getApplicationSupportDirectory();
+    await root.create(recursive: true);
+    lock = await File(p.join(root.path, 'session.lock'))
+        .open(mode: FileMode.append);
+    await lock.lock(FileLock.exclusive);
+    final settings = AppSettings(File(p.join(root.path, 'settings.json')));
+    String? warning;
+    try {
+      await settings.load();
+    } catch (_) {
+      warning = 'Settings could not be read. Defaults are active; select your Telegram channels again.';
+    }
+    final vault = Platform.isAndroid
+        ? AndroidSecretVault(File(p.join(root.path, 'credentials.aesgcm')))
+        : SecretVault(File(p.join(root.path, 'credentials.dpapi')));
+    final telegram = TelegramService(
+      Directory(p.join(root.path, 'telegram')),
+      vault,
+    );
+    final session = Platform.isAndroid ? await AudioSession.instance : null;
+    await session?.configure(const AudioSessionConfiguration.music());
+    final audio = MpvBackend(session: session);
+    await audio.volume(settings.volume);
+    final player = PlayerController(
+      audio,
+      TelegramStreamProxy(telegram.request),
+      settings,
+    );
+    final handler = Platform.isAndroid
+        ? await AudioService.init(
+            builder: () => AndroidAudioHandler(player),
+            config: const AudioServiceConfig(
+              androidNotificationChannelId: 'app.auralis.playback',
+              androidNotificationChannelName: 'Music playback',
+              androidNotificationIcon: 'drawable/ic_stat_music',
+              androidStopForegroundOnPause: false,
+            ),
+          )
+        : null;
+    if (session != null) handler?.handleInterruptions(session);
+    final package = await PackageInfo.fromPlatform();
+    telegram.isStreaming = player.proxy.isStreaming;
+    AppUpdater? updater;
+    Future<void>? shutdownFuture;
+    Future<void> shutdown() => shutdownFuture ??= () async {
+      try {
+        await handler?.close();
+        await player.shutdown();
+      } finally {
+        try {
+          await telegram.shutdown();
+        } finally {
+          await lock?.close();
+        }
+      }
+      updater?.dispose();
+    }();
+    if (Platform.isWindows) {
+      updater = AppUpdater(
+        currentVersion: package.version,
+        directory: Directory(p.join(root.path, 'updates')),
+        settings: settings,
+        requestExit: () => exitForUpdate(shutdown),
+      );
+    }
+    AppLifecycleListener(
+      onPause: () => unawaited(player.flushListeningStats()),
+      onExitRequested: () async {
+        await shutdown();
+        return AppExitResponse.exit;
+      },
+    );
+    runApp(
+      AuralisApp(
+        player: player,
+        telegram: telegram,
+        startupWarning: warning,
+        updater: updater,
+        dataFiles: Platform.isAndroid
+            ? const AndroidDataFiles()
+            : const DataFiles(),
+      ),
+    );
+    updater?.start();
+    if (await vault.file.exists()) unawaited(telegram.start());
+  } catch (_) {
+    await lock?.close();
+    runApp(
+      MaterialApp(
+        theme: ThemeData.dark(),
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: SelectableText(
+                Platform.isAndroid
+                    ? 'Auralis could not start.\n\nRestart the app and check available device storage. Reinstall the complete APK if a native library is missing.\n\nSee README.md for setup instructions.'
+                    : 'Auralis could not start.\n\nClose any other Auralis window. '
+                          'If this persists, extract the complete Windows bundle, including libmpv-2.dll and the data folder. '
+                          'Check that your application data folder is writable.\n\nSee README.md for setup instructions.',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<bool> exitForUpdate(Future<void> Function() shutdown) async {
+  await shutdown();
+  // Windows acknowledges cancelable exits before the shutdown decision completes.
+  await ServicesBinding.instance.exitApplication(AppExitType.required);
+  return true;
+}
