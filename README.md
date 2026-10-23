@@ -8,8 +8,8 @@ A compact music player for **Android and Windows**, built with Flutter.<br>
 Bring music from your Telegram channels into one library, build playlists, and follow along with lyrics.
 
 <p>
-  <a href="https://github.com/SiamTest/Auralis/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/SiamTest/Auralis?style=for-the-badge&color=BFA5F5&label=Latest"></a>
-  <a href="https://github.com/SiamTest/Auralis"><img alt="Repository size" src="https://img.shields.io/github/repo-size/SiamTest/Auralis?style=for-the-badge&color=E8DFF5"></a>
+  <a href="https://github.com/Chowdhury-Siam/Auralis/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Chowdhury-Siam/Auralis?style=for-the-badge&color=BFA5F5&label=Latest"></a>
+  <a href="https://github.com/Chowdhury-Siam/Auralis"><img alt="Repository size" src="https://img.shields.io/github/repo-size/Chowdhury-Siam/Auralis?style=for-the-badge&color=E8DFF5"></a>
   <a href="LICENSE"><img alt="AGPL-3.0-or-later license" src="https://img.shields.io/badge/License-AGPL--3.0--or--later-BFA5F5?style=for-the-badge"></a>
   <br>
   <a href="https://flutter.dev"><img alt="Flutter" src="https://img.shields.io/badge/Powered_by-Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white"></a>
@@ -17,7 +17,7 @@ Bring music from your Telegram channels into one library, build playlists, and f
   <a href="https://core.telegram.org/tdlib"><img alt="Telegram connectivity through TDLib" src="https://img.shields.io/badge/Telegram-TDLib-2AABEE?style=for-the-badge&logo=telegram&logoColor=white"></a>
 </p>
 
-[**Download Latest**](https://github.com/SiamTest/Auralis/releases/latest) · [**Setup Guide**](#get-started) · [**Report a Bug**](https://github.com/SiamTest/Auralis/issues) · [**Build from Source**](#development)
+[**Download Latest**](https://github.com/Chowdhury-Siam/Auralis/releases/latest) · [**Setup Guide**](#get-started) · [**Report a Bug**](https://github.com/Chowdhury-Siam/Auralis/issues) · [**Build from Source**](#development)
 
 </div>
 
@@ -131,7 +131,7 @@ Back up stats, collections, selected channels, and preferences. Preview a restor
 
 ### Download and install
 
-Choose a matching asset from [the latest GitHub release](https://github.com/SiamTest/Auralis/releases/latest). If an Android asset is not attached yet, check the successful **Android APK build** run's artifacts.
+Choose a matching asset from [the latest GitHub release](https://github.com/Chowdhury-Siam/Auralis/releases/latest). If an Android asset is not attached yet, check the successful **Android APK build** run's artifacts.
 
 | Platform | Package | Installation |
 | --- | --- | --- |
@@ -241,7 +241,7 @@ Artwork uses Telegram or embedded metadata. LRCLIB is contacted only when you re
 Use **Flutter 3.47.1 / Dart 3.13.1**, matching the workflows. Keep the vendored `third_party/media_kit` runtime and `pubspec.lock` with the source.
 
 ```bash
-git clone https://github.com/SiamTest/Auralis.git
+git clone https://github.com/Chowdhury-Siam/Auralis.git
 cd Auralis
 flutter pub get --enforce-lockfile
 flutter analyze --no-pub --fatal-infos
@@ -290,7 +290,7 @@ See [Windows releases and updates](docs/UPDATES.md), [Android publishing and sig
 | A second instance cannot open Telegram | Close the first instance; a session lock protects the account database |
 | An old Windows installation cannot apply an update | Install the latest setup manually; see [updater recovery](docs/UPDATES.md#recovery-from-the-v013-updater-failure) |
 
-When [reporting a bug](https://github.com/SiamTest/Auralis/issues), include your platform, app version, steps, and expected result. Remove credentials, phone numbers, login codes, session files, and private channel details from attachments.
+When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), include your platform, app version, steps, and expected result. Remove credentials, phone numbers, login codes, session files, and private channel details from attachments.
 
 ---
 
@@ -298,7 +298,7 @@ When [reporting a bug](https://github.com/SiamTest/Auralis/issues), include your
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.39+40**; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.42+43**; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
