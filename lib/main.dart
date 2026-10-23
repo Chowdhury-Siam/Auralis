@@ -99,7 +99,7 @@ Future<void> main() async {
         );
       } catch (_) {
         warning = [
-          if (warning != null) warning,
+          ?warning,
           'Android updates could not initialize. Restart Auralis to retry.',
         ].join(' ');
       }
