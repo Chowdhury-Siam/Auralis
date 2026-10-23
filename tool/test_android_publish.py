@@ -22,6 +22,8 @@ class GitHub:
         self.calls = []
         self.bad_digest = False
         self.uploaded = False
+        self.release_reads = 0
+        self.publish_on_read = None
 
     def __call__(self, *args):
         self.calls.append(args)
@@ -37,6 +39,9 @@ class GitHub:
                 self.tag = next(arg[4:] for arg in args if arg.startswith("sha="))
                 return {}
             if endpoint.endswith("/releases/101"):
+                self.release_reads += 1
+                if self.release_reads == self.publish_on_read:
+                    self.release["draft"] = False
                 result = copy.deepcopy(self.release)
                 if self.bad_digest and self.uploaded:
                     result["assets"][-1]["digest"] = "sha256:" + "0" * 64
@@ -50,6 +55,12 @@ class GitHub:
             self.uploaded = True
             for name in args[3:args.index("--repo")]:
                 path = Path(name)
+                matches = [asset for asset in self.release["assets"] if asset["name"] == path.name]
+                if matches and "--clobber" not in args:
+                    raise RuntimeError("fixture: asset already exists")
+                if "--clobber" in args:
+                    self.release["assets"] = [asset for asset in self.release["assets"]
+                                              if asset["name"] != path.name]
                 self.release["assets"].append(dict(name=path.name, digest="sha256:" + publisher.digest(path),
                                                    size=path.stat().st_size))
             return
@@ -129,6 +140,67 @@ class AndroidPublishTest(unittest.TestCase):
         self.run_publish()
         self.assertTrue(self.github.release["draft"])
         self.assertEqual([args[:2] for args in self.mutations()], [("release", "upload")])
+
+    def test_rebuilt_debug_apk_refreshes_only_owned_assets_in_unpublished_draft(self):
+        self.debug_artifact()
+        self.github.release["draft"] = True
+        self.run_publish(SIGNED="false")
+        windows = copy.deepcopy(self.github.release["assets"][:1])
+        original_tag = self.github.tag
+        self.github.calls.clear()
+        self.apk.write_bytes(b"Another CI debug signing key/build; harmless fixture")
+        self.checksum()
+        (self.dist / "build-manifest.json").write_text("Fresh native build provenance\n")
+        self.run_publish(SIGNED="false")
+        self.assertTrue(self.github.release["draft"])
+        self.assertEqual(self.github.release["assets"][:1], windows)
+        self.assertEqual(self.github.tag, original_tag)
+        self.assertEqual(len(self.github.release["assets"]), 4)
+        upload, = self.mutations()
+        self.assertIn("--clobber", upload)
+        self.assertEqual(len(upload[3:upload.index("--repo")]), 3)
+        for path in self.dist.glob("*debug*"):
+            asset, = [a for a in self.github.release["assets"] if a["name"] == path.name]
+            self.assertEqual(asset["digest"], "sha256:" + publisher.digest(path))
+            self.assertEqual(asset["size"], path.stat().st_size)
+
+    def test_partial_draft_refreshes_changed_apk_and_missing_checksums(self):
+        self.github.release["draft"] = True
+        self.run_publish()
+        self.github.release["assets"].pop()
+        self.github.calls.clear()
+        self.apk.write_bytes(b"Rebuilt same app after an interrupted draft upload")
+        self.checksum()
+        self.run_publish()
+        upload, = self.mutations()
+        names = {Path(path).name for path in upload[3:upload.index("--repo")]}
+        self.assertEqual(names, {self.apk.name, "SHA256SUMS-android-arm64-v8a.txt"})
+        self.assertIn("--clobber", upload)
+        self.assertTrue(self.github.release["draft"])
+        self.assertEqual(len(self.github.release["assets"]), 4)
+
+    def test_draft_published_before_refresh_never_clobbers_assets(self):
+        self.github.release["draft"] = True
+        self.run_publish()
+        before = copy.deepcopy(self.github.release["assets"])
+        self.github.calls.clear()
+        self.github.release_reads = 0
+        self.github.publish_on_read = 2
+        self.apk.write_bytes(b"Rebuilt APK fixture")
+        self.checksum()
+        with self.assertRaisesRegex(ValueError, "published before draft refresh"):
+            self.run_publish()
+        self.assertEqual(self.github.release["assets"], before)
+        self.assertEqual(self.mutations(), [])
+
+    def test_duplicate_draft_assets_are_rejected_without_mutation(self):
+        self.github.release["draft"] = True
+        self.run_publish()
+        self.github.release["assets"].append(copy.deepcopy(self.github.release["assets"][1]))
+        self.github.calls.clear()
+        with self.assertRaisesRegex(ValueError, "Duplicate release asset"):
+            self.run_publish()
+        self.assertEqual(self.mutations(), [])
 
     def test_completed_android_release_is_immutable_on_rerun(self):
         self.run_publish()
