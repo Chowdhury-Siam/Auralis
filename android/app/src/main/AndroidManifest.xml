@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application android:label="Auralis" android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher" android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:allowBackup="false"
         android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules"
         android:networkSecurityConfig="@xml/network_security_config">
         <activity android:name=".MainActivity" android:exported="true"
