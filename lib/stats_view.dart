@@ -34,7 +34,8 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
   late ListeningStats _stats;
   bool _busy = false, _error = false, _confirming = false;
   String? _status;
-  late bool _includeAccount;
+  bool? _includeAccount;
+  bool get _withAccount => _includeAccount ?? widget.telegram?.ready == true;
   PlayerController get player => widget.player;
   String get _recovery =>
       p.join(player.settings.file.parent.path, 'auralis-before-restore.json');
@@ -42,7 +43,17 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
   void initState() {
     super.initState();
     _snapshot();
-    _includeAccount = widget.telegram?.ready == true;
+    widget.telegram?.addListener(_telegramChanged);
+  }
+
+  void _telegramChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.telegram?.removeListener(_telegramChanged);
+    super.dispose();
   }
 
   void _snapshot() =>
@@ -219,7 +230,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     await player.flushListeningStats(failOnError: true);
     final data = DataBackup.create(player.settings, DateTime.now());
     String text;
-    if (_includeAccount && widget.telegram != null) {
+    if (_withAccount && widget.telegram != null) {
       final password = await _password(creating: true);
       if (password == null) return;
       // Pause streaming before closing TDLib to take a consistent snapshot.
@@ -231,7 +242,13 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
       DataBackup.parse(text);
     }
     await widget.files.write(path, text);
-    if (mounted) setState(() => _status = 'Backup saved.');
+    if (mounted) {
+      setState(
+        () => _status = AccountBackup.isEncrypted(text)
+            ? 'Backup saved with your Telegram sign-in. Keep the backup password.'
+            : 'Settings backup saved. This file does not contain your Telegram sign-in.',
+      );
+    }
   });
 
   Future<void> _restore({bool recovery = false}) => _run(() async {
@@ -266,7 +283,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
             '${listeningTime(stats.milliseconds)} listened · ${stats.plays} qualified plays\n\n'
             'This replaces local stats, collections and preferences. Playback and the queue will stop. '
             'Your current settings are saved as a recovery copy first. Music files are kept. '
-            '${account != null ? 'This also replaces the local Telegram sign-in with the account in this backup. Telegram may require reauthentication if that session has expired or been revoked.' : 'Your Telegram sign-in is kept.'}',
+            '${account != null ? 'Telegram sign-in: included. This replaces the local account with the saved session. Telegram may require reauthentication if that session has expired or been revoked.' : 'Telegram sign-in: not included. This file can only restore settings and collections. Your current sign-in is kept.'}',
           ),
         ),
         actions: [
@@ -294,9 +311,17 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     }
     await widget.onRestored?.call();
     if (mounted) {
-      setState(
-        () => _status = 'Backup restored. A recovery copy is available below.',
-      );
+      setState(() {
+        final telegram = widget.telegram;
+        _error = account != null && telegram?.error != null;
+        _status = account == null
+            ? 'Settings restored. This backup has no Telegram sign-in; connect Telegram or restore a password-protected account backup.'
+            : telegram!.error != null
+            ? 'Settings and Telegram session restored, but Telegram could not reconnect. ${telegram.error}'
+            : telegram.ready
+            ? 'Settings and Telegram sign-in restored.'
+            : 'Settings and Telegram session restored. Reconnecting; check the Telegram screen for connection or sign-in progress.';
+      });
     }
   });
 
@@ -567,7 +592,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
                               ? 'Password protected · briefly pauses playback and reconnects Telegram'
                               : 'Connect Telegram to include your sign-in',
                         ),
-                        value: _includeAccount,
+                        value: _withAccount,
                         onChanged: _busy || !widget.telegram!.ready
                             ? null
                             : (value) =>
