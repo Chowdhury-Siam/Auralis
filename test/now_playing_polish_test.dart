@@ -58,7 +58,7 @@ void main() {
 
   for (final size in [const Size(390, 844), const Size(1280, 714)]) {
     testWidgets('compact controls remain usable at $size', (tester) async {
-      final (audio, _) = await mount(tester, reduced: true, size: size);
+      final (audio, player) = await mount(tester, reduced: true, size: size);
       final play = find.byKey(const ValueKey('now-playing-play-pause'));
       final bounds = tester.getSize(play);
       expect(bounds.width, bounds.height);
@@ -67,6 +67,12 @@ void main() {
       await tester.tap(play);
       await tester.pumpAndSettle();
       expect(audio.playing, isTrue);
+      await tester.tap(find.byKey(const ValueKey('now-playing-repeat')));
+      await tester.pumpAndSettle();
+      expect(player.repeatMode, PlaybackRepeat.all);
+      await tester.tap(find.byKey(const ValueKey('now-playing-favorite')));
+      await tester.pumpAndSettle();
+      expect(player.settings.favoriteIds, contains('first'));
 
       final slider = find.byKey(const ValueKey('volume-slider'));
       final sliderBounds = tester.getRect(slider);
@@ -84,6 +90,19 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('large desktop keeps the open artwork layout and compact modes', (
+    tester,
+  ) async {
+    await mount(tester, reduced: true, size: const Size(1600, 1000));
+    expect(find.byKey(const ValueKey('now-playing-control-card')), findsNothing);
+    for (final action in ['shuffle', 'repeat', 'favorite']) {
+      final button = find.byKey(ValueKey('now-playing-$action'));
+      expect(button.hitTestable(), findsOneWidget);
+      expect(tester.getSize(button), const Size(48, 48));
+    }
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('down arrow slides the whole player before restoring the dock', (
     tester,
