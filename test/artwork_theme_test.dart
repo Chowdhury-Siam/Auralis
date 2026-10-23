@@ -46,10 +46,18 @@ void main() {
   ) async {
     final teal = File('test/fixtures/theme-teal.png').readAsBytesSync();
     final orange = File('test/fixtures/theme-orange.png').readAsBytesSync();
-    final expected = (await tester.runAsync(() => ColorScheme.fromImageProvider(
-      provider: MemoryImage(orange),
-      brightness: Brightness.dark,
-    )))!;
+    final expected = (await tester.runAsync(() async {
+      // Both previews may start extraction before the rapid track switch.
+      // Decode both in the real async zone, including the abandoned preview.
+      await ColorScheme.fromImageProvider(
+        provider: MemoryImage(teal),
+        brightness: Brightness.dark,
+      );
+      return ColorScheme.fromImageProvider(
+        provider: MemoryImage(orange),
+        brightness: Brightness.dark,
+      );
+    }))!;
     final player = PlayerController(
       FakeAudio(),
       TelegramStreamProxy((_) async => {}),
