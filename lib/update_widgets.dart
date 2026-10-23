@@ -18,8 +18,16 @@ class UpdateSettings extends StatelessWidget {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Check automatically'),
-          subtitle: const Text('At startup and every six hours'),
+          title: Text(
+            updater.isAndroid
+                ? 'Check and download automatically'
+                : 'Check automatically',
+          ),
+          subtitle: Text(
+            updater.isAndroid
+                ? 'At startup and every six hours. Android asks before installation.'
+                : 'At startup and every six hours',
+          ),
           value: updater.settings.automaticUpdates,
           onChanged: updater.setAutomatic,
         ),
@@ -73,7 +81,7 @@ class UpdateSettings extends StatelessWidget {
                 onPressed: updater.installing || updater.checking
                     ? null
                     : () => confirmUpdate(context, updater),
-                child: const Text('Install and restart'),
+                child: Text(updater.installLabel),
               ),
           ],
         ),
@@ -120,7 +128,7 @@ class UpdateBanner extends StatelessWidget {
                   child: Text(
                     updater.downloaded == null
                         ? 'Download'
-                        : 'Install and restart',
+                        : updater.installLabel,
                   ),
                 ),
             ],
@@ -135,10 +143,16 @@ Future<void> confirmUpdate(BuildContext context, AppUpdater updater) async {
   final accepted = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Install update and restart?'),
+      title: Text(
+        updater.isAndroid
+            ? 'Install Android update?'
+            : 'Install update and restart?',
+      ),
       content: Text(
-        'The ${updater.available?.version} installer passed its SHA-256 checksum check. '
-        'Auralis will close and open the Windows installer. Complete its steps to install and reopen Auralis. Your settings and Telegram session stay on this device.',
+        updater.isAndroid
+            ? 'Version ${updater.available?.version} has passed its SHA-256 checksum check. Android will ask you to confirm installation. If prompted, allow updates from Auralis. Your settings and Telegram session stay on this device.'
+            : 'The ${updater.available?.version} installer passed its SHA-256 checksum check. '
+                  'Auralis will close and open the Windows installer. Complete its steps to install and reopen Auralis. Your settings and Telegram session stay on this device.',
       ),
       actions: [
         TextButton(
@@ -147,7 +161,7 @@ Future<void> confirmUpdate(BuildContext context, AppUpdater updater) async {
         ),
         FilledButton(
           onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text('Install and restart'),
+          child: Text(updater.installLabel),
         ),
       ],
     ),
