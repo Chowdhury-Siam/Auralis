@@ -23,7 +23,7 @@ const accent = Color(0xFFC7B5FF),
     surface = Color(0xFF19171E),
     muted = Color(0xFFAAA4B5);
 
-class AuralisApp extends StatelessWidget {
+class AuralisApp extends StatefulWidget {
   const AuralisApp({
     super.key,
     required this.player,
@@ -38,36 +38,141 @@ class AuralisApp extends StatelessWidget {
   final AppUpdater? updater;
   final DataFiles dataFiles;
   @override
+  State<AuralisApp> createState() => _AuralisAppState();
+}
+
+class _AuralisAppState extends State<AuralisApp> {
+  static final _fallback = ColorScheme.fromSeed(
+    seedColor: accent,
+    brightness: Brightness.dark,
+    primary: accent,
+    surface: surface,
+  );
+  ColorScheme _scheme = _fallback;
+  Object? _artworkIdentity;
+  int _generation = 0;
+  final _palettes = <Uint8List, Future<ColorScheme?>>{};
+
+  @override
+  void initState() {
+    super.initState();
+    widget.player.addListener(_artworkChanged);
+    widget.telegram.addListener(_artworkChanged);
+    _artworkChanged();
+  }
+
+  @override
+  void didUpdateWidget(AuralisApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.player != widget.player ||
+        oldWidget.telegram != widget.telegram) {
+      oldWidget.player.removeListener(_artworkChanged);
+      oldWidget.telegram.removeListener(_artworkChanged);
+      widget.player.addListener(_artworkChanged);
+      widget.telegram.addListener(_artworkChanged);
+      _artworkIdentity = null;
+      _artworkChanged();
+    }
+  }
+
+  void _artworkChanged() {
+    final track = widget.player.current;
+    final cover = track != null && track.fileId != null && widget.telegram.ready
+        ? widget.telegram.cover(track)
+        : null;
+    final identity = (
+      track?.id,
+      track?.coverFileId,
+      track?.coverPreview,
+      cover,
+    );
+    if (identity == _artworkIdentity) return;
+    _artworkIdentity = identity;
+    final generation = ++_generation;
+    unawaited(_loadPalette(track?.coverPreview, cover, generation));
+  }
+
+  Future<ColorScheme?> _extract(Uint8List bytes) async {
+    try {
+      return await ColorScheme.fromImageProvider(
+        provider: MemoryImage(bytes),
+        brightness: Brightness.dark,
+      );
+    } catch (_) {
+      return null; // Missing or damaged artwork keeps the fallback theme.
+    }
+  }
+
+  Future<void> _loadPalette(
+    Uint8List? preview,
+    Future<Uint8List?>? cover,
+    int generation,
+  ) async {
+    Future<bool> apply(Uint8List? bytes) async {
+      if (!mounted || generation != _generation || bytes == null) return false;
+      if (_palettes.length >= 8 && !_palettes.containsKey(bytes)) {
+        _palettes.remove(_palettes.keys.first);
+      }
+      final palette = await _palettes.putIfAbsent(bytes, () => _extract(bytes));
+      if (mounted && generation == _generation && palette != null) {
+        if (_scheme != palette) setState(() => _scheme = palette);
+        return true;
+      }
+      return false;
+    }
+
+    var hasPalette = await apply(preview);
+    try {
+      hasPalette = await apply(await cover) || hasPalette;
+    } catch (_) {
+      // A failed full-size cover must not discard a usable preview palette.
+    }
+    if (!hasPalette && mounted && generation == _generation &&
+        _scheme != _fallback) {
+      setState(() => _scheme = _fallback);
+    }
+  }
+
+  @override
+  void dispose() {
+    ++_generation;
+    widget.player.removeListener(_artworkChanged);
+    widget.telegram.removeListener(_artworkChanged);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
     title: 'Auralis',
+    themeAnimationDuration: Duration(
+      milliseconds: widget.player.settings.reducedMotion ||
+          WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.disableAnimations
+          ? 0
+          : 350,
+    ),
     theme: ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       fontFamily: 'Segoe UI',
-      scaffoldBackgroundColor: const Color(0xFF111015),
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: accent,
-        brightness: Brightness.dark,
-        surface: surface,
-        primary: accent,
-      ),
+      scaffoldBackgroundColor: _scheme.surface,
+      colorScheme: _scheme,
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF211E28),
+        fillColor: _scheme.surfaceContainerHigh,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
       ),
-      dividerColor: const Color(0xFF302B39),
+      dividerColor: _scheme.outlineVariant,
     ),
     home: PlayerShell(
-      player: player,
-      telegram: telegram,
-      startupWarning: startupWarning,
-      updater: updater,
-      dataFiles: dataFiles,
+      player: widget.player,
+      telegram: widget.telegram,
+      startupWarning: widget.startupWarning,
+      updater: widget.updater,
+      dataFiles: widget.dataFiles,
     ),
   );
 }
@@ -92,6 +197,7 @@ class PlayerShell extends StatefulWidget {
 
 class _PlayerShellState extends State<PlayerShell>
     with SingleTickerProviderStateMixin {
+  ColorScheme get _colors => Theme.of(context).colorScheme;
   int destination = 0;
   bool showLyrics = false;
   String collection = 'All songs';
@@ -253,7 +359,7 @@ class _PlayerShellState extends State<PlayerShell>
           child: Focus(
             autofocus: true,
             child: Scaffold(
-              backgroundColor: immersiveLyrics ? lyricsBackground : null,
+              backgroundColor: immersiveLyrics ? _colors.surface : null,
               bottomNavigationBar: compact && destination != 3
                   ? _bottomNavigation()
                   : null,
@@ -363,7 +469,7 @@ class _PlayerShellState extends State<PlayerShell>
                               margin: const EdgeInsets.fromLTRB(0, 20, 20, 20),
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                color: surface,
+                                color: _colors.surfaceContainerLow,
                                 borderRadius: BorderRadius.circular(28),
                               ),
                               child: _nowPlaying(compact: true),
@@ -428,9 +534,9 @@ class _PlayerShellState extends State<PlayerShell>
 
   Widget _navigation(bool narrow, {bool short = false}) => Container(
     width: narrow ? 72 : 202,
-    decoration: const BoxDecoration(
-      color: Color(0xFF17151B),
-      border: Border(right: BorderSide(color: Color(0xFF26222E))),
+    decoration: BoxDecoration(
+      color: _colors.surfaceContainerLowest,
+      border: Border(right: BorderSide(color: _colors.surfaceContainerHigh)),
     ),
     padding: EdgeInsets.symmetric(
       horizontal: narrow ? 8 : 14,
@@ -443,7 +549,7 @@ class _PlayerShellState extends State<PlayerShell>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.graphic_eq_rounded, color: accent, size: 30),
+              Icon(Icons.graphic_eq_rounded, color: _colors.primary, size: 30),
               if (!narrow) ...[
                 const SizedBox(width: 10),
                 const Flexible(
@@ -464,10 +570,10 @@ class _PlayerShellState extends State<PlayerShell>
           ),
         if (!short) const SizedBox(height: 8),
         if (!narrow && !short)
-          const Text(
+          Text(
             'A LITTLE CLOSER TO MUSIC',
             textAlign: TextAlign.center,
-            style: TextStyle(color: muted, fontSize: 8, letterSpacing: 1.4),
+            style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 8, letterSpacing: 1.4),
           ),
         SizedBox(
           height: short
@@ -488,7 +594,7 @@ class _PlayerShellState extends State<PlayerShell>
               message: label,
               child: Material(
                 color: destination == i
-                    ? const Color(0xFF332B45)
+                    ? _colors.primaryContainer
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(18),
                 child: InkWell(
@@ -509,7 +615,7 @@ class _PlayerShellState extends State<PlayerShell>
                       children: [
                         Icon(
                           icon,
-                          color: destination == i ? accent : muted,
+                          color: destination == i ? _colors.primary : _colors.onSurfaceVariant,
                           size: 23,
                         ),
                         if (!narrow) ...[
@@ -520,7 +626,7 @@ class _PlayerShellState extends State<PlayerShell>
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: destination == i ? accent : muted,
+                                color: destination == i ? _colors.primary : _colors.onSurfaceVariant,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -535,11 +641,11 @@ class _PlayerShellState extends State<PlayerShell>
           ),
         const Spacer(),
         if (!narrow && !short)
-          const Padding(
-            padding: EdgeInsets.all(12),
+          Padding(
+            padding: const EdgeInsets.all(12),
             child: Text(
               'YOUR MUSIC. YOUR SPACE.\n\nIndependent. Open source.',
-              style: TextStyle(color: muted, fontSize: 10, height: 1.4),
+              style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 10, height: 1.4),
             ),
           ),
         IconButton(
@@ -608,10 +714,10 @@ class _PlayerShellState extends State<PlayerShell>
                             'KEEP THE GOOD ONES GOING',
                             'IN THE MOMENT',
                           ][destination],
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 9,
                             letterSpacing: 1.7,
-                            color: accent,
+                            color: _colors.primary,
                           ),
                         ),
                       if (!short) const SizedBox(height: 7),
@@ -666,13 +772,13 @@ class _PlayerShellState extends State<PlayerShell>
                     icon: const Icon(Icons.sort_rounded),
                     position: PopupMenuPosition.under,
                     offset: const Offset(0, 6),
-                    color: surface,
+                    color: _colors.surfaceContainerLow,
                     surfaceTintColor: Colors.transparent,
                     elevation: 4,
                     shadowColor: const Color(0x40000000),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(color: Color(0xFF302B39)),
+                      side: BorderSide(color: _colors.outlineVariant),
                     ),
                     clipBehavior: Clip.antiAlias,
                     itemBuilder: (context) => [
@@ -684,7 +790,7 @@ class _PlayerShellState extends State<PlayerShell>
                             sort.label,
                             style: TextStyle(
                               color: player.settings.librarySort == sort
-                                  ? accent
+                                  ? _colors.primary
                                   : null,
                               fontSize: 13,
                             ),
@@ -711,12 +817,12 @@ class _PlayerShellState extends State<PlayerShell>
     margin: const EdgeInsets.only(bottom: 12),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: const Color(0xFF3C2730),
+      color: _colors.errorContainer,
       borderRadius: BorderRadius.circular(12),
     ),
     child: Text(
       text,
-      style: const TextStyle(color: Color(0xFFFFCDD8), fontSize: 12),
+      style: TextStyle(color: _colors.onErrorContainer, fontSize: 12),
     ),
   );
   Widget _search(String hint) => TextField(
@@ -820,9 +926,9 @@ class _PlayerShellState extends State<PlayerShell>
             ),
           SimpleDialogOption(
             onPressed: () => Navigator.pop(context, ''),
-            child: const Text(
+            child: Text(
               'Create playlist',
-              style: TextStyle(color: accent),
+              style: TextStyle(color: _colors.primary),
             ),
           ),
         ],
@@ -870,7 +976,7 @@ class _PlayerShellState extends State<PlayerShell>
     onPressed: _sleepTimer,
     icon: Icon(
       Icons.bedtime_outlined,
-      color: player.sleepActive ? accent : muted,
+      color: player.sleepActive ? _colors.primary : _colors.onSurfaceVariant,
     ),
   );
 
@@ -1050,9 +1156,9 @@ class _PlayerShellState extends State<PlayerShell>
               : ListView.builder(
                   itemCount: entries.length,
                   itemBuilder: (context, i) => ListTile(
-                    leading: const Icon(
+                    leading: Icon(
                       Icons.playlist_play_rounded,
-                      color: accent,
+                      color: _colors.primary,
                     ),
                     title: Text(
                       entries[i].key,
@@ -1098,7 +1204,7 @@ class _PlayerShellState extends State<PlayerShell>
         key: const ValueKey('library-counts'),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: muted, fontSize: 11),
+        style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 11),
       ),
     );
   }
@@ -1188,11 +1294,11 @@ class _PlayerShellState extends State<PlayerShell>
           if (library.error != null) _banner(library.error!),
           if (library.loading) ...[
             const LinearProgressIndicator(minHeight: 2),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 'Loading music from your channels…',
-                style: TextStyle(color: muted, fontSize: 11),
+                style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 11),
               ),
             ),
           ],
@@ -1282,7 +1388,7 @@ class _PlayerShellState extends State<PlayerShell>
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
-        color: active ? const Color(0xFF2B2438) : Colors.transparent,
+        color: active ? _colors.surfaceContainerHigh : Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         child: ListTile(
           dense: true,
@@ -1312,14 +1418,14 @@ class _PlayerShellState extends State<PlayerShell>
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: active ? accent : null,
+              color: active ? _colors.primary : null,
             ),
           ),
           subtitle: Text(
             '${track.artist} · ${track.source}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, color: muted),
+            style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1327,15 +1433,15 @@ class _PlayerShellState extends State<PlayerShell>
               if (track.duration > Duration.zero)
                 Text(
                   clockText(track.duration),
-                  style: const TextStyle(fontSize: 11, color: muted),
+                  style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
                 ),
               if (queued)
-                const SizedBox(
+                SizedBox(
                   width: 30,
                   child: Icon(
                     Icons.drag_handle_rounded,
                     size: 19,
-                    color: muted,
+                    color: _colors.onSurfaceVariant,
                   ),
                 )
               else
@@ -1383,9 +1489,9 @@ class _PlayerShellState extends State<PlayerShell>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
+                    Text(
                       'Select channels to combine their music in Library.',
-                      style: TextStyle(color: muted, fontSize: 12),
+                      style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 12),
                     ),
                     Wrap(
                       spacing: 8,
@@ -1393,7 +1499,7 @@ class _PlayerShellState extends State<PlayerShell>
                       children: [
                         Text(
                           '${channels.length} channels · ${telegram.connection}',
-                          style: const TextStyle(fontSize: 11, color: muted),
+                          style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
                         ),
                         TextButton.icon(
                           onPressed: telegram.busy
@@ -1462,7 +1568,7 @@ class _PlayerShellState extends State<PlayerShell>
                       library.selected(channels[i].id)
                           ? 'Selected for Library'
                           : 'Add music to Library',
-                      style: const TextStyle(color: muted, fontSize: 11),
+                      style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 11),
                     ),
                   ),
                 ),
@@ -1484,10 +1590,10 @@ class _PlayerShellState extends State<PlayerShell>
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF30283E),
+                color: _colors.primaryContainer,
                 borderRadius: BorderRadius.circular(26),
               ),
-              child: const Icon(Icons.send_rounded, color: accent, size: 36),
+              child: Icon(Icons.send_rounded, color: _colors.primary, size: 36),
             ),
             const SizedBox(height: 22),
             const Text(
@@ -1500,18 +1606,18 @@ class _PlayerShellState extends State<PlayerShell>
               ),
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Connect Telegram to browse music shared in channels you can access. Audio stays on your device.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: muted, height: 1.6, fontSize: 12),
+              style: TextStyle(color: _colors.onSurfaceVariant, height: 1.6, fontSize: 12),
             ),
             const SizedBox(height: 24),
             AuthForm(telegram: telegram),
             const SizedBox(height: 18),
-            const Text(
+            Text(
               'Credentials are encrypted on this device.\nLogin codes and passwords are never saved.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: muted, fontSize: 10, height: 1.6),
+              style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 10, height: 1.6),
             ),
             const SizedBox(height: 20),
           ],
@@ -1527,7 +1633,7 @@ class _PlayerShellState extends State<PlayerShell>
           Expanded(
             child: Text(
               '${player.queue.length} tracks',
-              style: const TextStyle(color: muted, fontSize: 12),
+              style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 12),
             ),
           ),
           IconButton(
@@ -1573,9 +1679,9 @@ class _PlayerShellState extends State<PlayerShell>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
+        Text(
           'NOW PLAYING',
-          style: TextStyle(color: muted, fontSize: 10, letterSpacing: 1.5),
+          style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 10, letterSpacing: 1.5),
         ),
         const SizedBox(height: 14),
         Expanded(
@@ -1613,7 +1719,7 @@ class _PlayerShellState extends State<PlayerShell>
           track?.artist ?? 'A space for the music you love',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: muted, fontSize: 12),
+          style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 12),
         ),
         const SizedBox(height: 14),
         Row(
@@ -1681,8 +1787,6 @@ class _PlayerShellState extends State<PlayerShell>
           final veryShort = horizontal && heroHeight < 360;
           final comfortable = horizontal && heroHeight >= 420 * scale;
           final spacious = heroHeight >= 580 * scale;
-          final framed =
-              horizontal && box.maxWidth >= 860 && heroHeight >= 460 * scale;
           final gap = veryShort
               ? 4.0
               : spacious
@@ -1704,23 +1808,21 @@ class _PlayerShellState extends State<PlayerShell>
             required String tooltip,
             required IconData icon,
             required VoidCallback? onPressed,
-            Color background = const Color(0xFF2B2436),
-            Color foreground = accent,
+            Color background = Colors.transparent,
+            Color? foreground,
             Key? key,
-          }) => Expanded(
-            child: IconButton.filledTonal(
+          }) => IconButton(
               key: key,
               tooltip: tooltip,
               onPressed: onPressed,
               style: IconButton.styleFrom(
                 minimumSize: const Size(48, 48),
                 backgroundColor: background,
-                foregroundColor: foreground,
-                disabledBackgroundColor: const Color(0xFF211D28),
-                shape: const StadiumBorder(),
+                foregroundColor: foreground ?? _colors.primary,
+                disabledBackgroundColor: Colors.transparent,
+                shape: const CircleBorder(),
               ),
-              icon: Icon(icon, size: tight ? 26 : 32),
-            ),
+              icon: Icon(icon, size: 24),
           );
 
           Widget artwork() => LayoutBuilder(
@@ -1746,12 +1848,12 @@ class _PlayerShellState extends State<PlayerShell>
                         reducedMotion: player.settings.reducedMotion,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: const Color(0xFF211B2B),
+                            color: _colors.surfaceContainer,
                             borderRadius: BorderRadius.circular(
                               tight ? 26 : 34,
                             ),
                             border: Border.all(
-                              color: accent.withValues(alpha: .14),
+                              color: _colors.primary.withValues(alpha: .14),
                             ),
                           ),
                           child: Padding(
@@ -1815,13 +1917,13 @@ class _PlayerShellState extends State<PlayerShell>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (horizontal && spacious && track != null) ...[
+              if (horizontal && comfortable && track != null) ...[
                 Text(
                   'PLAYING FROM  ·  ${track.source.isEmpty ? 'YOUR LIBRARY' : track.source}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: accent,
+                  style: TextStyle(
+                    color: _colors.primary,
                     fontSize: 10,
                     letterSpacing: 1.2,
                     fontWeight: FontWeight.w600,
@@ -1861,7 +1963,7 @@ class _PlayerShellState extends State<PlayerShell>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: muted,
+                  color: _colors.onSurfaceVariant,
                   fontSize: veryShort
                       ? 12
                       : tight
@@ -1891,7 +1993,7 @@ class _PlayerShellState extends State<PlayerShell>
                 children: [
                   Text(
                     clockText(audio.position),
-                    style: const TextStyle(fontSize: 11, color: muted),
+                    style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -1911,13 +2013,13 @@ class _PlayerShellState extends State<PlayerShell>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 10, color: accent),
+                      style: TextStyle(fontSize: 10, color: _colors.primary),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     clockText(audio.duration),
-                    style: const TextStyle(fontSize: 11, color: muted),
+                    style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -1937,7 +2039,7 @@ class _PlayerShellState extends State<PlayerShell>
                       : () => unawaited(player.previous()),
                   style: IconButton.styleFrom(
                     minimumSize: const Size.square(48),
-                    foregroundColor: accent,
+                    foregroundColor: _colors.primary,
                     shape: const CircleBorder(),
                   ),
                   icon: const Icon(Icons.skip_previous_rounded, size: 30),
@@ -1953,16 +2055,16 @@ class _PlayerShellState extends State<PlayerShell>
                         : audio.toggle,
                     style: IconButton.styleFrom(
                       padding: EdgeInsets.zero,
-                      backgroundColor: accent,
-                      foregroundColor: const Color(0xFF21182F),
+                      backgroundColor: _colors.primary,
+                      foregroundColor: _colors.onPrimary,
                       shape: const CircleBorder(),
                     ),
                     icon: player.loading || audio.buffering
-                        ? const SizedBox.square(
+                        ? SizedBox.square(
                             dimension: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Color(0xFF21182F),
+                              color: _colors.onPrimary,
                             ),
                           )
                         : Icon(
@@ -1981,7 +2083,7 @@ class _PlayerShellState extends State<PlayerShell>
                       : () => unawaited(player.next()),
                   style: IconButton.styleFrom(
                     minimumSize: const Size.square(48),
-                    foregroundColor: accent,
+                    foregroundColor: _colors.primary,
                     shape: const CircleBorder(),
                   ),
                   icon: const Icon(Icons.skip_next_rounded, size: 30),
@@ -1990,15 +2092,11 @@ class _PlayerShellState extends State<PlayerShell>
             ),
           );
 
-          final modes = DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xFF1C1724).withValues(alpha: .55),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0xFF302839)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Row(
+          final modes = SizedBox(
+            key: const ValueKey('now-playing-modes'),
+            height: 48,
+            child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   pill(
                     key: const ValueKey('now-playing-shuffle'),
@@ -2007,7 +2105,7 @@ class _PlayerShellState extends State<PlayerShell>
                     onPressed: hasNext ? player.shuffle : null,
                     background: Colors.transparent,
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 20),
                   pill(
                     key: const ValueKey('now-playing-repeat'),
                     tooltip: switch (player.repeatMode) {
@@ -2020,11 +2118,11 @@ class _PlayerShellState extends State<PlayerShell>
                         : Icons.repeat_rounded,
                     onPressed: player.toggleRepeat,
                     background: player.repeat
-                        ? accent.withValues(alpha: .16)
+                        ? _colors.primary.withValues(alpha: .16)
                         : Colors.transparent,
-                    foreground: player.repeat ? const Color(0xFFE5D9FF) : muted,
+                    foreground: player.repeat ? _colors.primary : _colors.onSurfaceVariant,
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 20),
                   pill(
                     key: const ValueKey('now-playing-favorite'),
                     tooltip: favorite
@@ -2033,7 +2131,10 @@ class _PlayerShellState extends State<PlayerShell>
                     icon: favorite
                         ? Icons.favorite_rounded
                         : Icons.favorite_border_rounded,
-                    background: Colors.transparent,
+                    background: favorite
+                        ? _colors.primary.withValues(alpha: .12)
+                        : Colors.transparent,
+                    foreground: favorite ? _colors.primary : _colors.onSurfaceVariant,
                     onPressed: track == null
                         ? null
                         : () async {
@@ -2046,7 +2147,6 @@ class _PlayerShellState extends State<PlayerShell>
                   ),
                 ],
               ),
-            ),
           );
 
           final actions = LayoutBuilder(
@@ -2064,7 +2164,7 @@ class _PlayerShellState extends State<PlayerShell>
                           horizontal: labels ? 12 : 8,
                         ),
                         backgroundColor: labels
-                            ? accent.withValues(alpha: .09)
+                            ? _colors.primary.withValues(alpha: .09)
                             : Colors.transparent,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -2119,24 +2219,7 @@ class _PlayerShellState extends State<PlayerShell>
                     const SizedBox(width: 28),
                     Expanded(
                       flex: 6,
-                      child: framed
-                          ? Container(
-                              key: const ValueKey('now-playing-control-card'),
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 18,
-                                vertical: spacious ? 16 : 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF19151F)
-                                    .withValues(alpha: .76),
-                                borderRadius: BorderRadius.circular(28),
-                                border: Border.all(
-                                  color: const Color(0xFF302738),
-                                ),
-                              ),
-                              child: controls,
-                            )
-                          : controls,
+                      child: controls,
                     ),
                   ],
                 )
@@ -2183,7 +2266,7 @@ class _PlayerShellState extends State<PlayerShell>
                       SizedBox(
                         height: previewHeight,
                         child: Material(
-                          color: const Color(0xFF1C1823).withValues(alpha: .72),
+                          color: _colors.surfaceContainerLow.withValues(alpha: .72),
                           borderRadius: BorderRadius.circular(22),
                           clipBehavior: Clip.antiAlias,
                           child: InkWell(
@@ -2220,8 +2303,8 @@ class _PlayerShellState extends State<PlayerShell>
                                           'UP NEXT · ${player.queue.length - nextIndex} tracks',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: accent,
+                                          style: TextStyle(
+                                            color: _colors.primary,
                                             fontSize: 10,
                                             letterSpacing: 1,
                                             fontWeight: FontWeight.w600,
@@ -2241,8 +2324,8 @@ class _PlayerShellState extends State<PlayerShell>
                                           player.queue[nextIndex].artist,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: muted,
+                                          style: TextStyle(
+                                            color: _colors.onSurfaceVariant,
                                             fontSize: 11,
                                           ),
                                         ),
@@ -2250,10 +2333,10 @@ class _PlayerShellState extends State<PlayerShell>
                                     ),
                                   ),
                                   const SizedBox(width: 16),
-                                  const Icon(
+                                  Icon(
                                     Icons.play_circle_fill_rounded,
                                     size: 32,
-                                    color: accent,
+                                    color: _colors.primary,
                                   ),
                                 ],
                               ),
@@ -2287,10 +2370,10 @@ class _PlayerShellState extends State<PlayerShell>
             width: 96,
             height: 96,
             decoration: BoxDecoration(
-              color: const Color(0xFF25202E),
+              color: _colors.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(34),
             ),
-            child: Icon(icon, size: 38, color: accent),
+            child: Icon(icon, size: 38, color: _colors.primary),
           ),
           const SizedBox(height: 22),
           Text(
@@ -2306,7 +2389,7 @@ class _PlayerShellState extends State<PlayerShell>
           Text(
             description,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: muted, height: 1.8, fontSize: 12),
+            style: TextStyle(color: _colors.onSurfaceVariant, height: 1.8, fontSize: 12),
           ),
           if (action != null) ...[const SizedBox(height: 24), action],
         ],
@@ -2334,7 +2417,7 @@ class _PlayerShellState extends State<PlayerShell>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.volume_up_rounded, size: 16, color: muted),
+            Icon(Icons.volume_up_rounded, size: 16, color: _colors.onSurfaceVariant),
             const SizedBox(width: 4),
             SizedBox(
               width: narrow ? 84 : 100,
@@ -2343,10 +2426,10 @@ class _PlayerShellState extends State<PlayerShell>
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     trackHeight: 3,
-                    activeTrackColor: accent,
-                    inactiveTrackColor: accent.withValues(alpha: .18),
-                    thumbColor: accent,
-                    overlayColor: accent.withValues(alpha: .12),
+                    activeTrackColor: _colors.primary,
+                    inactiveTrackColor: _colors.primary.withValues(alpha: .18),
+                    thumbColor: _colors.primary,
+                    overlayColor: _colors.primary.withValues(alpha: .12),
                     trackShape: const RoundedRectSliderTrackShape(),
                     thumbShape: const RoundSliderThumbShape(
                       enabledThumbRadius: 5,
@@ -2429,18 +2512,18 @@ class _PlayerShellState extends State<PlayerShell>
                       player.current?.artist ?? 'Choose a track to get started',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: muted, fontSize: 11),
+                      style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 11),
                     ),
                   ],
                 ),
               ),
               if (player.current != null)
-                const Padding(
-                  padding: EdgeInsets.only(left: 8),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
                   child: Icon(
                     Icons.open_in_full_rounded,
                     size: 16,
-                    color: muted,
+                    color: _colors.onSurfaceVariant,
                   ),
                 ),
             ],
@@ -2473,8 +2556,8 @@ class _PlayerShellState extends State<PlayerShell>
               : audio.toggle,
           tooltip: audio.playing ? 'Pause' : 'Play',
           style: IconButton.styleFrom(
-            backgroundColor: accent,
-            foregroundColor: const Color(0xFF1D1825),
+            backgroundColor: _colors.primary,
+            foregroundColor: _colors.onPrimary,
           ),
           icon: Icon(
             audio.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
@@ -2503,7 +2586,7 @@ class _PlayerShellState extends State<PlayerShell>
             player.repeatMode == PlaybackRepeat.one
                 ? Icons.repeat_one_rounded
                 : Icons.repeat_rounded,
-            color: player.repeat ? accent : muted,
+            color: player.repeat ? _colors.primary : _colors.onSurfaceVariant,
           ),
         ),
         _sleepControl(key: const ValueKey('sleep-timer-control')),
@@ -2517,7 +2600,7 @@ class _PlayerShellState extends State<PlayerShell>
           width: 34,
           child: Text(
             clockText(audio.position),
-            style: const TextStyle(fontSize: 10, color: muted),
+            style: TextStyle(fontSize: 10, color: _colors.onSurfaceVariant),
           ),
         ),
         Expanded(
@@ -2540,7 +2623,7 @@ class _PlayerShellState extends State<PlayerShell>
           child: Text(
             clockText(audio.duration),
             textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 10, color: muted),
+            style: TextStyle(fontSize: 10, color: _colors.onSurfaceVariant),
           ),
         ),
       ],
@@ -2590,7 +2673,7 @@ class _PlayerShellState extends State<PlayerShell>
                     player.current?.artist ?? 'Choose a track',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 10, color: muted),
+                    style: TextStyle(fontSize: 10, color: _colors.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -2601,9 +2684,9 @@ class _PlayerShellState extends State<PlayerShell>
     );
     return Container(
       key: const ValueKey('player-bar'),
-      decoration: const BoxDecoration(
-        color: Color(0xFF17141D),
-        border: Border(top: BorderSide(color: Color(0xFF302B39))),
+      decoration: BoxDecoration(
+        color: _colors.surfaceContainerLowest,
+        border: Border(top: BorderSide(color: _colors.outlineVariant)),
       ),
       padding: EdgeInsets.fromLTRB(
         narrow ? 10 : 18,
@@ -2640,7 +2723,7 @@ class _PlayerShellState extends State<PlayerShell>
                         player.repeatMode == PlaybackRepeat.one
                             ? Icons.repeat_one_rounded
                             : Icons.repeat_rounded,
-                        color: player.repeat ? accent : muted,
+                        color: player.repeat ? _colors.primary : _colors.onSurfaceVariant,
                       ),
                     ),
                     _sleepControl(key: const ValueKey('sleep-timer-control')),
@@ -2726,9 +2809,9 @@ class _PlayerShellState extends State<PlayerShell>
                   const Divider(),
                 ],
                 Text(
-                  'Auralis ${widget.updater?.currentVersion ?? '0.1.53'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
-                  style: const TextStyle(
-                    color: muted,
+                  'Auralis ${widget.updater?.currentVersion ?? '0.1.56'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+                  style: TextStyle(
+                    color: _colors.onSurfaceVariant,
                     fontSize: 12,
                     height: 1.6,
                   ),
@@ -2769,7 +2852,7 @@ class _PlayerShellState extends State<PlayerShell>
             onPressed: () => showLicensePage(
               context: context,
               applicationName: 'Auralis',
-              applicationVersion: widget.updater?.currentVersion ?? '0.1.53',
+              applicationVersion: widget.updater?.currentVersion ?? '0.1.56',
             ),
             child: const Text('Licenses'),
           ),
@@ -2791,6 +2874,7 @@ class AuthForm extends StatefulWidget {
 }
 
 class _AuthFormState extends State<AuthForm> {
+  ColorScheme get _colors => Theme.of(context).colorScheme;
   final apiId = TextEditingController(),
       apiHash = TextEditingController(),
       value = TextEditingController();
@@ -2843,9 +2927,9 @@ class _AuthFormState extends State<AuthForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (initial) ...[
-          const Text(
+          Text(
             'Create an API application at my.telegram.org, then enter its details here.',
-            style: TextStyle(fontSize: 12, color: muted, height: 1.6),
+            style: TextStyle(fontSize: 12, color: _colors.onSurfaceVariant, height: 1.6),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -2881,13 +2965,13 @@ class _AuthFormState extends State<AuthForm> {
             'authorizationStateWaitOtherDeviceConfirmation' =>
               'Confirm this sign-in in your Telegram application.',
             _ => 'Connecting securely to Telegram…',
-          }, style: const TextStyle(color: muted, height: 1.6)),
+          }, style: TextStyle(color: _colors.onSurfaceVariant, height: 1.6)),
         if (td.error != null)
           Padding(
             padding: const EdgeInsets.only(top: 14),
             child: Text(
               td.error!,
-              style: const TextStyle(color: Color(0xFFFFB4C8), fontSize: 12),
+              style: TextStyle(color: _colors.error, fontSize: 12),
             ),
           ),
         if (td.credentialRecoveryRequired)
