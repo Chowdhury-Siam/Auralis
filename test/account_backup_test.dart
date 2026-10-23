@@ -39,14 +39,19 @@ class SnapshotTd extends FakeTd {
 class FileVault extends SecretVault {
   FileVault(super.file);
   bool rejectRead = false;
+  bool rejectWrite = false;
+  int protectionResets = 0;
   @override
   Future<void> resetProtection() async {
     rejectRead = false;
+    rejectWrite = false;
+    protectionResets++;
   }
 
   @override
   Future<Uint8List> transform(List<int> bytes, {required bool encrypt}) async {
     if (!encrypt && rejectRead) throw StateError('Device key unavailable');
+    if (encrypt && rejectWrite) throw StateError('Device key invalidated');
     return Uint8List.fromList(bytes.map((byte) => byte ^ 0xff).toList());
   }
 }
@@ -205,6 +210,7 @@ void main() {
         fail ? 'previous database' : 'new database',
       );
       expect(await vault.read(), fail ? oldCredentials : credentials);
+      expect(vault.protectionResets, 0);
       expect(await cache.readAsString(), 'keep music');
       expect(service.busy, isFalse);
       expect(
@@ -299,6 +305,41 @@ void main() {
         expect(service.error, isNull);
         expect(service.state, 'authorizationStateWaitTdlibParameters');
       }
+      await service.shutdown();
+    }
+  });
+
+  test('portable restore renews an invalidated device key and retains rollback bytes', () async {
+    for (final fail in [true, false]) {
+      final root = Directory('${dir.path}/invalidated-key-$fail');
+      await root.create();
+      final vault = FileVault(File('${root.path}/credentials.aesgcm'));
+      final original = [5, 4, 3, 2, 1];
+      await vault.file.writeAsBytes(original);
+      vault.rejectRead = true;
+      vault.rejectWrite = true;
+      final service = TelegramService(
+        root,
+        vault,
+        transport: FakeTd(),
+        createTransport: FakeTd.new,
+      );
+      await service.start();
+      expect(service.credentialRecoveryRequired, isTrue);
+      Future<void> restore() => service.restoreAccount(account(), () async {
+        expect(await vault.read(), credentials);
+        if (fail) throw const FileSystemException('settings disk failure');
+      });
+      if (fail) {
+        await expectLater(restore(), throwsA(isA<FileSystemException>()));
+        expect(await vault.file.readAsBytes(), original);
+      } else {
+        await restore();
+        expect(await vault.read(), credentials);
+        expect(service.credentialRecoveryRequired, isFalse);
+        expect(service.error, isNull);
+      }
+      expect(vault.protectionResets, 1);
       await service.shutdown();
     }
   });
