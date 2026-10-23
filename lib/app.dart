@@ -286,7 +286,8 @@ class _PlayerShellState extends State<PlayerShell> {
                         ],
                       ),
                     ),
-                    if (destination != 3) _transport(box.maxWidth < 600),
+                    if (destination != 3 && player.current != null)
+                      _transport(box.maxWidth < 600),
                   ],
                 ),
               ),
@@ -1672,12 +1673,31 @@ class _PlayerShellState extends State<PlayerShell> {
           final horizontal = box.maxWidth >= 700;
           final preview =
               hasNext && box.maxWidth >= 680 && box.maxHeight >= 440 * scale;
-          final previewHeight = 48.0 + 56 * scale;
-          final heroHeight = box.maxHeight - 12 - (preview ? previewHeight + 12 : 0);
+          final previewHeight = 40.0 + 52 * scale;
+          final heroHeight =
+              box.maxHeight - 12 - (preview ? previewHeight + 12 : 0);
           final tight = heroHeight < (horizontal ? 550 : 520) * scale;
           final veryShort = horizontal && heroHeight < 360;
-          final gap = veryShort ? 4.0 : tight ? 6.0 : 14.0;
-          final transportHeight = veryShort ? 48.0 : tight ? 52.0 : 76.0;
+          final comfortable = horizontal && heroHeight >= 420 * scale;
+          final spacious = heroHeight >= 580 * scale;
+          final framed =
+              horizontal && box.maxWidth >= 860 && heroHeight >= 460 * scale;
+          final gap = veryShort
+              ? 4.0
+              : spacious
+              ? 10.0
+              : 6.0;
+          final transportHeight = veryShort
+              ? 48.0
+              : horizontal
+              ? (spacious
+                    ? 72.0
+                    : comfortable
+                    ? 56.0
+                    : 52.0)
+              : tight
+              ? 52.0
+              : 72.0;
 
           Widget pill({
             required String tooltip,
@@ -1704,11 +1724,11 @@ class _PlayerShellState extends State<PlayerShell> {
 
           Widget artwork() => LayoutBuilder(
             builder: (context, artBox) {
-              final peek = hasNext && !tight ? 44.0 : 0.0;
+              final peek = hasNext && !tight && !horizontal ? 40.0 : 0.0;
               final size = math.max(
                 0.0,
                 math.min(
-                  horizontal ? 460.0 : 380.0,
+                  horizontal ? 410.0 : 380.0,
                   math.min(
                     artBox.maxHeight,
                     artBox.maxWidth - peek - (peek > 0 ? 12 : 0),
@@ -1721,13 +1741,27 @@ class _PlayerShellState extends State<PlayerShell> {
                   children: [
                     SizedBox.square(
                       dimension: size,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(tight ? 22 : 30),
-                        child: Artwork(
-                          key: const ValueKey('now-playing-artwork'),
-                          seed: track?.title ?? 'Auralis',
-                          telegram: telegram,
-                          track: track,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF211B2B),
+                          borderRadius: BorderRadius.circular(tight ? 26 : 34),
+                          border: Border.all(
+                            color: accent.withValues(alpha: .14),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(5),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              tight ? 21 : 29,
+                            ),
+                            child: Artwork(
+                              key: const ValueKey('now-playing-artwork'),
+                              seed: track?.title ?? 'Auralis',
+                              telegram: telegram,
+                              track: track,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -1775,20 +1809,44 @@ class _PlayerShellState extends State<PlayerShell> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (horizontal && spacious && track != null) ...[
+                Text(
+                  'PLAYING FROM  ·  ${track.source.isEmpty ? 'YOUR LIBRARY' : track.source}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: accent,
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               Text(
                 track?.title ?? 'Find your next favorite',
                 key: const ValueKey('now-playing-title'),
-                maxLines: tight ? 1 : 2,
+                maxLines: horizontal
+                    ? (comfortable ? 2 : 1)
+                    : tight
+                    ? 1
+                    : 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: tight
+                  fontSize: horizontal
+                      ? (veryShort
+                            ? 20
+                            : spacious
+                            ? 34
+                            : comfortable
+                            ? 28
+                            : 24)
+                      : tight
                       ? 22
-                      : horizontal
-                      ? 36
-                      : 30,
+                      : 28,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -.7,
-                  height: 1.15,
+                  height: 1.18,
                 ),
               ),
               const SizedBox(height: 5),
@@ -1796,7 +1854,14 @@ class _PlayerShellState extends State<PlayerShell> {
                 track?.artist ?? 'Choose a song from your Library',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: muted, fontSize: tight ? 13 : 16),
+                style: TextStyle(
+                  color: muted,
+                  fontSize: veryShort
+                      ? 12
+                      : tight
+                      ? 14
+                      : 16,
+                ),
               ),
             ],
           );
@@ -1828,9 +1893,16 @@ class _PlayerShellState extends State<PlayerShell> {
                     child: Text(
                       track == null
                           ? 'Nothing playing'
-                          : track.mime.startsWith('audio/')
-                          ? track.mime.substring(6).toUpperCase()
-                          : 'Original audio',
+                          : switch (track.mime.toLowerCase()) {
+                              'audio/x-flac' || 'audio/flac' => 'FLAC',
+                              'audio/mpeg' || 'audio/mp3' => 'MP3',
+                              'audio/mp4' || 'audio/x-m4a' => 'M4A',
+                              'application/octet-stream' => 'Original audio',
+                              _ =>
+                                track.mime.startsWith('audio/')
+                                    ? track.mime.substring(6).toUpperCase()
+                                    : 'Original audio',
+                            },
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
@@ -1862,6 +1934,7 @@ class _PlayerShellState extends State<PlayerShell> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
+                  flex: 2,
                   child: IconButton.filled(
                     key: const ValueKey('now-playing-play-pause'),
                     tooltip: audio.playing ? 'Pause' : 'Play',
@@ -1901,8 +1974,8 @@ class _PlayerShellState extends State<PlayerShell> {
           final modes = DecoratedBox(
             decoration: BoxDecoration(
               color: const Color(0xFF1C1724),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: const Color(0xFF342B42)),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFF302839)),
             ),
             child: Padding(
               padding: const EdgeInsets.all(4),
@@ -1928,11 +2001,9 @@ class _PlayerShellState extends State<PlayerShell> {
                         : Icons.repeat_rounded,
                     onPressed: player.toggleRepeat,
                     background: player.repeat
-                        ? const Color(0xFFE2D5FF)
-                        : const Color(0xFF30263E),
-                    foreground: player.repeat
-                        ? const Color(0xFF291D3A)
-                        : accent,
+                        ? accent.withValues(alpha: .16)
+                        : Colors.transparent,
+                    foreground: player.repeat ? const Color(0xFFE5D9FF) : muted,
                   ),
                   const SizedBox(width: 4),
                   pill(
@@ -1959,28 +2030,52 @@ class _PlayerShellState extends State<PlayerShell> {
             ),
           );
 
-          final actions = Row(
-            key: const ValueKey('now-playing-actions'),
-            children: [
-              IconButton(
-                tooltip: 'Lyrics',
-                onPressed: track == null
-                    ? null
-                    : () => setState(() {
-                        showLyrics = true;
-                        search.clear();
-                      }),
-                icon: const Icon(Icons.lyrics_rounded),
-              ),
-              IconButton(
-                tooltip: 'Add to playlist',
-                onPressed: track == null ? null : () => _choosePlaylist(track),
-                icon: const Icon(Icons.playlist_add_rounded),
-              ),
-              _sleepControl(key: const ValueKey('sleep-timer-control')),
-              const Spacer(),
-              _volumeControl(true, tight: true),
-            ],
+          final actions = LayoutBuilder(
+            builder: (context, actionBox) {
+              final labels = actionBox.maxWidth >= 400 * scale;
+              return Row(
+                key: const ValueKey('now-playing-actions'),
+                children: [
+                  Tooltip(
+                    message: 'Lyrics',
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: labels ? 12 : 8,
+                        ),
+                        backgroundColor: labels
+                            ? accent.withValues(alpha: .09)
+                            : Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: track == null
+                          ? null
+                          : () => setState(() {
+                              showLyrics = true;
+                              search.clear();
+                            }),
+                      icon: const Icon(Icons.lyrics_rounded, size: 21),
+                      label: labels
+                          ? const Text('Lyrics')
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Add to playlist',
+                    onPressed: track == null
+                        ? null
+                        : () => _choosePlaylist(track),
+                    icon: const Icon(Icons.playlist_add_rounded),
+                  ),
+                  _sleepControl(key: const ValueKey('sleep-timer-control')),
+                  const Spacer(),
+                  _volumeControl(true, tight: true),
+                ],
+              );
+            },
           );
 
           final controls = Column(
@@ -2001,9 +2096,28 @@ class _PlayerShellState extends State<PlayerShell> {
           final hero = horizontal
               ? Row(
                   children: [
-                    Expanded(child: artwork()),
-                    const SizedBox(width: 32),
-                    Expanded(child: controls),
+                    Expanded(flex: 5, child: artwork()),
+                    const SizedBox(width: 28),
+                    Expanded(
+                      flex: 6,
+                      child: framed
+                          ? Container(
+                              key: const ValueKey('now-playing-control-card'),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: spacious ? 16 : 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF19151F),
+                                borderRadius: BorderRadius.circular(28),
+                                border: Border.all(
+                                  color: const Color(0xFF302738),
+                                ),
+                              ),
+                              child: controls,
+                            )
+                          : controls,
+                    ),
                   ],
                 )
               : Column(
@@ -2052,49 +2166,77 @@ class _PlayerShellState extends State<PlayerShell> {
                           color: const Color(0xFF1C1823),
                           borderRadius: BorderRadius.circular(22),
                           clipBehavior: Clip.antiAlias,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const SizedBox(height: 12),
-                                Text(
-                                  'UP NEXT · ${player.queue.length - nextIndex} tracks',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: muted,
-                                    fontSize: 11,
-                                    letterSpacing: 1,
-                                    fontWeight: FontWeight.w700,
+                          child: InkWell(
+                            key: const ValueKey('now-playing-next-0'),
+                            onTap: () => player.playAt(nextIndex),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: SizedBox.square(
+                                      dimension: 48,
+                                      child: Artwork(
+                                        seed: player.queue[nextIndex].title,
+                                        telegram: telegram,
+                                        track: player.queue[nextIndex],
+                                        small: true,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                Expanded(
-                                  child: ListTile(
-                                    key: const ValueKey('now-playing-next-0'),
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: const Icon(
-                                      Icons.music_note_rounded,
-                                      color: accent,
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'UP NEXT · ${player.queue.length - nextIndex} tracks',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: accent,
+                                            fontSize: 10,
+                                            letterSpacing: 1,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          player.queue[nextIndex].title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        Text(
+                                          player.queue[nextIndex].artist,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: muted,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    title: Text(
-                                      player.queue[nextIndex].title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      player.queue[nextIndex].artist,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    trailing: const Icon(
-                                      Icons.play_arrow_rounded,
-                                    ),
-                                    onTap: () => player.playAt(nextIndex),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 16),
+                                  const Icon(
+                                    Icons.play_circle_fill_rounded,
+                                    size: 32,
+                                    color: accent,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -2573,7 +2715,7 @@ class _PlayerShellState extends State<PlayerShell> {
                   const Divider(),
                 ],
                 Text(
-                  'Auralis ${widget.updater?.currentVersion ?? '0.1.39'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+                  'Auralis ${widget.updater?.currentVersion ?? '0.1.42'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
                   style: const TextStyle(
                     color: muted,
                     fontSize: 12,
@@ -2616,7 +2758,7 @@ class _PlayerShellState extends State<PlayerShell> {
             onPressed: () => showLicensePage(
               context: context,
               applicationName: 'Auralis',
-              applicationVersion: widget.updater?.currentVersion ?? '0.1.39',
+              applicationVersion: widget.updater?.currentVersion ?? '0.1.42',
             ),
             child: const Text('Licenses'),
           ),
