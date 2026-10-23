@@ -91,15 +91,15 @@ class _NowPlayingBackdropState extends State<NowPlayingBackdrop> {
                   ),
                 ),
               ),
-              const DecoratedBox(
+              DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color(0x99111015),
-                      Color(0xB3111015),
-                      Color(0xEB111015),
+                      Theme.of(context).colorScheme.surface.withValues(alpha: .60),
+                      Theme.of(context).colorScheme.surface.withValues(alpha: .70),
+                      Theme.of(context).colorScheme.surface.withValues(alpha: .92),
                     ],
                     stops: [0, .55, 1],
                   ),
