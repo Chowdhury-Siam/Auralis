@@ -9,7 +9,7 @@ import 'storage.dart';
 
 const releaseRepository = String.fromEnvironment(
   'AURALIS_RELEASE_REPOSITORY',
-  defaultValue: 'SiamTest/Auralis',
+  defaultValue: 'Chowdhury-Siam/Auralis',
 );
 
 class StableVersion implements Comparable<StableVersion> {
