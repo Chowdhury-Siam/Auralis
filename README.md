@@ -139,7 +139,7 @@ Choose a matching asset from [the latest GitHub release](https://github.com/Chow
 | **Windows x64** | `auralis-<version>-windows-x64-setup.exe` | Run the per-user installer. The Microsoft Visual C++ 2015–2022 x64 runtime is required. |
 | **Windows portable** | Windows x64 release ZIP | Extract the complete package and launch `auralis.exe`; keep its DLLs and data folders together. |
 
-Android assets marked **debug** are development builds. Consistent Android upgrade signing requires the same signing key; see [signing and upgrades](docs/ANDROID.md#signing-and-upgrades).
+Android APKs now always use optimized release mode. Run **Set up Android signing** once to generate and retain a signing identity automatically; later builds reuse it. APKs labelled **development-release** use a temporary development signature. See [signing and upgrades](docs/ANDROID.md#signing-and-upgrades).
 
 ### First launch
 
@@ -268,7 +268,7 @@ GitHub Actions has separate **Windows** and **Android APK build** workflows. Suc
 - Windows builds, checks, packages, and publishes the stable release.
 - Android verifies its APK, ABI, native alignment, and signing before attaching the APK, checksums, and native provenance to the matching release.
 - If Android finishes first, it creates a draft; the Windows publisher completes publication.
-- Custom Android signing is optional. Leave all four signing secrets unset for a development APK, or configure all four for a persistent release key.
+- Run **Set up Android signing** once with the setup token to save a persistent signing identity; subsequent APK builds sign automatically. Existing custom signing keys remain supported, and release compilation no longer depends on signing setup.
 - Pull requests and other branches produce build artifacts without publishing releases. Published assets and tags are not overwritten; unpublished Android draft files can be refreshed on retries.
 
 The Windows app checks stable releases, verifies downloaded installers, and asks before installing and restarting. Android has no in-app updater or Play Store upload flow in this source.
@@ -301,7 +301,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.47+48**; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.48+49**; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
