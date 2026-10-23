@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:auralis/app.dart';
+import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/storage.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
@@ -29,11 +30,17 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     final audio = FakeAudio()..playing = true;
     final settings = VolumeSettings();
-    final player = PlayerController(
-      audio,
-      TelegramStreamProxy((_) async => {}),
-      settings,
-    );
+    final player =
+        PlayerController(audio, TelegramStreamProxy((_) async => {}), settings)
+          ..queue.add(
+            const Track(
+              id: 'volume-track',
+              title: 'Volume test',
+              artist: 'Test artist',
+              source: 'Music channel',
+            ),
+          )
+          ..index = 0;
     addTearDown(player.shutdown);
     await tester.pumpWidget(
       AuralisApp(
