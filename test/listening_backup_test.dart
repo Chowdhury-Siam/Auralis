@@ -61,7 +61,7 @@ class MemoryDataSettings extends MemorySettings {
 }
 
 class ChosenFiles extends DataFiles {
-  String? chosenSave = '/virtual/export.json', chosenOpen;
+  String? chosenSave = testExportPath('export.json'), chosenOpen;
   final contents = <String, String>{};
   @override
   Future<String?> savePath(String name, String extension) async => chosenSave;
@@ -419,19 +419,33 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      files.chosenSave = '/virtual/stats.csv';
+      // Keep the safety check covered while using native external paths below.
+      files.chosenSave = settings.file.absolute.path;
       await click('Export CSV');
-      expect(files.contents['/virtual/stats.csv'], contains('qualified_plays'));
-      files.chosenSave = '/virtual/stats.json';
+      expect(files.contents, isEmpty);
+      expect(
+        find.text(
+          'Choose a destination outside Auralis’s internal app-data folder.',
+        ),
+        findsOneWidget,
+      );
+
+      files.chosenSave = testExportPath('stats.csv');
+      await click('Export CSV');
+      expect(
+        files.contents[testExportPath('stats.csv')],
+        contains('qualified_plays'),
+      );
+      files.chosenSave = testExportPath('stats.json');
       await click('Export JSON');
       expect(
-        jsonDecode(files.contents['/virtual/stats.json']!)['format'],
+        jsonDecode(files.contents[testExportPath('stats.json')]!)['format'],
         'auralis-listening-stats',
       );
-      files.chosenSave = '/virtual/backup.json';
+      files.chosenSave = testExportPath('backup.json');
       await click('Create backup');
       expect(
-        DataBackup.parse(files.contents['/virtual/backup.json']!)
+        DataBackup.parse(files.contents[testExportPath('backup.json')]!)
             .snapshot['favoriteIds'],
         [song.id],
       );
@@ -442,7 +456,7 @@ void main() {
       final candidate = MemorySettings()
         ..favoriteIds = {'-9:9'}
         ..volume = 55;
-      files.chosenOpen = '/virtual/restore.json';
+      files.chosenOpen = testExportPath('restore.json');
       files.contents[files.chosenOpen!] = DataBackup.create(
         candidate,
         DateTime.now(),
