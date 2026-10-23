@@ -412,7 +412,10 @@ void main() {
         expect(tester.takeException(), isNull);
         await tester.tap(find.byTooltip('Settings'));
         await tester.pumpAndSettle();
-        expect(find.text('Reduce motion'), findsOneWidget);
+        expect(find.text('Reduce motion'), findsNothing);
+        expect(find.text('Use instant page transitions'), findsNothing);
+        expect(find.text('Listening stats'), findsOneWidget);
+        expect(find.text('Backup & Restore'), findsOneWidget);
         expect(find.text('Check automatically'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('Done'));
