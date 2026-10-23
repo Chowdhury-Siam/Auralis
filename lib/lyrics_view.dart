@@ -13,8 +13,6 @@ import 'wave_seek_bar.dart';
 
 const lyricsBackground = Color(0xFF111015);
 const lyricsHighlight = Color(0xFFC7B5FF);
-const _lyricsSurface = Color(0xFF19171E);
-const _lyricsPlay = Color(0xFFC7B5FF);
 
 class LyricsView extends StatefulWidget {
   const LyricsView({
@@ -23,7 +21,7 @@ class LyricsView extends StatefulWidget {
     required this.repository,
     required this.artwork,
     required this.onBack,
-    this.backgroundColor = lyricsBackground,
+    this.backgroundColor,
     this.loadEmbedded,
     this.files = const DataFiles(),
   });
@@ -33,13 +31,14 @@ class LyricsView extends StatefulWidget {
   final Widget artwork;
   final VoidCallback onBack;
   // The player shell supplies the artwork backdrop behind immersive lyrics.
-  final Color backgroundColor;
+  final Color? backgroundColor;
   final Future<Lyrics?> Function(Track)? loadEmbedded;
   @override
   State<LyricsView> createState() => _LyricsViewState();
 }
 
 class _LyricsViewState extends State<LyricsView> {
+  ColorScheme get _colors => Theme.of(context).colorScheme;
   Track? _track;
   Lyrics? _lyrics;
   String? _error;
@@ -270,14 +269,14 @@ class _LyricsViewState extends State<LyricsView> {
     return Theme(
       data: theme.copyWith(
         popupMenuTheme: PopupMenuThemeData(
-          color: const Color(0xFF211E28),
+          color: _colors.surfaceContainerHigh,
           surfaceTintColor: Colors.transparent,
           shadowColor: Colors.black.withValues(alpha: .42),
           elevation: 16,
           menuPadding: const EdgeInsets.all(8),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
-            side: const BorderSide(color: Color(0xFF312C3B)),
+            side: BorderSide(color: _colors.outlineVariant),
           ),
         ),
       ),
@@ -348,10 +347,10 @@ class _LyricsViewState extends State<LyricsView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.lyrics_rounded,
                 size: 44,
-                color: lyricsHighlight,
+                color: _colors.primary,
               ),
               const SizedBox(height: 12),
               Text(
@@ -428,17 +427,17 @@ class _LyricsViewState extends State<LyricsView> {
           key: ValueKey(synced ? 'lyrics-synced-mode' : 'lyrics-static-mode'),
           style: TextButton.styleFrom(
             backgroundColor: selected
-                ? lyricsHighlight
-                : const Color(0xFF1D1A23),
+                ? _colors.primary
+                : _colors.surfaceContainer,
             foregroundColor: selected
-                ? const Color(0xFF21182F)
-                : const Color(0xFFF0EBFF),
-            disabledBackgroundColor: const Color(0xFF18161D),
-            disabledForegroundColor: const Color(0xFF6C6A76),
+                ? _colors.onPrimary
+                : _colors.onSurface,
+            disabledBackgroundColor: _colors.surfaceContainerLowest,
+            disabledForegroundColor: _colors.onSurfaceVariant,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
               side: BorderSide(
-                color: selected ? Colors.transparent : const Color(0xFF302B39),
+                color: selected ? Colors.transparent : _colors.outlineVariant,
               ),
             ),
             padding: EdgeInsets.symmetric(
@@ -485,7 +484,7 @@ class _LyricsViewState extends State<LyricsView> {
     EdgeInsetsGeometry padding = const EdgeInsets.all(16),
     double radius = 30,
   }) => Material(
-    color: _lyricsSurface,
+    color: _colors.surfaceContainerLow,
     elevation: 0,
     borderRadius: BorderRadius.circular(radius),
     clipBehavior: Clip.antiAlias,
@@ -521,7 +520,7 @@ class _LyricsViewState extends State<LyricsView> {
                 _track?.artist ?? 'Choose a track first',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: Color(0xFFAAA7B4)),
+                style: TextStyle(fontSize: 12, color: _colors.onSurfaceVariant),
               ),
             ],
           ),
@@ -549,9 +548,9 @@ class _LyricsViewState extends State<LyricsView> {
             tooltip: audio.playing ? 'Pause' : 'Play',
             style:
                 IconButton.styleFrom(
-                  backgroundColor: _lyricsPlay,
-                  foregroundColor: const Color(0xFF21182F),
-                  disabledBackgroundColor: _lyricsPlay.withValues(alpha: .35),
+                  backgroundColor: _colors.primary,
+                  foregroundColor: _colors.onPrimary,
+                  disabledBackgroundColor: _colors.primary.withValues(alpha: .35),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(
                       audio.playing ? 20 : size / 2,
@@ -604,14 +603,14 @@ class _LyricsViewState extends State<LyricsView> {
           child: Text(
             clockText(audio.position),
             maxLines: 1,
-            style: const TextStyle(fontSize: 10, color: Color(0xFFAAA4B5)),
+            style: TextStyle(fontSize: 10, color: _colors.onSurfaceVariant),
           ),
         ),
         Expanded(
           child: DecoratedBox(
             key: const ValueKey('lyrics-seek-pill'),
             decoration: BoxDecoration(
-              color: _lyricsSurface,
+              color: _colors.surfaceContainerLow,
               borderRadius: BorderRadius.circular(40),
             ),
             child: Padding(
@@ -652,7 +651,7 @@ class _LyricsViewState extends State<LyricsView> {
             clockText(audio.duration),
             maxLines: 1,
             textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 10, color: Color(0xFFAAA4B5)),
+            style: TextStyle(fontSize: 10, color: _colors.onSurfaceVariant),
           ),
         ),
       ],
@@ -705,8 +704,8 @@ class _LyricsViewState extends State<LyricsView> {
           onPressed: widget.onBack,
           tooltip: 'Back to cover',
           style: IconButton.styleFrom(
-            backgroundColor: _lyricsSurface,
-            foregroundColor: const Color(0xFFE4E0EF),
+            backgroundColor: _colors.surfaceContainerLow,
+            foregroundColor: _colors.onSurface,
           ),
           icon: const Icon(Icons.arrow_back_rounded),
         ),
@@ -717,16 +716,16 @@ class _LyricsViewState extends State<LyricsView> {
             textAlign: compact ? TextAlign.center : TextAlign.left,
             maxLines: compact ? 1 : 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11.5,
-              color: Color(0xFFAAA4B5),
+              color: _colors.onSurfaceVariant,
               fontWeight: FontWeight.w500,
             ),
           ),
         ),
         const SizedBox(width: 12),
         Material(
-          color: _lyricsSurface,
+          color: _colors.surfaceContainerLow,
           shape: const CircleBorder(),
           child: _options(vertical: true),
         ),
@@ -754,19 +753,9 @@ class _LyricsViewState extends State<LyricsView> {
     final reduced =
         widget.player.settings.reducedMotion ||
         MediaQuery.disableAnimationsOf(context);
-    final theme = Theme.of(context);
-    return Theme(
-      data: theme.copyWith(
-        colorScheme: theme.colorScheme.copyWith(
-          primary: lyricsHighlight,
-          onPrimary: const Color(0xFF21182F),
-          surface: _lyricsSurface,
-          onSurface: const Color(0xFFE4E0EF),
-        ),
-      ),
-      child: Material(
+    return Material(
         key: const ValueKey('lyrics-immersive'),
-        color: widget.backgroundColor,
+        color: widget.backgroundColor ?? _colors.surface,
         child: LayoutBuilder(
           builder: (context, box) {
             final short = box.maxHeight < 620;
@@ -786,7 +775,6 @@ class _LyricsViewState extends State<LyricsView> {
             );
           },
         ),
-      ),
     );
   }
 }
@@ -806,12 +794,13 @@ class _LyricsMenuEntry extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final foreground = enabled
-        ? const Color(0xFFF0EBFF)
-        : const Color(0xFF7B748A);
-    final secondary = enabled
-        ? const Color(0xFFB8B1C8)
-        : const Color(0xFF676170);
+        ? colors.onSurface
+        : colors.onSurfaceVariant;
+    final secondary = colors.onSurfaceVariant.withValues(
+      alpha: enabled ? 1 : .48,
+    );
     return Container(
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -822,7 +811,7 @@ class _LyricsMenuEntry extends StatelessWidget {
             height: 38,
             decoration: BoxDecoration(
               color: enabled
-                  ? lyricsHighlight.withValues(alpha: .14)
+                  ? colors.primary.withValues(alpha: .14)
                   : Colors.white.withValues(alpha: .05),
               borderRadius: BorderRadius.circular(14),
             ),
@@ -876,6 +865,7 @@ class _SyncedLyrics extends StatefulWidget {
 
 class _SyncedLyricsState extends State<_SyncedLyrics>
     with SingleTickerProviderStateMixin {
+  ColorScheme get _colors => Theme.of(context).colorScheme;
   late final _lineMotion = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 480),
@@ -1085,7 +1075,7 @@ class _SyncedLyricsState extends State<_SyncedLyrics>
                                   curve: Curves.easeOutCubic,
                                   style: style.copyWith(
                                     color: current
-                                        ? lyricsHighlight
+                                        ? _colors.primary
                                         : Colors.white.withValues(
                                             alpha: !_follow
                                                 ? .72
