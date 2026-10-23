@@ -488,6 +488,69 @@ void main() {
   );
 
   testWidgets(
+    'Android restore reports provider errors, retries and keeps committed settings after refresh fails',
+    (tester) async {
+      const channel = MethodChannel('app.auralis/platform');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final settings = MemoryDataSettings()..volume = 23;
+      final candidate = MemorySettings()..volume = 55;
+      final bytes = utf8.encode(
+        DataBackup.create(candidate, DateTime.now()).encode(),
+      );
+      var denied = true;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'openDocument') {
+          return 'content://test.documents/backup.json';
+        }
+        if (call.method == 'readDocument') {
+          if (denied) {
+            throw PlatformException(
+              code: 'document_permission',
+              message: 'Select the backup again using the system file picker.',
+            );
+          }
+          return bytes;
+        }
+        throw StateError('Unexpected call: ${call.method}');
+      });
+      final player = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy((_) async => {}),
+        settings,
+      );
+      addTearDown(player.shutdown);
+      await tester.pumpWidget(MaterialApp(
+        home: StatsDataDialog(
+          player: player,
+          files: const AndroidDataFiles(),
+          openBackupSection: true,
+          onRestored: () async => throw StateError('Refresh failed'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Restore backup'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Restore failed (document_permission)'), findsOneWidget);
+      expect(settings.volume, 23);
+      expect(settings.recovery, isNull);
+      denied = false;
+      await tester.tap(find.text('Restore backup'));
+      await tester.pumpAndSettle();
+      expect(find.text('Restore this backup?'), findsOneWidget);
+      await tester.tap(find.text('Restore'));
+      await tester.pumpAndSettle();
+      expect(settings.volume, 55);
+      expect(settings.recovery, isNotNull);
+      expect(find.textContaining('Settings restored.'), findsOneWidget);
+      expect(find.textContaining('Reopen the Library'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
     'listening stats and backup remain reachable from compact Settings',
     (tester) async {
       final settings = MemoryDataSettings()..reducedMotion = true;
