@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import zipfile
 
 
@@ -96,9 +97,15 @@ def publish(root, env):
                 git(root, "fetch", "--no-tags", "--depth=1", "origin", tagged)
             # CI-only fixes may complete an existing version; app changes
             # require a new version and must never reuse another app's tag.
-            git(root, "diff", "--exit-code", tagged, "HEAD", "--", "lib", "android",
-                "assets", "third_party", "pubspec.yaml", "pubspec.lock",
-                "tool/build-tdlib-android.sh", "THIRD_PARTY_NOTICES.md", "LICENSE")
+            changed = git(root, "diff", "--name-only", tagged, "HEAD", "--", "lib", "android",
+                          "assets", "third_party", "pubspec.yaml", "pubspec.lock",
+                          "tool/build-tdlib-android.sh", "THIRD_PARTY_NOTICES.md", "LICENSE")
+            if changed:
+                raise ValueError(
+                    f"{tag} already points to different app sources ({tagged[:12]}). "
+                    "Bump the version and build number in pubspec.yaml, commit all changes, "
+                    "and push the new version to main. Existing tags and downloads are preserved. "
+                    "Changed paths: " + ", ".join(changed.splitlines()))
     elif existing or ref_type == "tag":
         raise ValueError("The release tag is missing; no assets were changed.")
     else:
@@ -155,4 +162,8 @@ def publish(root, env):
 
 
 if __name__ == "__main__":
-    publish(Path(__file__).resolve().parents[1], os.environ)
+    try:
+        publish(Path(__file__).resolve().parents[1], os.environ)
+    except ValueError as error:
+        print(f"::error::Android publishing stopped: {error}", file=sys.stderr)
+        sys.exit(1)
