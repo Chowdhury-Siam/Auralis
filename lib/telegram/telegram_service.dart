@@ -401,7 +401,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.53',
+          'application_version': '0.1.56',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -567,6 +567,9 @@ class TelegramService extends ChangeNotifier {
       safeToRestart = false;
       await incoming.rename(database.path);
       installed = true;
+      // A confirmed portable restore can replace an unusable device key.
+      // Keep healthy keys, and retain the previous vault bytes for rollback.
+      if (credentialRecoveryRequired) await vault.resetProtection();
       await vault.write(checked.credentials);
       await restoreData();
       safeToRestart = true;
