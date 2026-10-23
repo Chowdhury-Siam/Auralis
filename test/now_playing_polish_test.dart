@@ -22,6 +22,14 @@ void main() {
     tester.view.physicalSize = size;
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
+    final cover = File('test/fixtures/cover.png').readAsBytesSync();
+    // Image decoding uses the engine, so finish it outside the fake test clock.
+    // Reuse these exact bytes so the app resolves the cached MemoryImage and
+    // cancels ColorScheme's image-load timeout synchronously.
+    await tester.runAsync(() => ColorScheme.fromImageProvider(
+      provider: MemoryImage(cover),
+      brightness: Brightness.dark,
+    ));
     final audio = FakeAudio();
     final settings = MemorySettings()..reducedMotion = reduced;
     final player =
@@ -32,7 +40,7 @@ void main() {
               title: 'First song',
               artist: 'Artist',
               source: 'Library',
-              coverPreview: File('test/fixtures/cover.png').readAsBytesSync(),
+              coverPreview: cover,
             ),
             const Track(
               id: 'second',
@@ -101,6 +109,16 @@ void main() {
       expect(button.hitTestable(), findsOneWidget);
       expect(tester.getSize(button), const Size(48, 48));
     }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('artwork setup permits immediate disposal without a pending image timeout', (
+    tester,
+  ) async {
+    await mount(tester, reduced: true);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    // The binding also verifies that no fake timers remain after this test.
     expect(tester.takeException(), isNull);
   });
 
