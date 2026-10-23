@@ -1,6 +1,6 @@
 # Android build and use
 
-Auralis now shares its Flutter UI and Telegram library/player features between Android and Windows. The Android app ID is `app.auralis.auralis`; minimum Android is **7.0 / API 24**. The default APK is **ARM64**, suitable for the Redmi Note 10 Pro. x86_64 is available for emulator testing. There is no 32-bit APK in this milestone.
+Auralis now shares its Flutter UI and Telegram library/player features between Android and Windows. The Android app ID is `com.auralis.siam`; minimum Android is **7.0 / API 24**. The default APK is **ARM64**, suitable for the Redmi Note 10 Pro. x86_64 is available for emulator testing. There is no 32-bit APK in this milestone.
 
 ## Separate GitHub Action
 
@@ -14,7 +14,7 @@ Download **auralis-android-arm64-v8a-development** or **auralis-android-arm64-v8
 
 1. Commit this complete source to `main`. Run the signing setup below once for automatic retained-key signing, or keep an existing custom key. Without either, compilation still uses release mode with an explicitly labelled development signature.
 2. Open **Actions → Android APK build → Run workflow**, choose `main`, and keep **arm64-v8a** for a phone APK. A push to `main` also runs it automatically. Re-running an old commit still uses that commit's old workflow.
-3. Once analysis, tests, native checks, and APK signature/alignment verification succeed, the separate publishing job attaches the built APK to `v<pubspec version>`. An existing version can be completed by a publishing-only change when the Android app sources still match its tag. Different app sources require a new version; tags are never moved. This recovery source uses **0.1.51+52** to avoid the existing 0.1.43 assets/tag.
+3. Once analysis, tests, native checks, and APK signature/alignment verification succeed, the separate publishing job attaches the built APK to `v<pubspec version>`. An existing version can be completed by a publishing-only change when the Android app sources still match its tag. Different app sources require a new version; tags are never moved. This recovery source uses **0.1.52+53** to avoid the existing 0.1.43 assets/tag.
 
 If Android finishes first for a new version, it creates a **draft**, uploads and verifies its Android assets, and leaves publication to the existing Windows publisher. If Windows finishes first, Android appends its assets to the published release. Both publishing jobs use the same concurrency group. For a brand-new version started manually only on Android, also run the Windows workflow for that same commit to publish the shared draft.
 
@@ -28,7 +28,7 @@ The APK build keeps read-only repository permission. Only the guarded publishing
 
 1. Create a [fine-grained GitHub token](https://github.com/settings/personal-access-tokens/new), restricted to **Chowdhury-Siam/Auralis**, with repository **Secrets: Read and write**. Add it to this repository's **Settings → Secrets and variables → Actions** as `ANDROID_SIGNING_SETUP_TOKEN`.
 2. Commit this complete source to `main`, then open **Actions → Set up Android signing → Run workflow** on `main`.
-3. The action generates a private RSA-4096 key with a random password and saves the key/alias/password together in the encrypted `ANDROID_SIGNING_IDENTITY` repository secret. It then starts a fresh **Android APK build** on `main`, which reads that identity and produces `auralis-0.1.51-android-arm64-v8a-release.apk`. Future builds reuse it automatically. No manual keytool command or four-secret setup is needed.
+3. The action generates a private RSA-4096 key with a random password and saves the key/alias/password together in the encrypted `ANDROID_SIGNING_IDENTITY` repository secret. It then starts a fresh **Android APK build** on `main`, which reads that identity and produces `auralis-0.1.52-android-arm64-v8a-release.apk`. Future builds reuse it automatically. No manual keytool command or four-secret setup is needed.
 
 You can remove or revoke `ANDROID_SIGNING_SETUP_TOKEN` after successful setup; normal builds only need the saved identity. GitHub's default workflow token cannot manage repository secrets, so that one-time Secrets permission is needed. See [GitHub's repository secret API](https://docs.github.com/en/rest/actions/secrets#create-or-update-a-repository-secret). A separate build is queued after setup because repository secrets are read when a workflow is queued, as documented in [Secrets reference](https://docs.github.com/en/actions/reference/security/secrets).
 
@@ -113,7 +113,7 @@ This is a packaging/CI-only correction; the application version is unchanged.
 
 `Existing asset differs: auralis-0.1.43-android-arm64-v8a-debug.apk` means that a file with that version/ABI/signing name already exists with different bytes. Rebuilding identical source is not guaranteed to reproduce APK bytes, especially when a fresh runner generates a different development signing key. The former publisher rejected this in drafts as well as published releases.
 
-Commit the complete **0.1.51+52** source to `main` and let both workflows run for that commit. It targets a new `v0.1.51` release without deleting or moving `v0.1.43`. Re-running an old 0.1.43 job still uses its old script/version. The corrected publisher can also refresh only its own conflicting Android assets while a release remains a draft, with local checksum/provenance validation and post-upload GitHub digest/size checks. Published downloads remain protected. Signing stays optional; the draft retry fix does not make development keys consistent between runners. Use a persistent release key for Android updates that preserve installed app data.
+Commit the complete **0.1.52+53** source to `main` and let both workflows run for that commit. It targets a new `v0.1.52` release without deleting or moving `v0.1.43`. Re-running an old 0.1.43 job still uses its old script/version. The corrected publisher can also refresh only its own conflicting Android assets while a release remains a draft, with local checksum/provenance validation and post-upload GitHub digest/size checks. Published downloads remain protected. Signing stays optional; the draft retry fix does not make development keys consistent between runners. Use a persistent release key for Android updates that preserve installed app data.
 
 
 ## 0.1.49 source update
@@ -146,3 +146,41 @@ The buffered-ahead overlay is no longer shown on the shared seek bar in Now
 Playing, the lyrics view, or the player dock. The played waveform, seek thumb,
 timestamps, and seeking remain. Audio buffering and all artwork/lyric blur and
 motion effects are preserved. This source targets v0.1.51.
+
+
+## 0.1.52 Android identity, updates, and credential recovery
+
+The Android namespace, application ID, and Kotlin package are `com.auralis.siam`.
+Android treats this as a separate app from `app.auralis.auralis`. Install the new
+package manually once. Keep the old app until any available password-protected
+account backup and settings backup have been restored. A settings-only backup
+cannot transfer a Telegram sign-in, and a device-encrypted vault cannot be
+copied between packages or devices. If the old key is already unreadable, sign
+in to the new package again using your Telegram API details and verification.
+
+Android now has App updates in Settings, update banners, manual checks, and
+optional automatic checking/downloading at startup, on resuming after six hours,
+and every six hours while the app runs. Installation always requires Android's
+confirmation; it never silently installs. Android may first ask to allow Auralis
+to install updates from this source. Returning from that permission screen
+continues the verified installation automatically.
+
+The updater selects the signed release APK for arm64-v8a or x86_64 from the
+configured public GitHub repository. Temporary development-signed APKs are not
+used for automatic updates. Keep using the same retained signing identity from
+the existing signing workflow. SHA-256 and download size are checked in Dart;
+native code checks the checksum again, package ID, expected release version,
+newer Android version code, same signing certificate, and native architecture.
+Only the private APK update-cache folder is shared with the system installer.
+
+Android credential saves now verify that the current device key can decrypt the
+ciphertext before replacing the saved file. An unreadable local session offers
+Sign in again with an explicit confirmation. Its protected vault and database
+are set aside, while music and settings are kept; a fresh local key/sign-in can
+then be created. Portable password-protected account backups remain supported.
+
+Validation: the source checker validates the new application ID and restricted
+update provider; regression tests cover Android asset selection, automatic
+verified download without silent install, installer retries, native bridge
+arguments, credential read-back failure, and fresh-session recovery. A full APK
+build and device installation test are still required in CI/on Android.
