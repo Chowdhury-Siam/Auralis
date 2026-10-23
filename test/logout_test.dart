@@ -239,6 +239,9 @@ void main() {
         findsOneWidget,
       );
       await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('player-bar')), findsNothing);
+      expect(find.byTooltip('Settings').hitTestable(), findsOneWidget);
       td.onRequest = null;
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
@@ -246,6 +249,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(settings.selectedChannels, isEmpty);
       expect(player.queue, isEmpty);
+      expect(find.byKey(const ValueKey('player-bar')), findsNothing);
       expect(find.textContaining('Signing out of Telegram'), findsOneWidget);
       expect(find.text('Telegram API ID'), findsNothing);
       td.auth('authorizationStateClosed');
