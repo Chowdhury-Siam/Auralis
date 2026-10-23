@@ -125,6 +125,7 @@ class _PlayerShellState extends State<PlayerShell> {
       context: context,
       builder: (_) => StatsDataDialog(
         player: player,
+        telegram: telegram,
         files: widget.dataFiles,
         openBackupSection: backup,
         onRestored: () async {
@@ -2715,7 +2716,7 @@ class _PlayerShellState extends State<PlayerShell> {
                   const Divider(),
                 ],
                 Text(
-                  'Auralis ${widget.updater?.currentVersion ?? '0.1.42'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+                  'Auralis ${widget.updater?.currentVersion ?? '0.1.43'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
                   style: const TextStyle(
                     color: muted,
                     fontSize: 12,
@@ -2758,7 +2759,7 @@ class _PlayerShellState extends State<PlayerShell> {
             onPressed: () => showLicensePage(
               context: context,
               applicationName: 'Auralis',
-              applicationVersion: widget.updater?.currentVersion ?? '0.1.42',
+              applicationVersion: widget.updater?.currentVersion ?? '0.1.43',
             ),
             child: const Text('Licenses'),
           ),
