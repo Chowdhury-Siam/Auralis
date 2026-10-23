@@ -1,0 +1,141 @@
+# Auralis Guide
+
+Detailed playback, collection, storage, and build notes. For downloads and first launch, see the [project README](../README.md). Verification history is in [VERIFICATION.md](VERIFICATION.md).
+
+## Logout and another account
+
+Use **Settings → Sign out of Telegram**. Playback stops and the queue clears. When Telegram accepts logout, Auralis removes the API ID/hash from its encrypted vault and clears selected channels. The sign-in page shows progress until TDLib reports its closed state, then displays blank API ID/hash fields. Enter the details to start a fresh client, followed by the usual phone/code/2FA steps. The playback proxy follows the new client rather than keeping a closed connection. A normal app restart while signed in still retains your API configuration/session; explicit logout is what forgets it.
+
+The database encryption key is retained, and Auralis does not recursively delete application-data folders. TDLib handles its own [logout cleanup](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1log_out.html). If Telegram rejects logout, the existing API configuration and channel selection stay intact and an error is shown. A failure to clear the credential vault is reported; entering new API details overwrites the saved configuration once storage is writable. Live switching between two real accounts and installation remain unverified.
+
+## Favorites, playlists and recent music
+
+Use the **All songs**, **Favorites**, **Playlists** and **Recently played** chips in Library. Track actions use the playlist/play icon beside the existing queue-add button: favorite/unfavorite, Play next, or Add to playlist. Now Playing also has a favorite button and Add to playlist shortcut. Favorites persist locally. Recent music records the last 100 unique successfully opened tracks, newest first; Clear history removes those references.
+
+Create a playlist in Library → Playlists or while adding a track. Open a playlist and click a track to play its saved order. Rename and Delete are explicit buttons; track actions inside a playlist can remove that entry. Duplicate entries are ignored. Names are trimmed, case-insensitively unique and limited to 60 characters. There are limits of 100 playlists, 5000 tracks per playlist and 10000 favorites. Saved playlists keep their order; Library sort does not reorder them or Recent music. Delete removes the playlist only, never the Telegram files.
+
+These are local collections, retained across sign-out and app restarts. They store message IDs and playlist names rather than native file IDs, artwork, credentials or audio copies. A saved track is playable only when its source channel is selected and its message appears in the loaded Library. Missing/inaccessible messages stay referenced but are not playable; choose the appropriate channels and refresh. The loaded/saved count is visible in larger windows. No cloud playlist sync, downloaded playlist audio or queue restoration is implemented.
+
+## Repeat and sleep timer
+
+The repeat button cycles **Off → Queue → One track → Off** and remembers the choice. Repeat one restarts a completed track; pressing Next still advances manually. Play next inserts immediately after the current queue entry without interrupting playback or changing which duplicate entry is active.
+
+Open the moon icon in Now Playing or the playback bar. Choose **15, 30, 45, 60 or 90 minutes**, or **End of current track**. The active icon is highlighted and the dialog shows the pause time. Cancel timer removes it. Expiry pauses playback without clearing the queue or resuming already paused audio. End-of-track sleep takes priority over repeat. Clearing the queue or shutting down cancels the timer; it is not restored after restart and cannot wake a sleeping/closed PC.
+
+## Listening stats, export and backups
+
+Open the chart icon in the player header or **Settings → Listening stats** for total listening time, qualified plays, tracks/artists heard, top ten tracks/artists by listening time and daily activity for the last seven local calendar days. Stats start with this version; earlier recent history is not estimated. A play qualifies after 30 seconds or half the track duration, whichever is shorter, once per playback session. Repeat/replay starts a new session. Time is sampled from actual playback advancement, bounded by elapsed active time; pauses, buffering, app seeks and gaps longer than five seconds are excluded. Captured stats labels are limited to 1000 characters. Snapshots refresh on demand. Data is saved about every 30 seconds of playback events and on pause, track changes, export and orderly shutdown; an abrupt crash may lose the latest unsaved samples.
+
+**Export CSV** writes UTF-8 spreadsheet data with separate track/day rows, listening seconds and qualified play counts. **Export JSON** preserves the complete stats structure. These exports contain stats only; use **Create backup** for a restorable snapshot. Track and day rows are alternate aggregations of the same time, so do not sum them together. Track titles, artist names and channel names are included in exports/backups; choose where to save them.
+
+Open **Settings → Backup & Restore** directly, or scroll below the stats exports. A backup includes listening stats, favorites, ordered playlists, recent music, channel selections and preferences. It excludes Telegram credentials/sessions, music files, artwork, lyrics, the queue and sleep timer. Existing sign-in and music files stay in place. Channel/message references still require access to the same account and channels.
+
+**Restore backup** checks the format, schema, size (64 MiB maximum) and SHA-256 integrity before displaying a confirmation with counts. Restore replaces the saved local data and stops playback/clears the queue. The current data is saved first as `auralis-before-restore.json` beside the app settings. **Restore recovery copy** restores that snapshot using the same preview; each successful restore replaces the single recovery slot with the data it supersedes. Failed writes preserve the current settings. Backups are plain JSON, not encrypted. The integrity digest detects accidental damage, not a maliciously edited backup.
+
+![Listening stats test frame](screenshots/stats-1280.png)
+
+## Now Playing lyrics
+
+Open **Now Playing → Lyrics**, or click Lyrics in the side panel. The song header keeps its cover/title/artist, the current line is large and highlighted, and surrounding lines fade into the background. Synced lyrics follow playback and support clicking a line to seek. Scroll with the mouse to read elsewhere; **Follow song** resumes tracking. Static mode displays selectable text without timestamps. The immersive lyrics page includes play/pause and wave seeking. Back returns to the normal player and volume controls. Automatic line advances use a brief vertical motion blur that clears when scrolling settles. Manual browsing stays sharp. Reduced motion uses instant scrolling without blur. Layouts and screenshots are tested at 1280×800 and 360×480.
+
+Embedded lyrics are read automatically when opening this page: MP3 ID3v2.2–2.4 USLT/ULT, millisecond SYLT/SLT and custom LYRICS/UNSYNCEDLYRICS/SYNCEDLYRICS text frames; FLAC Vorbis comment fields with those names; M4A/MP4 ©lyr atoms (UTF-8/UTF-16). LRC timestamps inside text tags enable Synced mode; plain tags use Static mode. Cached/pasted lyrics take precedence. **Lyrics options → Read lyrics from music file** retries extraction. Metadata reads share the artwork reader’s 4 MiB total budget and 20-second TDLib deadline. While streaming, only already buffered ranges are read so metadata extraction cannot move the playback download. If a needed range is not buffered, retry once it is downloaded. Compressed/encrypted ID3 frames, MPEG-frame SYLT timestamps, Ogg/Opus/WMA tags and automatic sidecar discovery is not supported; use Import .lrc file to choose a sidecar manually. No music is uploaded to a lyrics service.
+
+Press **Find lyrics** to request a matching song from [LRCLIB](https://lrclib.net/docs). This sends only the displayed song title, artist and duration, never Telegram credentials, channel names or message/file IDs. There is no background lookup for unrequested songs. Results and pasted lyrics are kept only in a bounded, 32-entry session cache. Missing metadata, unindexed songs, alternate recordings and incorrect provider timings may prevent a match. Loading, offline/error, no-result and instrumental states are handled; plain-only lyrics use Static mode.
+
+Use **Import .lrc file** in the empty state or **Lyrics options → Import .lrc file** to attach a local lyrics file to the current song. Windows uses the native .lrc picker; Android uses the system document picker, which may show all file types so providers can expose .lrc files. UTF-8 (with or without BOM) and UTF-16 LE/BE with BOM are supported. Files are limited to 256 KiB and 2000 lyric entries. Existing LRC offsets, repeated timestamps and translations work as usual; plain text uses Static mode. Import overrides the current session’s lyrics, with no audio/tag modification or upload. Cancelled/invalid imports preserve the previous lyrics, and a selection made for a song that has changed is discarded. Imported lyrics are kept in the same bounded session cache, not in backups.
+
+Use **Paste lyrics** for plain text or line-timed LRC. It supports fractional seconds, repeated timestamps, offset tags and simultaneous translation lines. Lyrics are limited to 256 KiB per field / 2000 timed entries, with HTTP responses capped at 512 KiB and a 20-second overall deadline. Only line synchronization is implemented: no word-level karaoke, automatic translation or permanent lyrics library. PixelPlayer is a design and feature reference; no code/assets or song lyrics from it are bundled. Screenshots use original synthetic text.
+
+![Now Playing lyrics test frame](screenshots/lyrics-1280.png)
+
+## Adaptive player and wave seek bar
+
+The bottom seek line has an independently drawn traveling wave on its played portion. It animates only for an active, unbuffered track with a known duration, freezes when paused and uses a straight line with user/system reduced motion. The animation is decorative; it does not sample audio or claim to display the file's waveform/spectrum. The seek thumb, buffered segment, timestamps, mouse seeking and focused-slider keyboard controls remain available. A localized repaint boundary keeps the animation inside the seek control. Click the bottom cover/title/artist area to open the current Now Playing page; seeking and transport buttons retain their own actions.
+
+Now Playing has its own full-size seek bar, previous/play/next pills, grouped shuffle/repeat/favorite controls, and lyrics, playlist, sleep, and volume actions. The normal bottom player dock is hidden on this page. Phones also hide bottom navigation here; the header's back button returns to Library, Settings remains accessible in the phone header, and Queue opens the complete queue.
+
+Below 700 logical pixels of available page width, the player stacks artwork and details above the controls. Short phone windows place a smaller cover beside the details to keep every control reachable. Wider pages place the cover beside the details and playback controls. A sliver of the next cover is available in roomy layouts; click or tap it to play that queued track. Medium and larger layouts reserve space for an Up Next row before sizing the hero. The page itself does not scroll.
+
+The rest of the app retains bottom navigation below 900 logical pixels, an icon rail from 900–1179, and an expanded sidebar from 1180. The companion Now Playing panel appears only on other pages at 1220+ width and 620+ height. User/system reduced motion disables the decorative seek wave and automatic lyric transition blur.
+
+Windows requests a 360×480 logical client minimum and centers its initial window in the monitor work area. Automated layout coverage includes compact windows, tall phones, phone landscape, medium and large desktops, and enlarged text. The screenshots use synthetic tracks and original fixture artwork; hardware resizing, high-DPI multi-monitor behavior, and device animation performance still need real-device verification.
+
+![Medium desktop Now Playing test frame](screenshots/now-playing-1000.png)
+
+![Compact player test frame](screenshots/adaptive-360.png)
+
+## Streaming audio quality
+
+Telegram playback uses the original file ID from the selected message. The streaming proxy passes its file bytes unchanged to libmpv: no re-encoding, lossy conversion, bitrate cap or lower-quality fallback. Download priority, buffering and byte-range seeking affect when bytes arrive, not their encoded quality. A slow download buffers or reports a stalled-transfer error rather than switching to a lower-bitrate copy.
+
+This preserves the quality of the file supplied in Telegram; it does not restore detail already absent from that source. Volume adjustment and the Windows/audio-device output path are separate from file transport. Bit-perfect DAC output or exclusive-mode playback is not implemented or verified. The regression test checks a complete multi-chunk stream's SHA-256 against its simulated original and checks seek ranges exactly; live-account playback remains unverified.
+
+## Dependencies and build
+
+Use **Windows x64**, Flutter **3.47.1** / Dart **3.13.1**, Git, PowerShell **7.4+**, CMake, and **Visual Studio 2022** (or Build Tools 2022) with **Desktop development with C++**, the MSVC x64 toolset, and Windows SDK. Install these tools using their official installers, then check `flutter doctor -v`.
+
+Windows build requirements are listed above. Android uses its separate workflow; see [docs/ANDROID.md](ANDROID.md).
+
+Pinned Dart dependencies and their transitive versions are in `pubspec.yaml` and `pubspec.lock`: Flutter, media_kit 1.2.6+auralis.2 (vendored MIT runtime with Windows COM/shutdown patches), media_kit_libs_windows_audio 1.0.9, ffi 2.2.0, path 1.9.1, path_provider 2.1.6, package_info_plus 10.2.1, crypto 3.0.7, and file_selector 1.1.0 for desktop save/open dialogs, media_kit_libs_android_audio 1.3.8, audio_service 0.18.19 and audio_session 0.2.4. Android file export/restore uses the Storage Access Framework. TDLib is built separately; no third-party Dart Telegram wrapper is used. Keep `third_party/media_kit` in Git with the app; its patch and original license are included there.
+
+From this directory:
+
+```powershell
+flutter pub get --enforce-lockfile
+flutter analyze --fatal-infos
+flutter test --reporter expanded
+pwsh ./tool/build-tdlib.ps1 -Jobs 2
+flutter build windows --release
+dart run tool/native_smoke_repeat.dart `
+  "$PWD/build/windows/x64/runner/Release/libmpv-2.dll" `
+  "$PWD/native/tdjson.dll"
+pwsh ./tool/package.ps1
+```
+
+TDLib's first build can take a long time and several GB of disk space. The script pins TDLib and vcpkg revisions, builds OpenSSL/zlib/gperf through vcpkg, and builds `tdjson.dll` with MSVC. Start with two parallel compiler jobs to limit memory use. It writes only its generated `.native-build/` tree, `native/` binaries, license texts, and build manifest. Neither upstream player is cloned or modified.
+
+GitHub Actions caches the compiled TDLib DLLs, dependency DLLs, license files and build manifest immediately after a successful TDLib build or compatible legacy-cache restore. The stable key includes the Windows runner image version and native build-script hash; UI and release-workflow edits do not invalidate it. An audited migration can reuse the existing v1 cache from the same image with the exact unchanged builder, then save it under the stable v2 key. Changed native inputs/images and unavailable caches still require compilation. See [cache details](UPDATES.md#tdlib-build-cache).
+
+The workflow also retains Flutter SDK and locked Pub package caching, and now caches Windows/CMake intermediates (including the libmpv download), Flutter/Dart compilation data, and native hook output. Compatible builds warm-start from the previous source revision; source changes receive a new cache entry. Keys separate Windows runner image, Flutter SDK, dependency lock, Windows native sources and vendored runtime. The final Release bundle is excluded and rebuilt; analysis, tests, native smoke checks, packaging and asset verification always run. If compiled TDLib is unavailable, vcpkg downloads and ABI-checked binary packages (OpenSSL/zlib/gperf) can be reused. Native dependency caches are saved even if a later TDLib compilation fails. See [build cache coverage and limits](UPDATES.md#additional-build-caches).
+
+Run the app with `flutter run -d windows` after native setup, or launch `build/windows/x64/runner/Release/auralis.exe`. Keep **the entire Release directory** together. The executable depends on Flutter's DLL/data files, `libmpv-2.dll`, and `native/tdjson.dll` plus its dependent DLLs. End-user machines also need the Microsoft Visual C++ 2015–2022 x64 runtime. The optional installer currently assumes it is installed.
+
+`pwsh ./tool/package.ps1 -Installer` additionally requires Inno Setup 6 and produces an unsigned per-user installer. It requests no administrator privileges and preserves application data during uninstall. Neither packaging mode has been tested with a built executable in this environment.
+
+Packaging derives asset names and the installer version from `pubspec.yaml`. Commit the source first: the source ZIP is produced from Git `HEAD`. Release tags must match the version exactly (for example, `0.1.39+40` → `v0.1.39`). Packaging/tag validation has been tested with harmless fixture files; the current revision's installer compilation/installation is still outstanding.
+
+## Connect Telegram
+
+1. Create your own application at [my.telegram.org](https://my.telegram.org) and obtain its API ID/hash. Do not use someone else's credentials or commit yours.
+2. Open Telegram in Auralis and enter the application ID/hash locally. Enter your phone number with country code, the code delivered by Telegram, and your 2FA password if requested.
+3. Check the channels you want to include, then choose Open Library. Their music appears together as older audio and audio-document pages load automatically. Use Load more in Telegram to discover more main/archived channels. Your selection is saved and loads again after sign-in on subsequent launches.
+4. In Library, search by title, artist or channel. Click a track to play the filtered list, or add individual tracks to the queue. Use Refresh to scan again for new music, retry partial failures and retry missing artwork. Deselect a channel in Telegram to remove its tracks from Library; already queued/playing tracks stay in the queue until you remove/clear them. Large channels can take time or hit Telegram rate limits; progress and partial errors remain visible.
+
+If a Telegram-specific delivery/verification step is unsupported, the app shows that state. Existing Telegram account membership/access rules apply. This app has no affiliation with Telegram, mpvRx, or PixelPlayer.
+
+## Telegram artwork
+
+Audio messages first try the largest supplied Telegram album-cover thumbnail/cover variant; audio documents try their thumbnail. Tiny Telegram previews are shown while larger artwork loads. If a thumbnail is absent or unavailable, Auralis reads embedded artwork from ID3v2.2/2.3/2.4 (MP3), FLAC PICTURE blocks and MP4/M4A covr metadata. This is independently authored Dart code with no extra native library or external artwork lookup. Channel avatars use the small channel photo and follow photo-change/removal updates.
+
+Only displayed items request artwork. The reader requests metadata ranges rather than full songs, skips MP4 audio payloads to reach tail metadata, caps metadata at 4 MiB, and parses away from the UI isolate. At most two cover jobs run together; up to 64 cover results and 128 channel/thumbnail request results are retained. Image decode sizes are bounded to the display. Metadata download requests use TDLib priority 1 and deadlines. For a file registered with the playback proxy, cover extraction uses already buffered bytes only: it never changes that file's active download offset. File-progress updates allow missing covers to retry as playback fills the cache. Refresh retries failed artwork. Original music bytes are unchanged.
+
+Files with no picture, unsupported embedded-art containers (including Ogg/Opus/WMA), metadata exceeding the limit, inaccessible ranges or invalid image data retain a preview or the generated placeholder. The implementation cannot invent a missing cover. A provided thumbnail may be lower resolution than embedded artwork. Downloaded images/media remain plaintext in TDLib's application-data cache. The screenshot below uses original geometric test artwork embedded in a generated MP3 with **no Telegram cover thumbnail**; it verifies rendering with a fake TDLib transport, not the user's live channels.
+
+![Selected-channel Library with fixture covers](screenshots/channel-library.png)
+
+## Storage and architecture
+
+Windows application support data is resolved by `path_provider`, using the runner's company/product metadata. The app creates `settings.json`, `credentials.dpapi`, `session.lock`, and `telegram/database` plus `telegram/cache` there. The session lock prevents two Auralis processes from opening the same account database. Settings contain selected channel IDs/titles and preferences, never login secrets. Old local-file references are ignored and removed on the next settings save; source files are untouched. Successful explicit logout clears selected channels; restored channel references are checked through TDLib before indexing. Track metadata is rebuilt after launch rather than stored as a second persistent database. DPAPI vaults cannot be copied to another Windows user/machine and decrypted there. Secrets necessarily exist in process memory while being used; Dart strings cannot guarantee memory zeroization.
+
+- `lib/app.dart`: UI, responsive navigation, channel selection, Library, artwork and Telegram forms.
+- `lib/player.dart`: native audio backend and queue controller.
+- `lib/telegram/td_transport.dart`: native TDLib receiver isolate and correlated requests.
+- `lib/telegram/telegram_service.dart`: authorization, chat updates and music search.
+- `lib/telegram/embedded_cover.dart`: bounded ID3/FLAC/MP4 picture extraction from file ranges.
+- `lib/telegram/channel_library.dart`: selected-channel persistence, merged music indexing, pagination, cancellation and partial errors.
+- `lib/telegram/stream_proxy.dart`: authenticated-by-capability loopback byte streaming.
+- `lib/storage.dart`: Windows DPAPI vault and serialized atomic settings writes.
+- `lib/updater.dart` / `lib/update_widgets.dart`: stable GitHub Release checks, checksum-verified downloads, update controls and graceful installer handoff.
+
+Tests use generated audio and synthetic metadata only. Flutter UI previews are rendered test frames, not screenshots of a compiled Windows executable.
+
