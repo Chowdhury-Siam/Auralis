@@ -286,6 +286,21 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: '$size Library');
+        expect(find.byTooltip('Listening stats'), findsNothing);
+        expect(find.byTooltip('Choose channels'), findsNothing);
+        expect(find.byKey(const ValueKey('library-counts')), findsOneWidget);
+        expect(find.byTooltip('Refresh library').hitTestable(), findsOneWidget);
+        expect(find.byTooltip('Sort Library').hitTestable(), findsOneWidget);
+        expect(
+          tester.getRect(find.byTooltip('Sort Library')).right,
+          inInclusiveRange(
+            tester.getRect(find.byType(TextField).first).right - 8,
+            tester.getRect(find.byType(TextField).first).right,
+          ),
+          reason: '$size keeps Library actions at the right edge',
+        );
+        expect(find.text('Refresh library'), findsNothing);
+
         expect(
           find.byType(NavigationBar),
           size.width < 900 ? findsOneWidget : findsNothing,
@@ -320,6 +335,7 @@ void main() {
           'Now playing',
         );
         expect(audio.playing, isTrue);
+        expect(find.byTooltip('Listening stats'), findsNothing);
         expect(find.text('FLAC'), findsOneWidget);
         expect(tester.takeException(), isNull, reason: '$size Now Playing');
         final layout = find.byKey(const ValueKey('now-playing-layout'));
@@ -365,7 +381,7 @@ void main() {
         );
         expect(
           find.byKey(const ValueKey('now-playing-queue')).hitTestable(),
-          findsOneWidget,
+          size.width < 900 ? findsOneWidget : findsNothing,
         );
         if (size.width >= 760 && size.height >= 650) {
           final next = find.byKey(const ValueKey('now-playing-next-0'));
@@ -444,12 +460,17 @@ void main() {
             image.dispose();
           });
         }
-        await tester.tap(find.byKey(const ValueKey('now-playing-queue')));
+        await tester.tap(
+          size.width < 900
+              ? find.byKey(const ValueKey('now-playing-queue'))
+              : find.byTooltip('Play queue').first,
+        );
         await tester.pumpAndSettle();
         expect(
           tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
           'Play queue',
         );
+        expect(find.byTooltip('Listening stats'), findsNothing);
 
         await tester.tap(find.byTooltip('Library').first);
         await tester.pumpAndSettle();
