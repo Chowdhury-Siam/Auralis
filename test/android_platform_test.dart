@@ -3,11 +3,13 @@ import 'dart:io';
 
 import 'package:auralis/android_audio.dart';
 import 'package:auralis/android_updater.dart';
+import 'package:auralis/account_backup.dart';
 import 'package:auralis/data_files.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/android_storage.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
+import 'package:auralis/telegram/telegram_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -53,6 +55,83 @@ void main() {
     );
     expect(await vault.file.readAsBytes(), saved);
     await expectLater(vault.read(), throwsA(isA<PlatformException>()));
+  });
+
+  test('Android vault owns writable copies of read-only platform replies', () async {
+    const codec = StandardMethodCodec();
+    messenger.setMockMessageHandler(channel.name, (message) async {
+      final call = codec.decodeMethodCall(message);
+      // Model immutable platform-message memory, not native cryptography.
+      final result = Uint8List.fromList(
+        (call.arguments as Uint8List).map((byte) => byte ^ 0xff).toList(),
+      );
+      return codec.encodeSuccessEnvelope(result).asUnmodifiableView();
+    });
+    final native = (await channel.invokeMethod<Uint8List>(
+      'decrypt', Uint8List.fromList([1, 2, 3]),
+    ))!;
+    expect(() => native.fillRange(0, native.length, 0), throwsUnsupportedError);
+    final dir = await Directory.systemTemp.createTemp('auralis-readonly-vault');
+    addTearDown(() => dir.delete(recursive: true));
+    final vault = AndroidSecretVault(File('${dir.path}/vault.aesgcm'));
+    final secrets = {'apiId': 123, 'apiHash': 'synthetic-secret'};
+    await vault.write(secrets);
+    expect(await vault.read(), secrets);
+    final owned = await vault.transform([1, 2, 3], encrypt: false);
+    owned.fillRange(0, owned.length, 0);
+    expect(owned, [0, 0, 0]);
+  });
+
+  test('portable Android restore and rollback work with read-only native buffers', () async {
+    const codec = StandardMethodCodec();
+    messenger.setMockMessageHandler(channel.name, (message) async {
+      final call = codec.decodeMethodCall(message);
+      final result = Uint8List.fromList(
+        (call.arguments as Uint8List).map((byte) => byte ^ 0xff).toList(),
+      );
+      return codec.encodeSuccessEnvelope(result).asUnmodifiableView();
+    });
+    final credentials = <String, dynamic>{
+      'apiId': 12345,
+      'apiHash': 'abcdef0123456789abcdef0123456789',
+      'databaseKey': base64Encode(List.filled(32, 7)),
+    };
+    final account = TelegramAccount.fromJson({
+      'credentials': credentials,
+      'files': {'td.binlog': base64Encode(utf8.encode('portable session'))},
+    });
+    for (final fail in [true, false]) {
+      final dir = await Directory.systemTemp.createTemp('auralis-readonly-restore');
+      addTearDown(() => dir.delete(recursive: true));
+      final vault = AndroidSecretVault(File('${dir.path}/vault.aesgcm'));
+      final previous = {...credentials, 'apiId': 98765};
+      await vault.write(previous);
+      final protected = await vault.file.readAsBytes();
+      final database = File('${dir.path}/database/td.binlog');
+      await database.parent.create();
+      await database.writeAsString('previous session');
+      final service = TelegramService(
+        dir, vault, transport: FakeTd(), createTransport: FakeTd.new,
+      );
+      var restored = false;
+      Future<void> restore() => service.restoreAccount(account, () async {
+        expect(await vault.read(), credentials);
+        if (fail) throw const FileSystemException('settings write failed');
+        restored = true;
+      });
+      if (fail) {
+        await expectLater(restore(), throwsA(isA<FileSystemException>()));
+        expect(await vault.file.readAsBytes(), protected);
+        expect(await database.readAsString(), 'previous session');
+      } else {
+        await restore();
+        expect(restored, isTrue);
+        expect(await vault.read(), credentials);
+        expect(await database.readAsString(), 'portable session');
+        expect(service.error, isNull);
+      }
+      await service.shutdown();
+    }
   });
 
   test('Android update bridge sends only the verified APK handoff', () async {
