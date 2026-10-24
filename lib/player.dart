@@ -272,6 +272,10 @@ class PlayerController extends ChangeNotifier {
   final AudioBackend audio;
   final TelegramStreamProxy proxy;
   final AppSettings settings;
+
+  void refreshSettings() {
+    if (!_closed) notifyListeners();
+  }
   late final StreamSubscription<String> _proxyErrors;
   final List<Track> queue = [];
   int index = -1, _generation = 0;
