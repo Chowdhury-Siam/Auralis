@@ -378,6 +378,15 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: '$size Library');
+        if (size.width >= 600 && size.height < 560) {
+          expect(
+            tester.getSize(find.byKey(const ValueKey('player-bar'))).height,
+            lessThanOrEqualTo(80),
+            reason: '$size keeps landscape controls in one row',
+          );
+          expect(find.byTooltip('Previous track').hitTestable(), findsOneWidget);
+          expect(find.byTooltip('Next track').hitTestable(), findsOneWidget);
+        }
         expect(find.byTooltip('Listening stats'), findsNothing);
         expect(find.byTooltip('Choose channels'), findsNothing);
         expect(find.byKey(const ValueKey('library-counts')), findsOneWidget);
