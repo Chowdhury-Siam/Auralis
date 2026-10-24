@@ -1,5 +1,24 @@
 # Auralis changes
 
+## 0.1.69
+
+- Added a searchable Telegram country/calling-code picker to phone sign-in on Android and Windows.
+- The verification-code page shows the destination number and offers Change number, with editable phone/country fields, cancellation and a new-code action.
+- Correcting a number keeps the same Telegram login session and clears stale verification codes. Pasting a full international number remains supported without duplicating the selected calling code.
+
+## 0.1.68
+
+- Added Yutaka-style Cloudflare + Turso setup and redeployment inside Android and Windows Settings.
+- The app prepares database tables, uploads its bundled sync Worker, verifies the service and connects the device automatically after deployment.
+- Deployment credentials are protected locally and remembered for retries and service updates. Other devices pair using only the service URL and private sync key.
+- Added transactional Turso storage with rollback, conflict retries and live notifications after committed changes. Existing sync spaces and unrelated Workers are protected from accidental replacement.
+
+## 0.1.67
+
+- Android and Windows releases can include Auralis's Telegram application credentials from GitHub build secrets, so users no longer enter an API ID or API hash.
+- Configured builds initialize Telegram automatically for phone/code sign-in. Existing sessions and restored backups retain their saved API identity; fresh sign-in after logout uses the build identity.
+- Release builds validate both Telegram secrets before compiling. Pull-request and local builds without app credentials retain manual API setup.
+
 ## 0.1.66
 
 - Kept the bottom player in a single row on short, wide screens so the Library fits in phone landscape mode.
