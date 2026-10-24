@@ -10,12 +10,13 @@ import '../storage.dart';
 import 'document.dart';
 
 class SyncController extends ChangeNotifier {
-  SyncController(this.settings, this.vault, {required this.onApplied, required this.paused}) {
+  SyncController(this.settings, this.vault, {required this.onApplied, required this.paused, this.deploymentVault}) {
     settings.captureSync = _capture;
     settings.onSaved = _schedule;
   }
   final AppSettings settings;
   final SecretVault vault;
+  final SecretVault? deploymentVault;
   final VoidCallback onApplied;
   final bool Function() paused;
   HttpClient _client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
