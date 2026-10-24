@@ -21,7 +21,10 @@ class AndroidSecretVault extends SecretVault {
     }
     if (encrypt) {
       // Never persist ciphertext that the current device key cannot read back.
-      final plain = await _channel.invokeMethod<Uint8List>('decrypt', result);
+      final readback = await _channel.invokeMethod<Uint8List>('decrypt', result);
+      // Platform replies may be backed by read-only message buffers. Only
+      // wipe an owned mutable copy, otherwise cleanup throws UnsupportedError.
+      final plain = readback == null ? null : Uint8List.fromList(readback);
       try {
         if (plain == null || plain.length != bytes.length) {
           throw StateError('Android could not verify the saved credentials.');
@@ -37,6 +40,7 @@ class AndroidSecretVault extends SecretVault {
         if (plain != null) plain.fillRange(0, plain.length, 0);
       }
     }
-    return result;
+    // SecretVault.read wipes decrypted bytes after decoding them, too.
+    return Uint8List.fromList(result);
   }
 }
