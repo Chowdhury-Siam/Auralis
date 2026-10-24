@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.70
+
+- Fixed the four reported Android/Windows analyzer lints in sync deployment code and its test fixtures by adding required blocks and override annotations.
+
 ## 0.1.69
 
 - Added a searchable Telegram country/calling-code picker to phone sign-in on Android and Windows.
