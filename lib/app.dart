@@ -11,6 +11,7 @@ import 'lyrics.dart';
 import 'lyrics_view.dart';
 import 'player.dart';
 import 'telegram/telegram_service.dart';
+import 'telegram/phone_login.dart';
 import 'telegram/channel_library.dart';
 import 'updater.dart';
 import 'update_widgets.dart';
@@ -2781,7 +2782,7 @@ class _PlayerShellState extends State<PlayerShell>
           ],
           const SizedBox(height: 12),
           Text(
-            'Auralis ${widget.updater?.currentVersion ?? '0.1.66'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+            'Auralis ${widget.updater?.currentVersion ?? '0.1.69'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
             style: TextStyle(
               color: _colors.onSurfaceVariant,
               fontSize: 12,
@@ -2794,7 +2795,7 @@ class _PlayerShellState extends State<PlayerShell>
               onPressed: () => showLicensePage(
                 context: context,
                 applicationName: 'Auralis',
-                applicationVersion: widget.updater?.currentVersion ?? '0.1.66',
+                applicationVersion: widget.updater?.currentVersion ?? '0.1.69',
               ),
               child: const Text('Licenses'),
             ),
@@ -2843,13 +2844,18 @@ class _AuthFormState extends State<AuthForm> {
   ColorScheme get _colors => Theme.of(context).colorScheme;
   final apiId = TextEditingController(),
       apiHash = TextEditingController(),
-      value = TextEditingController();
+      value = TextEditingController(),
+      phone = TextEditingController();
   String? _lastState;
+  PhoneCountry? _country;
+  bool _editingNumber=false;
+  String? _phoneError;
   @override
   void dispose() {
     apiId.dispose();
     apiHash.dispose();
     value.dispose();
+    phone.dispose();
     super.dispose();
   }
 
@@ -2861,13 +2867,18 @@ class _AuthFormState extends State<AuthForm> {
       if (td.state == 'disconnected') {
         apiId.clear();
         apiHash.clear();
+        phone.clear();
+        _country=null;
       }
+      if(td.state!='authorizationStateWaitCode') _editingNumber=false;
+      _phoneError=null;
       _lastState = td.state;
     }
     final initial = td.state == 'disconnected';
+    final enteringPhone=td.state=='authorizationStateWaitPhoneNumber' || _editingNumber;
     final label = switch (td.state) {
       'authorizationStateWaitPhoneNumber' =>
-        'Phone number, including country code',
+        'Phone number',
       'authorizationStateWaitCode' => 'Login code from Telegram',
       'authorizationStateWaitPassword' => 'Two-step verification password',
       'authorizationStateWaitEmailAddress' =>
@@ -2876,11 +2887,26 @@ class _AuthFormState extends State<AuthForm> {
       _ => null,
     };
     Future<void> submit() async {
-      if (initial) {
-        await td.start(
-          apiId: int.tryParse(apiId.text.trim()) ?? 0,
-          apiHash: apiHash.text.trim(),
-        );
+      if(enteringPhone) {
+        try {
+          final number=internationalLoginNumber(phone.text,country:_country);
+          setState(()=>_phoneError=null);
+          if(_editingNumber) {
+            await td.changeLoginPhoneNumber(number);
+            if(mounted && td.error==null) setState(() {_editingNumber=false;value.clear();});
+          } else {
+            await td.submit(number);
+          }
+        } on FormatException catch(e) {if(mounted) setState(()=>_phoneError=e.message);}
+      } else if (initial) {
+        if (td.hasApplicationCredentials) {
+          await td.start();
+        } else {
+          await td.start(
+            apiId: int.tryParse(apiId.text.trim()) ?? 0,
+            apiHash: apiHash.text.trim(),
+          );
+        }
         apiHash.clear();
       } else {
         final input = value.text;
@@ -2892,7 +2918,9 @@ class _AuthFormState extends State<AuthForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (initial) ...[
+        if (initial && td.hasApplicationCredentials)
+          const Text('Sign in with your Telegram account to access your music channels.')
+        else if (initial) ...[
           Text(
             'Create an API application at my.telegram.org, then enter its details here.',
             style: TextStyle(fontSize: 12, color: _colors.onSurfaceVariant, height: 1.6),
@@ -2911,32 +2939,58 @@ class _AuthFormState extends State<AuthForm> {
             enableSuggestions: false,
             decoration: const InputDecoration(labelText: 'Telegram API hash'),
           ),
-        ] else if (label != null)
+        ] else if(enteringPhone) ...[
+          PhoneNumberInput(
+            controller:phone,country:_country,enabled:!td.busy,loadCountries:td.loginCountries,
+            onCountryChanged:(country)=>setState(() {_country=country;_phoneError=null;}),onSubmitted:submit,
+          ),
+          if(_editingNumber) Align(alignment:Alignment.centerLeft,child:TextButton(
+            onPressed:td.busy?null:()=>setState(() {_editingNumber=false;_phoneError=null;value.clear();}),
+            child:const Text('Cancel number change'),
+          )),
+        ] else if (label != null) ...[
+          if(td.state=='authorizationStateWaitCode') ...[
+            Text(td.authenticationPhoneNumber==null?'Enter the code sent by Telegram.':'Code sent to ${td.authenticationPhoneNumber}',key:const ValueKey('login-code-number')),
+            Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+              key:const ValueKey('change-login-number'),
+              onPressed:td.busy?null:()=>setState(() {
+                final sent=td.authenticationPhoneNumber;
+                if(sent!=null) {
+                  final prefix=_country==null?null:'+${_country!.callingCode}';
+                  phone.text=prefix!=null && sent.startsWith(prefix)?sent.substring(prefix.length):sent;
+                }
+                _editingNumber=true;_phoneError=null;value.clear();
+              }),icon:const Icon(Icons.edit_rounded,size:18),label:const Text('Change number'),
+            )),
+          ],
           TextField(
             key: ValueKey(td.state),
             controller: value,
             obscureText: td.state == 'authorizationStateWaitPassword',
             autocorrect: false,
             enableSuggestions: false,
+            enabled:!td.busy,
+            keyboardType:td.state=='authorizationStateWaitCode' || td.state=='authorizationStateWaitEmailCode'?TextInputType.number:TextInputType.text,
+            autofillHints:td.state=='authorizationStateWaitCode' || td.state=='authorizationStateWaitEmailCode'?const [AutofillHints.oneTimeCode]:null,
             decoration: InputDecoration(labelText: label),
             onSubmitted: td.busy ? null : (_) => submit(),
           )
-        else
+        ] else
           Text(switch (td.state) {
             'authorizationStateWaitRegistration' => 'Create your Telegram account in the official app first, then restart Auralis.',
             'authorizationStateClosed' =>
               'Telegram was closed. Restart Auralis to reconnect.',
-            'authorizationStateLoggingOut' => 'Signing out of Telegram… Keep your internet connection available. The API ID and hash form will appear when sign-out finishes.',
+            'authorizationStateLoggingOut' => 'Signing out of Telegram… Keep your internet connection available. You can sign in again when sign-out finishes.',
             'authorizationStateWaitPremiumPurchase' => 'Telegram requires a Premium verification step. Complete it in the official app.',
             'authorizationStateWaitOtherDeviceConfirmation' =>
               'Confirm this sign-in in your Telegram application.',
             _ => 'Connecting securely to Telegram…',
           }, style: TextStyle(color: _colors.onSurfaceVariant, height: 1.6)),
-        if (td.error != null)
+        if (_phoneError ?? td.error case final String error)
           Padding(
             padding: const EdgeInsets.only(top: 14),
             child: Text(
-              td.error!,
+              error,
               style: TextStyle(color: _colors.error, fontSize: 12),
             ),
           ),
@@ -2953,8 +3007,8 @@ class _AuthFormState extends State<AuthForm> {
                         context: context,
                         builder: (dialogContext) => AlertDialog(
                           title: const Text('Start a new Telegram sign-in?'),
-                          content: const Text(
-                            'Your music and app settings stay. The unreadable local Telegram files will be set aside. You will need your API details and Telegram verification to sign in again. To keep the old sign-in, restore a password-protected account backup instead.',
+                          content: Text(
+                            'Your music and app settings stay. The unreadable local Telegram files will be set aside. ${td.hasApplicationCredentials ? 'You will need Telegram verification to sign in again.' : 'You will need your API details and Telegram verification to sign in again.'} To keep the old sign-in, restore a password-protected account backup instead.',
                           ),
                           actions: [
                             TextButton(
@@ -2992,7 +3046,7 @@ class _AuthFormState extends State<AuthForm> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Text(initial ? 'Connect Telegram' : 'Continue'),
+                  : Text(initial ? 'Connect Telegram' : _editingNumber?'Send new code':'Continue'),
             ),
           ),
       ],
