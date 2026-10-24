@@ -679,3 +679,36 @@ checks silent non-update behavior; it no longer clicks Launch or Done.
 Python/Dart syntax and source checks were verified locally. The actual Inno
 installer and Windows GUI checks require the Windows CI runner; neither was
 executed in this environment.
+
+
+## 0.1.61 artwork gestures and lyrics waiting — 24 October 2026
+
+Added artwork-local swipe/wheel track navigation, drag feedback and cover fades.
+Before the first timed words and during explicit blank timestamped lines, no
+line is highlighted: all rows are blurred and a small decorative music pulse
+is shown. The pulse uses its own repaint boundary and animation controller;
+pausing, buffering, reduced motion, disabled tickers and app backgrounding stop
+it. No timers, audio-processing dependency or full-screen animated blur was
+added. Existing player buttons, original stream data, lyric seeking and static
+reading remain available.
+
+The existing before-first-line expectation was updated. Widget regressions now
+cover phone/desktop swipes and boundaries, wheel burst/reversal behavior,
+instrumental gaps and seeking, pause/background/disposal and reduced-motion
+handling. These Flutter tests have not run here because the SDK is absent;
+Dart syntax and Android source checks were run. Device appearance, gesture feel
+and actual playback remain to be verified with a built app.
+
+## 0.1.62 system artwork and automatic lyrics — 24 October 2026
+
+The supplied system-player screenshots show missing cover art and the generic music note. The Android media handler previously omitted MediaItem.artUri entirely. It now reuses Telegram’s cached preview/full-cover metadata, writes supported image bytes to a bounded private cache, and updates media/queue metadata without waiting for playback position changes. Generation guards discard late covers on track switches and shutdown; Telegram availability notifications permit retry. New content-derived paths invalidate stale Android image caches. The notification vector reuses the Auralis A/play paths in white and is retained during resource shrinking. The existing player/stream proxy and custom Windows installer are unchanged.
+
+Removed the entire duplicate lyrics footer; the back arrow and one options menu are in the song header. Embedded lyrics are checked first on opening, then LRCLIB is requested automatically if tags are missing, empty or unreadable. Existing imported/pasted/session-cache results win. Added request identity guards in the repository so a late HTTP completion cannot overwrite locally selected lyrics in the cache. The no-result/error UI keeps retry, import and paste available.
+
+Flutter regressions were added/updated for header controls, embedded-first fallback, cache reuse, stale lyrics/local overrides, media preview/full-cover updates, duration updates, retries, song changes and shutdown. Dart syntax parsing and Android source/XML checks passed locally. Flutter and Dart executables are absent: fatal-info analysis, Flutter tests, native builds, live LRCLIB retrieval, Android/launcher rendering and APK installation were not run. Source archive CRC, version consistency and unchanged baseline entries are checked during packaging.
+
+## 0.1.63 rounded swipe-to-stop dock — 24 October 2026
+
+Removed repeat/sleep/volume from both compact and desktop bottom-dock layouts. The dock is now an inset Material card with 28-pixel corners and clipped contents. The full Now Playing page retains those controls. The native Flutter Dismissible supplies horizontal drag feedback and snapping; confirmation runs the existing PlayerController.clear before the dock disappears. An outdated gesture is ignored if the current track changed, and a failed stop leaves the card available for retry. Reduced motion disables the extra slide duration. The seek slider keeps its child drag gesture, and semantic dismissal offers an accessible stop action. No audio, stream-proxy, installer or dependency code changes were needed.
+
+Added widget regressions for both swipe directions on phone/desktop, reduced and normal motion, rounded shape, absence of removed controls, seeking and short swipes without stopping, cancellation of the sleep timer, stopping the active loopback stream, clearing the queue, stale gesture protection and failed-stop retry. Updated the older dock volume expectation to the new layout. Dart syntax and Android source checks passed. Flutter/Dart executables are unavailable, so fatal-info analysis, widget tests, native builds and device rendering were not run. ZIP CRC, exact bytes and shared version consistency were checked during packaging.
