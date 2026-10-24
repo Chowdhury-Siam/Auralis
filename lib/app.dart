@@ -177,6 +177,8 @@ class _AuralisAppState extends State<AuralisApp> {
   );
 }
 
+enum _Page { library, telegram, nowPlaying, settings }
+
 class PlayerShell extends StatefulWidget {
   const PlayerShell({
     super.key,
@@ -198,7 +200,7 @@ class PlayerShell extends StatefulWidget {
 class _PlayerShellState extends State<PlayerShell>
     with SingleTickerProviderStateMixin {
   ColorScheme get _colors => Theme.of(context).colorScheme;
-  int destination = 0;
+  _Page destination = _Page.library;
   bool showLyrics = false;
   String collection = 'All songs';
   String? selectedPlaylist;
@@ -230,6 +232,26 @@ class _PlayerShellState extends State<PlayerShell>
     if (mounted) setState(() {});
   }
 
+  void _navigate(_Page page) {
+    setState(() {
+      destination = page;
+      showLyrics = false;
+      search.clear();
+    });
+  }
+
+  void _back() {
+    if (destination == _Page.nowPlaying) {
+      if (showLyrics) {
+        setState(() => showLyrics = false);
+      } else {
+        unawaited(_closeNowPlaying());
+      }
+    } else if (destination != _Page.library) {
+      _navigate(_Page.library);
+    }
+  }
+
   @override
   void dispose() {
     _dismissPlayer.dispose();
@@ -240,7 +262,7 @@ class _PlayerShellState extends State<PlayerShell>
   }
 
   Future<void> _closeNowPlaying() async {
-    if (_closingPlayer || destination != 3) return;
+    if (_closingPlayer || destination != _Page.nowPlaying) return;
     final reduced =
         player.settings.reducedMotion ||
         MediaQuery.disableAnimationsOf(context);
@@ -255,8 +277,8 @@ class _PlayerShellState extends State<PlayerShell>
     if (!mounted) return;
     setState(() {
       // A sidebar navigation during dismissal takes precedence.
-      if (destination == 3) {
-        destination = 0;
+      if (destination == _Page.nowPlaying) {
+        destination = _Page.library;
         showLyrics = false;
       }
       _closingPlayer = false;
@@ -267,15 +289,15 @@ class _PlayerShellState extends State<PlayerShell>
   Widget _playerSurface({required Widget child}) => ClipRect(
     child: SlideTransition(
       key: const ValueKey('now-playing-dismiss'),
-      position: destination == 3
+      position: destination == _Page.nowPlaying
           ? _dismissOffset
           : const AlwaysStoppedAnimation(Offset.zero),
       child: AbsorbPointer(
-        absorbing: _closingPlayer && destination == 3,
+        absorbing: _closingPlayer && destination == _Page.nowPlaying,
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (destination == 3)
+            if (destination == _Page.nowPlaying)
               NowPlayingBackdrop(
                 key: const ValueKey('now-playing-backdrop'),
                 identity: (
@@ -323,12 +345,7 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  void _openTelegram() {
-    setState(() {
-      search.clear();
-      destination = 1;
-    });
-  }
+  void _openTelegram() => _navigate(_Page.telegram);
 
   void _notice(String value) {
     if (mounted) {
@@ -342,144 +359,153 @@ class _PlayerShellState extends State<PlayerShell>
     listenable: _shellUpdates,
     builder: (context, _) => LayoutBuilder(
       builder: (context, box) {
-        final immersiveLyrics = destination == 3 && showLyrics;
+        final immersiveLyrics = destination == _Page.nowPlaying && showLyrics;
         final compact = box.maxWidth < 900;
         final narrow = box.maxWidth < 1180;
         final short = box.maxHeight < 560;
         final wide = box.maxWidth >= 1220 && box.maxHeight >= 620;
-        return CallbackShortcuts(
-          bindings: {
-            const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () =>
-                player.restoringData ? null : unawaited(player.audio.toggle()),
-            const SingleActivator(LogicalKeyboardKey.mediaTrackNext): () =>
-                unawaited(player.next()),
-            const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): () =>
-                unawaited(player.previous()),
+        return PopScope<Object?>(
+          canPop: destination == _Page.library,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) _back();
           },
-          child: Focus(
-            autofocus: true,
-            child: Scaffold(
-              backgroundColor: immersiveLyrics ? _colors.surface : null,
-              bottomNavigationBar: compact && destination != 3
-                  ? _bottomNavigation()
-                  : null,
-              body: SafeArea(
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          if (!compact && !immersiveLyrics)
-                            _navigation(narrow, short: short),
-                          Expanded(
-                            child: _playerSurface(
-                              child: Padding(
-                                padding: immersiveLyrics
-                                    ? EdgeInsets.zero
-                                    : EdgeInsets.fromLTRB(
-                                        narrow ? 16 : 30,
-                                        short ? 12 : 26,
-                                        narrow ? 16 : 26,
-                                        0,
-                                      ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    if (!(destination == 3 && showLyrics)) ...[
-                                      _header(narrow, short: short),
-                                      SizedBox(height: short ? 10 : 22),
-                                    ],
-                                    if (widget.updater != null)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 12,
+          child: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.escape): _back,
+              const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () =>
+                  player.restoringData ? null : unawaited(player.audio.toggle()),
+              const SingleActivator(LogicalKeyboardKey.mediaTrackNext): () =>
+                  unawaited(player.next()),
+              const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): () =>
+                  unawaited(player.previous()),
+            },
+            child: Focus(
+              autofocus: true,
+              child: Scaffold(
+                backgroundColor: immersiveLyrics ? _colors.surface : null,
+                bottomNavigationBar: compact && destination != _Page.nowPlaying
+                    ? _bottomNavigation()
+                    : null,
+                body: SafeArea(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            if (!compact && !immersiveLyrics)
+                              _navigation(narrow, short: short),
+                            Expanded(
+                              child: _playerSurface(
+                                child: Padding(
+                                  padding: immersiveLyrics
+                                      ? EdgeInsets.zero
+                                      : EdgeInsets.fromLTRB(
+                                          narrow ? 16 : 30,
+                                          short ? 12 : 26,
+                                          narrow ? 16 : 26,
+                                          0,
                                         ),
-                                        child: UpdateBanner(
-                                          updater: widget.updater!,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      if (!(destination == _Page.nowPlaying && showLyrics)) ...[
+                                        _header(narrow, short: short),
+                                        SizedBox(height: short ? 10 : 22),
+                                      ],
+                                      if (widget.updater != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 12,
+                                          ),
+                                          child: UpdateBanner(
+                                            updater: widget.updater!,
+                                          ),
                                         ),
-                                      ),
-                                    if (widget.startupWarning != null)
-                                      _banner(widget.startupWarning!),
-                                    if (player.error ?? player.audio.error
-                                        case final String error)
-                                      _banner(error),
-                                    Expanded(
-                                      child: AnimatedSwitcher(
-                                        // The dock/nav reappear on exit. Fade in the
-                                        // new page without squeezing an outgoing
-                                        // full player into its smaller viewport.
-                                        layoutBuilder: (current, _) =>
-                                            current ?? const SizedBox.shrink(),
-                                        duration: Duration(
-                                          milliseconds:
-                                              player.settings.reducedMotion ||
-                                                  MediaQuery.disableAnimationsOf(
-                                                    context,
-                                                  )
-                                              ? 0
-                                              : 180,
-                                        ),
-                                        child: KeyedSubtree(
-                                          key: ValueKey((
-                                            destination,
-                                            showLyrics,
-                                          )),
-                                          child: switch (destination) {
-                                            0 => _library(),
-                                            1 => _telegram(),
-                                            2 => _queue(),
-                                            _ =>
-                                              showLyrics
-                                                  ? LyricsView(
-                                                      backgroundColor:
-                                                          Colors.transparent,
-                                                      player: player,
-                                                      repository: lyrics,
-                                                      files: widget.dataFiles,
-                                                      loadEmbedded: telegram
-                                                          .embeddedLyrics,
-                                                      artwork: Artwork(
-                                                        seed:
-                                                            player
-                                                                .current
-                                                                ?.title ??
-                                                            'Auralis',
-                                                        telegram: telegram,
-                                                        track: player.current,
-                                                      ),
-                                                      onBack: () =>
-                                                          setState(() {
-                                                            showLyrics = false;
-                                                          }),
+                                      if (widget.startupWarning != null)
+                                        _banner(widget.startupWarning!),
+                                      if (player.error ?? player.audio.error
+                                          case final String error)
+                                        _banner(error),
+                                      Expanded(
+                                        child: AnimatedSwitcher(
+                                          // The dock/nav reappear on exit. Fade in the
+                                          // new page without squeezing an outgoing
+                                          // full player into its smaller viewport.
+                                          layoutBuilder: (current, _) =>
+                                              current ?? const SizedBox.shrink(),
+                                          duration: Duration(
+                                            milliseconds:
+                                                player.settings.reducedMotion ||
+                                                    MediaQuery.disableAnimationsOf(
+                                                      context,
                                                     )
-                                                  : _nowPlaying(),
-                                          },
+                                                ? 0
+                                                : 180,
+                                          ),
+                                          child: KeyedSubtree(
+                                            key: ValueKey((
+                                              destination,
+                                              showLyrics,
+                                            )),
+                                            child: switch (destination) {
+                                              _Page.library => _library(),
+                                              _Page.telegram => _telegram(),
+                                              _Page.settings => _settingsPage(),
+                                              _Page.nowPlaying =>
+                                                showLyrics
+                                                    ? LyricsView(
+                                                        backgroundColor:
+                                                            Colors.transparent,
+                                                        player: player,
+                                                        repository: lyrics,
+                                                        files: widget.dataFiles,
+                                                        loadEmbedded: telegram
+                                                            .embeddedLyrics,
+                                                        artwork: Artwork(
+                                                          seed:
+                                                              player
+                                                                  .current
+                                                                  ?.title ??
+                                                              'Auralis',
+                                                          telegram: telegram,
+                                                          track: player.current,
+                                                        ),
+                                                        onBack: () =>
+                                                            setState(() {
+                                                              showLyrics = false;
+                                                            }),
+                                                      )
+                                                    : _nowPlaying(),
+                                            },
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          if (wide && destination != 3)
-                            Container(
-                              width: (box.maxWidth * .23).clamp(280, 360),
-                              margin: const EdgeInsets.fromLTRB(0, 20, 20, 20),
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: _colors.surfaceContainerLow,
-                                borderRadius: BorderRadius.circular(28),
+                            if (wide &&
+                                (destination == _Page.library ||
+                                    destination == _Page.telegram))
+                              Container(
+                                width: (box.maxWidth * .23).clamp(280, 360),
+                                margin: const EdgeInsets.fromLTRB(0, 20, 20, 20),
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: _colors.surfaceContainerLow,
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                                child: _nowPlaying(compact: true),
                               ),
-                              child: _nowPlaying(compact: true),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    if (destination != 3 && player.current != null)
-                      _transport(box.maxWidth < 600),
-                  ],
+                      if (destination != _Page.nowPlaying && player.current != null)
+                        _transport(box.maxWidth < 600),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -490,19 +516,12 @@ class _PlayerShellState extends State<PlayerShell>
   );
 
   Widget _bottomNavigation() => NavigationBar(
-    height: 56,
-    selectedIndex: destination,
-    labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-    onDestinationSelected: (i) {
-      if (i == 4) {
-        _settings();
-        return;
-      }
-      setState(() {
-        destination = i;
-        search.clear();
-      });
-    },
+    key: const ValueKey('app-navigation'),
+    height: 80,
+    backgroundColor: _colors.surfaceContainerLowest,
+    selectedIndex: destination.index,
+    labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+    onDestinationSelected: (i) => _navigate(_Page.values[i]),
     destinations: const [
       NavigationDestination(
         icon: Icon(Icons.library_music_rounded),
@@ -513,11 +532,6 @@ class _PlayerShellState extends State<PlayerShell>
         icon: Icon(Icons.send_rounded),
         label: 'Telegram',
         tooltip: 'Telegram',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.queue_music_rounded),
-        label: 'Play queue',
-        tooltip: 'Play queue',
       ),
       NavigationDestination(
         icon: Icon(Icons.album_rounded),
@@ -583,10 +597,9 @@ class _PlayerShellState extends State<PlayerShell>
               : 32,
         ),
         for (final (i, icon, label) in [
-          (0, Icons.library_music_rounded, 'Library'),
-          (1, Icons.send_rounded, 'Telegram'),
-          (2, Icons.queue_music_rounded, 'Play queue'),
-          (3, Icons.album_rounded, 'Now playing'),
+          (_Page.library, Icons.library_music_rounded, 'Library'),
+          (_Page.telegram, Icons.send_rounded, 'Telegram'),
+          (_Page.nowPlaying, Icons.album_rounded, 'Now playing'),
         ])
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -599,10 +612,7 @@ class _PlayerShellState extends State<PlayerShell>
                 borderRadius: BorderRadius.circular(18),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(18),
-                  onTap: () => setState(() {
-                    destination = i;
-                    search.clear();
-                  }),
+                  onTap: () => _navigate(i),
                   child: Padding(
                     padding: EdgeInsets.symmetric(
                       horizontal: 14,
@@ -649,8 +659,13 @@ class _PlayerShellState extends State<PlayerShell>
             ),
           ),
         IconButton(
-          onPressed: _settings,
+          onPressed: () => _navigate(_Page.settings),
           tooltip: 'Settings',
+          style: IconButton.styleFrom(
+            backgroundColor: destination == _Page.settings
+                ? _colors.primaryContainer
+                : Colors.transparent,
+          ),
           icon: const Icon(Icons.tune_rounded),
         ),
       ],
@@ -662,7 +677,7 @@ class _PlayerShellState extends State<PlayerShell>
       final inlineCounts =
           box.maxWidth >= 560 &&
           MediaQuery.textScalerOf(context).scale(12) <= 16;
-      return destination == 3
+      return destination == _Page.nowPlaying
           ? Row(
               children: [
                 IconButton.filledTonal(
@@ -682,38 +697,36 @@ class _PlayerShellState extends State<PlayerShell>
                   ),
                 ),
                 // Full-screen phones need these routes while navigation is hidden.
-                if (MediaQuery.sizeOf(context).width < 900) ...[
+                if (MediaQuery.sizeOf(context).width < 900)
                   IconButton(
-                    onPressed: _settings,
+                    onPressed: () => _navigate(_Page.settings),
                     tooltip: 'Settings',
                     icon: const Icon(Icons.tune_rounded),
                   ),
-                  IconButton.filledTonal(
-                    key: const ValueKey('now-playing-queue'),
-                    tooltip: 'Queue',
-                    onPressed: () => setState(() {
-                      destination = 2;
-                      showLyrics = false;
-                    }),
-                    icon: const Icon(Icons.queue_music_rounded),
-                  ),
-                ],
               ],
             )
           : Row(
               children: [
+                if (destination == _Page.settings) ...[
+                  IconButton(
+                    tooltip: 'Back to Library',
+                    onPressed: _back,
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (!short)
                         Text(
-                          [
-                            'YOUR COLLECTION',
-                            'MUSIC IN YOUR CHANNELS',
-                            'KEEP THE GOOD ONES GOING',
-                            'IN THE MOMENT',
-                          ][destination],
+                          switch (destination) {
+                            _Page.library => 'YOUR COLLECTION',
+                            _Page.telegram => 'MUSIC IN YOUR CHANNELS',
+                            _Page.settings => 'MAKE IT YOURS',
+                            _Page.nowPlaying => 'IN THE MOMENT',
+                          },
                           style: TextStyle(
                             fontSize: 9,
                             letterSpacing: 1.7,
@@ -723,12 +736,12 @@ class _PlayerShellState extends State<PlayerShell>
                       if (!short) const SizedBox(height: 7),
                       Text(
                         key: const ValueKey('page-title'),
-                        [
-                          'Library',
-                          'Telegram',
-                          'Play queue',
-                          'Now playing',
-                        ][destination],
+                        switch (destination) {
+                          _Page.library => 'Library',
+                          _Page.telegram => 'Telegram',
+                          _Page.settings => 'Settings',
+                          _Page.nowPlaying => 'Now playing',
+                        },
                         style: TextStyle(
                           fontSize: short
                               ? 24
@@ -739,14 +752,14 @@ class _PlayerShellState extends State<PlayerShell>
                           letterSpacing: -1.4,
                         ),
                       ),
-                      if (destination == 0 && !inlineCounts) ...[
+                      if (destination == _Page.library && !inlineCounts) ...[
                         const SizedBox(height: 3),
                         _libraryCounts(),
                       ],
                     ],
                   ),
                 ),
-                if (destination == 0) ...[
+                if (destination == _Page.library) ...[
                   if (inlineCounts)
                     Padding(
                       padding: const EdgeInsets.only(right: 10),
@@ -1382,7 +1395,6 @@ class _PlayerShellState extends State<PlayerShell>
   Widget _trackTile(
     Track track, {
     required VoidCallback onPlay,
-    bool queued = false,
   }) {
     final active = player.current?.id == track.id;
     return Padding(
@@ -1435,24 +1447,14 @@ class _PlayerShellState extends State<PlayerShell>
                   clockText(track.duration),
                   style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
                 ),
-              if (queued)
-                SizedBox(
-                  width: 30,
-                  child: Icon(
-                    Icons.drag_handle_rounded,
-                    size: 19,
-                    color: _colors.onSurfaceVariant,
-                  ),
-                )
-              else
-                IconButton(
-                  tooltip: 'Add ${track.title} to queue',
-                  onPressed: () {
-                    player.enqueue(track);
-                    _notice('Added to queue');
-                  },
-                  icon: const Icon(Icons.playlist_add_rounded, size: 20),
-                ),
+              IconButton(
+                tooltip: 'Add ${track.title} to queue',
+                onPressed: () {
+                  player.enqueue(track);
+                  _notice('Added to queue');
+                },
+                icon: const Icon(Icons.playlist_add_rounded, size: 20),
+              ),
               _trackActions(track),
             ],
           ),
@@ -1511,7 +1513,7 @@ class _PlayerShellState extends State<PlayerShell>
                         TextButton.icon(
                           onPressed: () => setState(() {
                             search.clear();
-                            destination = 0;
+                            destination = _Page.library;
                           }),
                           icon: const Icon(
                             Icons.library_music_rounded,
@@ -1626,51 +1628,6 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _queue() => Column(
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: Text(
-              '${player.queue.length} tracks',
-              style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 12),
-            ),
-          ),
-          IconButton(
-            onPressed: player.queue.isEmpty ? null : player.shuffle,
-            tooltip: 'Shuffle upcoming tracks',
-            icon: const Icon(Icons.shuffle_rounded),
-          ),
-          TextButton(
-            onPressed: player.queue.isEmpty ? null : () => player.clear(),
-            child: const Text('Clear'),
-          ),
-        ],
-      ),
-      Expanded(
-        child: player.queue.isEmpty
-            ? _empty(
-                Icons.queue_music_rounded,
-                'A little more of what you love',
-                'Add tracks from your Library to build a queue.',
-              )
-            : ReorderableListView.builder(
-                itemCount: player.queue.length,
-                buildDefaultDragHandles: false,
-                onReorderItem: player.reorder,
-                itemBuilder: (context, i) => ReorderableDragStartListener(
-                  key: ValueKey('$i:${player.queue[i].id}'),
-                  index: i,
-                  child: _trackTile(
-                    player.queue[i],
-                    queued: true,
-                    onPlay: () => player.playAt(i),
-                  ),
-                ),
-              ),
-      ),
-    ],
-  );
   Widget _miniNowPlaying(BoxConstraints box, Track? track) {
     final coverSize = math.min(
       200.0,
@@ -1730,25 +1687,12 @@ class _PlayerShellState extends State<PlayerShell>
                 onPressed: track == null
                     ? null
                     : () => setState(() {
-                        destination = 3;
+                        destination = _Page.nowPlaying;
                         showLyrics = true;
                         search.clear();
                       }),
                 icon: const Icon(Icons.lyrics_rounded, size: 17),
                 label: const Text('Lyrics'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: FilledButton.tonalIcon(
-                key: const ValueKey('now-playing-queue'),
-                onPressed: () => setState(() {
-                  destination = 2;
-                  showLyrics = false;
-                  search.clear();
-                }),
-                icon: const Icon(Icons.queue_music_rounded, size: 17),
-                label: const Text('Queue'),
               ),
             ),
           ],
@@ -1995,28 +1939,7 @@ class _PlayerShellState extends State<PlayerShell>
                     clockText(audio.position),
                     style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      track == null
-                          ? 'Nothing playing'
-                          : switch (track.mime.toLowerCase()) {
-                              'audio/x-flac' || 'audio/flac' => 'FLAC',
-                              'audio/mpeg' || 'audio/mp3' => 'MP3',
-                              'audio/mp4' || 'audio/x-m4a' => 'M4A',
-                              'application/octet-stream' => 'Original audio',
-                              _ =>
-                                track.mime.startsWith('audio/')
-                                    ? track.mime.substring(6).toUpperCase()
-                                    : 'Original audio',
-                            },
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 10, color: _colors.primary),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
+                  const Spacer(),
                   Text(
                     clockText(audio.duration),
                     style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
@@ -2471,10 +2394,7 @@ class _PlayerShellState extends State<PlayerShell>
         borderRadius: BorderRadius.circular(20),
         onTap: player.current == null
             ? null
-            : () => setState(() {
-                destination = 3;
-                search.clear();
-              }),
+            : () => _navigate(_Page.nowPlaying),
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(
@@ -2636,10 +2556,7 @@ class _PlayerShellState extends State<PlayerShell>
         borderRadius: BorderRadius.circular(14),
         onTap: player.current == null
             ? null
-            : () => setState(() {
-                destination = 3;
-                search.clear();
-              }),
+            : () => _navigate(_Page.nowPlaying),
         child: Row(
           children: [
             ClipRRect(
@@ -2770,96 +2687,80 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Future<void> _settings() => showDialog<void>(
-    context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, update) => AlertDialog(
-        title: const Text('Make it yours'),
-        content: SizedBox(
-          width: 360,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.bar_chart_rounded),
-                  title: const Text('Listening stats'),
-                  subtitle: const Text(
-                    'Listening time, rankings and data export',
-                  ),
-                  onTap: () async {
-                    await _stats();
-                    if (dialogContext.mounted) update(() {});
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.backup_outlined),
-                  title: const Text('Backup & Restore'),
-                  subtitle: const Text('Stats, collections and preferences'),
-                  onTap: () async {
-                    await _stats(backup: true);
-                    if (dialogContext.mounted) update(() {});
-                  },
-                ),
-                const Divider(),
-                if (widget.updater != null) ...[
-                  UpdateSettings(updater: widget.updater!),
-                  const Divider(),
-                ],
-                Text(
-                  'Auralis ${widget.updater?.currentVersion ?? '0.1.56'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
-                  style: TextStyle(
-                    color: _colors.onSurfaceVariant,
-                    fontSize: 12,
-                    height: 1.6,
-                  ),
-                ),
-                if (telegram.ready)
-                  TextButton(
-                    onPressed: telegram.busy
-                        ? null
-                        : () async {
-                            await player.clear();
-                            await telegram.logout();
-                            if (telegram.ready && telegram.error != null) {
-                              _notice(telegram.error!);
-                            }
-                            if (!telegram.ready) {
-                              player.settings.selectedChannels = [];
-                              try {
-                                await player.settings.save();
-                              } catch (_) {
-                                _notice(
-                                  'Signed out, but the old channel selection could not be removed from settings.',
-                                );
-                              }
-                            }
-                            if (dialogContext.mounted) {
-                              Navigator.pop(dialogContext);
-                            }
-                            if (mounted && !telegram.ready) _openTelegram();
-                          },
-                    child: const Text('Sign out of Telegram'),
-                  ),
-              ],
+  Widget _settingsPage() => Align(
+    alignment: Alignment.topCenter,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: ListView(
+        key: const ValueKey('settings-page'),
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.bar_chart_rounded),
+            title: const Text('Listening stats'),
+            subtitle: const Text('Listening time, rankings and data export'),
+            onTap: () => _stats(),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.backup_outlined),
+            title: const Text('Backup & Restore'),
+            subtitle: const Text('Stats, collections and preferences'),
+            onTap: () => _stats(backup: true),
+          ),
+          const Divider(),
+          if (widget.updater != null) ...[
+            UpdateSettings(updater: widget.updater!),
+            const Divider(),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            'Auralis ${widget.updater?.currentVersion ?? '0.1.60'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+            style: TextStyle(
+              color: _colors.onSurfaceVariant,
+              fontSize: 12,
+              height: 1.6,
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => showLicensePage(
-              context: context,
-              applicationName: 'Auralis',
-              applicationVersion: widget.updater?.currentVersion ?? '0.1.56',
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => showLicensePage(
+                context: context,
+                applicationName: 'Auralis',
+                applicationVersion: widget.updater?.currentVersion ?? '0.1.60',
+              ),
+              child: const Text('Licenses'),
             ),
-            child: const Text('Licenses'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Done'),
-          ),
+          if (telegram.ready)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: telegram.busy
+                    ? null
+                    : () async {
+                        await player.clear();
+                        await telegram.logout();
+                        if (telegram.ready && telegram.error != null) {
+                          _notice(telegram.error!);
+                        }
+                        if (!telegram.ready) {
+                          player.settings.selectedChannels = [];
+                          try {
+                            await player.settings.save();
+                          } catch (_) {
+                            _notice(
+                              'Signed out, but the old channel selection could not be removed from settings.',
+                            );
+                          }
+                          if (mounted) _openTelegram();
+                        }
+                      },
+                child: const Text('Sign out of Telegram'),
+              ),
+            ),
         ],
       ),
     ),
