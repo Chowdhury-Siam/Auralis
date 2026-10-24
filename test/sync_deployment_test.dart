@@ -11,7 +11,9 @@ import 'updater_test.dart' show Headers, Response;
 
 class DeployRequest extends Fake implements HttpClientRequest {
   DeployRequest(this.method,this.uri,this.reply);
+  @override
   final String method;
+  @override
   final Uri uri;
   final Response Function(DeployRequest) reply;
   final bytes=<int>[];
@@ -61,9 +63,11 @@ void main() {
         if(r.uri.host=='api.cloudflare.com') {
           expect(r.headers.value('authorization'),'Bearer cloudflare-token');
           if(r.uri.path.endsWith('/workers/subdomain')) return response({'success':true,'result':{'subdomain':'test-account'}});
-          if(r.uri.path.endsWith('/settings')) return response(existing?{'success':true,'result':{'bindings':[
-            {'name':'ROOM','class_name':'AuralisRoom'}, {'name':'TURSO_DATABASE_URL','text':'https://auralis-test.turso.io'},
-          ]}}:{'success':false},status:existing?200:404);
+          if(r.uri.path.endsWith('/settings')) {
+            return response(existing?{'success':true,'result':{'bindings':[
+              {'name':'ROOM','class_name':'AuralisRoom'}, {'name':'TURSO_DATABASE_URL','text':'https://auralis-test.turso.io'},
+            ]}}:{'success':false},status:existing?200:404);
+          }
           if(r.method=='PUT') {
             uploads++;
             final body=utf8.decode(r.bytes);
