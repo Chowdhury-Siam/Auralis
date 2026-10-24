@@ -172,17 +172,17 @@ void main() {
         }
         expect(find.descendant(of: dock, matching: find.byIcon(Icons.repeat_rounded)), findsNothing);
         final seek = find.descendant(of: dock, matching: find.byKey(const ValueKey('playback-seek')));
-        await tester.drag(seek, const Offset(50, 0), duration: const Duration(milliseconds: 500));
+        await tester.timedDrag(seek, const Offset(50, 0), const Duration(milliseconds: 500));
         await tester.pump(const Duration(milliseconds: 300));
         expect(audio.position, greaterThan(Duration.zero));
         expect(player.current, same(track));
         final preview = find.descendant(of: dock, matching: find.byKey(const ValueKey('open-current-track')));
-        await tester.drag(preview, Offset(direction * 35, 0), duration: const Duration(milliseconds: 700));
+        await tester.timedDrag(preview, Offset(direction * 35, 0), const Duration(milliseconds: 700));
         await tester.pump(const Duration(milliseconds: 300));
         expect(player.current, same(track), reason: 'Short swipes snap back');
         expect(audio.playing, isTrue);
         final confirm = tester.widget<Dismissible>(find.byType(Dismissible)).confirmDismiss!;
-        await tester.drag(preview, Offset(direction * size.width * .8, 0), duration: const Duration(milliseconds: 600));
+        await tester.timedDrag(preview, Offset(direction * size.width * .8, 0), const Duration(milliseconds: 600));
         await tester.pump(const Duration(milliseconds: 250));
         // stop() closes the real loopback proxy outside the fake test clock.
         await tester.runAsync(() async {
