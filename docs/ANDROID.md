@@ -14,7 +14,7 @@ Download **auralis-android-arm64-v8a-development** or **auralis-android-arm64-v8
 
 1. Commit this complete source to `main`. Run the signing setup below once for automatic retained-key signing, or keep an existing custom key. Without either, compilation still uses release mode with an explicitly labelled development signature.
 2. Open **Actions → Android APK build → Run workflow**, choose `main`, and keep **arm64-v8a** for a phone APK. A push to `main` also runs it automatically. Re-running an old commit still uses that commit's old workflow.
-3. Once analysis, tests, native checks, and APK signature/alignment verification succeed, the separate publishing job attaches the built APK to `v<pubspec version>`. An existing version can be completed by a publishing-only change when the Android app sources still match its tag. Different app sources require a new version; tags are never moved. This recovery source uses **0.1.60+61** to avoid the existing 0.1.43 assets/tag.
+3. Once analysis, tests, native checks, and APK signature/alignment verification succeed, the separate publishing job attaches the built APK to `v<pubspec version>`. An existing version can be completed by a publishing-only change when the Android app sources still match its tag. Different app sources require a new version; tags are never moved. This recovery source uses **0.1.63+64** to avoid the existing 0.1.43 assets/tag.
 
 If Android finishes first for a new version, it creates a **draft**, uploads and verifies its Android assets, and leaves publication to the existing Windows publisher. If Windows finishes first, Android appends its assets to the published release. Both publishing jobs use the same concurrency group. For a brand-new version started manually only on Android, also run the Windows workflow for that same commit to publish the shared draft.
 
@@ -28,7 +28,7 @@ The APK build keeps read-only repository permission. Only the guarded publishing
 
 1. Create a [fine-grained GitHub token](https://github.com/settings/personal-access-tokens/new), restricted to **Chowdhury-Siam/Auralis**, with repository **Secrets: Read and write**. Add it to this repository's **Settings → Secrets and variables → Actions** as `ANDROID_SIGNING_SETUP_TOKEN`.
 2. Commit this complete source to `main`, then open **Actions → Set up Android signing → Run workflow** on `main`.
-3. The action generates a private RSA-4096 key with a random password and saves the key/alias/password together in the encrypted `ANDROID_SIGNING_IDENTITY` repository secret. It then starts a fresh **Android APK build** on `main`, which reads that identity and produces `auralis-0.1.60-android-arm64-v8a-release.apk`. Future builds reuse it automatically. No manual keytool command or four-secret setup is needed.
+3. The action generates a private RSA-4096 key with a random password and saves the key/alias/password together in the encrypted `ANDROID_SIGNING_IDENTITY` repository secret. It then starts a fresh **Android APK build** on `main`, which reads that identity and produces `auralis-0.1.63-android-arm64-v8a-release.apk`. Future builds reuse it automatically. No manual keytool command or four-secret setup is needed.
 
 You can remove or revoke `ANDROID_SIGNING_SETUP_TOKEN` after successful setup; normal builds only need the saved identity. GitHub's default workflow token cannot manage repository secrets, so that one-time Secrets permission is needed. See [GitHub's repository secret API](https://docs.github.com/en/rest/actions/secrets#create-or-update-a-repository-secret). A separate build is queued after setup because repository secrets are read when a workflow is queued, as documented in [Secrets reference](https://docs.github.com/en/actions/reference/security/secrets).
 
@@ -113,7 +113,7 @@ This is a packaging/CI-only correction; the application version is unchanged.
 
 `Existing asset differs: auralis-0.1.43-android-arm64-v8a-debug.apk` means that a file with that version/ABI/signing name already exists with different bytes. Rebuilding identical source is not guaranteed to reproduce APK bytes, especially when a fresh runner generates a different development signing key. The former publisher rejected this in drafts as well as published releases.
 
-Commit the complete **0.1.60+61** source to `main` and let both workflows run for that commit. It targets a new `v0.1.60` release without deleting or moving `v0.1.43`. Re-running an old 0.1.43 job still uses its old script/version. The corrected publisher can also refresh only its own conflicting Android assets while a release remains a draft, with local checksum/provenance validation and post-upload GitHub digest/size checks. Published downloads remain protected. Signing stays optional; the draft retry fix does not make development keys consistent between runners. Use a persistent release key for Android updates that preserve installed app data.
+Commit the complete **0.1.63+64** source to `main` and let both workflows run for that commit. It targets a new `v0.1.63` release without deleting or moving `v0.1.43`. Re-running an old 0.1.43 job still uses its old script/version. The corrected publisher can also refresh only its own conflicting Android assets while a release remains a draft, with local checksum/provenance validation and post-upload GitHub digest/size checks. Published downloads remain protected. Signing stays optional; the draft retry fix does not make development keys consistent between runners. Use a persistent release key for Android updates that preserve installed app data.
 
 
 ## 0.1.49 source update
@@ -147,6 +147,30 @@ Playing, the lyrics view, or the player dock. The played waveform, seek thumb,
 timestamps, and seeking remain. Audio buffering and all artwork/lyric blur and
 motion effects are preserved. This source targets v0.1.51.
 
+
+## 0.1.61 artwork gestures and lyrics waiting state
+
+Swipe artwork left/right in Now Playing or the desktop mini player to select the
+next/previous song. Scrolling the mouse wheel over artwork does the same; tiny
+wheel movements are accumulated and an inertial burst triggers one change.
+Gestures stay inside the artwork area, respect queue boundaries and repeat,
+and preserve the existing timeline, volume, next-cover tap and hover controls.
+Dragging has direct visual feedback and cover changes fade; reduced motion
+keeps navigation available without the movement/transition.
+
+Before the first timed lyric or during an explicitly blank timed line, all
+lyric text is blurred and a decorative music pulse appears. Normal highlighting
+resumes at the next non-empty line, including after seeking. Instrumental tracks
+use the same pulse. The effect is decorative, not an audio-amplitude measurement.
+It paints only a small canvas and pauses while playback is paused/buffering,
+when the app is backgrounded, when its ticker is disabled or when reduced motion
+is enabled. It is disposed on leaving the view. Static lyrics and all controls
+remain available. Untimed gaps are not guessed from elapsed time.
+
+Widget regressions cover gesture navigation/edges, wheel inertia, lyric intros,
+blank gaps, seeking and animation lifecycle/reduced motion. Python/Dart source
+checks can run locally; the Flutter widget suite and device rendering require
+CI or a Flutter-equipped device environment and were not run here.
 
 ## 0.1.58 navigation and Settings
 
@@ -210,3 +234,13 @@ update provider; regression tests cover Android asset selection, automatic
 verified download without silent install, installer retries, native bridge
 arguments, credential read-back failure, and fresh-session recovery. A full APK
 build and device installation test are still required in CI/on Android.
+
+## 0.1.62 system artwork and lyrics cleanup
+
+Android media metadata now includes a private file URI for the current cover, with preview/full-cover updates and late-request protection. It reuses the Telegram cover reader and metadata availability notifications. Covers are capped at the existing 4 MiB limit, cached under the app cache directory (at most 32 images), and downscaled by audio_service to 512×512 for system controls. Auralis’s monochrome logo replaces the generic note in the media notification. No new storage permission is needed.
+
+The lyrics page keeps one top options menu, moves Back to the top and removes the source footer. Opening it checks embedded lyrics first, then automatically looks up missing or unreadable lyrics on LRCLIB; imported/pasted words take precedence. Offline/no-match states retain retry and import/paste actions. Source/About/TDLib version is 0.1.62+63 / 0.1.62 on Android and Windows. Flutter/device checks remain unrun locally; source/syntax checks are recorded in VERIFICATION.md.
+
+## 0.1.63 rounded swipe-to-stop dock
+
+The bottom player is an inset card with 28-pixel corners, seeking and previous/play/next controls. Repeat, sleep timer and volume controls are removed from this dock; they remain on Now Playing. Swipe the card horizontally in either direction to fully stop playback and dismiss it. The existing clear action stops audio and the Telegram stream, cancels the sleep timer and clears the playback queue. Short swipes snap back; dragging the seek bar seeks as before. A semantic dismiss action provides an accessible equivalent. Source/About/TDLib version: 0.1.63+64 / 0.1.63 on Android and Windows.
