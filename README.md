@@ -22,7 +22,7 @@ Bring music from your Telegram channels into one library, build playlists, and f
 </div>
 
 > [!TIP]
-> **Use your own Telegram account and API credentials.** Select channels you already have access to, then open Library to browse their music together. Local music importing is not included.
+> **Sign in with your own Telegram account.** Select channels you already have access to, then open Library to browse their music together. Local music importing is not included.
 
 ---
 
@@ -147,11 +147,12 @@ Android APKs now always use optimized release mode. Run **Set up Android signing
 
 ### First launch
 
-1. Create your own application at [my.telegram.org](https://my.telegram.org) and obtain its **API ID** and **API hash**.
-2. Open **Telegram** in Auralis and enter those credentials locally.
-3. Sign in with your phone number, Telegram login code, and two-step verification password if requested.
-4. Select one or more channels and choose **Open Library**.
-5. Wait for the selected channels' audio posts to load, then choose a track to play.
+1. Open **Telegram** in Auralis. Release builds configured with the application's Telegram credentials do not ask for an API ID or API hash.
+2. Choose your country/calling code and enter your phone number, or paste a full international number beginning with `+`. Enter the Telegram login code and two-step password if requested. The code page shows the destination number; use **Change number** to correct it and request a replacement code.
+3. Select one or more channels and choose **Open Library**.
+4. Wait for the selected channels' audio posts to load, then choose a track to play.
+
+Maintainers must set the two [Telegram build secrets](docs/TELEGRAM_BUILD.md) before building releases. Local/PR builds without application credentials retain manual API setup using an application registered at [my.telegram.org](https://my.telegram.org).
 
 Use **Load more** in Telegram to discover more accessible channels and **Refresh** in Library to scan for new music or retry partial failures. Auralis respects your account's existing channel access; it does not join channels automatically.
 
@@ -196,7 +197,7 @@ The bottom player is a rounded card with seeking and previous/play/next. Swipe i
 
 Embedded lyrics load when supported tags are available. Use **Lyrics options** to retry reading the music file, import `.lrc`, or paste text. If embedded lyrics are missing or unreadable, LRCLIB is searched automatically using the displayed title, artist, and duration. **Find lyrics** retries the lookup. Back and the single options menu are at the top; the source footer is removed. **Follow song** returns to automatic scrolling after you browse elsewhere.
 
-Favorites, playlists, listening statistics, recent music, channels and shared preferences can sync across Android and Windows through your own private service. See [multi-device sync setup](docs/SYNC.md). Lyrics use a bounded session cache and are not included in backups. Word-level karaoke, automatic translation, and permanent lyrics storage are not included.
+Favorites, playlists, listening statistics, recent music, channels and shared preferences can sync across Android and Windows through your own Cloudflare Worker and Turso database. Deploy/redeploy it from Settings → Multi-device sync. See [multi-device sync setup](docs/SYNC.md). Lyrics use a bounded session cache and are not included in backups. Word-level karaoke, automatic translation, and permanent lyrics storage are not included.
 
 See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality notes](docs/GUIDE.md#streaming-audio-quality).
 
@@ -305,7 +306,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.66+67**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.69+70**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
