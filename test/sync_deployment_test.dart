@@ -46,10 +46,24 @@ void main() {
   test('deployment rejects non-Turso endpoints before sending credentials',() async {
     final client=DeployClient((_)=>throw StateError('must not send'));
     final service=SyncDeployment(client:client);addTearDown(service.close);
-    for(final url in ['http://auralis-test.turso.io','https://evil.example','libsql://a.turso.io/path','libsql://a.turso.io:443']) {
+    for(final url in [
+      'http://auralis-test.turso.io', 'https://evil.example',
+      'https://a.turso.io@evil.example', 'https://user@a.turso.io',
+      'libsql://a.turso.io/path', 'https://a.turso.io?token=x',
+      'https://a.turso.io#fragment', 'https://a.turso.io:8443',
+      for(final scheme in ['https', 'libsql', 'turso']) '$scheme://a.turso.io:443',
+    ]) {
       await expectLater(service.deploy(config(database:url),(_){}),throwsFormatException);
     }
     expect(client.requests,isEmpty);
+  });
+  test('deployment accepts Turso URL schemes and optional trailing slash',() {
+    for(final scheme in ['https', 'libsql', 'turso']) {
+      for(final suffix in ['', '/']) {
+        expect(config(database:'$scheme://auralis-test.turso.io$suffix').databaseHttp(),
+          'https://auralis-test.turso.io');
+      }
+    }
   });
   for(final existing in [false,true]) {
     test('deployment ${existing?'updates':'creates'} Cloudflare with bundled modules and Turso bindings',() async {
