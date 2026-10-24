@@ -1,0 +1,15 @@
+name = "auralis-sync"
+main = "worker.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+AURALIS_VERSION = "0.1.64"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "AuralisRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AuralisRoom"]
