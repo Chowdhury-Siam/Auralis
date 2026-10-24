@@ -52,6 +52,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build gperf libssl-dev zlib1g-dev
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+      - name: Prepare Telegram build credentials
+        env:
+          TELEGRAM_API_ID: ${{ github.event_name != 'pull_request' && secrets.TELEGRAM_API_ID || '' }}
+          TELEGRAM_API_HASH: ${{ github.event_name != 'pull_request' && secrets.TELEGRAM_API_HASH || '' }}
+        run: python3 tool/telegram-build-config.py --output "$RUNNER_TEMP/auralis-telegram-build.json"
       - name: Resolve locked dependencies
         run: flutter pub get --enforce-lockfile
       - uses: actions/setup-node@v4
@@ -60,7 +65,7 @@ jobs:
       - name: Check release notes, sync service and workflow policy
         run: |
           python tool/release-notes.py
-          node --test cloud/worker/worker.test.mjs tool/release-policy.test.cjs
+          node --test cloud/worker/worker.test.mjs cloud/worker/turso.test.mjs cloud/worker/deploy.test.mjs tool/release-policy.test.cjs
       - name: Static analysis
         run: flutter analyze --no-pub --fatal-infos
       - name: Automated tests
@@ -105,7 +110,7 @@ jobs:
           if [ "$SIGNED" = true ]; then flavor=release; else flavor=development-release; fi
           # --target-platform alone can leave third-party native libraries for
           # other ABIs in the APK; Flutter's ABI split enforces a single ABI.
-          flutter build apk --release --no-pub --split-per-abi --target-platform "$target"
+          flutter build apk --release --no-pub --split-per-abi --target-platform "$target" --dart-define-from-file="$RUNNER_TEMP/auralis-telegram-build.json"
           mkdir -p dist/android
           version=$(sed -n 's/^version: \([^+]*\)+.*/\1/p' pubspec.yaml)
           source_apk="build/app/outputs/flutter-apk/app-$ABI-release.apk"
@@ -121,7 +126,7 @@ jobs:
           (cd dist/android && sha256sum *.apk > SHA256SUMS.txt)
       - name: Remove temporary signing files
         if: always()
-        run: rm -f android/key.properties android/auralis-release.jks
+        run: rm -f android/key.properties android/auralis-release.jks "$RUNNER_TEMP/auralis-telegram-build.json"
       - name: Save APK and native provenance
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
