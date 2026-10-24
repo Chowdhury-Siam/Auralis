@@ -90,6 +90,9 @@ Future<void> main() async {
     final sync = SyncController(settings, syncVault,
       onApplied: player.refreshSettings,
       paused: () => player.restoringData,
+      deploymentVault: Platform.isAndroid
+          ? AndroidSecretVault(File(p.join(root.path, 'sync-deployment.aesgcm')))
+          : SecretVault(File(p.join(root.path, 'sync-deployment.dpapi'))),
     );
     telegram.isStreaming = player.proxy.isStreaming;
     AppUpdater? updater;
@@ -161,7 +164,9 @@ Future<void> main() async {
     );
     updater?.start();
     unawaited(sync.start());
-    if (await vault.file.exists()) unawaited(telegram.start());
+    if (telegram.hasApplicationCredentials || await vault.file.exists()) {
+      unawaited(telegram.start());
+    }
   } catch (_) {
     await lock?.close();
     runApp(
