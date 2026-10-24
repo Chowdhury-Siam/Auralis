@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,6 +13,7 @@ import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yaml/yaml.dart';
 
@@ -283,6 +285,76 @@ void main() {
       );
     },
   );
+
+  test('system artwork upgrades previews, retries and ignores stale tracks and disposal', () async {
+    final dir = await Directory.systemTemp.createTemp('auralis-media-art');
+    final preview = File('test/fixtures/cover.png').readAsBytesSync();
+    final full = File('test/fixtures/theme-teal.png').readAsBytesSync();
+    final a = Track(id: 'a', title: 'First', artist: 'Artist', source: 'Channel', coverPreview: preview);
+    const b = Track(id: 'b', title: 'Second', artist: 'Artist', source: 'Channel');
+    const c = Track(id: 'c', title: 'No art', artist: 'Artist', source: 'Channel');
+    final audio = FakeAudio();
+    final player = PlayerController(audio, TelegramStreamProxy((_) async => {}), MemorySettings());
+    final changes = ChangeNotifier();
+    final pendingA = Completer<Uint8List?>(), pendingB = Completer<Uint8List?>();
+    Future<Uint8List?>? nextCover = pendingA.future;
+    final handler = AndroidAudioHandler(player,
+      artworkDirectory: dir,
+      artworkChanges: changes,
+      loadArtwork: (_) => nextCover,
+    );
+    addTearDown(() async {
+      await handler.close();
+      await player.shutdown();
+      changes.dispose();
+      await dir.delete(recursive: true);
+    });
+    Future<MediaItem> withArt(String id, {Uri? differentFrom}) => handler.mediaItem
+      .firstWhere((item) => item?.id == id && item?.artUri != null && item?.artUri != differentFrom)
+      .then((item) => item!).timeout(const Duration(seconds: 3));
+
+    await player.play(a, from: [a, b, c]);
+    final first = await withArt(a.id);
+    expect(first.artUri!.scheme, 'file');
+    expect(await File.fromUri(first.artUri!).readAsBytes(), preview);
+    expect(handler.queue.value.first.artUri, first.artUri);
+    pendingA.complete(full);
+    final upgraded = await withArt(a.id, differentFrom: first.artUri);
+    expect(await File.fromUri(upgraded.artUri!).readAsBytes(), full);
+    // Re-publishing duration must retain the cover.
+    audio.duration = const Duration(minutes: 3);
+    audio.notifyListeners();
+    expect(handler.mediaItem.value!.artUri, upgraded.artUri);
+
+    final stale = Completer<Uint8List?>();
+    nextCover = stale.future;
+    changes.notifyListeners();
+    nextCover = pendingB.future;
+    await player.playAt(1);
+    expect(handler.mediaItem.value!.artUri, isNull, reason: 'Never carry the old cover into a new track');
+    stale.complete(preview);
+    pendingB.complete(full);
+    await withArt(b.id);
+    expect(handler.mediaItem.value!.id, b.id);
+    expect(await File.fromUri(handler.mediaItem.value!.artUri!).readAsBytes(), full);
+
+    nextCover = null;
+    await player.playAt(2);
+    expect(handler.mediaItem.value!.artUri, isNull);
+    final retry = Completer<Uint8List?>();
+    nextCover = retry.future;
+    changes.notifyListeners();
+    retry.complete(preview);
+    await withArt(c.id);
+    final lateCover = Completer<Uint8List?>();
+    nextCover = lateCover.future;
+    changes.notifyListeners();
+    final last = handler.mediaItem.value;
+    await handler.close();
+    lateCover.complete(full);
+    await Future<void>.delayed(Duration.zero);
+    expect(handler.mediaItem.value, same(last));
+  });
 
   test(
     'Android builds independently and never require Windows build results',
