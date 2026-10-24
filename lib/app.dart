@@ -533,7 +533,7 @@ class _PlayerShellState extends State<PlayerShell>
                         ),
                       ),
                       if (destination != _Page.nowPlaying && player.current != null)
-                        _transport(box.maxWidth < 600),
+                        _transport(box.maxWidth < 600, short: short),
                     ],
                   ),
                 ),
@@ -2431,7 +2431,7 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _transport(bool narrow) {
+  Widget _transport(bool narrow, {bool short = false}) {
     final audio = player.audio, duration = player.audio.duration.inMilliseconds;
     final progress = duration <= 0
         ? 0.0
@@ -2689,6 +2689,17 @@ class _PlayerShellState extends State<PlayerShell>
                     )
                   : LayoutBuilder(
                       builder: (context, box) {
+                        if (short) {
+                          return Row(
+                            children: [
+                              Expanded(child: compactPreview),
+                              const SizedBox(width: 12),
+                              Expanded(child: progressBar),
+                              const SizedBox(width: 12),
+                              transportButtons,
+                            ],
+                          );
+                        }
                         if (box.maxWidth < 960) {
                           return Column(
                             mainAxisSize: MainAxisSize.min,
@@ -2770,7 +2781,7 @@ class _PlayerShellState extends State<PlayerShell>
           ],
           const SizedBox(height: 12),
           Text(
-            'Auralis ${widget.updater?.currentVersion ?? '0.1.65'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+            'Auralis ${widget.updater?.currentVersion ?? '0.1.66'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
             style: TextStyle(
               color: _colors.onSurfaceVariant,
               fontSize: 12,
@@ -2783,7 +2794,7 @@ class _PlayerShellState extends State<PlayerShell>
               onPressed: () => showLicensePage(
                 context: context,
                 applicationName: 'Auralis',
-                applicationVersion: widget.updater?.currentVersion ?? '0.1.65',
+                applicationVersion: widget.updater?.currentVersion ?? '0.1.66',
               ),
               child: const Text('Licenses'),
             ),
