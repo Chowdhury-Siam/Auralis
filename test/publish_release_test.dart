@@ -57,6 +57,7 @@ void main() {
         'auralis-0.9.0-windows-x64-setup.exe',
         'auralis-0.9.0-source.zip',
         'SHA256SUMS.txt',
+        'release-notes.md',
       ]) {
         await File('${project.path}/dist/$name')
             .writeAsString('Harmless fixture, never executed.');
