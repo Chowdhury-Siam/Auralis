@@ -56,14 +56,28 @@ Future<void> main() async {
       TelegramStreamProxy(telegram.request),
       settings,
     );
+    final artworkDirectory = Platform.isAndroid
+        ? Directory(
+            p.join((await getTemporaryDirectory()).path, 'auralis-media-artwork'),
+          )
+        : null;
     final handler = Platform.isAndroid
         ? await AudioService.init(
-            builder: () => AndroidAudioHandler(player),
+            builder: () => AndroidAudioHandler(
+              player,
+              loadArtwork: (track) => telegram.ready && track.fileId != null
+                  ? telegram.cover(track)
+                  : null,
+              artworkDirectory: artworkDirectory,
+              artworkChanges: telegram,
+            ),
             config: const AudioServiceConfig(
               androidNotificationChannelId: 'com.auralis.siam.playback',
               androidNotificationChannelName: 'Music playback',
-              androidNotificationIcon: 'drawable/ic_stat_music',
+              androidNotificationIcon: 'drawable/ic_stat_auralis',
               androidStopForegroundOnPause: false,
+              artDownscaleWidth: 512,
+              artDownscaleHeight: 512,
             ),
           )
         : null;
