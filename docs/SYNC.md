@@ -1,39 +1,69 @@
 # Multi-device sync
 
-Auralis 0.1.64 adds a private sync space for Android and Windows. This adapts
-Yutaka's self-hosted service, offline edits and live change notifications to music
-data. It is a separate Auralis service: do not enter your Yutaka finance Worker URL.
-It uses Cloudflare Durable Objects with SQLite; no Turso database is required.
+Auralis 0.1.68 uses the same deployment pattern as Yutaka: a private Cloudflare
+Worker connected to a Turso database, with setup and redeployment inside the app.
+Auralis stores music collection/listening metadata in Turso; Cloudflare Durable
+Objects serialize requests and deliver live change notifications. Use a separate
+Auralis Worker and database, rather than your Yutaka finance Worker.
 
-## One-time deployment
+## Deploy from Android or Windows
 
-1. In Auralis, open **Settings → Multi-device sync → Create key**. Keep the copied
-   64-character key private. This is the key for your own sync space.
-2. In your Auralis GitHub repository, add these Actions **secrets**:
-   - `CLOUDFLARE_API_TOKEN`: a token created using Cloudflare's **Edit Cloudflare
-     Workers** template for your account.
-   - `CLOUDFLARE_ACCOUNT_ID`: the account ID shown in Cloudflare.
-   - `AURALIS_SYNC_KEY`: the key created in the app.
-3. Optionally add the Actions **variable** `CLOUDFLARE_WORKER_NAME`. The default is
-   `auralis-sync`; use a unique lowercase name if you already have one with that name.
-4. Commit this complete source to `main`. Run **Actions → Deploy Auralis sync
-   service → Run workflow**. The job tests the service, deploys it and sets its
-   private key. Open the deployed worker in Cloudflare and copy its HTTPS
-   `workers.dev` URL. It is also printed by the deployment while its logs remain
-   available; cleanup may remove the completed green workflow run.
-5. Enter that URL and the same key in the app and choose **Connect and merge**.
-   The key and URL are stored in Android Keystore-protected storage or Windows
-   DPAPI, separately from Telegram credentials.
-6. On your connected device, choose **Copy connection**. On another device choose
-   **Paste connection**, then **Connect and merge**. These connection details
-   include the private key; share them only with your own devices.
+1. Create a dedicated database at <https://turso.tech/>. Copy its database URL
+   (`libsql://…turso.io`, `turso://…turso.io` or its HTTPS equivalent) and a database
+   **read/write auth token**. As in the inspected Yutaka setup, this flow prepares
+   tables in an existing database; it does not create your Turso account/database
+   through a platform-management token.
+2. In Cloudflare Workers & Pages, note your 32-character Account ID and create an
+   API token using **Edit Cloudflare Workers** for that account. Initialize the
+   account's `workers.dev` subdomain once in Cloudflare if it has none.
+3. In Auralis open **Settings → Multi-device sync → Set up / redeploy cloud sync**.
+4. Enter a Worker name, Cloudflare Account ID/API token, and Turso URL/database
+   token. Auralis generates a private sync key; retain it for redeployment.
+5. Choose **Deploy and connect**. The app checks Cloudflare, prepares its four
+   non-destructive SQL schema statements, uploads the bundled Worker modules and
+   secret bindings together, enables its `workers.dev` address, verifies health
+   and database access, and connects/merges this device's library.
+6. On this device choose **Copy connection**. On each other device choose **Paste
+   connection → Connect and merge**. Pairing shares only the service URL and sync
+   key, not Cloudflare administration credentials or the Turso database token.
 
-Sign in to Telegram on each device and use the same music channels. Synced
-references do not grant access to channels that the Telegram account cannot read.
-No service is deployed, credential created in your account or GitHub repository
-changed merely by downloading this source archive. Run the deployment workflow
-with your own settings to activate cloud sync. Changing the service key requires
-reconnecting your devices with the new key.
+Deployment credentials are saved separately from Telegram/sync connection
+credentials using Android Keystore or Windows DPAPI. Reopening the setup page
+restores the protected values and offers **Redeploy and connect** to upload the
+service included in the current app. Updates are explicit on this page, not an
+unattended deployment. A failed request does not delete remote data. Saved inputs
+and the generated key are retained for a retry even if an upload succeeded before
+its health check timed out. An expired Turso database token can be replaced here.
+
+## Existing Workers and older sync spaces
+
+Redeployment authenticates the existing private sync key and verifies that the
+Worker is an Auralis service connected to the same Turso URL. It refuses to
+replace another service or silently switch an existing service to another
+database. The Cloudflare namespace is preserved on code updates.
+
+For the older Durable-Object-only service, use a **new Worker name** and dedicated
+Turso database, then pair all devices to the new URL. This keeps the old cloud
+space intact. Connecting merges local collections/statistics into the new space;
+make a local backup first if some data exists only on an offline device. Existing
+DO-only deployments continue to work when no Turso bindings are configured. A
+partially configured or unavailable Turso backend never falls back to a different
+local store. Removing a local connection or reinstalling does not delete your
+Cloudflare Worker or Turso database.
+
+## Optional GitHub deployment
+
+The **Deploy Auralis sync service** workflow uses the same Worker modules and
+non-destructive schema with an atomic multipart upload. Add repository secrets
+`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TURSO_DATABASE_URL`,
+`TURSO_AUTH_TOKEN` and `AURALIS_SYNC_KEY`. Optionally set the repository variable
+`CLOUDFLARE_WORKER_NAME` (default `auralis-sync`). Push the complete project to
+`main` and run the workflow there. Use the same values if the app will later
+redeploy that service. No Cloudflare/Turso resource is created merely by
+installing the app or downloading this source.
+
+Sign in to Telegram on each device and use the same channels. Sync references do
+not grant access to channels that the Telegram account cannot read.
 
 ## What syncs
 
@@ -78,13 +108,17 @@ while sync is connected does not subtract already synced listening time.
 
 The service permits up to 32 live devices and 50,000 field records per sync space;
 requests contain at most 100 operations and pulls contain at most 200 records.
+Turso writes use conditional transactions with a revision compare-and-swap guard,
+rollback on any statement failure and bounded retries when a competing writer
+changes the revision. Notifications are sent only after the transaction commits.
 Auralis's existing collection/backup validation also applies. Same-field
 simultaneous edits resolve deterministically rather than presenting a merge dialog.
 
 ## Checks
 
-`node --test cloud/worker/worker.test.mjs` tests the real service handler and merge
-logic against local SQLite with a Cloudflare storage adapter. Flutter regressions
+`node --test cloud/worker/worker.test.mjs cloud/worker/turso.test.mjs cloud/worker/deploy.test.mjs`
+tests the real handler, Turso transactions and deployment orchestration using
+local SQLite protocol adapters and mock Cloudflare responses. Flutter regressions
 cover the client document and atomic metadata persistence. These are local checks;
 Cloudflare deployment, real-device timing and live multi-device Flutter execution
 require your service and native builds. The editing environment has no Flutter SDK.
