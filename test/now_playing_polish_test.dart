@@ -118,6 +118,110 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final size in [const Size(390, 844), const Size(1280, 714)]) {
+    testWidgets('artwork swipes switch songs and respect queue edges at $size', (tester) async {
+      final (_, player) = await mount(tester, reduced: true, size: size);
+      final artwork = find.byKey(const ValueKey('now-playing-artwork'));
+      await tester.drag(artwork, const Offset(-180, 0));
+      await tester.pumpAndSettle();
+      expect(player.current?.id, 'second');
+      await tester.drag(artwork, const Offset(-180, 0));
+      await tester.pumpAndSettle();
+      expect(player.current?.id, 'second');
+      await player.audio.seek(const Duration(seconds: 40));
+      await tester.drag(artwork, const Offset(180, 0));
+      await tester.pumpAndSettle();
+      // A cover swipe selects the previous song even after the first 3 seconds.
+      expect(player.current?.id, 'first');
+      await tester.drag(artwork, const Offset(180, 0));
+      await tester.pumpAndSettle();
+      expect(player.current?.id, 'first');
+      await tester.drag(artwork, const Offset(0, -180));
+      await tester.pumpAndSettle();
+      expect(player.current?.id, 'first');
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('artwork wheel gestures coalesce inertia and allow deliberate reversal', (tester) async {
+    var next = 0, previous = 0;
+    await tester.pumpWidget(MaterialApp(home: Center(
+      child: SizedBox.square(dimension: 240, child: ArtworkTrackSwitcher(
+        identity: 'cover',
+        reducedMotion: true,
+        onNext: () => next++,
+        onPrevious: () => previous++,
+        child: const ColoredBox(color: Colors.pink),
+      )),
+    )));
+    final cover = find.byType(ArtworkTrackSwitcher);
+    void wheel(Offset delta, int milliseconds) {
+      tester.binding.handlePointerEvent(PointerScrollEvent(
+        position: tester.getCenter(cover),
+        scrollDelta: delta,
+        timeStamp: Duration(milliseconds: milliseconds),
+      ));
+    }
+    wheel(const Offset(0, 24), 0);
+    wheel(const Offset(0, 30), 10);
+    wheel(const Offset(0, 90), 30);
+    wheel(const Offset(0, 40), 60);
+    expect(next, 1);
+    wheel(const Offset(0, 60), 400);
+    expect(next, 2);
+    wheel(const Offset(-60, 0), 410);
+    expect(previous, 1);
+    await tester.timedDrag(cover, const Offset(30, 0), const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    expect(previous, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('lyric waiting animation pauses, respects reduced motion and stops offscreen', (tester) async {
+    Widget indicator({bool playing = true, bool reduced = false, bool visible = true}) => MaterialApp(
+      home: TickerMode(enabled: visible, child: LyricsWaitingIndicator(
+        playing: playing,
+        reducedMotion: reduced,
+        label: 'Waiting for lyrics',
+      )),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    addTearDown(() => tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed));
+    await tester.pumpWidget(indicator());
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.binding.hasScheduledFrame, isTrue);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.binding.hasScheduledFrame, isTrue);
+    await tester.pumpWidget(indicator(playing: false));
+    await tester.pumpAndSettle();
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pumpWidget(indicator(reduced: true));
+    await tester.pumpAndSettle();
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pumpWidget(indicator(visible: false));
+    await tester.pumpAndSettle();
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await tester.pumpWidget(indicator());
+    await tester.pumpAndSettle();
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    tester.platformDispatcher.clearAccessibilityFeaturesTestValue();
+    await tester.pumpWidget(indicator());
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.binding.hasScheduledFrame, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('artwork setup permits immediate disposal without a pending image timeout', (
     tester,
   ) async {
