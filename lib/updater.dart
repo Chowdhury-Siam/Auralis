@@ -52,11 +52,12 @@ class UpdateAssetUnavailable implements Exception {
 }
 
 class ReleaseUpdate {
-  const ReleaseUpdate(this.version, this.url, this.sha256, this.size);
+  const ReleaseUpdate(this.version, this.url, this.sha256, this.size, {this.notes = ''});
   final StableVersion version;
   final Uri url;
   final String sha256;
   final int size;
+  final String notes;
   static ReleaseUpdate? fromJson(
     Map<String, dynamic> json,
     String repository,
@@ -105,7 +106,8 @@ class ReleaseUpdate {
         'Installer URL does not match the configured release',
       );
     }
-    return ReleaseUpdate(version, url, digest.substring(7).toLowerCase(), size);
+    final body = json['body'] is String ? json['body'] as String : '';
+    return ReleaseUpdate(version, url, digest.substring(7).toLowerCase(), size, notes: body.length > 12000 ? body.substring(0, 12000) : body);
   }
 }
 
@@ -159,10 +161,10 @@ class AppUpdater extends ChangeNotifier {
   DateTime? _lastAutomaticCheck;
 
   void start() {
-    _initial ??= Timer(const Duration(seconds: 10), () {
+    _initial ??= Timer(const Duration(seconds: 3), () {
       if (settings.automaticUpdates) checkOnResume();
     });
-    _timer ??= Timer.periodic(const Duration(hours: 6), (_) {
+    _timer ??= Timer.periodic(const Duration(minutes: 30), (_) {
       if (settings.automaticUpdates) unawaited(_automaticCheck());
     });
   }
@@ -190,7 +192,7 @@ class AppUpdater extends ChangeNotifier {
   void checkOnResume() {
     if (_lastAutomaticCheck == null ||
         DateTime.now().difference(_lastAutomaticCheck!) >=
-            const Duration(hours: 6)) {
+            const Duration(minutes: 5)) {
       unawaited(_automaticCheck());
     }
   }
@@ -200,7 +202,7 @@ class AppUpdater extends ChangeNotifier {
     _changed();
     try {
       await settings.save();
-      if (enabled && isAndroid) unawaited(_automaticCheck());
+      if (enabled) unawaited(_automaticCheck());
     } catch (_) {
       error = 'Could not save the update preference.';
       _changed();
