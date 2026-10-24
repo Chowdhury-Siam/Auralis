@@ -24,6 +24,8 @@ Auralis 0.1.64 adapts the Yutaka pipeline to Android and Windows.
    and queues can delay deletion beyond ten minutes; it is not an exact timer.
 
 Use a fresh app version for app changes and push the complete project to `main`.
+Configure the two [Telegram application build secrets](TELEGRAM_BUILD.md) before
+running release builds. PR checks do not use these secrets.
 A tag-only build is an artifact build; automatic publication waits for matching
 trusted `main` builds. Manual **Publish Auralis release** retries matching builds
 for its selected main revision. A build that fails checks produces no release.
@@ -60,7 +62,7 @@ remain visible; no release check uses Telegram credentials.
 ## Local verification
 
 ```sh
-node --test cloud/worker/worker.test.mjs tool/release-policy.test.cjs
+node --test cloud/worker/worker.test.mjs cloud/worker/turso.test.mjs cloud/worker/deploy.test.mjs tool/release-policy.test.cjs
 python3 -m unittest discover -s tool -p 'test_android*.py'
 python3 tool/release-notes.py
 flutter analyze --no-pub --fatal-infos
