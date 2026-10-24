@@ -1,6 +1,13 @@
 {
-  "current": "0.1.70",
+  "current": "0.1.71",
   "releases": [
+    {
+      "version": "0.1.71",
+      "changes": [
+        "Fixed sync setup URL validation on Android and Windows: explicit ports, credentials, paths, queries and fragments are rejected before network requests.",
+        "Valid HTTPS, libsql and turso database URLs continue to work, with or without a trailing slash."
+      ]
+    },
     {
       "version": "0.1.70",
       "changes": [
