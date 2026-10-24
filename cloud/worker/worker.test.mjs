@@ -58,6 +58,13 @@ test('authorization is required before any durable object access',async()=>{
  assert.equal((await worker.fetch(new Request('https://example.com/v1/sync',{headers:{Authorization:'Bearer '+'a'.repeat(64)}}),env)).status,200);assert.equal(calls,1);
  const health=await (await worker.fetch(new Request('https://example.com/health'),env)).json();assert.equal(health.service,'auralis-sync');assert.equal(JSON.stringify(health).includes(env.AURALIS_SYNC_KEY),false);
 });
+test('partial Turso configuration cannot fall back locally and ownership remains verifiable for repair',async()=>{
+ const env={AURALIS_SYNC_KEY:'a'.repeat(64),TURSO_DATABASE_URL:'https://auralis-test.turso.io',ROOM:{get(){throw new Error('must not reach local data');}}};
+ const headers={Authorization:'Bearer '+env.AURALIS_SYNC_KEY};
+ assert.equal((await worker.fetch(new Request('https://example.com/v1/sync',{headers}),env)).status,503);
+ assert.equal((await worker.fetch(new Request('https://example.com/v1/info',{headers}),env)).status,200);
+ assert.equal((await (await worker.fetch(new Request('https://example.com/health'),env)).json()).configured,false);
+});
 
 test('SQLite failure rolls back the entire batch and revision',async()=>{
  const {room,db,state}=backend();const original=state.storage.sql.exec;let inserts=0;
