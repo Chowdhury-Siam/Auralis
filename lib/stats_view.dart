@@ -104,6 +104,13 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
               'Check available storage and choose the file again.';
         });
       }
+    } on UnsupportedError catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = true;
+          _status = '$operation failed: ${e.message}';
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
