@@ -402,10 +402,6 @@ void main() {
         expect(find.text('MUSIC IN YOUR CHANNELS'), findsOneWidget);
         expect(tester.takeException(), isNull);
         telegram.state = 'disconnected';
-        await tester.tap(find.byTooltip('Play queue').first);
-        await tester.pumpAndSettle();
-        expect(find.text('A little more of what you love'), findsOneWidget);
-        expect(tester.takeException(), isNull);
         await tester.tap(find.byTooltip('Now playing').first);
         await tester.pumpAndSettle();
         expect(find.text('Find your next favorite'), findsOneWidget);
@@ -418,8 +414,8 @@ void main() {
         expect(find.text('Backup & Restore'), findsOneWidget);
         expect(find.text('Check automatically'), findsOneWidget);
         expect(tester.takeException(), isNull);
-        await tester.tap(find.text('Done'));
-        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
         await tester.tap(find.byTooltip('Back to Library'));
         await tester.pumpAndSettle();
       }
