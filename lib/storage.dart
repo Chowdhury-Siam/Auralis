@@ -116,6 +116,10 @@ Future<void> atomicWrite(File file, List<int> data) async {
 class AppSettings {
   AppSettings(this.file);
   final File file;
+  Map<String, dynamic> syncState = {};
+  String? lastSeenRelease;
+  void Function(Map<String, dynamic>)? captureSync;
+  void Function()? onSaved;
   bool reducedMotion = false;
   bool automaticUpdates = true;
   double volume = 70;
@@ -140,8 +144,16 @@ class AppSettings {
 
   Future<void> load() async {
     if (!await file.exists()) return;
-    applyJson(jsonDecode(await file.readAsString()) as Map<String, dynamic>);
+    final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    applyJson(json);
+    syncState = json['_sync'] is Map<String, dynamic>
+        ? json['_sync'] as Map<String, dynamic> : {};
+    lastSeenRelease = json['_lastSeenRelease'] as String?;
   }
+
+  Map<String, dynamic> _diskJson(Map<String, dynamic> snapshot) => {
+    ...snapshot, '_sync': syncState, '_lastSeenRelease': lastSeenRelease,
+  };
 
   void applyJson(Map<String, dynamic> json) {
     listening = ListeningStats.fromJson(json['listening']);
@@ -202,23 +214,35 @@ class AppSettings {
     Map<String, dynamic> snapshot,
     List<int> recovery,
   ) {
-    final data = utf8.encode(jsonEncode(snapshot));
     final next = _saving.then((_) async {
       await atomicWrite(
         File('${file.parent.path}/auralis-before-restore.json'),
         recovery,
       );
-      await atomicWrite(file, data);
-      applyJson(jsonDecode(utf8.decode(data)) as Map<String, dynamic>);
+      final oldSync = jsonDecode(jsonEncode(syncState)) as Map<String, dynamic>;
+      try {
+        captureSync?.call(snapshot);
+        await atomicWrite(file, utf8.encode(jsonEncode(_diskJson(snapshot))));
+        applyJson(snapshot);
+      } catch (_) {
+        syncState = oldSync;
+        rethrow;
+      }
+      onSaved?.call();
     });
     _saving = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return next;
   }
 
   Future<void> save() {
-    final data = utf8.encode(jsonEncode(toJson()));
+    final snapshot = toJson();
+    captureSync?.call(snapshot);
+    final data = utf8.encode(jsonEncode(_diskJson(snapshot)));
     // Serialize writes so a quick series of slider changes cannot race renames.
-    final next = _saving.then((_) => atomicWrite(file, data));
+    final next = _saving.then((_) async {
+      await atomicWrite(file, data);
+      onSaved?.call();
+    });
     _saving = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return next;
   }
