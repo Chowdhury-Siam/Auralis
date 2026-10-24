@@ -1,6 +1,6 @@
 # GitHub Releases and application updates
 
-Configured repository: **[Chowdhury-Siam/Auralis](https://github.com/Chowdhury-Siam/Auralis)**. Current source target is **v0.1.60**, with the custom Windows installer described in [INSTALLER.md](INSTALLER.md). Earlier playback, lyrics, artwork theme, navigation, Telegram backup and Android changes remain included. Commit the complete source to main to run the Windows build and publisher; rerunning an older commit uses its older source. No repository changes or release publication were made from this workspace.
+Configured repository: **[Chowdhury-Siam/Auralis](https://github.com/Chowdhury-Siam/Auralis)**. Current source target is **v0.1.63**, with artwork gestures, timed-lyrics waiting effects, and the custom Windows installer described in [INSTALLER.md](INSTALLER.md). Earlier playback, lyrics, artwork theme, navigation, Telegram backup and Android changes remain included. Commit the complete source to main to run the Windows build and publisher; rerunning an older commit uses its older source. No repository changes or release publication were made from this workspace.
 
 The Windows release flow below remains independent. Android builds run in `.github/workflows/android.yml` and upload APK artifacts; see [ANDROID.md](ANDROID.md). They do not edit Windows tags/releases or run the Windows publisher.
 
@@ -117,3 +117,11 @@ The native Windows launch regression uses a harmless GUI fixture in a path conta
 The Android publisher distinguishes unpublished drafts from published releases. A regenerated APK can differ between CI runs, including when the runner creates a new debug signing key. Missing draft files are uploaded and differing files owned by the current Android version/ABI/signing variant can be replaced, after rechecking the release is still a draft. Unchanged assets are skipped. The three current Android outputs (APK, native provenance ZIP and their checksum file) are verified against GitHub SHA-256 and sizes afterward. Windows release files, tags and other Android variants are outside this replacement list. Published partial-release conflicts report that a new version is required; completed published Android variants remain untouched on retries.
 
 The source is bumped to **0.1.44+45** for a fresh tag/asset set after the reported v0.1.43 collision. Commit this complete source to `main` so Windows and Android build the same revision; an old workflow rerun will not acquire the change. Draft refresh uses GitHub CLI's [documented replace option](https://cli.github.com/manual/gh_release_upload), which deletes the old same-name draft asset before uploading its replacement; failure can leave the draft incomplete until retry. Existing publisher concurrency serializes both platform workflows. No release or tag was mutated from this workspace.
+
+## 0.1.62 media artwork and lyrics
+
+Android system players receive the current album cover and Auralis notification icon. The lyrics page has a top back button and one options menu, with no source footer. Missing embedded lyrics automatically fall back to LRCLIB on opening the page, using song metadata only. Late online responses cannot overwrite newer imported or pasted lyrics. Shared Android/Windows version: 0.1.62+63.
+
+## 0.1.63 compact player dock
+
+The bottom player is a rounded inset card. Repeat, sleep timer and volume are removed from the dock. Horizontal swiping fully stops audio and its stream, cancels sleep timing, clears the playback queue and hides the card. Short swipes snap back and seeking remains independent. Shared Android/Windows version: 0.1.63+64.
