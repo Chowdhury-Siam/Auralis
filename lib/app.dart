@@ -1628,6 +1628,21 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
+  Widget _artworkSwitcher({required Widget child}) => ArtworkTrackSwitcher(
+    key: const ValueKey('artwork-track-switcher'),
+    identity: (player.current?.id, player.index),
+    reducedMotion: player.settings.reducedMotion,
+    onNext: !player.restoringData && player.current != null &&
+        player.queue.length > 1 &&
+        (player.index + 1 < player.queue.length || player.repeat)
+        ? () => unawaited(player.next())
+        : null,
+    onPrevious: !player.restoringData && player.index > 0
+        ? () => unawaited(player.playAt(player.index - 1))
+        : null,
+    child: child,
+  );
+
   Widget _miniNowPlaying(BoxConstraints box, Track? track) {
     final coverSize = math.min(
       200.0,
@@ -1650,13 +1665,15 @@ class _PlayerShellState extends State<PlayerShell>
               ),
               child: AspectRatio(
                 aspectRatio: 1,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(22),
-                  child: Artwork(
-                    key: const ValueKey('now-playing-artwork'),
-                    seed: track?.title ?? 'Auralis',
-                    telegram: telegram,
-                    track: track,
+                child: _artworkSwitcher(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Artwork(
+                      key: const ValueKey('now-playing-artwork'),
+                      seed: track?.title ?? 'Auralis',
+                      telegram: telegram,
+                      track: track,
+                    ),
                   ),
                 ),
               ),
@@ -1783,64 +1800,66 @@ class _PlayerShellState extends State<PlayerShell>
                 ),
               );
               return Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox.square(
-                      dimension: size,
-                      child: ArtworkMotion(
-                        reducedMotion: player.settings.reducedMotion,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: _colors.surfaceContainer,
-                            borderRadius: BorderRadius.circular(
-                              tight ? 26 : 34,
-                            ),
-                            border: Border.all(
-                              color: _colors.primary.withValues(alpha: .14),
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(5),
-                            child: ClipRRect(
+                child: _artworkSwitcher(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox.square(
+                        dimension: size,
+                        child: ArtworkMotion(
+                          reducedMotion: player.settings.reducedMotion,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: _colors.surfaceContainer,
                               borderRadius: BorderRadius.circular(
-                                tight ? 21 : 29,
+                                tight ? 26 : 34,
                               ),
-                              child: Artwork(
-                                key: const ValueKey('now-playing-artwork'),
-                                seed: track?.title ?? 'Auralis',
-                                telegram: telegram,
-                                track: track,
+                              border: Border.all(
+                                color: _colors.primary.withValues(alpha: .14),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(5),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  tight ? 21 : 29,
+                                ),
+                                child: Artwork(
+                                  key: const ValueKey('now-playing-artwork'),
+                                  seed: track?.title ?? 'Auralis',
+                                  telegram: telegram,
+                                  track: track,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    if (peek > 0) ...[
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: peek,
-                        height: size,
-                        child: Tooltip(
-                          message: 'Play next track',
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(22),
-                            child: Material(
-                              child: InkWell(
-                                key: const ValueKey('now-playing-next-cover'),
-                                onTap: () => player.playAt(nextIndex),
-                                child: ExcludeSemantics(
-                                  child: OverflowBox(
-                                    maxWidth: size,
-                                    maxHeight: size,
-                                    alignment: Alignment.centerLeft,
-                                    child: SizedBox.square(
-                                      dimension: size,
-                                      child: Artwork(
-                                        seed: player.queue[nextIndex].title,
-                                        telegram: telegram,
-                                        track: player.queue[nextIndex],
+                      if (peek > 0) ...[
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: peek,
+                          height: size,
+                          child: Tooltip(
+                            message: 'Play next track',
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(22),
+                              child: Material(
+                                child: InkWell(
+                                  key: const ValueKey('now-playing-next-cover'),
+                                  onTap: () => player.playAt(nextIndex),
+                                  child: ExcludeSemantics(
+                                    child: OverflowBox(
+                                      maxWidth: size,
+                                      maxHeight: size,
+                                      alignment: Alignment.centerLeft,
+                                      child: SizedBox.square(
+                                        dimension: size,
+                                        child: Artwork(
+                                          seed: player.queue[nextIndex].title,
+                                          telegram: telegram,
+                                          track: player.queue[nextIndex],
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1849,9 +1868,9 @@ class _PlayerShellState extends State<PlayerShell>
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               );
             },
@@ -2492,28 +2511,6 @@ class _PlayerShellState extends State<PlayerShell>
       ],
     );
 
-    final utilityButtons = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          onPressed: player.toggleRepeat,
-          tooltip: switch (player.repeatMode) {
-            PlaybackRepeat.off => 'Repeat: off',
-            PlaybackRepeat.all => 'Repeat: queue',
-            PlaybackRepeat.one => 'Repeat: one track',
-          },
-          icon: Icon(
-            player.repeatMode == PlaybackRepeat.one
-                ? Icons.repeat_one_rounded
-                : Icons.repeat_rounded,
-            color: player.repeat ? _colors.primary : _colors.onSurfaceVariant,
-          ),
-        ),
-        _sleepControl(key: const ValueKey('sleep-timer-control')),
-        _volumeControl(narrow),
-      ],
-    );
-
     final progressBar = Row(
       children: [
         SizedBox(
@@ -2599,92 +2596,112 @@ class _PlayerShellState extends State<PlayerShell>
         ),
       ),
     );
-    return Container(
-      key: const ValueKey('player-bar'),
-      decoration: BoxDecoration(
-        color: _colors.surfaceContainerLowest,
-        border: Border(top: BorderSide(color: _colors.outlineVariant)),
+    final reduced = player.settings.reducedMotion ||
+        MediaQuery.disableAnimationsOf(context);
+    final track = player.current!;
+    Widget stopBackground(Alignment alignment) => Material(
+      color: _colors.errorContainer,
+      borderRadius: BorderRadius.circular(28),
+      child: Align(
+        alignment: alignment,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Icon(Icons.stop_circle_rounded, color: _colors.onErrorContainer),
+        ),
       ),
-      padding: EdgeInsets.fromLTRB(
-        narrow ? 10 : 18,
-        narrow ? 4 : 10,
-        narrow ? 10 : 18,
-        narrow ? 6 : 12,
-      ),
-      child: narrow
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Two compact control rows plus the seek bar. Never stack
-                // large full-size player cards on short phone windows.
-                progressBar,
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(child: compactPreview),
-                    const SizedBox(width: 4),
-                    transportButtons,
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: player.toggleRepeat,
-                      tooltip: switch (player.repeatMode) {
-                        PlaybackRepeat.off => 'Repeat: off',
-                        PlaybackRepeat.all => 'Repeat: queue',
-                        PlaybackRepeat.one => 'Repeat: one track',
-                      },
-                      icon: Icon(
-                        player.repeatMode == PlaybackRepeat.one
-                            ? Icons.repeat_one_rounded
-                            : Icons.repeat_rounded,
-                        color: player.repeat ? _colors.primary : _colors.onSurfaceVariant,
-                      ),
-                    ),
-                    _sleepControl(key: const ValueKey('sleep-timer-control')),
-                    const Spacer(),
-                    _volumeControl(true),
-                  ],
-                ),
-              ],
-            )
-          : LayoutBuilder(
-              builder: (context, box) {
-                if (box.maxWidth < 960) {
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(child: compactPreview),
-                          transportButtons,
-                          utilityButtons,
-                        ],
-                      ),
-                      progressBar,
-                    ],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(flex: 3, child: preview),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      flex: 5,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [transportButtons, progressBar],
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    utilityButtons,
-                  ],
-                );
-              },
-            ),
     );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Semantics(
+        hint: 'Swipe left or right to stop playback',
+        onDismiss: () => unawaited(_stopDock(track)),
+        child: Dismissible(
+          key: ValueKey(('dismiss-player', track.id)),
+          direction: player.restoringData
+              ? DismissDirection.none
+              : DismissDirection.horizontal,
+          movementDuration: Duration(milliseconds: reduced ? 0 : 220),
+          resizeDuration: null,
+          background: stopBackground(Alignment.centerLeft),
+          secondaryBackground: stopBackground(Alignment.centerRight),
+          confirmDismiss: (_) async {
+            await _stopDock(track);
+            // clear() removes this dock after stopping audio and its stream.
+            // No dismissed child is left in the tree while that work awaits.
+            return false;
+          },
+          child: Material(
+            key: const ValueKey('player-bar'),
+            color: _colors.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(28),
+            clipBehavior: Clip.antiAlias,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                narrow ? 12 : 18,
+                narrow ? 4 : 10,
+                narrow ? 12 : 18,
+                narrow ? 8 : 12,
+              ),
+              child: narrow
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        progressBar,
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Expanded(child: compactPreview),
+                            const SizedBox(width: 4),
+                            transportButtons,
+                          ],
+                        ),
+                      ],
+                    )
+                  : LayoutBuilder(
+                      builder: (context, box) {
+                        if (box.maxWidth < 960) {
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(child: compactPreview),
+                                  transportButtons,
+                                ],
+                              ),
+                              progressBar,
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(flex: 3, child: preview),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [transportButtons, progressBar],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _stopDock(Track track) async {
+    if (player.restoringData || !identical(player.current, track)) return;
+    try {
+      await player.clear();
+    } catch (_) {
+      _notice('Could not stop playback. Please try again.');
+    }
   }
 
   Widget _settingsPage() => Align(
@@ -2716,7 +2733,7 @@ class _PlayerShellState extends State<PlayerShell>
           ],
           const SizedBox(height: 12),
           Text(
-            'Auralis ${widget.updater?.currentVersion ?? '0.1.60'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+            'Auralis ${widget.updater?.currentVersion ?? '0.1.63'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
             style: TextStyle(
               color: _colors.onSurfaceVariant,
               fontSize: 12,
@@ -2729,7 +2746,7 @@ class _PlayerShellState extends State<PlayerShell>
               onPressed: () => showLicensePage(
                 context: context,
                 applicationName: 'Auralis',
-                applicationVersion: widget.updater?.currentVersion ?? '0.1.60',
+                applicationVersion: widget.updater?.currentVersion ?? '0.1.63',
               ),
               child: const Text('Licenses'),
             ),
