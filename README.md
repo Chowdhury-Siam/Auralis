@@ -75,7 +75,7 @@ Add and reorder tracks, use Play next, shuffle upcoming songs, and repeat the qu
 
 ### 📝 Lyrics with the Music
 
-Follow line-synced lyrics with the highlighted line sharp and all other lines softly blurred. Line advances retain a brief motion-blur transition; reduced motion skips that animation. Click a line to seek, or switch to Static for clear selectable lyrics. Read supported embedded tags, import an `.lrc` file, paste lyrics, or request a match from LRCLIB.
+Follow line-synced lyrics with the highlighted line sharp and all other lines softly blurred. Line advances retain a brief motion-blur transition; reduced motion skips that animation. Click a line to seek, or switch to Static for clear selectable lyrics. Embedded tags are read first; missing lyrics automatically fall back to LRCLIB when opening lyrics. You can also import an `.lrc` file or paste lyrics.
 
 ### 🖼️ Artwork Where It Belongs
 
@@ -139,6 +139,8 @@ Choose a matching asset from [the latest GitHub release](https://github.com/Chow
 | **Windows x64** | `auralis-<version>-windows-x64-setup.exe` | Run the custom per-user installer; choose an install location and optional desktop shortcut. The Microsoft Visual C++ 2015–2022 x64 runtime is required. |
 | **Windows portable** | Windows x64 release ZIP | Extract the complete package and launch `auralis.exe`; keep its DLLs and data folders together. |
 
+Now Playing artwork supports left/right swipes and mouse-wheel track changes. Timed lyric intros and instrumental gaps use blurred text with a gentle music animation.
+
 The Windows installer uses the Yutaka-style dark setup layout with Auralis branding, progress and automatic app opening/installer closing after one Install click. See the [installer guide](docs/INSTALLER.md) for build and verification details.
 
 Android APKs now always use optimized release mode. Run **Set up Android signing** once to generate and retain a signing identity automatically; later builds reuse it. APKs labelled **development-release** use a temporary development signature. See [signing and upgrades](docs/ANDROID.md#signing-and-upgrades).
@@ -190,7 +192,9 @@ Open **Now Playing** from navigation or the bottom track artwork/title. Use **Qu
 | **Wave seek bar** | Seeks through the song; its wave is decorative, not an audio waveform |
 | **Lyrics** | Opens synced or static text while keeping playback controls available |
 
-Embedded lyrics load when supported tags are available. Use **Lyrics options** to retry reading the music file, import `.lrc`, or paste text. **Find lyrics** requests a match from LRCLIB using the displayed title, artist, and duration. **Follow song** returns to automatic scrolling after you browse elsewhere.
+The bottom player is a rounded card with seeking and previous/play/next. Swipe it left or right to fully stop playback and clear the playback queue. Repeat, sleep timer and volume are on Now Playing.
+
+Embedded lyrics load when supported tags are available. Use **Lyrics options** to retry reading the music file, import `.lrc`, or paste text. If embedded lyrics are missing or unreadable, LRCLIB is searched automatically using the displayed title, artist, and duration. **Find lyrics** retries the lookup. Back and the single options menu are at the top; the source footer is removed. **Follow song** returns to automatic scrolling after you browse elsewhere.
 
 Lyrics use a bounded session cache and are not included in backups. Word-level karaoke, automatic translation, and permanent lyrics storage are not included.
 
@@ -233,7 +237,7 @@ API credentials and the TDLib database key are encrypted with **Windows DPAPI** 
 
 Downloaded audio and images remain plaintext in TDLib's app-data cache. There is no automatic cache eviction setting yet. Logout does not promise secure erasure of cached media or backups.
 
-Artwork uses Telegram or embedded metadata. LRCLIB is contacted only when you request lyrics; that request does not include Telegram credentials, channel names, or message IDs. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
+Artwork uses Telegram or embedded metadata. Opening lyrics automatically contacts LRCLIB if embedded lyrics are unavailable; only the song title, artist and duration are sent, with no Telegram credentials, channel names, or message IDs. Android media controls receive the current cover and use the monochrome Auralis logo. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
 
 ---
 
@@ -302,7 +306,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.60+61**; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.63+64**; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
