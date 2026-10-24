@@ -16,7 +16,8 @@ Auralis 0.1.64 adapts the Yutaka pipeline to Android and Windows.
 4. **Clean completed Auralis runs** (`cleanup-runs.yml`) removes completed green
    publisher/deployment/signing/older-cleanup runs. Successful `main` build runs
    are kept until a publication receipt proves their artifacts were consumed.
-   Successful feature/PR/tag builds do not wait for publication. Active runs,
+   Successful feature/PR/tag builds do not wait for publication. Completed gray
+   skipped runs are eligible immediately at the next cleanup. Active runs,
    cancellations and the currently executing cleanup run are retained.
 5. Failed/timed-out runs become eligible **ten minutes after completion**. Cleanup
    runs on workflow completion and on a five-minute schedule. GitHub scheduling
