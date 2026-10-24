@@ -153,7 +153,7 @@ class _LyricsWaitingIndicatorState extends State<LyricsWaitingIndicator>
 
   void _sync() {
     final animate = widget.playing && _foreground && !widget.reducedMotion &&
-        !MediaQuery.disableAnimationsOf(context) && TickerMode.of(context);
+        !MediaQuery.disableAnimationsOf(context) && TickerMode.valuesOf(context).enabled;
     if (animate && !_motion.isAnimating) _motion.repeat();
     if (!animate && _motion.isAnimating) _motion.stop();
   }
