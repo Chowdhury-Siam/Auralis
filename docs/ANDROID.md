@@ -14,7 +14,7 @@ Download **auralis-android-arm64-v8a-development** or **auralis-android-arm64-v8
 
 1. Commit this complete source to `main`. Run the signing setup below once for automatic retained-key signing, or keep an existing custom key. Without either, compilation still uses release mode with an explicitly labelled development signature.
 2. Open **Actions → Android APK build → Run workflow**, choose `main`, and keep **arm64-v8a** for a phone APK. A push to `main` also runs it automatically. Re-running an old commit still uses that commit's old workflow.
-3. Once analysis, tests, native checks, and APK signature/alignment verification succeed, the separate publishing job attaches the built APK to `v<pubspec version>`. An existing version can be completed by a publishing-only change when the Android app sources still match its tag. Different app sources require a new version; tags are never moved. This recovery source uses **0.1.66+67** to avoid the existing 0.1.43 assets/tag.
+3. Once analysis, tests, native checks, and APK signature/alignment verification succeed, the separate publishing job attaches the built APK to `v<pubspec version>`. An existing version can be completed by a publishing-only change when the Android app sources still match its tag. Different app sources require a new version; tags are never moved. This recovery source uses **0.1.69+70** to avoid the existing 0.1.43 assets/tag.
 
 If Android finishes first for a new version, it creates a **draft**, uploads and verifies its Android assets, and leaves publication to the existing Windows publisher. If Windows finishes first, Android appends its assets to the published release. Both publishing jobs use the same concurrency group. For a brand-new version started manually only on Android, also run the Windows workflow for that same commit to publish the shared draft.
 
@@ -28,7 +28,7 @@ The APK build keeps read-only repository permission. Only the guarded publishing
 
 1. Create a [fine-grained GitHub token](https://github.com/settings/personal-access-tokens/new), restricted to **Chowdhury-Siam/Auralis**, with repository **Secrets: Read and write**. Add it to this repository's **Settings → Secrets and variables → Actions** as `ANDROID_SIGNING_SETUP_TOKEN`.
 2. Commit this complete source to `main`, then open **Actions → Set up Android signing → Run workflow** on `main`.
-3. The action generates a private RSA-4096 key with a random password and saves the key/alias/password together in the encrypted `ANDROID_SIGNING_IDENTITY` repository secret. It then starts a fresh **Android APK build** on `main`, which reads that identity and produces `auralis-0.1.66-android-arm64-v8a-release.apk`. Future builds reuse it automatically. No manual keytool command or four-secret setup is needed.
+3. The action generates a private RSA-4096 key with a random password and saves the key/alias/password together in the encrypted `ANDROID_SIGNING_IDENTITY` repository secret. It then starts a fresh **Android APK build** on `main`, which reads that identity and produces `auralis-0.1.69-android-arm64-v8a-release.apk`. Future builds reuse it automatically. No manual keytool command or four-secret setup is needed.
 
 You can remove or revoke `ANDROID_SIGNING_SETUP_TOKEN` after successful setup; normal builds only need the saved identity. GitHub's default workflow token cannot manage repository secrets, so that one-time Secrets permission is needed. See [GitHub's repository secret API](https://docs.github.com/en/rest/actions/secrets#create-or-update-a-repository-secret). A separate build is queued after setup because repository secrets are read when a workflow is queued, as documented in [Secrets reference](https://docs.github.com/en/actions/reference/security/secrets).
 
@@ -113,7 +113,7 @@ This is a packaging/CI-only correction; the application version is unchanged.
 
 `Existing asset differs: auralis-0.1.43-android-arm64-v8a-debug.apk` means that a file with that version/ABI/signing name already exists with different bytes. Rebuilding identical source is not guaranteed to reproduce APK bytes, especially when a fresh runner generates a different development signing key. The former publisher rejected this in drafts as well as published releases.
 
-Commit the complete **0.1.66+67** source to `main` and let both workflows run for that commit. It targets a new `v0.1.66` release without deleting or moving `v0.1.43`. Re-running an old 0.1.43 job still uses its old script/version. The corrected publisher can also refresh only its own conflicting Android assets while a release remains a draft, with local checksum/provenance validation and post-upload GitHub digest/size checks. Published downloads remain protected. Signing stays optional; the draft retry fix does not make development keys consistent between runners. Use a persistent release key for Android updates that preserve installed app data.
+Commit the complete **0.1.69+70** source to `main` and let both workflows run for that commit. It targets a new `v0.1.69` release without deleting or moving `v0.1.43`. Re-running an old 0.1.43 job still uses its old script/version. The corrected publisher can also refresh only its own conflicting Android assets while a release remains a draft, with local checksum/provenance validation and post-upload GitHub digest/size checks. Published downloads remain protected. Signing stays optional; the draft retry fix does not make development keys consistent between runners. Use a persistent release key for Android updates that preserve installed app data.
 
 
 ## 0.1.49 source update
@@ -258,3 +258,15 @@ Shared Android/Windows source version is 0.1.65+66. The timed swipe tests use `t
 ## 0.1.66 landscape Library fix
 
 The bottom player uses one row on short screens at least 600 logical pixels wide, preserving space for the Library search and collection controls in phone landscape. Volume controls remain on Now Playing only. Shared Android/Windows source version is 0.1.66+67.
+
+## 0.1.67 Telegram application identity
+
+Both Android and Windows builds now require the maintainer's `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` repository secrets. The temporary Flutter define file is validated before native compilation and removed after the build. Configured releases hide API fields and initialize Telegram for normal phone/code sign-in. PR builds use the manual API fallback. Follow [TELEGRAM_BUILD.md](TELEGRAM_BUILD.md) for the one-time setup; the actual repository secrets have not been set from this workspace. Shared app version is 0.1.67+68.
+
+## 0.1.68 in-app Cloudflare + Turso deployment
+
+Settings → Multi-device sync now includes Set up / redeploy cloud sync on Android and Windows. Enter the Cloudflare account/token, a dedicated Turso database URL/write token and a private sync key. The app prepares the schema, deploys its bundled service, verifies the database and connects. The existing system Keystore protects a separate deployment vault. See [SYNC.md](SYNC.md) for setup, pairing and old-service handling. Shared app version is 0.1.68+69.
+
+## 0.1.69 phone sign-in improvements
+
+Phone sign-in offers a searchable country/calling-code picker. The Telegram-code page displays the destination number and includes Change number, Cancel number change and Send new code. Full international paste remains supported, and correcting a number reuses the native login session. Shared Android/Windows version is 0.1.69+70.
