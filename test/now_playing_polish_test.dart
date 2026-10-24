@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:auralis/app.dart';
+import 'package:auralis/lyrics_view.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/now_playing_effects.dart';
 import 'package:auralis/player.dart';
@@ -8,6 +9,7 @@ import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
@@ -16,6 +18,7 @@ void main() {
   Future<(FakeAudio, PlayerController)> mount(
     WidgetTester tester, {
     bool reduced = false,
+    bool openPlayer = true,
     Size size = const Size(1280, 714),
   }) async {
     tester.view.devicePixelRatio = 1;
@@ -59,14 +62,17 @@ void main() {
     addTearDown(telegram.shutdown);
     await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('open-current-track')));
-    await tester.pumpAndSettle();
+    if (openPlayer) {
+      await tester.tap(find.byKey(const ValueKey('open-current-track')));
+      await tester.pumpAndSettle();
+    }
     return (audio, player);
   }
 
   for (final size in [const Size(390, 844), const Size(1280, 714)]) {
     testWidgets('compact controls remain usable at $size', (tester) async {
       final (audio, player) = await mount(tester, reduced: true, size: size);
+      expect(find.text('MP3'), findsNothing);
       final play = find.byKey(const ValueKey('now-playing-play-pause'));
       final bounds = tester.getSize(play);
       expect(bounds.width, bounds.height);
@@ -157,11 +163,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('close-now-playing')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
-    await tester.tap(find.byTooltip('Play queue').first);
+    await tester.tap(find.byTooltip('Telegram').first);
     await tester.pumpAndSettle();
     expect(
       tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
-      'Play queue',
+      'Telegram',
     );
     expect(tester.takeException(), isNull);
   });
@@ -208,6 +214,98 @@ void main() {
     expect(find.text('Use instant page transitions'), findsNothing);
     expect(find.text('Listening stats'), findsOneWidget);
     expect(find.text('Backup & Restore'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('system Back leaves lyrics and Now Playing without exiting or stopping music', (
+    tester,
+  ) async {
+    var exits = 0;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemNavigator.pop') exits++;
+        return null;
+      },
+    );
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+    final (audio, player) = await mount(
+      tester,
+      reduced: true,
+      size: const Size(390, 844),
+    );
+    await audio.toggle();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Lyrics').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(LyricsView), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(LyricsView), findsNothing);
+    expect(find.byKey(const ValueKey('now-playing-play-pause')), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data, 'Library');
+    expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
+    expect(player.current?.id, 'first');
+    expect(audio.playing, isTrue);
+    expect(exits, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Settings is a selected full page and system Back returns to Library', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      reduced: true,
+      openPlayer: false,
+      size: const Size(390, 844),
+    );
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-page')).hitTestable(), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(Dialog), findsNothing);
+    expect(tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex, 3);
+    expect(find.byTooltip('Play queue'), findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data, 'Library');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('bottom navigation keeps four labels and icons clear of the gesture area', (
+    tester,
+  ) async {
+    tester.view.padding = const FakeViewPadding(bottom: 24);
+    tester.view.viewPadding = const FakeViewPadding(bottom: 24);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    await mount(
+      tester,
+      reduced: true,
+      openPlayer: false,
+      size: const Size(360, 780),
+    );
+    final navigation = find.byKey(const ValueKey('app-navigation'));
+    final bounds = tester.getRect(navigation);
+    final destinations = find.descendant(
+      of: navigation,
+      matching: find.byType(NavigationDestination),
+    );
+    expect(destinations, findsNWidgets(4));
+    for (final label in ['Library', 'Telegram', 'Now playing', 'Settings']) {
+      final destination = find.widgetWithText(NavigationDestination, label);
+      final icon = find.descendant(of: destination, matching: find.byType(Icon));
+      final text = find.descendant(of: destination, matching: find.text(label));
+      final labelBounds = tester.getRect(text);
+      expect(text.hitTestable(), findsOneWidget);
+      expect(labelBounds.top, greaterThanOrEqualTo(tester.getRect(icon).bottom));
+      expect(labelBounds.bottom, lessThanOrEqualTo(bounds.bottom - 24));
+    }
     expect(tester.takeException(), isNull);
   });
 
