@@ -18,6 +18,9 @@ import 'wave_seek_bar.dart';
 import 'now_playing_effects.dart';
 import 'data_files.dart';
 import 'stats_view.dart';
+import 'sync/controller.dart';
+import 'sync/settings_view.dart';
+import 'release_notes.dart';
 
 const accent = Color(0xFFC7B5FF),
     surface = Color(0xFF19171E),
@@ -29,12 +32,16 @@ class AuralisApp extends StatefulWidget {
     required this.player,
     required this.telegram,
     this.startupWarning,
+    this.sync,
+    this.installedVersion,
     this.updater,
     this.dataFiles = const DataFiles(),
   });
   final PlayerController player;
   final TelegramService telegram;
   final String? startupWarning;
+  final SyncController? sync;
+  final String? installedVersion;
   final AppUpdater? updater;
   final DataFiles dataFiles;
   @override
@@ -172,6 +179,8 @@ class _AuralisAppState extends State<AuralisApp> {
       telegram: widget.telegram,
       startupWarning: widget.startupWarning,
       updater: widget.updater,
+      sync: widget.sync,
+      installedVersion: widget.installedVersion,
       dataFiles: widget.dataFiles,
     ),
   );
@@ -185,12 +194,16 @@ class PlayerShell extends StatefulWidget {
     required this.player,
     required this.telegram,
     this.startupWarning,
+    this.sync,
+    this.installedVersion,
     this.updater,
     this.dataFiles = const DataFiles(),
   });
   final PlayerController player;
   final TelegramService telegram;
   final String? startupWarning;
+  final SyncController? sync;
+  final String? installedVersion;
   final AppUpdater? updater;
   final DataFiles dataFiles;
   @override
@@ -226,6 +239,22 @@ class _PlayerShellState extends State<PlayerShell>
     library = ChannelLibrary(telegram, player.settings);
     _shellUpdates = Listenable.merge([player, telegram, library]);
     search.addListener(_changed);
+    _syncedChannels = player.settings.selectedChannels.map((c) => c.id).join(',');
+    widget.sync?.addListener(_syncChanged);
+    if (widget.installedVersion != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(maybeShowWhatsNew(context, player.settings, widget.installedVersion!));
+      });
+    }
+  }
+
+  String _syncedChannels = '';
+  void _syncChanged() {
+    final channels = player.settings.selectedChannels.map((c) => c.id).join(',');
+    if (channels != _syncedChannels) {
+      _syncedChannels = channels;
+      if (telegram.ready && !player.restoringData) unawaited(library.refresh());
+    }
   }
 
   void _changed() {
@@ -257,6 +286,7 @@ class _PlayerShellState extends State<PlayerShell>
     _dismissPlayer.dispose();
     lyrics.close();
     library.dispose();
+    widget.sync?.removeListener(_syncChanged);
     search.dispose();
     super.dispose();
   }
@@ -2726,6 +2756,13 @@ class _PlayerShellState extends State<PlayerShell>
             subtitle: const Text('Stats, collections and preferences'),
             onTap: () => _stats(backup: true),
           ),
+          if (widget.sync != null) SyncSettings(controller: widget.sync!),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.new_releases_outlined),
+            title: const Text('What’s new'),
+            onTap: () => showInstalledChanges(context, widget.installedVersion ?? widget.updater?.currentVersion ?? currentReleaseVersion),
+          ),
           const Divider(),
           if (widget.updater != null) ...[
             UpdateSettings(updater: widget.updater!),
@@ -2733,7 +2770,7 @@ class _PlayerShellState extends State<PlayerShell>
           ],
           const SizedBox(height: 12),
           Text(
-            'Auralis ${widget.updater?.currentVersion ?? '0.1.63'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
+            'Auralis ${widget.updater?.currentVersion ?? '0.1.64'} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
             style: TextStyle(
               color: _colors.onSurfaceVariant,
               fontSize: 12,
@@ -2746,7 +2783,7 @@ class _PlayerShellState extends State<PlayerShell>
               onPressed: () => showLicensePage(
                 context: context,
                 applicationName: 'Auralis',
-                applicationVersion: widget.updater?.currentVersion ?? '0.1.63',
+                applicationVersion: widget.updater?.currentVersion ?? '0.1.64',
               ),
               child: const Text('Licenses'),
             ),
