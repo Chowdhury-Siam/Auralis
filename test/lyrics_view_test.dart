@@ -17,6 +17,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
+import 'updater_test.dart' show Client, Response;
 
 const song = Track(
   id: 'one',
@@ -35,11 +36,12 @@ final fixture =
 
 class PendingLyrics extends LyricsRepository {
   final pending = Completer<Lyrics?>();
+  final other = Completer<Lyrics?>();
   int calls = 0;
   @override
   Future<Lyrics?> find(Track track) {
     calls++;
-    return pending.future;
+    return track.id == song.id ? pending.future : other.future;
   }
 }
 
@@ -123,7 +125,7 @@ void main() {
     'imports LRC; cancellation and invalid files preserve existing lyrics',
     (tester) async {
       final player = controller();
-      final repository = LyricsRepository();
+      final repository = LyricsRepository()..save(song, null);
       final files = LrcFiles();
       addTearDown(player.shutdown);
       addTearDown(repository.close);
@@ -131,7 +133,7 @@ void main() {
       await tester.tap(find.widgetWithText(TextButton, 'Import .lrc file'));
       await tester.pumpAndSettle();
       expect(find.text('Original imported line'), findsOneWidget);
-      expect(find.text('Imported LRC · session only'), findsOneWidget);
+      expect(find.text('Imported LRC · session only'), findsNothing);
       expect(repository.cached(song)!.imported, isTrue);
       expect(files.limit, Lyrics.maxFileBytes);
       final imported = repository.cached(song);
@@ -151,7 +153,7 @@ void main() {
     tester,
   ) async {
     final player = controller();
-    final repository = LyricsRepository();
+    final repository = LyricsRepository()..save(song, null)..save(second, null);
     final files = LrcFiles()..pending = Completer<String?>();
     addTearDown(player.shutdown);
     addTearDown(repository.close);
@@ -191,7 +193,7 @@ void main() {
       player.notifyListeners();
       await tester.pumpAndSettle();
       expect(find.text('Original embedded second song'), findsOneWidget);
-      expect(find.text('Lyrics from music file'), findsOneWidget);
+      expect(find.text('Lyrics from music file'), findsNothing);
       pending.complete(
         Lyrics.parse('Stale embedded first song', embedded: true),
       );
@@ -208,7 +210,7 @@ void main() {
     },
   );
 
-  testWidgets('both lyrics menus keep their action labels', (tester) async {
+  testWidgets('one top menu keeps all actions and Back stays in the header', (tester) async {
     final player = controller();
     final repository = LyricsRepository()
       ..save(song, Lyrics.parse('Cached lyrics'));
@@ -224,19 +226,22 @@ void main() {
     );
     await tester.pumpAndSettle();
     final buttons = find.byTooltip('Lyrics options');
-    expect(buttons, findsNWidgets(2));
+    expect(buttons, findsOneWidget);
+    final header = tester.getRect(find.byKey(const ValueKey('lyrics-song-pill')));
+    final back = tester.getRect(find.byTooltip('Back to cover'));
+    expect(back.center.dy, inInclusiveRange(header.top, header.bottom));
+    expect(tester.getRect(buttons).center.dy, inInclusiveRange(header.top, header.bottom));
+    expect(find.textContaining('Lyrics source'), findsNothing);
 
-    for (final index in [0, 1]) {
-      await tester.tap(buttons.at(index));
-      await tester.pumpAndSettle();
-      expect(find.text('Import .lrc file'), findsOneWidget);
-      expect(find.text('Read lyrics from music file'), findsOneWidget);
-      expect(find.text('Find lyrics on LRCLIB'), findsOneWidget);
-      expect(find.text('Paste lyrics'), findsOneWidget);
-      await tester.tapAt(const Offset(5, 5));
-      await tester.pumpAndSettle();
-      expect(find.text('Read lyrics from music file'), findsNothing);
-    }
+    await tester.tap(buttons);
+    await tester.pumpAndSettle();
+    expect(find.text('Import .lrc file'), findsOneWidget);
+    expect(find.text('Read lyrics from music file'), findsOneWidget);
+    expect(find.text('Find lyrics on LRCLIB'), findsOneWidget);
+    expect(find.text('Paste lyrics'), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(find.text('Read lyrics from music file'), findsNothing);
   });
 
   testWidgets('cached pasted lyrics take precedence over embedded tags', (
@@ -267,6 +272,62 @@ void main() {
     await tester.pumpAndSettle();
     expect(calls, 1);
     expect(find.text('Original embedded words'), findsOneWidget);
+  });
+
+  testWidgets('missing, empty or unreadable embedded tags automatically fall back to LRCLIB', (tester) async {
+    final player = controller();
+    addTearDown(player.shutdown);
+    for (final mode in ['missing', 'empty', 'unreadable']) {
+      final client = Client([
+        Response(utf8.encode('{"syncedLyrics":"[00:00]Online fallback words"}')),
+      ]);
+      final repository = LyricsRepository(createClient: () => client);
+      await tester.pumpWidget(view(player, repository, embedded: (_) async {
+        expect(client.requests, isEmpty, reason: 'Embedded tags are checked first');
+        if (mode == 'unreadable') throw const FormatException('bad tags');
+        return mode == 'empty' ? Lyrics.parse('[ar:Artist]', embedded: true) : null;
+      }));
+      await tester.pumpAndSettle();
+      expect(find.text('Online fallback words'), findsOneWidget);
+      expect(client.requests, hasLength(1));
+      expect(repository.cached(song)!.online, isTrue);
+      expect(find.byTooltip('Lyrics options'), findsOneWidget);
+      expect(find.text('Lyrics from music file'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(view(player, repository));
+      await tester.pumpAndSettle();
+      expect(client.requests, hasLength(1), reason: 'Reopening uses the session cache');
+      await tester.pumpWidget(const SizedBox());
+      repository.close();
+    }
+  });
+
+  testWidgets('embedded words prevent online lookup and imported words win a pending lookup', (tester) async {
+    final player = controller();
+    final repository = PendingLyrics();
+    addTearDown(player.shutdown);
+    addTearDown(repository.close);
+    await tester.pumpWidget(view(player, repository,
+      embedded: (_) async => Lyrics.parse('Embedded first', embedded: true),
+    ));
+    await tester.pumpAndSettle();
+    expect(repository.calls, 0);
+    expect(find.text('Embedded first'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    final pending = PendingLyrics();
+    addTearDown(pending.close);
+    await tester.pumpWidget(view(player, pending, files: LrcFiles()));
+    expect(pending.calls, 1);
+    await tester.tap(find.byTooltip('Lyrics options'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Import .lrc file'));
+    await tester.pumpAndSettle();
+    expect(find.text('Original imported line'), findsOneWidget);
+    pending.pending.complete(Lyrics.parse('Late online words', online: true));
+    await tester.pumpAndSettle();
+    expect(find.text('Late online words'), findsNothing);
+    expect(pending.cached(song)!.imported, isTrue);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets(
@@ -409,13 +470,15 @@ void main() {
         .enabled;
     // There is no highlighted line before the first timestamp.
     for (var index = 0; index < 3; index++) {
-      expect(softened(index), isFalse);
+      expect(softened(index), isTrue);
     }
+    expect(find.byKey(const ValueKey('lyrics-waiting')), findsOneWidget);
     await player.audio.seek(const Duration(seconds: 8));
     await tester.pumpAndSettle();
     expect(softened(0), isFalse);
     expect(softened(1), isTrue);
     expect(softened(2), isTrue);
+    expect(find.byKey(const ValueKey('lyrics-waiting')), findsNothing);
     await player.audio.seek(const Duration(seconds: 16));
     await tester.pumpAndSettle();
     expect(softened(0), isTrue);
@@ -465,6 +528,37 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+
+  testWidgets('timed instrumental gaps blur every line and recover after seeking', (tester) async {
+    final player = controller();
+    final repository = LyricsRepository()..save(song, Lyrics.parse(
+      '[00:08]First words\n[00:12]\n[00:16]Words return',
+    ));
+    addTearDown(player.shutdown);
+    addTearDown(repository.close);
+    await tester.pumpWidget(view(player, repository));
+    await tester.pumpAndSettle();
+    expect(find.text('Waiting for lyrics'), findsOneWidget);
+    await player.audio.seek(const Duration(seconds: 8));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('lyrics-waiting')), findsNothing);
+    expect(tester.widget<ImageFiltered>(find.byKey(const ValueKey('lyric-focus-0'))).enabled, isFalse);
+    await player.audio.seek(const Duration(seconds: 12));
+    await tester.pumpAndSettle();
+    expect(find.text('Instrumental break'), findsOneWidget);
+    for (var index = 0; index < 3; index++) {
+      expect(tester.widget<ImageFiltered>(find.byKey(ValueKey('lyric-focus-$index'))).enabled, isTrue);
+    }
+    await player.audio.seek(const Duration(seconds: 16));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('lyrics-waiting')), findsNothing);
+    expect(tester.widget<ImageFiltered>(find.byKey(const ValueKey('lyric-focus-2'))).enabled, isFalse);
+    await player.audio.seek(Duration.zero);
+    await tester.pumpAndSettle();
+    expect(find.text('Waiting for lyrics'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets(
     'lyric advances blur briefly, settle sharply, and respect manual and reduced motion',
@@ -553,7 +647,7 @@ void main() {
     },
   );
 
-  testWidgets('lookup needs a click; stale results cannot replace a new song', (
+  testWidgets('lookup starts automatically; stale results cannot replace a new song', (
     tester,
   ) async {
     final player = controller();
@@ -561,16 +655,13 @@ void main() {
     addTearDown(player.shutdown);
     addTearDown(repository.close);
     await tester.pumpWidget(view(player, repository));
-    expect(repository.calls, 0);
-    expect(find.textContaining('title, artist and duration'), findsOneWidget);
-    await tester.tap(find.text('Find lyrics'));
-    await tester.pump();
     expect(repository.calls, 1);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     player.queue[0] = second;
     await player.audio.seek(Duration.zero);
     await tester.pump();
     repository.pending.complete(Lyrics.parse('[00:00]Stale result'));
+    repository.other.complete(null);
     await tester.pumpAndSettle();
     expect(find.text('Stale result'), findsNothing);
     expect(find.text('Morning light'), findsOneWidget);
@@ -607,8 +698,6 @@ void main() {
       }
       final repository = PendingLyrics();
       await tester.pumpWidget(view(player, repository));
-      await tester.tap(find.text('Find lyrics'));
-      await tester.pump();
       repository.pending.completeError(const SocketException('offline'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Could not load lyrics'), findsOneWidget);
