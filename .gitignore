@@ -70,3 +70,9 @@ android/key.properties
 android/app/src/main/jniLibs/
 android/app/src/main/java/io/flutter/plugins/
 native/android/
+
+# Private sync deployment/cache files
+cloud/worker/.wrangler/
+**/node_modules/
+*.aesgcm
+cloud/worker/.dev.vars*
