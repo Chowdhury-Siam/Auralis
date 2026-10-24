@@ -13,6 +13,7 @@ import '../lyrics.dart';
 import '../storage.dart';
 import 'td_transport.dart';
 import 'embedded_cover.dart';
+import 'phone_login.dart';
 
 class TelegramService extends ChangeNotifier {
   TelegramService(
@@ -20,10 +21,16 @@ class TelegramService extends ChangeNotifier {
     this.vault, {
     TdTransport? transport,
     TdTransport Function()? createTransport,
+    this.applicationApiId = const int.fromEnvironment('TELEGRAM_API_ID'),
+    this.applicationApiHash = const String.fromEnvironment('TELEGRAM_API_HASH'),
   }) : _createTransport = createTransport ?? TdTransport.new,
        _transport = transport ?? (createTransport ?? TdTransport.new)();
   final Directory directory;
   final SecretVault vault;
+  final int applicationApiId;
+  final String applicationApiHash;
+  bool get hasApplicationCredentials => applicationApiId > 0 &&
+      RegExp(r'^[a-fA-F0-9]{32}$').hasMatch(applicationApiHash);
   TdTransport _transport;
   final TdTransport Function() _createTransport;
   bool _clientClosed = false;
@@ -34,6 +41,7 @@ class TelegramService extends ChangeNotifier {
   Json _secrets = {};
   String state = 'disconnected';
   String? error;
+  String? authenticationPhoneNumber;
   bool busy = false;
   bool credentialRecoveryRequired = false;
   final Map<int, MusicChat> _channels = {};
@@ -232,7 +240,7 @@ class TelegramService extends ChangeNotifier {
   Future<void> start({int? apiId, String? apiHash}) async {
     await action(() async {
       if (state != 'disconnected') {
-        throw StateError('Finish signing out before entering new API details.');
+        throw StateError('Finish signing out before connecting again.');
       }
       try {
         _secrets = await vault.read();
@@ -242,6 +250,14 @@ class TelegramService extends ChangeNotifier {
         throw const FormatException(
           'Saved Telegram credentials cannot be unlocked on this device. Restore a password-protected account backup to recover your sign-in, or choose Sign in again to create a new local session.',
         );
+      }
+      // Retain the application identity of existing/restored sessions. Use the
+      // build identity only for a fresh sign-in with no saved API details.
+      if (apiId == null && apiHash == null &&
+          !_secrets.containsKey('apiId') && !_secrets.containsKey('apiHash') &&
+          hasApplicationCredentials) {
+        _secrets['apiId'] = applicationApiId;
+        _secrets['apiHash'] = applicationApiHash;
       }
       if (apiId == null &&
           apiHash == null &&
@@ -364,6 +380,17 @@ class TelegramService extends ChangeNotifier {
   Future<Json>? _parametersRequest;
   Future<void> _onAuthorization(Json auth) async {
     state = auth['@type'] as String;
+    if(state=='authorizationStateWaitCode') {
+      final info=auth['code_info'];
+      if(info is Map && info['phone_number'] is String) {
+        final reported=(info['phone_number'] as String).trim();
+        try {
+          authenticationPhoneNumber=internationalLoginNumber(reported.startsWith('+') || reported.startsWith('00')?reported:'+$reported');
+        } on FormatException { /* Keep the last known number if Telegram omits it. */ }
+      }
+    } else if(state=='authorizationStateReady' || state=='authorizationStateClosed') {
+      authenticationPhoneNumber=null;
+    }
     if (state == 'authorizationStateClosed') {
       _clientClosed = true;
       _parametersRequest = null;
@@ -401,7 +428,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.66',
+          'application_version': '0.1.69',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -414,11 +441,11 @@ class TelegramService extends ChangeNotifier {
   }
 
   Future<void> submit(String value) => action(() async {
+    if(state=='authorizationStateWaitPhoneNumber') {
+      await _sendLoginPhoneNumber(value);
+      return;
+    }
     final request = switch (state) {
-      'authorizationStateWaitPhoneNumber' => {
-        '@type': 'setAuthenticationPhoneNumber',
-        'phone_number': value.trim(),
-      },
       'authorizationStateWaitCode' => {
         '@type': 'checkAuthenticationCode',
         'code': value.trim(),
@@ -446,6 +473,23 @@ class TelegramService extends ChangeNotifier {
       throw const FormatException('Enter a value to continue.');
     }
     await transport.request(request);
+  });
+
+  Future<List<PhoneCountry>> loginCountries() async => PhoneCountry.fromResponse(await request({'@type':'getCountries'}));
+
+  Future<void> _sendLoginPhoneNumber(String input) async {
+    final number=internationalLoginNumber(input),previous=authenticationPhoneNumber;
+    authenticationPhoneNumber=number;
+    try {
+      await transport.request({'@type':'setAuthenticationPhoneNumber','phone_number':number});
+      if(ready || state=='disconnected') authenticationPhoneNumber=null;
+    }
+    catch (_) {authenticationPhoneNumber=previous;rethrow;}
+  }
+
+  Future<void> changeLoginPhoneNumber(String number)=>action(() async {
+    if(state!='authorizationStateWaitCode') throw StateError('The number can be edited while waiting for a login code.');
+    await _sendLoginPhoneNumber(number);
   });
 
   Future<void> refreshChats() async {
@@ -641,6 +685,7 @@ class TelegramService extends ChangeNotifier {
 
   Future<void> logout() => action(() async {
     await transport.request({'@type': 'logOut'});
+    authenticationPhoneNumber=null;
     state = _clientClosed ? 'disconnected' : 'authorizationStateLoggingOut';
     connection = _clientClosed ? 'Offline' : 'Signing out';
     _channels.clear();
@@ -653,7 +698,9 @@ class TelegramService extends ChangeNotifier {
       await vault.write(_secrets);
     } catch (_) {
       throw StateError(
-        'Signed out, but saved API details could not be cleared. Enter your API ID and hash again before connecting.',
+        hasApplicationCredentials
+            ? 'Signed out, but saved connection details could not be cleared. Restart Auralis and try connecting again.'
+            : 'Signed out, but saved API details could not be cleared. Enter your API ID and hash again before connecting.',
       );
     }
   });
@@ -683,6 +730,7 @@ class TelegramService extends ChangeNotifier {
 
   Future<void> shutdown() async {
     state = 'disconnected';
+    authenticationPhoneNumber=null;
     clearImageCache();
     await _subscription?.cancel();
     try {
