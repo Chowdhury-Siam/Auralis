@@ -784,3 +784,9 @@ Five Flutter regressions cover country parsing/shared codes/search, national/int
 Wrapped the multiline deployment health-check guard and the test settings-response branch in blocks, and annotated the inherited HttpClientRequest method/uri fixture fields with @override. These directly address all four reported fatal-info findings without changing deployment behavior. Shared version is 0.1.70+71 with updated release notes.
 
 Local validation: all 62 app/test Dart files passed syntax parsing; release-note consistency and Android source checks passed; the source diff was verified against the complete 0.1.69 archive. Flutter/Dart are unavailable here, so the analyzer, Flutter tests and native builds still require CI verification.
+
+## 0.1.71 Turso URL normalization regression — 24 October 2026
+
+Both supplied CI logs report one failing test: explicit `libsql://a.turso.io:443` reached the fake HTTP client instead of being rejected. Dart's HTTPS URI normalization removes the default port before the previous `hasPort` check. Database validation now checks the raw normalized URL against the same strict host-only allowlist as the Worker before parsing. The original no-network regression is retained and extended to all three accepted schemes with explicit :443, non-default ports, user info, paths, queries and fragments; a separate test covers accepted schemes and trailing slashes. Shared Android/Windows version is 0.1.71+72.
+
+Local validation: 11 Node deployment/Turso tests passed; a local comparison of the Dart source allowlist and Worker validator accepted 6 valid URLs and rejected 11 invalid forms. All 62 app/test Dart files passed syntax parsing, and release-note consistency and Android source checks passed. Flutter/Dart are unavailable locally, so Flutter analysis/tests and native builds still require CI verification.
