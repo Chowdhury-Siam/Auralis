@@ -1,38 +1,18 @@
 # GitHub Releases and application updates
 
-Configured repository: **[Chowdhury-Siam/Auralis](https://github.com/Chowdhury-Siam/Auralis)**. Current source target is **v0.1.63**, with artwork gestures, timed-lyrics waiting effects, and the custom Windows installer described in [INSTALLER.md](INSTALLER.md). Earlier playback, lyrics, artwork theme, navigation, Telegram backup and Android changes remain included. Commit the complete source to main to run the Windows build and publisher; rerunning an older commit uses its older source. No repository changes or release publication were made from this workspace.
+Repository: **[Chowdhury-Siam/Auralis](https://github.com/Chowdhury-Siam/Auralis)**.
+Current source target: **v0.1.64** (`0.1.64+65`).
 
-The Windows release flow below remains independent. Android builds run in `.github/workflows/android.yml` and upload APK artifacts; see [ANDROID.md](ANDROID.md). They do not edit Windows tags/releases or run the Windows publisher.
+Android and Windows build independently; **Publish Auralis release** waits for both
+successful artifacts from the same trusted main commit. **Clean completed Auralis
+runs** removes green runs after publication and failures after a minimum ten-minute
+retention period. Build artifacts needed for an unpublished release are retained.
 
-The canonical repository changed to `Chowdhury-Siam/Auralis` on 23 October 2026. Historical run and release links below retain their original repository for provenance. Builds that still embed the previous repository must be replaced with a new build to change their update source; source edits cannot change an already installed binary.
-
-## Release flow
-
-1. Upload the complete project as the repository root, including `.github`, `pubspec.lock`, tests, native notices and the vendored runtime. A push to `main` runs the Windows build/test/package job and, after success, the stable publisher. A manual run on `main` does the same. Other branches and pull requests produce artifacts only.
-2. Analysis, automated tests, native smoke tests and installer packaging must succeed. The job packages a portable ZIP, per-user Inno Setup installer, application source ZIP from the committed revision, and `SHA256SUMS.txt`.
-3. The publisher reads the stable version from `pubspec.yaml`. For the current `0.1.48+49`, it creates `v0.1.48` at the exact tested commit if that tag is absent. No manual tag is required. An existing tag must already resolve to the tested commit; it is never moved. Explicit stable tag builds remain supported and must match `pubspec.yaml`.
-4. Using the publishing job's `GITHUB_TOKEN` with `contents: write`, it creates an unpublished draft with `--prerelease=false`. It resolves the draft-aware CLI lookup's numeric `databaseId`, checks that the corresponding REST release has the intended tag and remains a non-prerelease draft, then uploads all four assets. It refreshes metadata by numeric ID, verifies GitHub's SHA-256 asset digests, then publishes with `--draft=false --prerelease=false`. It never uses the published-only by-tag REST route to verify a draft. The newest stable version is marked Latest; releasing an older version preserves a newer Latest. Build permissions remain read-only, and publishing jobs serialize to avoid concurrent tag/asset updates.
-5. Published versions are immutable. A later push with the same version reports that it is already stable and skips release mutation. For the next app update, bump `pubspec.yaml` to a new stable version, such as `0.1.49+50`, and commit to `main`; it automatically publishes `v0.1.49` after successful checks. A build-number-only change does not create a new stable release. An existing published prerelease is not silently overwritten; use a new stable version.
-
-Optional tag-based release after completing the native distribution audit:
-
-```powershell
-git tag v0.1.48
-git push origin v0.1.48
-```
-
-Tags such as `v0.1.3-beta`, mismatched versions, pull requests, other branches and mismatched checkout commits cannot publish. Existing drafts may resume only at their original tested tag/commit; a failed digest check leaves the draft unpublished. GitHub API permission/network errors fail explicitly instead of being treated as a missing release. An `untagged-…` URL is normal for an unpublished draft; it is not a reason to delete or move the version tag. Historical failed drafts may remain. The current source uses `v0.1.48`, preserving previous tags and published assets.
-
-Expected assets for `v0.1.48`:
-
-```text
-auralis-0.1.48-windows-x64.zip
-auralis-0.1.48-windows-x64-setup.exe
-auralis-0.1.48-source.zip
-SHA256SUMS.txt
-```
-
-GitHub Actions and repository/org policies must permit the publish job's write token. No Telegram credentials or personal access token need to be committed or added to the app. **Windows compilation, native smoke tests and installer compilation passed in run 39232305284. Actual stable publication, installation and in-app update execution remain unverified.** The local machine still lacks Visual Studio C++ Build Tools and Inno Setup. Publisher behavior is tested with a process-local fake GitHub CLI; it makes no external mutations during tests.
+See [RELEASE_PIPELINE.md](RELEASE_PIPELINE.md) for the authoritative current flow,
+release notes, update notices, signing, retries and cleanup timing. That flow
+supersedes older same-workflow publisher instructions. See [SYNC.md](SYNC.md) for
+one-time multi-device sync deployment and pairing. No GitHub/Cloudflare deployment
+or release was performed from this workspace.
 
 ## TDLib build cache
 
@@ -53,7 +33,7 @@ Implementation follows the official [restore](https://github.com/actions/cache/b
 ## Application update flow
 
 - Auralis reads its installed version from Windows package metadata, using `package_info_plus`; it does not assume the source's version is the installed version.
-- Automatic checks are enabled initially, run ten seconds after startup and every six hours while the app is open, and can be disabled in Settings. Settings also has a manual Check now button. No background scheduled task/service is installed.
+- Automatic checks are enabled initially, run three seconds after startup, on resume (at most once per five minutes) and every thirty minutes while the app is open, and can be disabled in Settings. Settings also has a manual Check now button. No background scheduled task/service is installed.
 - Checks use the configured public repository's latest stable GitHub Release. Drafts, prereleases, same/older versions, wrong asset names, missing SHA-256 digests, oversized files, and download URLs from another repository are not accepted.
 - A new version shows a banner. Download retrieves that exact Windows x64 installer using HTTPS and verifies its byte count and the SHA-256 digest reported by GitHub. Redirects are limited to GitHub's specified download hosts. Incomplete or corrupt downloads are not executable candidates.
 - Installation requires **Install and restart**, followed by confirmation. The file is hashed again before handoff. Following Yutaka's Windows updater, Auralis launches the verified setup.exe directly as a detached process with no shell or PowerShell helper. It passes its PID, installation directory and log path as separate arguments, then runs the shared orderly audio/TDLib shutdown and required process exit. Inno Setup waits up to 90 seconds for that process before beginning setup and aborts if waiting fails. Complete the visible setup wizard; the update-only Run entry reopens Auralis after success.
