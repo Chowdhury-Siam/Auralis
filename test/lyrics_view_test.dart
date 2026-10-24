@@ -319,10 +319,17 @@ void main() {
     await tester.pumpWidget(view(player, pending, files: LrcFiles()));
     expect(pending.calls, 1);
     await tester.tap(find.byTooltip('Lyrics options'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('Import .lrc file'));
-    await tester.pumpAndSettle();
+    // Start the menu transition before advancing it. The pending lookup keeps
+    // a progress indicator running, so pumpAndSettle cannot open this menu.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    final importItem = find.widgetWithText(PopupMenuItem<String>, 'Import .lrc file');
+    expect(importItem.hitTestable(), findsOneWidget);
+    await tester.tap(importItem);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
     expect(find.text('Original imported line'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
     pending.pending.complete(Lyrics.parse('Late online words', online: true));
     await tester.pumpAndSettle();
     expect(find.text('Late online words'), findsNothing);
