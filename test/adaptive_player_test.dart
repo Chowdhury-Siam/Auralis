@@ -341,7 +341,7 @@ void main() {
         );
         expect(audio.playing, isTrue);
         expect(find.byTooltip('Listening stats'), findsNothing);
-        expect(find.text('FLAC'), findsOneWidget);
+        expect(find.text('FLAC'), findsNothing);
         expect(tester.takeException(), isNull, reason: '$size Now Playing');
         final layout = find.byKey(const ValueKey('now-playing-layout'));
         final pageBounds = tester.getRect(layout).inflate(.1);
@@ -385,8 +385,8 @@ void main() {
           findsNothing,
         );
         expect(
-          find.byKey(const ValueKey('now-playing-queue')).hitTestable(),
-          size.width < 900 ? findsOneWidget : findsNothing,
+          find.byKey(const ValueKey('now-playing-queue')),
+          findsNothing,
         );
         if (size.width >= 760 && size.height >= 650) {
           final next = find.byKey(const ValueKey('now-playing-next-0'));
@@ -466,51 +466,35 @@ void main() {
             image.dispose();
           });
         }
-        await tester.tap(
-          size.width < 900
-              ? find.byKey(const ValueKey('now-playing-queue'))
-              : find.byTooltip('Play queue').first,
-        );
+        await tester.tap(find.byTooltip('Settings').first);
         await tester.pumpAndSettle();
         expect(
           tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
-          'Play queue',
+          'Settings',
         );
-        expect(find.byTooltip('Listening stats'), findsNothing);
-
-        await tester.tap(find.byTooltip('Library').first);
-        await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Settings').first);
-        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+        expect(find.byType(AlertDialog), findsNothing);
         expect(tester.takeException(), isNull, reason: '$size Settings');
-        await tester.tap(find.text('Done'));
+        await tester.tap(find.byTooltip('Back to Library'));
         await tester.pumpAndSettle();
-        for (final tab in ['Telegram', 'Play queue']) {
-          await tester.tap(find.byTooltip(tab).first);
-          await tester.pumpAndSettle();
-          expect(tester.takeException(), isNull, reason: '$size $tab');
-          if (tab == 'Telegram') {
-            final channel = find.widgetWithText(
-              CheckboxListTile,
-              'Music channel',
-            );
-            await tester.scrollUntilVisible(
-              channel,
-              80,
-              scrollable: find.descendant(
-                of: find.byKey(const ValueKey('telegram-channels')),
-                matching: find.byType(Scrollable),
-              ),
-            );
-            await tester.pumpAndSettle();
-            expect(channel.hitTestable(), findsOneWidget);
-            expect(
-              tester.takeException(),
-              isNull,
-              reason: '$size channel list',
-            );
-          }
-        }
+        await tester.tap(find.byTooltip('Telegram').first);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: '$size Telegram');
+        final channel = find.widgetWithText(
+          CheckboxListTile,
+          'Music channel',
+        );
+        await tester.scrollUntilVisible(
+          channel,
+          80,
+          scrollable: find.descendant(
+            of: find.byKey(const ValueKey('telegram-channels')),
+            matching: find.byType(Scrollable),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(channel.hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: '$size channel list');
         await tester.tap(find.byTooltip('Library').first);
         await tester.pumpAndSettle();
         if (size.width == 360 || size.width == 1280) {
@@ -555,7 +539,6 @@ void main() {
         expect(tester.takeException(), isNull, reason: '$size at $scale text');
         for (final key in [
           'now-playing-play-pause',
-          'now-playing-queue',
           'volume-slider',
           'sleep-timer-control',
         ]) {
