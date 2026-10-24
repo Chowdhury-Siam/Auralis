@@ -61,7 +61,9 @@ class SyncDeployment {
   Future<void> _verify(String url,String key,{bool turso=false}) async {
     final (status,health)=await _request('GET',Uri.parse('$url/health'));
     if(status!=200 || health['service']!='auralis-sync' || health['configured']!=true ||
-        (turso && (health['backend']!='turso' || health['version']!=currentReleaseVersion))) throw const FormatException('The Auralis sync service is not ready.');
+        (turso && (health['backend']!='turso' || health['version']!=currentReleaseVersion))) {
+      throw const FormatException('The Auralis sync service is not ready.');
+    }
     final (syncStatus,data)=await _request('POST',Uri.parse('$url/v1/sync'),token:key,bytes:utf8.encode('{"cursor":0,"ops":{}}'));
     if(syncStatus!=200 || data['records'] is! Map || data['cursor'] is! int) throw const FormatException('Could not verify the sync key and database.');
   }
