@@ -53,6 +53,7 @@ app.*.map.json
 *.env
 .env*
 secrets*
+auralis-telegram-build.json
 local.properties
 native/*.dll
 native/tdlib/
