@@ -644,3 +644,38 @@ Documentation includes the one-time token/setup steps and removal of the setup t
 Verification: **32 Android Python tooling/publisher tests passed**, including real keytool key generation, two isolated build-directory preparations with identical exported certificates, private-key signing of certificate requests and independent OpenSSL signature verification. GitHub secret storage was simulated locally; no real GitHub secrets were created or overwritten. Regressions cover no rotation on setup rerun, preservation of existing keys, partial/invalid configurations, denied/untrusted setup, sanitized API errors, PR secret exclusion, fresh build dispatch, release-only compilation and development/saved-key release groups coexisting. Existing native ABI/alignment validation and immutable/draft release asset tests continue passing. Workflow YAML parsing, shell syntax and Android source checks pass. Full Flutter suite **131 passed**, **23 Windows-only checks skipped**; fatal-info analysis clean.
 
 The final native Android release APK, optimized download size, apksigner/manifest verification on a built APK, real GitHub setup/dispatch and same-key phone upgrade were not executed here. Keytool/OpenSSL checks verify identity generation/reuse and signing capability, not a device install. No GitHub repository push or release publication was performed. The complete source ZIP was checked for CRC, exact intended overlays/new files, unchanged baseline bytes and absence of private keys/toolchains/build outputs.
+
+
+## 0.1.59 custom Windows installer — 24 October 2026
+
+Adapted Yutaka's custom Inno desktop layout to Auralis's existing icon, music
+branding and purple theme. The setup includes folder selection, Browse, desktop
+shortcut preference, progress, license access and Launch/Done completion. The
+existing production app ID, per-user install path, release/updater asset name,
+PID wait, data location and update restart were retained. Windows CI now probes
+compiler capabilities and runs the installer around an isolated fixture before
+packaging. See INSTALLER.md for the exact check and its boundaries.
+
+Locally verified: generated BMP artwork and dimensions; Python syntax; workflow
+YAML; Dart syntax for version/installer-test changes; and 17 portable regressions
+from the Yutaka checker exercised against the adapted Auralis input/polling
+helpers. Android source verification also passed. This environment has no
+Windows, Inno Setup, PowerShell or Flutter SDK. The actual installer executable,
+Windows GUI, full Flutter suite, app upgrade and GitHub release have not been
+built/run/published here.
+
+
+## 0.1.60 one-click Windows installation — 24 October 2026
+
+The normal installer path now needs one Install click after opening setup.
+The app opens and setup exits after success. Location and shortcut options stay
+inline, upgrades reuse the saved location, and ordinary silent installations
+remain quiet. Update-mode automatic restart and the requesting-process wait
+remain. Windows restart decisions can still show their native controls when
+necessary. The CI GUI fixture now waits for setup to exit directly after Install,
+checks automatic launch, reopens without /DIR to verify saved-folder reuse, and
+checks silent non-update behavior; it no longer clicks Launch or Done.
+
+Python/Dart syntax and source checks were verified locally. The actual Inno
+installer and Windows GUI checks require the Windows CI runner; neither was
+executed in this environment.
