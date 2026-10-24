@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.65
+
+- Fixed the Android and Windows analyzer failures by updating the timed swipe tests to Flutter's supported gesture API.
+- Updated the lyrics animation to the current ticker API and removed a redundant Android audio import.
+
 ## 0.1.64
 
 - Added multi-device sync for favorites, playlists, recent music, listening statistics, channel selections and shared preferences on Android and Windows.
