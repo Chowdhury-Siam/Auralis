@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.66
+
+- Kept the bottom player in a single row on short, wide screens so the Library fits in phone landscape mode.
+- Updated volume tests to use Now Playing and fixed lyrics import test timing while an online lookup is pending.
+
 ## 0.1.65
 
 - Fixed the Android and Windows analyzer failures by updating the timed swipe tests to Flutter's supported gesture API.
