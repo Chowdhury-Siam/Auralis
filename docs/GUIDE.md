@@ -14,7 +14,7 @@ Use the **All songs**, **Favorites**, **Playlists** and **Recently played** chip
 
 Create a playlist in Library → Playlists or while adding a track. Open a playlist and click a track to play its saved order. Rename and Delete are explicit buttons; track actions inside a playlist can remove that entry. Duplicate entries are ignored. Names are trimmed, case-insensitively unique and limited to 60 characters. There are limits of 100 playlists, 5000 tracks per playlist and 10000 favorites. Saved playlists keep their order; Library sort does not reorder them or Recent music. Delete removes the playlist only, never the Telegram files.
 
-These are local collections, retained across sign-out and app restarts. They store message IDs and playlist names rather than native file IDs, artwork, credentials or audio copies. A saved track is playable only when its source channel is selected and its message appears in the loaded Library. Missing/inaccessible messages stay referenced but are not playable; choose the appropriate channels and refresh. The loaded/saved count is visible in larger windows. No cloud playlist sync, downloaded playlist audio or queue restoration is implemented.
+These are local collections, retained across sign-out and app restarts. They store message IDs and playlist names rather than native file IDs, artwork, credentials or audio copies. A saved track is playable only when its source channel is selected and its message appears in the loaded Library. Missing/inaccessible messages stay referenced but are not playable; choose the appropriate channels and refresh. The loaded/saved count is visible in larger windows. Optional multi-device sync shares playlist references and other library data through your private Auralis service; see [SYNC.md](SYNC.md). Downloaded playlist audio and queue restoration are not implemented.
 
 ## Repeat and sleep timer
 
@@ -155,3 +155,7 @@ Tests use generated audio and synthetic metadata only. Flutter UI previews are r
 ## Android system media artwork
 
 The media notification and compatible launcher/lock-screen players receive the current cover through Android media metadata. A preview is upgraded when the full cover becomes available. Song changes clear the previous cover immediately; failed artwork reads do not stop playback. The existing Telegram cover reader is reused, preserving its streaming safeguards. Android uses a monochrome Auralis notification mark. Android and launcher software control the surrounding system-player layout.
+
+## Sync and release notes
+
+Settings includes **Multi-device sync** for connecting and pairing devices, and **What’s new** for installed-release changes. Your private sync service must be deployed once; follow [SYNC.md](SYNC.md). New-update banners provide **What changed**, using the same release notes published to GitHub. The app checks for updates at startup, on return to the app (at most once per five minutes) and every thirty minutes when automatic updates are enabled. Changes are shown once after installing a new version. The current build/publish/cleanup flow is documented in [RELEASE_PIPELINE.md](RELEASE_PIPELINE.md).
