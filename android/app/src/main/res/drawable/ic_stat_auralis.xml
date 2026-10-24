@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="256" android:viewportHeight="256">
+    <!-- Auralis A/play mark, monochrome for Android media notifications. -->
+    <path android:pathData="M67,185 L116,69 Q128,43 140,69 L189,185"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="24"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M111,119 Q111,113 117,117 L155,139 Q161,143 155,147 L117,169 Q111,173 111,167 Z"
+        android:fillColor="#FFFFFFFF" />
+</vector>
