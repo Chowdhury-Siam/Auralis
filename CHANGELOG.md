@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.71
+
+- Fixed sync setup URL validation on Android and Windows: explicit ports, credentials, paths, queries and fragments are rejected before network requests.
+- Valid HTTPS, libsql and turso database URLs continue to work, with or without a trailing slash.
+
 ## 0.1.70
 
 - Fixed the four reported Android/Windows analyzer lints in sync deployment code and its test fixtures by adding required blocks and override annotations.
