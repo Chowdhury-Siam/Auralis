@@ -548,6 +548,16 @@ void main() {
       expect(client.requests.length, 2);
     },
   );
+  test('release notes come from the verified release metadata and are bounded', () {
+    final json=release()..['body']='Changes for this version';
+    final update=ReleaseUpdate.fromJson(json,repository,StableVersion.parse('0.1.0'))!;
+    expect(update.notes,'Changes for this version');
+    json['body']='x'*13000;
+    expect(ReleaseUpdate.fromJson(json,repository,StableVersion.parse('0.1.0'))!.notes.length,12000);
+    json.remove('body');
+    expect(ReleaseUpdate.fromJson(json,repository,StableVersion.parse('0.1.0'))!.notes,isEmpty);
+  });
+
   test(
     'automatic update preference persists independently of existing settings',
     () async {
