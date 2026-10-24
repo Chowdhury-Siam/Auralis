@@ -738,3 +738,17 @@ Initial pairing completes a read-only cloud pull before uploading any local base
 Fixed all five issues reported by the Android and Windows Flutter 3.47.1 analyzers: removed the redundant `dart:typed_data` import from Android audio, replaced `TickerMode.of(context)` with `TickerMode.valuesOf(context).enabled`, and changed the three swipe tests to `timedDrag` with a positional duration. Gesture distances and durations are preserved. Shared app version is 0.1.65+66; bundled and GitHub release notes include these fixes.
 
 Validation here: all 57 app/test Dart files passed syntax parsing; Android source verification and release-note consistency checks passed. The changes were compared against the complete 0.1.64 source archive. Flutter/Dart are not installed in this environment, so `flutter analyze --no-pub --fatal-infos`, Flutter tests and native builds were not run locally; CI must verify them.
+
+## 0.1.66 landscape layout and widget regression fixes — 24 October 2026
+
+The supplied CI log shows the earlier analyzer fixes passing compilation and identifies four widget failures. The Library overflow at 844×390 came from the two-row bottom player reducing the content height. Short screens (height below 560) at least 600 logical pixels wide now use a single row for preview, seek and transport. The existing adaptive-size regression still checks layout exceptions and seeking across twelve window sizes, with additional height and hit-target assertions for short wide screens. Rounded styling, swipe-to-stop and the dock's omitted volume/repeat/sleep controls are preserved.
+
+The two volume tests now explicitly open Now Playing before looking for its speaker and volume slider; they also assert that the Library dock omits volume controls. Decorative motion is disabled in these interaction tests. The pending lyrics lookup test pumps the first menu frame before advancing its opening animation, asserts that the actual Import menu item is hit-testable, and uses bounded pumps while the online progress indicator is active. It still verifies that imported lyrics replace loading and a late online reply cannot replace them.
+
+Local verification: all 57 app/test Dart files passed syntax parsing; Android source and release-note consistency checks passed. Source changes were compared against the complete 0.1.65 archive. Flutter/Dart are not installed here, so the four widget regressions, the full Flutter suite, analysis and native builds must still be verified by CI.
+
+## Skipped workflow-run cleanup — 24 October 2026
+
+Completed gray/skipped runs are now eligible for deletion at the next cleanup, including skipped release-publishing runs. Failed runs still require ten minutes after completion. The completed-status and current-run guards remain, and unpublished successful main builds, queued/in-progress runs and cancellations are retained. This is a workflow/tooling-only correction; the app remains 0.1.66+67.
+
+All seven release-policy Node tests passed, including the new skipped-run regression and existing artifact/active-retry/failure-age protections. Cleanup YAML and its embedded JavaScript syntax passed validation. Actual GitHub workflow execution and deletion were not performed here.
