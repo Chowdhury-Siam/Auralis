@@ -1,6 +1,13 @@
 {
-  "current": "0.1.64",
+  "current": "0.1.65",
   "releases": [
+    {
+      "version": "0.1.65",
+      "changes": [
+        "Fixed the Android and Windows analyzer failures by updating the timed swipe tests to Flutter's supported gesture API.",
+        "Updated the lyrics animation to the current ticker API and removed a redundant Android audio import."
+      ]
+    },
     {
       "version": "0.1.64",
       "changes": [
