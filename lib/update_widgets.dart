@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'updater.dart';
+import 'release_notes.dart';
 
 class UpdateSettings extends StatelessWidget {
   const UpdateSettings({super.key, required this.updater});
@@ -25,8 +26,8 @@ class UpdateSettings extends StatelessWidget {
           ),
           subtitle: Text(
             updater.isAndroid
-                ? 'At startup and every six hours. Android asks before installation.'
-                : 'At startup and every six hours',
+                ? 'At startup and every thirty minutes. Android asks before installation.'
+                : 'At startup and every thirty minutes',
           ),
           value: updater.settings.automaticUpdates,
           onChanged: updater.setAutomatic,
@@ -65,6 +66,11 @@ class UpdateSettings extends StatelessWidget {
                   : updater.check,
               child: Text(updater.checking ? 'Checking…' : 'Check now'),
             ),
+            if (updater.available != null)
+              TextButton(
+                onPressed: () => showReleaseChanges(context, '${updater.available!.version}', updater.available!.notes.isEmpty ? 'Release notes are not available for this update.' : updater.available!.notes),
+                child: const Text('What changed'),
+              ),
             if (updater.available != null && updater.downloaded == null)
               FilledButton.tonal(
                 onPressed: updater.downloading || updater.checking
@@ -97,40 +103,42 @@ class UpdateBanner extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: updater,
     builder: (context, _) {
-      if (updater.available == null) return const SizedBox.shrink();
+      final release = updater.available;
+      if (release == null) return const SizedBox.shrink();
       return Material(
         color: Theme.of(context).colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(18),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Row(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: Text(
-                  updater.downloading
-                      ? 'Downloading update… ${(updater.progress * 100).round()}%'
-                      : updater.error != null
-                      ? 'Update needs attention. Open Settings to retry.'
-                      : 'Auralis ${updater.available!.version} is available.',
-                  style: const TextStyle(fontSize: 12),
-                ),
+              Text(
+                updater.downloading
+                    ? 'Downloading update… ${(updater.progress * 100).round()}%'
+                    : updater.error != null
+                    ? 'Update needs attention. Open Settings to retry.'
+                    : 'Auralis ${release.version} is available.',
+                style: const TextStyle(fontSize: 12),
               ),
-              if (updater.error == null)
+              Wrap(spacing: 8, children: [
                 TextButton(
-                  onPressed: updater.downloading || updater.installing
-                      ? null
-                      : () async {
-                          if (updater.downloaded == null) {
-                            await updater.download();
-                          } else {
-                            await confirmUpdate(context, updater);
-                          }
-                        },
-                  child: Text(
-                    updater.downloaded == null
-                        ? 'Download'
-                        : updater.installLabel,
-                  ),
+                  onPressed: () => showReleaseChanges(context, '${release.version}', release.notes.isEmpty ? 'Release notes are not available for this update.' : release.notes),
+                  child: const Text('What changed'),
                 ),
+                if (updater.error == null)
+                  TextButton(
+                    onPressed: updater.downloading || updater.installing ? null : () async {
+                      if (updater.downloaded == null) {
+                        await updater.download();
+                      } else if (context.mounted) {
+                        await confirmUpdate(context, updater);
+                      }
+                    },
+                    child: Text(updater.downloaded == null ? 'Download' : updater.installLabel),
+                  ),
+              ]),
             ],
           ),
         ),
