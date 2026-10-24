@@ -24,8 +24,18 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot 'docs') -Destination $Release -Re
 # A distributable Flutter bundle contains its DLLs and data directory as well as the EXE.
 Compress-Archive -Path (Join-Path $Release '*') -DestinationPath (Join-Path $Dist "auralis-$Version-windows-x64.zip") -Force
 if ($Installer) {
-    $Iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
-    if (-not (Test-Path -LiteralPath $Iscc)) { throw 'Install Inno Setup 6 before requesting an installer.' }
+    $Iscc = $env:ISCC_PATH
+    if ([string]::IsNullOrWhiteSpace($Iscc)) {
+        $Iscc = @(
+            "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe",
+            "$env:ProgramFiles/Inno Setup 6/ISCC.exe",
+            "$env:ProgramFiles/Inno Setup 7/ISCC.exe"
+        ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    }
+    if ([string]::IsNullOrWhiteSpace($Iscc) -or -not (Test-Path -LiteralPath $Iscc -PathType Leaf)) {
+        throw 'Install Inno Setup 6.7+ or set ISCC_PATH to its ISCC.exe before requesting an installer.'
+    }
+    & $Iscc /Qp (Join-Path $PSScriptRoot 'installer-compiler-check.iss')
     & $Iscc "/DAuralisVersion=$Version" (Join-Path $PSScriptRoot 'installer.iss')
 }
 $Source = Join-Path $Dist "auralis-$Version-source.zip"
