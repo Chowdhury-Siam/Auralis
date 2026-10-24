@@ -14,6 +14,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
 
+class StopFailureAudio extends FakeAudio {
+  @override
+  Future<void> stop() async => throw StateError('stop unavailable');
+}
+
 void main() {
   setUpAll(() async {
     final font = File(
@@ -125,14 +130,102 @@ void main() {
         expect(dock, findsOneWidget, reason: 'Paused music can be resumed');
 
         await player.clear();
-        await tester.pumpAndSettle();
         expect(player.current, isNull);
+        await tester.pumpAndSettle();
         expect(dock, findsNothing, reason: '$size queue cleared');
         expect(tester.takeException(), isNull);
       }
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('rounded dock omits extra controls, seeking stays separate and swiping fully stops', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    const track = Track(id: 'swipe-stop', title: 'Swipe song', artist: 'Artist', source: 'Channel', fileId: 7, size: 100);
+    for (final (size, reduced) in [
+      (const Size(390, 844), true),
+      (const Size(1280, 800), true),
+      (const Size(390, 844), false),
+    ]) {
+      for (final direction in [-1.0, 1.0]) {
+        final audio = FakeAudio()..duration = const Duration(minutes: 4);
+        final proxy = TelegramStreamProxy((_) async => {});
+        final settings = MemorySettings()..reducedMotion = reduced;
+        final player = PlayerController(audio, proxy, settings);
+        final telegram = TelegramService(Directory('unused'), MemoryVault(), transport: FakeTd());
+        addTearDown(player.shutdown);
+        addTearDown(telegram.shutdown);
+        await tester.runAsync(() => player.play(track, from: [track]));
+        player.sleepAtTrackEnd();
+        expect(proxy.isStreaming(7), isTrue);
+        tester.view.physicalSize = size;
+        await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+        await tester.pump(const Duration(milliseconds: 300));
+        final dock = find.byKey(const ValueKey('player-bar'));
+        final card = tester.widget<Material>(dock);
+        expect(card.borderRadius, BorderRadius.circular(28));
+        expect(card.clipBehavior, Clip.antiAlias);
+        for (final key in ['sleep-timer-control', 'volume-control', 'volume-slider', 'now-playing-repeat']) {
+          expect(find.descendant(of: dock, matching: find.byKey(ValueKey(key))), findsNothing);
+        }
+        expect(find.descendant(of: dock, matching: find.byIcon(Icons.repeat_rounded)), findsNothing);
+        final seek = find.descendant(of: dock, matching: find.byKey(const ValueKey('playback-seek')));
+        await tester.drag(seek, const Offset(50, 0), duration: const Duration(milliseconds: 500));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(audio.position, greaterThan(Duration.zero));
+        expect(player.current, same(track));
+        final preview = find.descendant(of: dock, matching: find.byKey(const ValueKey('open-current-track')));
+        await tester.drag(preview, Offset(direction * 35, 0), duration: const Duration(milliseconds: 700));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(player.current, same(track), reason: 'Short swipes snap back');
+        expect(audio.playing, isTrue);
+        final confirm = tester.widget<Dismissible>(find.byType(Dismissible)).confirmDismiss!;
+        await tester.drag(preview, Offset(direction * size.width * .8, 0), duration: const Duration(milliseconds: 600));
+        await tester.pump(const Duration(milliseconds: 250));
+        // stop() closes the real loopback proxy outside the fake test clock.
+        await tester.runAsync(() async {
+          for (var attempt = 0; attempt < 50 && player.current != null; attempt++) {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+          }
+        });
+        await tester.pumpAndSettle();
+        expect(player.current, isNull);
+        expect(player.queue, isEmpty);
+        expect(player.sleepActive, isFalse);
+        expect(audio.playing, isFalse);
+        expect(proxy.isStreaming(7), isFalse);
+        expect(dock, findsNothing);
+        expect(tester.takeException(), isNull);
+        // An old gesture cannot stop a newly selected song.
+        player.queue.add(const Track(id: 'new-song', title: 'New', artist: 'Artist', source: 'Channel'));
+        player.index = 0;
+        await confirm(DismissDirection.startToEnd);
+        expect(player.current!.id, 'new-song');
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+    }
+  });
+
+  testWidgets('failed swipe stop restores the player card for retry', (tester) async {
+    final audio = StopFailureAudio();
+    final player = PlayerController(audio, TelegramStreamProxy((_) async => {}), MemorySettings()..reducedMotion = true)
+      ..queue.add(const Track(id: 'keep', title: 'Still here', artist: 'Artist', source: 'Channel'))
+      ..index = 0;
+    final telegram = TelegramService(Directory('unused'), MemoryVault(), transport: FakeTd());
+    addTearDown(player.shutdown);
+    addTearDown(telegram.shutdown);
+    await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const ValueKey('open-current-track')), const Offset(-700, 0));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
+    expect(player.current!.id, 'keep');
+    expect(find.text('Could not stop playback. Please try again.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('wave animates only during playback and freezes when paused', (
     tester,
@@ -304,7 +397,13 @@ void main() {
           find.byType(NavigationBar),
           size.width < 900 ? findsOneWidget : findsNothing,
         );
-        expect(find.byKey(const ValueKey('volume-slider')), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('player-bar')),
+            matching: find.byKey(const ValueKey('volume-slider')),
+          ),
+          findsNothing,
+        );
         final seek = find.byKey(const ValueKey('playback-seek'));
         expect(
           tester.widget<Slider>(seek).secondaryTrackValue,
