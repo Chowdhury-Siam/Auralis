@@ -1,0 +1,101 @@
+name: Publish Auralis release
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Android APK build, Windows x64 build]
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: stable-release-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Match successful Android and Windows builds
+        id: runs
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const {resolve} = require('./tool/release-policy.cjs');
+            const result = await resolve(github, context);
+            for (const [key,value] of Object.entries(result)) core.setOutput(key,value);
+            if (!result.ready) core.info('Waiting for matching Android arm64 and Windows artifacts. Nothing is published or cleaned.');
+      - name: Checkout tested source
+        if: steps.runs.outputs.ready == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.runs.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download tested Windows bundle
+        if: steps.runs.outputs.ready == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.runs.outputs.windows_run }}
+          name: auralis-windows-x64
+          path: dist
+      - name: Download tested Android bundle
+        if: steps.runs.outputs.ready == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.runs.outputs.android_run }}
+          name: ${{ steps.runs.outputs.android_artifact }}
+          path: dist/android
+      - name: Download optional tested Android x64 bundle
+        if: steps.runs.outputs.ready == 'true' && steps.runs.outputs.x64_run != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.runs.outputs.x64_run }}
+          name: ${{ steps.runs.outputs.x64_artifact }}
+          path: dist/android-x64
+      - name: Verify and publish both platforms with matching release notes
+        if: steps.runs.outputs.ready == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTED_SHA: ${{ steps.runs.outputs.head_sha }}
+          SIGNED: ${{ steps.runs.outputs.signed }}
+          ABI: arm64-v8a
+          X64_RUN: ${{ steps.runs.outputs.x64_run }}
+          X64_SIGNED: ${{ steps.runs.outputs.x64_signed }}
+        run: |
+          $env:GITHUB_EVENT_NAME = 'workflow_dispatch'
+          $env:GITHUB_REF_TYPE = 'branch'
+          $env:GITHUB_REF_NAME = 'main'
+          $env:GITHUB_REF = 'refs/heads/main'
+          $env:GITHUB_SHA = $env:TESTED_SHA
+          python tool/release-notes.py --output dist/release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release notes validation failed.' }
+          python tool/publish-android.py
+          if ($LASTEXITCODE -ne 0) { throw 'Android assets failed verification; release remains unpublished.' }
+          if ($env:X64_RUN) {
+            Move-Item dist/android dist/android-arm64
+            Move-Item dist/android-x64 dist/android
+            $env:ABI = 'x86_64'
+            $env:SIGNED = $env:X64_SIGNED
+            python tool/publish-android.py
+            if ($LASTEXITCODE -ne 0) { throw 'Android x64 asset verification failed.' }
+          }
+          ./tool/publish-release.ps1
+      - name: Record consumed build artifacts
+        if: steps.runs.outputs.ready == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.runs.outputs.receipt }}
+          path: dist/release-notes.md
+          if-no-files-found: error
