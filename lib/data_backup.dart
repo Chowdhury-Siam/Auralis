@@ -130,4 +130,6 @@ class DataBackup {
       throw const FormatException('Backup contains unsupported app data.');
     }
   }
+
+  static void validateSnapshot(Map<String, dynamic> data) => _validate(data);
 }
