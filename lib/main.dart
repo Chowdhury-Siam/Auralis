@@ -23,6 +23,7 @@ import 'android_storage.dart';
 import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
 import 'updater.dart';
+import 'sync/controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,11 +84,20 @@ Future<void> main() async {
         : null;
     if (session != null) handler?.handleInterruptions(session);
     final package = await PackageInfo.fromPlatform();
+    final syncVault = Platform.isAndroid
+        ? AndroidSecretVault(File(p.join(root.path, 'sync-credentials.aesgcm')))
+        : SecretVault(File(p.join(root.path, 'sync-credentials.dpapi')));
+    final sync = SyncController(settings, syncVault,
+      onApplied: player.refreshSettings,
+      paused: () => player.restoringData,
+    );
     telegram.isStreaming = player.proxy.isStreaming;
     AppUpdater? updater;
     Future<void>? shutdownFuture;
     Future<void> shutdown() => shutdownFuture ??= () async {
       try {
+        await player.flushListeningStats();
+        await sync.close();
         await handler?.close();
         await player.shutdown();
       } finally {
@@ -126,8 +136,11 @@ Future<void> main() async {
       );
     }
     AppLifecycleListener(
-      onResume: () => updater?.checkOnResume(),
-      onPause: () => unawaited(player.flushListeningStats()),
+      onResume: () { updater?.checkOnResume(); sync.resume(); },
+      onPause: () => unawaited(() async {
+        await player.flushListeningStats();
+        await sync.flush();
+      }()),
       onExitRequested: () async {
         await shutdown();
         return AppExitResponse.exit;
@@ -142,9 +155,12 @@ Future<void> main() async {
         dataFiles: Platform.isAndroid
             ? const AndroidDataFiles()
             : const DataFiles(),
+        sync: sync,
+        installedVersion: package.version,
       ),
     );
     updater?.start();
+    unawaited(sync.start());
     if (await vault.file.exists()) unawaited(telegram.start());
   } catch (_) {
     await lock?.close();
