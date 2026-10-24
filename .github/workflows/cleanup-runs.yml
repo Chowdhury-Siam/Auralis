@@ -23,7 +23,7 @@ jobs:
         with:
           ref: main
           persist-credentials: false
-      - name: Clean published builds, green runs and failures older than ten minutes
+      - name: Clean published builds, green and skipped runs, and failures older than ten minutes
         uses: actions/github-script@v8
         with:
           script: |
@@ -65,4 +65,4 @@ jobs:
                 await github.rest.actions.deleteWorkflowRun({owner,repo,run_id});
               } catch (error) { if (error.status !== 404) throw error; }
             }
-            core.info('Unpublished successful builds, active runs, cancellations and recent failures are retained. Failed runs become eligible ten minutes after completion; scheduled cleanup may run later.');
+            core.info('Completed skipped runs are eligible immediately. Unpublished successful builds, active runs, cancellations and recent failures are retained. Failed runs become eligible ten minutes after completion; scheduled cleanup may run later.');
