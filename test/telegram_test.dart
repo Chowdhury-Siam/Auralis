@@ -7,6 +7,63 @@ import 'package:auralis/telegram/telegram_service.dart';
 import 'fakes.dart';
 
 void main() {
+  test('build credentials initialize a fresh sign-in without user API input', () async {
+    final dir = await Directory.systemTemp.createTemp('auralis-build-auth-');
+    addTearDown(() => dir.delete(recursive: true));
+    final td = FakeTd(), vault = MemoryVault();
+    final service = TelegramService(dir, vault, transport: td,
+      applicationApiId: 12345,
+      applicationApiHash: 'abcdef0123456789abcdef0123456789',
+    );
+    addTearDown(service.shutdown);
+    expect(service.hasApplicationCredentials, isTrue);
+    await service.start();
+    expect(service.error, isNull);
+    final parameters = td.requests.firstWhere((r) => r['@type'] == 'setTdlibParameters');
+    expect(parameters['api_id'], 12345);
+    expect(parameters['api_hash'], 'abcdef0123456789abcdef0123456789');
+    expect(vault.data.keys.toSet(), {'apiId', 'apiHash', 'databaseKey'});
+  });
+
+  test('existing and restored sessions keep their API identity across build changes', () async {
+    final dir = await Directory.systemTemp.createTemp('auralis-saved-auth-');
+    addTearDown(() => dir.delete(recursive: true));
+    final td = FakeTd(), vault = MemoryVault();
+    vault.data = {'apiId': 22222, 'apiHash': '11111111111111111111111111111111', 'databaseKey': 'saved-key'};
+    final service = TelegramService(dir, vault, transport: td,
+      applicationApiId: 12345,
+      applicationApiHash: 'abcdef0123456789abcdef0123456789',
+    );
+    addTearDown(service.shutdown);
+    await service.start();
+    expect(service.error, isNull);
+    final parameters = td.requests.firstWhere((r) => r['@type'] == 'setTdlibParameters');
+    expect(parameters['api_id'], 22222);
+    expect(parameters['api_hash'], '11111111111111111111111111111111');
+    expect(parameters['database_encryption_key'], 'saved-key');
+  });
+
+  test('a fresh sign-in after logout reuses build credentials with a new native client', () async {
+    final dir = await Directory.systemTemp.createTemp('auralis-build-logout-');
+    addTearDown(() => dir.delete(recursive: true));
+    final first = FakeTd(), second = FakeTd(), vault = MemoryVault();
+    final service = TelegramService(dir, vault, transport: first, createTransport: () => second,
+      applicationApiId: 12345,
+      applicationApiHash: 'abcdef0123456789abcdef0123456789',
+    );
+    addTearDown(service.shutdown);
+    await service.start();
+    final key = vault.data['databaseKey'];
+    await service.logout();
+    expect(vault.data.containsKey('apiId'), isFalse);
+    first.auth('authorizationStateClosed');
+    await Future<void>.delayed(Duration.zero);
+    await service.start();
+    expect(service.error, isNull);
+    expect(second.requests.any((r) => r['@type'] == 'setTdlibParameters' && r['api_id'] == 12345), isTrue);
+    expect(vault.data['databaseKey'], key);
+  });
+
   test('auth drives phone, code and 2FA with encrypted database parameters; codes are not stored', () async {
     final dir = await Directory.systemTemp.createTemp('auralis-auth-');
     addTearDown(() => dir.delete(recursive: true));
