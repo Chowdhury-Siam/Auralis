@@ -172,7 +172,7 @@ Track/channel counts and icon-only Refresh/Sort controls sit in the Library head
 
 Use a track's actions to favorite it, play it next, or add it to a playlist. Library sorting leaves saved playlist order unchanged. Deleting a playlist removes the collection, not files from Telegram.
 
-Saved collections hold channel/message references. To play those tracks later, sign into the appropriate account, select the source channels, and load their messages. There is no cloud playlist sync, and the queue is session-only.
+Saved collections hold channel/message references. To play those tracks later, sign into the appropriate account, select the source channels, and load their messages. Optional private multi-device sync shares these collection references; the playback queue remains session-only.
 
 See the [collection guide](docs/GUIDE.md#favorites-playlists-and-recent-music) for limits and unavailable-track behavior.
 
@@ -196,7 +196,7 @@ The bottom player is a rounded card with seeking and previous/play/next. Swipe i
 
 Embedded lyrics load when supported tags are available. Use **Lyrics options** to retry reading the music file, import `.lrc`, or paste text. If embedded lyrics are missing or unreadable, LRCLIB is searched automatically using the displayed title, artist, and duration. **Find lyrics** retries the lookup. Back and the single options menu are at the top; the source footer is removed. **Follow song** returns to automatic scrolling after you browse elsewhere.
 
-Lyrics use a bounded session cache and are not included in backups. Word-level karaoke, automatic translation, and permanent lyrics storage are not included.
+Favorites, playlists, listening statistics, recent music, channels and shared preferences can sync across Android and Windows through your own private service. See [multi-device sync setup](docs/SYNC.md). Lyrics use a bounded session cache and are not included in backups. Word-level karaoke, automatic translation, and permanent lyrics storage are not included.
 
 See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality notes](docs/GUIDE.md#streaming-audio-quality).
 
@@ -237,7 +237,7 @@ API credentials and the TDLib database key are encrypted with **Windows DPAPI** 
 
 Downloaded audio and images remain plaintext in TDLib's app-data cache. There is no automatic cache eviction setting yet. Logout does not promise secure erasure of cached media or backups.
 
-Artwork uses Telegram or embedded metadata. Opening lyrics automatically contacts LRCLIB if embedded lyrics are unavailable; only the song title, artist and duration are sent, with no Telegram credentials, channel names, or message IDs. Android media controls receive the current cover and use the monochrome Auralis logo. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
+Artwork uses Telegram or embedded metadata. Opening lyrics automatically contacts LRCLIB if embedded lyrics are unavailable; only the song title, artist and duration are sent, with no Telegram credentials, channel names, or message IDs. Android media controls receive the current cover and use the monochrome Auralis logo. Optional multi-device sync sends collection/listening metadata to your private service; Telegram credentials and music are excluded. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
 
 ---
 
@@ -268,17 +268,16 @@ TDLib must be built before running a native app; `flutter pub get` alone does no
 
 ## 📦 Publishing
 
-GitHub Actions has separate **Windows** and **Android APK build** workflows. Successful eligible `main` or matching version-tag builds use the version from `pubspec.yaml`.
+GitHub Actions builds Android and Windows independently. A separate **Publish Auralis release** workflow waits for successful artifacts from the same trusted `main` commit before publishing the APK, Windows ZIP and custom EXE installer.
 
-- Windows builds, checks, packages, and publishes the stable release.
-- Android verifies its APK, ABI, native alignment, and signing before attaching the APK, checksums, and native provenance to the matching release.
-- If Android finishes first, it creates a draft; the Windows publisher completes publication.
-- Run **Set up Android signing** once with the setup token to save a persistent signing identity; subsequent APK builds sign automatically. Existing custom signing keys remain supported, and release compilation no longer depends on signing setup.
-- Pull requests and other branches produce build artifacts without publishing releases. Published assets and tags are not overwritten; unpublished Android draft files can be refreshed on retries.
+- Existing APK verification, native checks, persistent signing setup and Windows installer checks are retained.
+- Optional Android x64 artifacts are attached when available for that same commit.
+- A separate cleanup action removes green runs after publishing and failures after a minimum ten-minute retention period. It keeps active runs and artifacts still needed for publication.
+- `CHANGELOG.md` generates matching GitHub and bundled app release notes. Settings has **What’s new**, installed updates show their changes once, and update notices include **What changed**.
+- Both Android and Windows check for new stable updates automatically when enabled. Android can download a verified APK automatically; installation still requires confirmation. There is no Play Store publishing flow.
+- Pull requests and other branches build artifacts without publishing. Published files/tags are not overwritten.
 
-The Windows app checks stable releases, verifies downloaded installers, and asks before installing and restarting. Android has no in-app updater or Play Store upload flow in this source.
-
-See [Windows releases and updates](docs/UPDATES.md), [Android publishing and signing](docs/ANDROID.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
+See [build/publish/cleanup and release notes](docs/RELEASE_PIPELINE.md), [sync setup](docs/SYNC.md), [Android signing](docs/ANDROID.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ---
 
@@ -306,7 +305,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.63+64**; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.64+65**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
