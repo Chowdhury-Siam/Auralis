@@ -64,4 +64,6 @@ $Newer = @($Releases | Where-Object {
     [version]$_.tag_name.Substring(1) -gt [version]$Version
 })
 $Latest = if ($Newer.Count) { 'false' } else { 'true' }
-gh release edit $Tag --repo $Repository --draft=false --prerelease=false "--latest=$Latest"
+$Notes = Join-Path $Dist 'release-notes.md'
+if (-not (Test-Path -LiteralPath $Notes -PathType Leaf)) { throw 'Matching release notes are required before publication.' }
+gh release edit $Tag --repo $Repository --notes-file $Notes --draft=false --prerelease=false "--latest=$Latest"
