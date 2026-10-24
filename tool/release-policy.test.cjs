@@ -7,6 +7,10 @@ test('cleanup preserves unpublished builds, active runs and failures younger tha
  assert.deepEqual(cleanupCandidates(runs,7,now,new Set()),[3,5]);
  assert.deepEqual(cleanupCandidates(runs,7,now,new Set([1,2])),[1,2,3,5]);
 });
+test('completed skipped runs are cleaned without waiting while current, active and cancelled runs stay',()=>{
+ const runs=[run(1,'publish-release.yml','skipped'),run(2,'android.yml','skipped'),run(3,'windows.yml','skipped'),run(4,'cleanup-runs.yml','skipped'),{...run(5,'publish-release.yml','skipped'),status:'in_progress'},{...run(6,'android.yml','skipped'),status:'queued'},run(7,'windows.yml','cancelled'),run(8,'android.yml'),run(9,'windows.yml','failure',599999)];
+ assert.deepEqual(cleanupCandidates(runs,4,now),[1,2,3]);
+});
 test('foreign repositories, branches and pull requests cannot authorize publication',()=>{
  assert.equal(trusted(run(1,'android.yml'),repo,sha),true);
  for(const change of [{head_branch:'feature'},{event:'pull_request'},{head_repository:{full_name:'Other/Auralis'}},{head_sha:'b'.repeat(40)}]) assert.equal(trusted({...run(1,'android.yml'),...change},repo,sha),false);
