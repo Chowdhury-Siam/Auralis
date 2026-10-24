@@ -154,12 +154,13 @@ class Lyrics {
   }
 }
 
-/// Session-only cache; lookup happens only after the user presses Find lyrics.
+/// Session-only cache; missing embedded lyrics fall back to LRCLIB on opening.
 class LyricsRepository {
   LyricsRepository({HttpClient Function()? createClient})
     : _createClient = createClient ?? HttpClient.new;
   final HttpClient Function() _createClient;
   final _cache = <String, Lyrics?>{};
+  final _pending = <String, Object>{};
   final _clients = <HttpClient>{};
   bool _closed = false;
   String _key(Track track) => jsonEncode([
@@ -172,6 +173,7 @@ class LyricsRepository {
   Lyrics? cached(Track track) => _cache[_key(track)];
   void save(Track track, Lyrics? lyrics) {
     if (_closed) return;
+    _pending.remove(_key(track));
     _cache.remove(_key(track));
     _cache[_key(track)] = lyrics;
     if (_cache.length > 32) _cache.remove(_cache.keys.first);
@@ -189,6 +191,8 @@ class LyricsRepository {
       );
     }
     final client = _createClient();
+    final key = _key(track), requestId = Object();
+    _pending[key] = requestId;
     _clients.add(client);
     client.connectionTimeout = const Duration(seconds: 10);
     try {
@@ -240,9 +244,11 @@ class LyricsRepository {
             ? null
             : result;
       })().timeout(const Duration(seconds: 20));
-      save(track, lyrics);
+      // An imported/pasted result or a newer request may have won meanwhile.
+      if (identical(_pending[key], requestId)) save(track, lyrics);
       return lyrics;
     } finally {
+      if (identical(_pending[key], requestId)) _pending.remove(key);
       _clients.remove(client);
       client.close(force: true);
     }
@@ -254,6 +260,7 @@ class LyricsRepository {
       client.close(force: true);
     }
     _clients.clear();
+    _pending.clear();
     _cache.clear();
   }
 }
