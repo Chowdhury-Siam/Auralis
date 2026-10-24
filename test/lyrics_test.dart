@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -17,6 +18,21 @@ const song = Track(
   source: 'Private channel',
   duration: Duration(seconds: 120),
 );
+
+class DelayedLyricsResponse extends Response {
+  DelayedLyricsResponse() : super(utf8.encode('{"plainLyrics":"Late online words"}'));
+  final ready = Completer<void>();
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int>)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) => (() async* {
+    await ready.future;
+    yield bytes;
+  })().listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+}
 
 void main() {
   test(
@@ -152,6 +168,18 @@ void main() {
       expect(() => repository.find(song), throwsStateError);
     },
   );
+
+  test('a late HTTP response cannot overwrite imported session lyrics', () async {
+    final response = DelayedLyricsResponse();
+    final repository = LyricsRepository(createClient: () => Client([response]));
+    addTearDown(repository.close);
+    final request = repository.find(song);
+    final imported = Lyrics.parse('Local choice', imported: true);
+    repository.save(song, imported);
+    response.ready.complete();
+    expect((await request)!.online, isTrue);
+    expect(repository.cached(song), same(imported));
+  });
 
   test('not found and instrumental states differ; invalid/oversized HTTP never caches', () async {
     for (final response in [
