@@ -1,3 +1,4 @@
+import {TursoStore} from './turso.mjs';
 const MAX_BODY = 2 * 1024 * 1024;
 export function validate(key, record) {
   let parts;
@@ -51,8 +52,10 @@ async function body(request) {
   return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
 }
 export class AuralisRoom {
-  constructor(state) {
+  constructor(state,env={}) {
     this.state=state; this.sql=state.storage.sql;
+    this.turso=env.TURSO_DATABASE_URL && env.TURSO_AUTH_TOKEN ? new TursoStore(env) : null;
+    this.queue=Promise.resolve();this.initialized=false;
     this.sql.exec('CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, value TEXT NOT NULL, revision INTEGER NOT NULL)');
     this.sql.exec('CREATE INDEX IF NOT EXISTS revisions ON records(revision)');
     this.sql.exec('CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY, revision INTEGER NOT NULL)');
@@ -70,6 +73,18 @@ export class AuralisRoom {
       const data=await body(request);
       if (!Number.isSafeInteger(data.cursor) || data.cursor < 0 || !data.ops || Array.isArray(data.ops) || Object.keys(data.ops).length > 100) throw new Error('Invalid sync request');
       for (const [key,value] of Object.entries(data.ops)) validate(key,value);
+      if(this.turso) {
+        const task=this.queue.then(async()=>{
+          // An older populated DO is never silently replaced by an empty database.
+          if(Array.from(this.sql.exec('SELECT count(*) AS n FROM records'))[0].n) throw new Error('Legacy cloud data exists; deploy Turso under a new Worker name');
+          if(!this.initialized) {await this.turso.initialize();this.initialized=true;}
+          const {changed,output}=await this.turso.sync(data,merge);
+          if(changed) this.broadcast();
+          return json(output);
+        });
+        this.queue=task.catch(()=>{});
+        try {return await task;} catch {return json({error:'Turso sync is unavailable. Check the deployment and retry; local changes are kept.'},503);}
+      }
       let changed=false;
       const output=this.state.storage.transactionSync(() => {
         let revision=Array.from(this.sql.exec('SELECT revision FROM meta WHERE id=1'))[0].revision;
@@ -87,10 +102,11 @@ export class AuralisRoom {
         const cursor=rows.length ? rows.at(-1).revision : revision;
         return {cursor,more:cursor<revision,records:Object.fromEntries(rows.map(r => [r.key,JSON.parse(r.value)]))};
       });
-      if (changed) for (const ws of this.state.getWebSockets()) { try { ws.send('changed'); } catch { /* A disconnected peer retries by polling. */ } }
+      if (changed) this.broadcast();
       return json(output);
     } catch (error) { return json({error:error instanceof Error ? error.message : 'Invalid sync request'},400); }
   }
+  broadcast() {for (const ws of this.state.getWebSockets()) {try {ws.send('changed');} catch { /* Polling retries disconnected peers. */ }}}
   webSocketMessage(socket,message) { if (message === 'ping') socket.send('pong'); }
   webSocketClose(socket,code) { socket.close(code,''); }
   webSocketError(socket) { try { socket.close(1011,''); } catch { /* Already closed. */ } }
@@ -98,13 +114,16 @@ export class AuralisRoom {
 export default {
   async fetch(request,env) {
     const path=new URL(request.url).pathname, configured=/^[a-f0-9]{64}$/.test(env.AURALIS_SYNC_KEY ?? '');
-    if (path === '/health' && request.method === 'GET') return json({service:'auralis-sync',version:env.AURALIS_VERSION ?? '0.1.64',configured});
+    const turso=Boolean(env.TURSO_DATABASE_URL && env.TURSO_AUTH_TOKEN),partial=Boolean(env.TURSO_DATABASE_URL || env.TURSO_AUTH_TOKEN) && !turso;
+    if (path === '/health' && request.method === 'GET') return json({service:'auralis-sync',version:env.AURALIS_VERSION ?? '0.1.68',configured:configured && !partial,backend:turso?'turso':'durable-object'});
     if (!configured) return json({error:'Sync service is not configured'},503);
     const supplied=request.headers.get('Authorization') ?? '';
     const hash=async s => new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)));
     const a=await hash(supplied),b=await hash(`Bearer ${env.AURALIS_SYNC_KEY}`);
     let difference=0;for(let i=0;i<a.length;i++) difference|=a[i]^b[i];
     if(difference) return json({error:'Invalid sync key'},401);
+    if(path==='/v1/info' && request.method==='GET') return json({service:'auralis-sync',version:env.AURALIS_VERSION ?? '0.1.68',backend:turso?'turso':'durable-object'});
+    if(partial) return json({error:'Turso configuration is incomplete'},503);
     if(!['/v1/sync','/v1/live'].includes(path)) return json({error:'Not found'},404);
     return env.ROOM.get(env.ROOM.idFromName('private-library')).fetch(request);
   }
