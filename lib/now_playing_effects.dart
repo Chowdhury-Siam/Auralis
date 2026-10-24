@@ -1,6 +1,257 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+
+/// Artwork-local navigation: one swipe or one wheel burst changes one song.
+class ArtworkTrackSwitcher extends StatefulWidget {
+  const ArtworkTrackSwitcher({
+    super.key,
+    required this.child,
+    required this.identity,
+    required this.reducedMotion,
+    this.onNext,
+    this.onPrevious,
+  });
+
+  final Widget child;
+  final Object identity;
+  final bool reducedMotion;
+  final VoidCallback? onNext, onPrevious;
+
+  @override
+  State<ArtworkTrackSwitcher> createState() => _ArtworkTrackSwitcherState();
+}
+
+class _ArtworkTrackSwitcherState extends State<ArtworkTrackSwitcher> {
+  double _drag = 0, _wheelDistance = 0;
+  bool _dragging = false, _wheelHandled = false;
+  Duration? _lastWheel;
+
+  void _resetDrag() => setState(() {
+    _drag = 0;
+    _dragging = false;
+  });
+
+  void _scroll(PointerSignalEvent signal) {
+    if (signal is! PointerScrollEvent) return;
+    final delta = signal.scrollDelta.dx.abs() > signal.scrollDelta.dy.abs()
+        ? signal.scrollDelta.dx
+        : signal.scrollDelta.dy;
+    if (delta == 0) return;
+    GestureBinding.instance.pointerSignalResolver.register(signal, (_) {
+      final newBurst = _lastWheel == null ||
+          signal.timeStamp - _lastWheel! > const Duration(milliseconds: 220) ||
+          _wheelDistance.sign != delta.sign;
+      _lastWheel = signal.timeStamp;
+      if (newBurst) {
+        _wheelDistance = 0;
+        _wheelHandled = false;
+      }
+      if (_wheelHandled) return;
+      _wheelDistance += delta;
+      if (_wheelDistance.abs() < 48) return;
+      _wheelHandled = true;
+      (delta > 0 ? widget.onNext : widget.onPrevious)?.call();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = widget.reducedMotion || MediaQuery.disableAnimationsOf(context);
+    return LayoutBuilder(builder: (context, box) {
+      final width = math.max(1.0, box.maxWidth);
+      final canDrag = widget.onNext != null || widget.onPrevious != null;
+      return Semantics(
+        label: 'Album artwork',
+        hint: canDrag ? 'Swipe artwork to change songs' : null,
+        onIncrease: widget.onNext,
+        onDecrease: widget.onPrevious,
+        child: Listener(
+          onPointerSignal: canDrag ? _scroll : null,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: canDrag ? (_) {
+              setState(() {
+                _drag = 0;
+                _dragging = true;
+              });
+            } : null,
+            onHorizontalDragUpdate: canDrag ? (event) => setState(() {
+              _drag = (_drag + event.delta.dx).clamp(-width * .35, width * .35);
+            }) : null,
+            onHorizontalDragCancel: canDrag ? _resetDrag : null,
+            onHorizontalDragEnd: canDrag ? (event) {
+              final velocity = event.primaryVelocity ?? 0;
+              final committed = _drag.abs() >= math.min(80, width * .18) ||
+                  (_drag.abs() >= 12 && velocity.abs() >= 600);
+              final direction = velocity.abs() >= 600 ? velocity : _drag;
+              _resetDrag();
+              if (committed) {
+                (direction < 0 ? widget.onNext : widget.onPrevious)?.call();
+              }
+            } : null,
+            child: AnimatedSlide(
+              key: const ValueKey('artwork-drag-feedback'),
+              offset: reduced ? Offset.zero : Offset(_drag / width, 0),
+              duration: Duration(milliseconds: reduced || _dragging ? 0 : 220),
+              curve: Curves.easeOutCubic,
+              child: AnimatedSwitcher(
+                duration: Duration(milliseconds: reduced ? 0 : 240),
+                layoutBuilder: (current, previous) => Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    for (final oldChild in previous)
+                      IgnorePointer(child: ExcludeSemantics(child: oldChild)),
+                    ?current,
+                  ],
+                ),
+                child: KeyedSubtree(
+                  key: ValueKey(widget.identity),
+                  child: widget.child,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+}
+
+/// A decorative music pulse; only its small canvas repaints, never the backdrop.
+class LyricsWaitingIndicator extends StatefulWidget {
+  const LyricsWaitingIndicator({
+    super.key,
+    required this.playing,
+    required this.reducedMotion,
+    required this.label,
+  });
+  final bool playing, reducedMotion;
+  final String label;
+
+  @override
+  State<LyricsWaitingIndicator> createState() => _LyricsWaitingIndicatorState();
+}
+
+class _LyricsWaitingIndicatorState extends State<LyricsWaitingIndicator>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  late final _motion = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  );
+  bool _foreground = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _foreground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
+  }
+
+  void _sync() {
+    final animate = widget.playing && _foreground && !widget.reducedMotion &&
+        !MediaQuery.disableAnimationsOf(context) && TickerMode.of(context);
+    if (animate && !_motion.isAnimating) _motion.repeat();
+    if (!animate && _motion.isAnimating) _motion.stop();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(LyricsWaitingIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _sync();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _motion.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Semantics(
+      label: widget.label,
+      child: ExcludeSemantics(
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: SizedBox(
+              width: 220,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RepaintBoundary(
+                    child: CustomPaint(
+                      key: const ValueKey('lyrics-waiting-pulse'),
+                      size: const Size(140, 64),
+                      painter: _MusicPulsePainter(
+                        _motion,
+                        Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    widget.label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _MusicPulsePainter extends CustomPainter {
+  _MusicPulsePainter(this.motion, this.color) : super(repaint: motion);
+  final Animation<double> motion;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color.withValues(alpha: .8);
+    for (var bar = 0; bar < 7; bar++) {
+      final wave = .5 + .5 * math.sin(motion.value * math.pi * 2 + bar * .85);
+      final envelope = 1 - (bar - 3).abs() * .18;
+      final height = 8 + 44 * envelope * (.35 + wave * .65);
+      final x = size.width / 2 + (bar - 3) * 12;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(x, size.height / 2), width: 5, height: height),
+          const Radius.circular(3),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_MusicPulsePainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.motion != motion;
+}
 
 /// A quiet, artwork-colored backdrop that never intercepts player input.
 class NowPlayingBackdrop extends StatefulWidget {
