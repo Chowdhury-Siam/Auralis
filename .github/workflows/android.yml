@@ -54,6 +54,13 @@ jobs:
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
       - name: Resolve locked dependencies
         run: flutter pub get --enforce-lockfile
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check release notes, sync service and workflow policy
+        run: |
+          python tool/release-notes.py
+          node --test cloud/worker/worker.test.mjs tool/release-policy.test.cjs
       - name: Static analysis
         run: flutter analyze --no-pub --fatal-infos
       - name: Automated tests
@@ -126,31 +133,7 @@ jobs:
           SIGNED: ${{ steps.signing.outputs.signed }}
         run: |
           if [ "$SIGNED" = true ]; then
-            echo 'Signed APK saved. Main and stable-tag builds also attach it to GitHub Releases.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Signed APK saved. The separate publisher waits for matching Android arm64 and Windows main builds; optional x64 artifacts are included when available.' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'Optimized release APK saved with a temporary development signature. Run Set up Android signing once for automatic signing with a retained key.' >> "$GITHUB_STEP_SUMMARY"
           fi
-  publish:
-    name: Attach Android APK to release
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-    needs: build
-    runs-on: ubuntu-24.04
-    concurrency:
-      group: stable-release-${{ github.repository }}
-      cancel-in-progress: false
-    permissions:
-      contents: write
-    env:
-      ABI: ${{ inputs.architecture || 'arm64-v8a' }}
-      SIGNED: ${{ needs.build.outputs.signed }}
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: auralis-android-${{ env.ABI }}-${{ needs.build.outputs.signed == 'true' && 'release' || 'development' }}
-          path: dist/android
-      - name: Attach and verify Android release assets
-        run: python3 tool/publish-android.py
