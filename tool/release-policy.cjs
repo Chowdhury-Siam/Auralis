@@ -44,7 +44,7 @@ function cleanupCandidates(runs, currentRun, now=Date.now(), publishedBuilds=new
     if(expired(r) && [...latest.values()].filter(other=>other.head_sha===r.head_sha).every(other=>other.status==='completed')) abandoned.add(r.head_sha);
   }
   return runs.filter(r=>r.id!==currentRun && r.status==='completed' && (
-    (r.conclusion==='success' && (!isBuild(r) || r.head_branch !== 'main' || !['push','workflow_dispatch'].includes(r.event) || publishedBuilds.has(r.id) || publishedCommits.has(r.head_sha) || abandoned.has(r.head_sha))) || expired(r)
+    r.conclusion==='skipped' || (r.conclusion==='success' && (!isBuild(r) || r.head_branch !== 'main' || !['push','workflow_dispatch'].includes(r.event) || publishedBuilds.has(r.id) || publishedCommits.has(r.head_sha) || abandoned.has(r.head_sha))) || expired(r)
   )).map(r=>r.id);
 }
 module.exports={resolve,cleanupCandidates,trusted};
