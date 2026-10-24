@@ -363,28 +363,15 @@ void main() {
         File('.github/workflows/android.yml').readAsStringSync(),
       ) as YamlMap;
       final jobs = workflow['jobs'] as YamlMap;
-      expect(jobs.keys, ['build', 'publish']);
+      expect(jobs.keys, ['build']);
       expect(jobs['build']['needs'], isNull);
       expect(jobs['build']['runs-on'], 'ubuntu-24.04');
       expect(workflow['permissions']['contents'], 'read');
-      expect(jobs['publish']['needs'], 'build');
-      expect(jobs['publish']['permissions']['contents'], 'write');
-      expect(
-        jobs['publish']['if'],
-        isNot(contains('needs.build.outputs.signed')),
-      );
-      expect(
-        jobs['publish']['env']['SIGNED'],
-        r'${{ needs.build.outputs.signed }}',
-      );
-      expect(
-        jobs['publish']['if'],
-        contains("github.event_name != 'pull_request'"),
-      );
-      expect(
-        jobs['publish']['concurrency']['group'],
-        r'stable-release-${{ github.repository }}',
-      );
+      final releaseWorkflow = loadYaml(File('.github/workflows/publish-release.yml').readAsStringSync()) as YamlMap;
+      final publishing = releaseWorkflow['jobs']['publish'];
+      expect(publishing['permissions']['contents'], 'write');
+      expect(releaseWorkflow['concurrency']['group'], r'stable-release-${{ github.repository }}');
+      expect(publishing['if'], contains("head_repository.full_name == github.repository"));
       final steps = jobs['build']['steps'] as YamlList;
       final sdk = steps.singleWhere((s) => s['name'] == 'Set up Android SDK');
       expect(
