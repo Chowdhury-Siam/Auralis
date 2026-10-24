@@ -29,7 +29,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
     final audio = FakeAudio()..playing = true;
-    final settings = VolumeSettings();
+    final settings = VolumeSettings()..reducedMotion = true;
     final player =
         PlayerController(audio, TelegramStreamProxy((_) async => {}), settings)
           ..queue.add(
@@ -49,6 +49,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('volume-control')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('open-current-track')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('volume-slider')).hitTestable(), findsOneWidget);
     return (audio, player, settings);
   }
 
@@ -83,7 +87,10 @@ void main() {
       expect(audio.volumes.last, 0);
       final calls = audio.volumes.length;
       await wheel(center, const Offset(120, 0));
-      await wheel(const Offset(400, 100), const Offset(0, -120));
+      await wheel(
+        tester.getCenter(find.byKey(const ValueKey('page-title'))),
+        const Offset(0, -120),
+      );
       expect(audio.volumes, hasLength(calls));
       expect(audio.playing, isTrue);
       expect(tester.takeException(), isNull);
