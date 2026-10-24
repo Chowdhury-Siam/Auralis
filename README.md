@@ -136,8 +136,10 @@ Choose a matching asset from [the latest GitHub release](https://github.com/Chow
 | Platform | Package | Installation |
 | --- | --- | --- |
 | **Android 7.0+** | ARM64 APK | Open the APK to install on a compatible phone. x86_64 builds are also available for compatible devices or emulators; no 32-bit APK is provided. |
-| **Windows x64** | `auralis-<version>-windows-x64-setup.exe` | Run the per-user installer. The Microsoft Visual C++ 2015–2022 x64 runtime is required. |
+| **Windows x64** | `auralis-<version>-windows-x64-setup.exe` | Run the custom per-user installer; choose an install location and optional desktop shortcut. The Microsoft Visual C++ 2015–2022 x64 runtime is required. |
 | **Windows portable** | Windows x64 release ZIP | Extract the complete package and launch `auralis.exe`; keep its DLLs and data folders together. |
+
+The Windows installer uses the Yutaka-style dark setup layout with Auralis branding, progress and automatic app opening/installer closing after one Install click. See the [installer guide](docs/INSTALLER.md) for build and verification details.
 
 Android APKs now always use optimized release mode. Run **Set up Android signing** once to generate and retain a signing identity automatically; later builds reuse it. APKs labelled **development-release** use a temporary development signature. See [signing and upgrades](docs/ANDROID.md#signing-and-upgrades).
 
@@ -163,9 +165,8 @@ Use **Load more** in Telegram to discover more accessible channels and **Refresh
 | **Favorites** | Tracks you have marked with the heart action |
 | **Playlists** | Named, ordered collections you can create, rename, and delete |
 | **Recently played** | The last 100 unique successfully opened tracks |
-| **Play queue** | The current playback order, including Play next and reordering |
 
-Track/channel counts and icon-only Refresh/Sort controls sit in the Library header. On narrow screens, the counts appear beneath the title. Choose channels in Telegram; listening stats remain in Settings.
+Track/channel counts and icon-only Refresh/Sort controls sit in the Library header. On narrow screens, the counts appear beneath the title. Choose channels in Telegram; listening stats remain in the full Settings page. Phone navigation has Library, Telegram, Now playing and Settings; the standalone Play Queue page is removed.
 
 Use a track's actions to favorite it, play it next, or add it to a playlist. Library sorting leaves saved playlist order unchanged. Deleting a playlist removes the collection, not files from Telegram.
 
@@ -301,7 +302,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.56+57**; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.60+61**; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
