@@ -1,7 +1,7 @@
 # GitHub Releases and application updates
 
 Repository: **[Chowdhury-Siam/Auralis](https://github.com/Chowdhury-Siam/Auralis)**.
-Current source target: **v0.1.70** (`0.1.70+71`).
+Current source target: **v0.1.71** (`0.1.71+72`).
 
 Android and Windows build independently; **Publish Auralis release** waits for both
 successful artifacts from the same trusted main commit. **Clean completed Auralis
