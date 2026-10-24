@@ -14,12 +14,12 @@ class SyncDeploymentConfig {
         databaseToken=databaseToken.trim(), key=key.trim();
   final String worker, account, cloudflareToken, database, databaseToken, key;
   String databaseHttp() {
-    final uri=Uri.tryParse(database.replaceFirst(RegExp(r'^(libsql|turso)://'),'https://'));
-    if(uri==null || uri.scheme!='https' || !RegExp(r'^[a-z0-9-]+\.turso\.io$').hasMatch(uri.host) ||
-        uri.userInfo.isNotEmpty || uri.hasPort || (uri.path.isNotEmpty && uri.path!='/') || uri.hasQuery || uri.hasFragment) {
+    final normalized=database.replaceFirst(RegExp(r'^(libsql|turso)://'),'https://');
+    // Check the entered form before Uri normalizes away explicit HTTPS port 443.
+    if(!RegExp(r'^https://[a-z0-9-]+\.turso\.io/?$').hasMatch(normalized)) {
       throw const FormatException('Enter your Turso database URL, such as libsql://auralis-yourname.turso.io.');
     }
-    return uri.origin;
+    return Uri.parse(normalized).origin;
   }
   void validate() {
     if(!RegExp(r'^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$').hasMatch(worker)) throw const FormatException('Use 1–63 lowercase letters, numbers or dashes for the Worker name.');
