@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'controller.dart';
 import 'document.dart';
+import 'deployment_view.dart';
 
 class SyncSettings extends StatefulWidget {
   const SyncSettings({super.key,required this.controller});
@@ -51,6 +52,9 @@ class _SyncSettingsState extends State<SyncSettings> {
             ],
             const SizedBox(height:12),
             Wrap(spacing:8,runSpacing:8,children:[
+              if(sync.deploymentVault!=null) FilledButton.tonalIcon(
+                onPressed:_busy?null:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>SyncDeploymentPage(sync:sync))),
+                icon:const Icon(Icons.cloud_upload_outlined),label:const Text('Set up / redeploy cloud sync')),
               if(!sync.connected) FilledButton(onPressed:_busy?null:_connect,child:Text(_busy?'Connecting…':'Connect and merge')),
               if(!sync.connected) TextButton(onPressed:_busy?null:() async {
                 final value=newSyncKey();_key.text=value;
