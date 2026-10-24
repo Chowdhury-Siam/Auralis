@@ -10,6 +10,7 @@ import 'data_files.dart';
 import 'models.dart';
 import 'player.dart';
 import 'wave_seek_bar.dart';
+import 'now_playing_effects.dart';
 
 const lyricsBackground = Color(0xFF111015);
 const lyricsHighlight = Color(0xFFC7B5FF);
@@ -66,35 +67,10 @@ class _LyricsViewState extends State<LyricsView> {
     _loading = false;
     _error = null;
     _synced = _lyrics == null || _lyrics!.lines.isNotEmpty;
-    if (_lyrics == null && widget.loadEmbedded != null) unawaited(_embedded());
+    if (_track != null && !_looked) unawaited(_load(embedded: true));
   }
 
-  Future<void> _embedded() async {
-    final track = _track, load = widget.loadEmbedded;
-    if (track == null || load == null || _loading) return;
-    final generation = ++_generation;
-    _loading = true;
-    try {
-      final lyrics = await load(track);
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        if (lyrics != null) {
-          _lyrics = lyrics;
-          widget.repository.save(track, lyrics);
-          _synced = lyrics.lines.isNotEmpty;
-          _error = null;
-        }
-      });
-    } catch (_) {
-      // Missing or unavailable tags leave lookup and paste available.
-    } finally {
-      if (mounted && generation == _generation) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
-  Future<void> _find() async {
+  Future<void> _load({bool embedded = false, bool online = true}) async {
     final track = _track;
     if (track == null || _loading) return;
     final generation = ++_generation;
@@ -103,12 +79,33 @@ class _LyricsViewState extends State<LyricsView> {
       _error = null;
     });
     try {
-      final lyrics = await widget.repository.find(track);
+      Lyrics? lyrics;
+      if (embedded && widget.loadEmbedded != null) {
+        try {
+          lyrics = await widget.loadEmbedded!(track);
+        } catch (_) {
+          // Unavailable tags must not prevent the online fallback.
+        }
+      }
       if (!mounted || generation != _generation) return;
+      if (lyrics != null &&
+          lyrics.plain.trim().isEmpty &&
+          !lyrics.lines.any((line) => line.text.trim().isNotEmpty) &&
+          !lyrics.instrumental) {
+        lyrics = null;
+      }
+      if (lyrics == null && online) {
+        lyrics = await widget.repository.find(track);
+      }
+      if (!mounted || generation != _generation) return;
+      final result = lyrics;
       setState(() {
-        _lyrics = lyrics;
-        _looked = true;
-        _synced = lyrics != null && lyrics.lines.isNotEmpty;
+        if (result != null) {
+          _lyrics = result;
+          widget.repository.save(track, result);
+          _synced = result.lines.isNotEmpty;
+        }
+        _looked = online || result != null;
       });
     } catch (_) {
       if (mounted && generation == _generation) {
@@ -264,7 +261,7 @@ class _LyricsViewState extends State<LyricsView> {
     ),
   );
 
-  Widget _options({bool vertical = false}) {
+  Widget _options() {
     final theme = Theme.of(context);
     return Theme(
       data: theme.copyWith(
@@ -284,17 +281,15 @@ class _LyricsViewState extends State<LyricsView> {
         tooltip: 'Lyrics options',
         position: PopupMenuPosition.under,
         constraints: const BoxConstraints(minWidth: 280, maxWidth: 300),
-        offset: Offset(vertical ? -6 : 0, vertical ? -10 : 10),
-        icon: Icon(
-          vertical ? Icons.more_vert_rounded : Icons.more_horiz_rounded,
-        ),
+        offset: const Offset(0, 10),
+        icon: const Icon(Icons.more_horiz_rounded),
         onSelected: (value) {
           if (value == 'import') {
             unawaited(_import());
           } else if (value == 'embedded') {
-            setState(() => unawaited(_embedded()));
+            unawaited(_load(embedded: true, online: false));
           } else {
-            unawaited(value == 'paste' ? _paste() : _find());
+            unawaited(value == 'paste' ? _paste() : _load());
           }
         },
         itemBuilder: (_) => [
@@ -336,9 +331,13 @@ class _LyricsViewState extends State<LyricsView> {
     final lyrics = _lyrics;
     if (_track == null) return _message('Choose a track to see its lyrics.');
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _message(_error!);
     if (lyrics?.instrumental == true) {
-      return _message('Instrumental · no lyrics');
+      return LyricsWaitingIndicator(
+        key: const ValueKey('lyrics-waiting'),
+        label: 'Instrumental · no lyrics',
+        playing: widget.player.audio.playing && !widget.player.audio.buffering,
+        reducedMotion: widget.player.settings.reducedMotion,
+      );
     }
     if (lyrics == null) {
       return Center(
@@ -354,9 +353,10 @@ class _LyricsViewState extends State<LyricsView> {
               ),
               const SizedBox(height: 12),
               Text(
-                _looked
-                    ? 'No lyrics found for this song.'
-                    : 'Bring the words into focus.',
+                _error ??
+                    (_looked
+                        ? 'No lyrics found for this song.'
+                        : 'Bring the words into focus.'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 22,
@@ -367,13 +367,13 @@ class _LyricsViewState extends State<LyricsView> {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 480),
                 child: const Text(
-                  'Embedded lyrics are read from the music file first. Find lyrics sends this song’s title, artist and duration to LRCLIB. Your Telegram account and channel details stay private.',
+                  'Missing embedded lyrics are looked up automatically on LRCLIB using this song’s title, artist and duration. You can retry, import a file or paste lyrics.',
                   textAlign: TextAlign.center,
                 ),
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
-                onPressed: _find,
+                onPressed: _load,
                 icon: const Icon(Icons.search),
                 label: const Text('Find lyrics'),
               ),
@@ -471,14 +471,6 @@ class _LyricsViewState extends State<LyricsView> {
     );
   }
 
-  String _sourceText(Lyrics lyrics) => lyrics.online
-      ? 'Lyrics: LRCLIB · timings may vary by recording'
-      : lyrics.embedded
-      ? 'Lyrics from music file'
-      : lyrics.imported
-      ? 'Imported LRC · session only'
-      : 'Pasted lyrics · session only';
-
   Widget _surfaceCard({
     required Widget child,
     EdgeInsetsGeometry padding = const EdgeInsets.all(16),
@@ -496,6 +488,13 @@ class _LyricsViewState extends State<LyricsView> {
     child: Row(
       key: const ValueKey('lyrics-song-pill'),
       children: [
+        IconButton.filledTonal(
+          key: const ValueKey('lyrics-back'),
+          onPressed: widget.onBack,
+          tooltip: 'Back to cover',
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        const SizedBox(width: 8),
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: SizedBox.square(dimension: 48, child: widget.artwork),
@@ -693,47 +692,7 @@ class _LyricsViewState extends State<LyricsView> {
     ),
   );
 
-  Widget _footerMetaRow({required bool compact}) {
-    final lyrics = _lyrics;
-    final source = lyrics == null
-        ? 'Lyrics source will appear here'
-        : _sourceText(lyrics);
-    return Row(
-      children: [
-        IconButton.filled(
-          onPressed: widget.onBack,
-          tooltip: 'Back to cover',
-          style: IconButton.styleFrom(
-            backgroundColor: _colors.surfaceContainerLow,
-            foregroundColor: _colors.onSurface,
-          ),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            source,
-            textAlign: compact ? TextAlign.center : TextAlign.left,
-            maxLines: compact ? 1 : 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11.5,
-              color: _colors.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Material(
-          color: _colors.surfaceContainerLow,
-          shape: const CircleBorder(),
-          child: _options(vertical: true),
-        ),
-      ],
-    );
-  }
-
-  Widget _layout({required bool short, required bool reduced}) => Column(
+  Widget _layout({required bool reduced}) => Column(
     children: [
       _header(),
       const SizedBox(height: 8),
@@ -743,8 +702,6 @@ class _LyricsViewState extends State<LyricsView> {
         reduced: reduced,
         showModeSelector: _lyrics != null && !_lyrics!.instrumental,
       ),
-      const SizedBox(height: 8),
-      _footerMetaRow(compact: short),
     ],
   );
 
@@ -769,7 +726,7 @@ class _LyricsViewState extends State<LyricsView> {
                     16,
                     short ? 8 : 16,
                   ),
-                  child: _layout(short: short, reduced: reduced),
+                  child: _layout(reduced: reduced),
                 ),
               ),
             );
@@ -890,6 +847,7 @@ class _SyncedLyricsState extends State<_SyncedLyrics>
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
       final active = widget.lyrics.activeAt(widget.player.audio.position);
+      final waiting = active < 0 || widget.lyrics.lines[active].text.trim().isEmpty;
       final scaler = MediaQuery.textScalerOf(context);
       final reduced =
           widget.player.settings.reducedMotion ||
@@ -1021,7 +979,7 @@ class _SyncedLyricsState extends State<_SyncedLyrics>
                       itemExtentBuilder: (index, _) => _heights[index],
                       itemBuilder: (context, index) {
                         final line = widget.lyrics.lines[index];
-                        final current = active == index;
+                        final current = !waiting && active == index;
                         final distance = (index - active).abs();
                         return Semantics(
                           selected: current,
@@ -1063,10 +1021,10 @@ class _SyncedLyricsState extends State<_SyncedLyrics>
                               ),
                               child: ImageFiltered(
                                 key: ValueKey('lyric-focus-$index'),
-                                enabled: active >= 0 && !current,
+                                enabled: !current,
                                 imageFilter: ui.ImageFilter.blur(
-                                  sigmaX: 2.2,
-                                  sigmaY: 2.2,
+                                  sigmaX: waiting ? 6 : 2.2,
+                                  sigmaY: waiting ? 6 : 2.2,
                                 ),
                                 child: AnimatedDefaultTextStyle(
                                   duration: Duration(
@@ -1077,7 +1035,9 @@ class _SyncedLyricsState extends State<_SyncedLyrics>
                                     color: current
                                         ? _colors.primary
                                         : Colors.white.withValues(
-                                            alpha: !_follow
+                                            alpha: waiting && _follow
+                                                ? .22
+                                                : !_follow
                                                 ? .72
                                                 : (distance <= 1 ? .56 : .32),
                                           ),
@@ -1097,6 +1057,15 @@ class _SyncedLyricsState extends State<_SyncedLyrics>
               ),
             ),
           ),
+          if (waiting && _follow)
+            Positioned.fill(
+              child: LyricsWaitingIndicator(
+                key: const ValueKey('lyrics-waiting'),
+                label: active < 0 ? 'Waiting for lyrics' : 'Instrumental break',
+                playing: widget.player.audio.playing && !widget.player.audio.buffering,
+                reducedMotion: reduced,
+              ),
+            ),
           if (!_follow)
             Positioned(
               bottom: 6,
