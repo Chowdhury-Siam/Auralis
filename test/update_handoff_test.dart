@@ -4,7 +4,7 @@ import 'package:auralis/updater.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('installer waits for the requesting process and only update installs reopen automatically', () {
+  test('installer waits for the requesting process and uses one-step completion', () {
     final script = File('tool/installer.iss').readAsStringSync();
     expect(script, contains("{param:AURALISPID|0}"));
     expect(script, contains('WaitForSingleObject(AppProcess, 90000) = 0'));
@@ -12,6 +12,9 @@ void main() {
     expect(script, contains('if not Result then'));
     expect(script, contains('Check: IsAuralisUpdate'));
     expect(script, contains('Check: not IsAuralisUpdate'));
+    expect(script, contains('Flags: nowait skipifsilent runasoriginaluser'));
+    expect(script, contains('DisableFinishedPage=yes'));
+    expect(script, isNot(contains('postinstall')));
   });
 
   test('real direct Windows executable launch preserves paths and arguments', () async {
