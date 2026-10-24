@@ -732,3 +732,9 @@ Optional Android x64 artifacts from the same tested commit are also attached whe
 Listening uploads are throttled to thirty-second intervals and each field is sent at most once per sync cycle. Incoming snapshots still preserve fresh local samples. This prevents two actively playing devices from continually uploading each other’s arriving counters. Favorites/playlist edits remain promptly debounced. Background/shutdown flushes are best effort, with a durable pending outbox when offline.
 
 Initial pairing completes a read-only cloud pull before uploading any local baseline. Baseline reconciliation subtracts already represented cloud device counters from a restored local aggregate, preventing reconnects or copied synced backups from inflating existing totals. A regression covers this pairing case.
+
+## 0.1.65 analyzer compatibility — 24 October 2026
+
+Fixed all five issues reported by the Android and Windows Flutter 3.47.1 analyzers: removed the redundant `dart:typed_data` import from Android audio, replaced `TickerMode.of(context)` with `TickerMode.valuesOf(context).enabled`, and changed the three swipe tests to `timedDrag` with a positional duration. Gesture distances and durations are preserved. Shared app version is 0.1.65+66; bundled and GitHub release notes include these fixes.
+
+Validation here: all 57 app/test Dart files passed syntax parsing; Android source verification and release-note consistency checks passed. The changes were compared against the complete 0.1.64 source archive. Flutter/Dart are not installed in this environment, so `flutter analyze --no-pub --fatal-infos`, Flutter tests and native builds were not run locally; CI must verify them.
