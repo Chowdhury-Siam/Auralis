@@ -95,7 +95,7 @@ void main() {
           return response({'success':true});
         }
         if(r.uri.path=='/v1/info') return response({'service':'auralis-sync'});
-        if(r.uri.path=='/health') return response({'service':'auralis-sync','configured':true,'backend':'turso','version':currentReleaseVersion});
+        if(r.uri.path=='/health') return response({'service':'auralis-sync','configured':true,'backend':'turso','version':currentSyncWorkerVersion});
         expect(uploads,1);
         return response({'cursor':0,'more':false,'records':<String,dynamic>{}});
       });
