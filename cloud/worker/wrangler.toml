@@ -4,7 +4,7 @@ compatibility_date = "2026-10-01"
 workers_dev = true
 
 [vars]
-AURALIS_VERSION = "0.1.76"
+AURALIS_VERSION = "0.1.78"
 
 [[durable_objects.bindings]]
 name = "ROOM"
