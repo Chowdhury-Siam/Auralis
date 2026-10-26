@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:auralis/app.dart';
 import 'package:auralis/data_files.dart';
 import 'package:auralis/lyrics.dart';
+import 'package:auralis/external_links.dart';
 import 'package:auralis/lyrics_view.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
@@ -39,7 +40,7 @@ class PendingLyrics extends LyricsRepository {
   final other = Completer<Lyrics?>();
   int calls = 0;
   @override
-  Future<Lyrics?> find(Track track) {
+  Future<Lyrics?> find(Track track, {bool refresh = false}) {
     calls++;
     return track.id == song.id ? pending.future : other.future;
   }
@@ -87,6 +88,13 @@ Future<void> chooseImport(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> chooseTranslation(WidgetTester tester, String label) async {
+  await tester.tap(find.byKey(const ValueKey('lyrics-translate')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
+
 PlayerController controller() =>
     PlayerController(
         FakeAudio()..duration = const Duration(minutes: 5),
@@ -101,6 +109,7 @@ Widget view(
   LyricsRepository repository, {
   Future<Lyrics?> Function(Track)? embedded,
   DataFiles files = const DataFiles(),
+  Future<void> Function(String) openLink = openExternalLink,
 }) => MaterialApp(
   theme: ThemeData.dark().copyWith(
     textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Segoe UI'),
@@ -113,6 +122,7 @@ Widget view(
         repository: repository,
         loadEmbedded: embedded,
         files: files,
+        openLink: openLink,
         artwork: const Icon(Icons.album),
         onBack: () {},
       ),
@@ -151,13 +161,11 @@ void main() {
           ..save(song, Lyrics.parse('[00:00]今日は晴れです。'));
         await tester.pumpWidget(view(player, repository));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('lyrics-translate')));
-        await tester.pumpAndSettle();
+        await chooseTranslation(tester, 'Translate in Auralis');
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
         expect(repository.translations, 0);
-        await tester.tap(find.byKey(const ValueKey('lyrics-translate')));
-        await tester.pumpAndSettle();
+        await chooseTranslation(tester, 'Translate in Auralis');
         await tester.tap(find.text('Translate'));
         await tester.pump();
         expect(repository.translations, 1);
@@ -166,12 +174,10 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('今日は晴れです。\nIt is sunny today.'), findsOneWidget);
-        await tester.tap(find.byKey(const ValueKey('lyrics-translate')));
-        await tester.pumpAndSettle();
+        await chooseTranslation(tester, 'Show original lyrics');
         expect(find.text('今日は晴れです。'), findsOneWidget);
         expect(repository.cached(song)!.plain, '今日は晴れです。');
-        await tester.tap(find.byKey(const ValueKey('lyrics-translate')));
-        await tester.pumpAndSettle();
+        await chooseTranslation(tester, 'Translate in Auralis');
         expect(repository.translations, 1);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
@@ -191,8 +197,7 @@ void main() {
     addTearDown(repository.close);
     await tester.pumpWidget(view(player, repository));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('lyrics-translate')));
-    await tester.pumpAndSettle();
+    await chooseTranslation(tester, 'Translate in Auralis');
     await tester.tap(find.text('Translate'));
     await tester.pump();
     player.queue.add(second);
@@ -204,6 +209,153 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Stale English'), findsNothing);
     expect(find.text('Other original lyrics'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'DeepL confirms copying, preserves originals and opens both directions on phone and desktop',
+    (tester) async {
+      final player = controller();
+      final opened = <String>[];
+      String? copied = 'previous clipboard';
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'Clipboard.setData') {
+              copied = (call.arguments as Map)['text'] as String;
+            }
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      addTearDown(player.shutdown);
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+      tester.view.devicePixelRatio = 1;
+      for (final size in [const Size(390, 844), const Size(1280, 800)]) {
+        tester.view.physicalSize = size;
+        final repository = LyricsRepository()
+          ..save(song, Lyrics.parse('[00:00]今日は晴れです。\n[00:02]明日も歩きます。'));
+        await tester.pumpWidget(
+          view(
+            player,
+            repository,
+            openLink: (url) async {
+              opened.add(url);
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final before = opened.length, oldClipboard = copied;
+        await chooseTranslation(tester, 'Translate with DeepL');
+        expect(
+          find.textContaining('Results stay in the browser.'),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(opened.length, before);
+        expect(copied, oldClipboard);
+        await chooseTranslation(tester, 'Translate with DeepL');
+        await tester.tap(find.text('Copy lyrics & open DeepL'));
+        await tester.pumpAndSettle();
+        expect(opened.last, 'https://www.deepl.com/en/translator/l/ja/en');
+        expect(copied, '今日は晴れです。\n明日も歩きます。');
+        expect(repository.cached(song)!.plain, copied);
+        expect(find.text('今日は晴れです。'), findsOneWidget);
+        await chooseTranslation(tester, 'Translate with DeepL');
+        await tester.tap(find.byType(DropdownButtonFormField<String>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('English → Japanese').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Copy lyrics & open DeepL'));
+        await tester.pumpAndSettle();
+        expect(opened.last, 'https://www.deepl.com/en/translator/l/en/ja');
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+        repository.close();
+      }
+    },
+  );
+
+  testWidgets(
+    'DeepL does not open stale lyrics after song changes while copying',
+    (tester) async {
+      final player = controller();
+      final repository = LyricsRepository()
+        ..save(song, Lyrics.parse('[00:00]今日は晴れです。'))
+        ..save(second, Lyrics.parse('[00:00]Other original lyrics'));
+      final gate = Completer<void>();
+      var opened = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'Clipboard.setData') await gate.future;
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      await tester.pumpWidget(
+        view(
+          player,
+          repository,
+          openLink: (_) async {
+            opened = true;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      await chooseTranslation(tester, 'Translate with DeepL');
+      await tester.tap(find.text('Copy lyrics & open DeepL'));
+      await tester.pumpAndSettle();
+      player.queue.add(second);
+      player.index = 1;
+      player.notifyListeners();
+      await tester.pumpAndSettle();
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(opened, isFalse);
+      expect(find.text('Other original lyrics'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('DeepL browser launch failure keeps lyrics and allows retry', (
+    tester,
+  ) async {
+    final player = controller();
+    final repository = LyricsRepository()
+      ..save(song, Lyrics.parse('Original English lyrics'));
+    var calls = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    addTearDown(player.shutdown);
+    addTearDown(repository.close);
+    await tester.pumpWidget(
+      view(
+        player,
+        repository,
+        openLink: (_) async {
+          if (++calls == 1) throw const FileSystemException('No browser');
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 2; attempt++) {
+      await chooseTranslation(tester, 'Translate with DeepL');
+      await tester.tap(find.text('Copy lyrics & open DeepL'));
+      await tester.pumpAndSettle();
+      expect(repository.cached(song)!.plain, 'Original English lyrics');
+    }
+    expect(calls, 2);
     expect(tester.takeException(), isNull);
   });
 
@@ -332,7 +484,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Import .lrc file'), findsOneWidget);
     expect(find.text('Read lyrics from music file'), findsOneWidget);
-    expect(find.text('Find lyrics on LRCLIB'), findsOneWidget);
+    expect(find.text('Find lyrics online'), findsOneWidget);
     expect(find.text('Paste lyrics'), findsOneWidget);
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
