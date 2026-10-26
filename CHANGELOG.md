@@ -1,5 +1,21 @@
 # Auralis changes
 
+## 0.1.88
+
+- Lyrics automatically fall back from LRCLIB exact lookup to LRCLIB search and then lyrics.ovh when a source is missing, empty, unavailable, invalid or timed out. Embedded lyrics remain first, and both translation options remain available.
+- Search results are checked against title, artist and duration to avoid unrelated songs/versions. Successful source attribution persists with the lyric cache, and each request has a bounded timeout and response size.
+- Find lyrics online retries the sources explicitly. Failed retries keep the existing lyrics; imported lyrics, newer requests and account changes stop stale fallback results from being saved.
+
+## 0.1.87
+
+- Kept both translation options in the translate button and Lyrics options: Translate in Auralis restores the cached Japanese-to-English Google/MyMemory flow, while Translate with DeepL keeps the free website workflow in both directions.
+- In-app translations retain original text, timestamps, offline cache reuse and original/bilingual toggling. DeepL copies only the original lyrics and leaves results in the browser. Both choices require no API key.
+
+## 0.1.86
+
+- Replaced the Google/MyMemory lyric translation path with DeepL’s free website, as requested. Translate copies original lyrics and opens the selected Japanese–English or English–Japanese page in the browser, with no API key.
+- The dialog explains copying and browser results. Cancellation leaves the clipboard unchanged; stale song changes and browser failures are handled without replacing the original lyrics. Removed the unused online translation client and its cache path.
+
 ## 0.1.85
 
 - Added on-demand Japanese-to-English lyrics with a translation button and original/bilingual toggle on phone and desktop. Original lyrics, timestamps and instrumental gaps remain intact.
