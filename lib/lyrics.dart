@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'models.dart';
+import 'lyrics_translation.dart';
 import 'media_cache.dart';
 
 class LyricLine {
@@ -161,6 +162,15 @@ class LyricsRepository {
     : _createClient = createClient ?? HttpClient.new;
   final HttpClient Function() _createClient;
   final MediaCache Function()? cache;
+  late final _translator = LyricsTranslator(
+    createClient: _createClient,
+    cache: cache,
+  );
+  Future<Lyrics> translateJapanese(
+    Track track,
+    Lyrics source, {
+    required bool Function() active,
+  }) => _translator.translate(track, source, active: active);
   Future<Lyrics?> loadCached(Track track) async {
     if (contains(track)) return cached(track);
     final disk = cache?.call();
@@ -321,6 +331,7 @@ class LyricsRepository {
   }
 
   void close() {
+    _translator.close();
     _closed = true;
     for (final client in _clients) {
       client.close(force: true);
