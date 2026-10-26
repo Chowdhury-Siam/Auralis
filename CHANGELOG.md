@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.80
+
+- Now Playing grows out of the mini-player card and shrinks back into it, with rounded corners, fading content and a blurred page underneath. Tap or drag up to open; use the down arrow or drag down to close. Short drags settle back into place.
+- Horizontal mini-player drags follow the finger and spring back in either direction while playback, queue and sleep timer stay active. Seeking and transport buttons keep their own gestures.
+- Added transition, drag-cancellation, screen-resize and reduced-motion checks on phone and desktop layouts.
+
 ## 0.1.79
 
 - Fixed widget-test shutdown hangs by releasing completed audio-cleanup futures instead of retaining their original async clock. Pending audio deletions remain serialized before replay.
