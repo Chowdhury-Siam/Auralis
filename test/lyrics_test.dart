@@ -20,7 +20,8 @@ const song = Track(
 );
 
 class DelayedLyricsResponse extends Response {
-  DelayedLyricsResponse() : super(utf8.encode('{"plainLyrics":"Late online words"}'));
+  DelayedLyricsResponse()
+    : super(utf8.encode('{"plainLyrics":"Late online words"}'));
   final ready = Completer<void>();
   @override
   StreamSubscription<List<int>> listen(
@@ -28,10 +29,16 @@ class DelayedLyricsResponse extends Response {
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) => (() async* {
-    await ready.future;
-    yield bytes;
-  })().listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }) =>
+      (() async* {
+        await ready.future;
+        yield bytes;
+      })().listen(
+        onData,
+        onError: onError,
+        onDone: onDone,
+        cancelOnError: cancelOnError,
+      );
 }
 
 void main() {
@@ -169,17 +176,22 @@ void main() {
     },
   );
 
-  test('a late HTTP response cannot overwrite imported session lyrics', () async {
-    final response = DelayedLyricsResponse();
-    final repository = LyricsRepository(createClient: () => Client([response]));
-    addTearDown(repository.close);
-    final request = repository.find(song);
-    final imported = Lyrics.parse('Local choice', imported: true);
-    repository.save(song, imported);
-    response.ready.complete();
-    expect((await request)!.online, isTrue);
-    expect(repository.cached(song), same(imported));
-  });
+  test(
+    'a late HTTP response cannot overwrite imported session lyrics',
+    () async {
+      final response = DelayedLyricsResponse();
+      final repository = LyricsRepository(
+        createClient: () => Client([response]),
+      );
+      addTearDown(repository.close);
+      final request = repository.find(song);
+      final imported = Lyrics.parse('Local choice', imported: true);
+      repository.save(song, imported);
+      response.ready.complete();
+      expect(await request, same(imported));
+      expect(repository.cached(song), same(imported));
+    },
+  );
 
   test('not found and instrumental states differ; invalid/oversized HTTP never caches', () async {
     for (final response in [
@@ -190,7 +202,11 @@ void main() {
       Response(List.filled(512 * 1024 + 1, 32)),
       Response(utf8.encode('not json')),
     ]) {
-      final client = Client([response]);
+      final client = Client([
+        response,
+        Response(utf8.encode('[]')),
+        Response([], statusCode: 404),
+      ]);
       final repository = LyricsRepository(createClient: () => client);
       if (response.statusCode == 404) {
         expect(await repository.find(song), isNull);
