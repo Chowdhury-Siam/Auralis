@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -7,37 +8,174 @@ import 'package:auralis/telegram/telegram_service.dart';
 import 'fakes.dart';
 
 void main() {
-  test('build credentials initialize a fresh sign-in without user API input', () async {
-    final dir = await Directory.systemTemp.createTemp('auralis-build-auth-');
-    addTearDown(() => dir.delete(recursive: true));
-    final td = FakeTd(), vault = MemoryVault();
-    final service = TelegramService(dir, vault, transport: td,
-      applicationApiId: 12345,
-      applicationApiHash: 'abcdef0123456789abcdef0123456789',
+  test(
+    'startup removes old audio and documents without sweeping artwork',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('auralis-audio-cache-');
+      addTearDown(() => dir.delete(recursive: true));
+      final td = FakeTd();
+      final service = TelegramService(dir, MemoryVault(), transport: td);
+      addTearDown(service.shutdown);
+      final sweeping = Completer<void>(), finish = Completer<void>();
+      addTearDown(() {
+        if (!finish.isCompleted) {
+          finish.complete();
+        }
+      });
+      await service.start(
+        apiId: 12345,
+        apiHash: 'abcdef0123456789abcdef0123456789',
+      );
+      td.onRequest = (r) async {
+        if (r['@type'] == 'optimizeStorage') {
+          sweeping.complete();
+          await finish.future;
+        }
+        return null;
+      };
+      td.auth('authorizationStateReady');
+      await sweeping.future;
+      final playback = service.request({
+        '@type': 'downloadFile',
+        'file_id': 7,
+        'priority': 32,
+        'offset': 0,
+        'limit': 100,
+        'synchronous': false,
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(td.requests.where((r) => r['@type'] == 'downloadFile'), isEmpty);
+      final cleanup = td.requests.singleWhere(
+        (r) => r['@type'] == 'optimizeStorage',
+      );
+      expect(cleanup['file_types'], [
+        {'@type': 'fileTypeAudio'},
+        {'@type': 'fileTypeDocument'},
+      ]);
+      expect(cleanup['size'], 0);
+      expect(cleanup['immunity_delay'], 0);
+      finish.complete();
+      await playback;
+      expect(
+        td.requests.where((r) => r['@type'] == 'downloadFile'),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'reconnecting during playback does not sweep the active buffer',
+    () async {
+      final td = FakeTd();
+      final directory = await Directory.systemTemp.createTemp(
+        'auralis-active-cache-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final service = TelegramService(directory, MemoryVault(), transport: td);
+      addTearDown(service.shutdown);
+      service.hasActiveStream = () => true;
+      await service.start(
+        apiId: 12345,
+        apiHash: 'abcdef0123456789abcdef0123456789',
+      );
+      td.auth('authorizationStateReady');
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        td.requests.where((r) => r['@type'] == 'optimizeStorage'),
+        isEmpty,
+      );
+      expect(service.ready, isTrue);
+    },
+  );
+
+  test('replaying audio waits for a pending metadata-file deletion', () async {
+    final td = FakeTd();
+    final service = TelegramService(
+      Directory('unused'),
+      MemoryVault(),
+      transport: td,
     );
     addTearDown(service.shutdown);
-    expect(service.hasApplicationCredentials, isTrue);
-    await service.start();
-    expect(service.error, isNull);
-    final parameters = td.requests.firstWhere((r) => r['@type'] == 'setTdlibParameters');
-    expect(parameters['api_id'], 12345);
-    expect(parameters['api_hash'], 'abcdef0123456789abcdef0123456789');
-    expect(vault.data.keys.toSet(), {'apiId', 'apiHash', 'databaseKey'});
+    service.state = 'authorizationStateReady';
+    final deleting = Completer<void>(), finish = Completer<void>();
+    addTearDown(() {
+      if (!finish.isCompleted) {
+        finish.complete();
+      }
+    });
+    td.onRequest = (r) async {
+      if (r['@type'] == 'deleteFile') {
+        deleting.complete();
+        await finish.future;
+      }
+      return null;
+    };
+    final cleanup = service.releaseAudio(7);
+    await deleting.future;
+    service.isStreaming = (_) => true;
+    final playback = service.request({
+      '@type': 'downloadFile',
+      'file_id': 7,
+      'priority': 32,
+      'offset': 0,
+      'limit': 100,
+      'synchronous': false,
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(td.requests.where((r) => r['@type'] == 'downloadFile'), isEmpty);
+    finish.complete();
+    await Future.wait([cleanup, playback]);
+    expect(td.requests.last['@type'], 'downloadFile');
   });
+
+  test(
+    'build credentials initialize a fresh sign-in without user API input',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('auralis-build-auth-');
+      addTearDown(() => dir.delete(recursive: true));
+      final td = FakeTd(), vault = MemoryVault();
+      final service = TelegramService(
+        dir,
+        vault,
+        transport: td,
+        applicationApiId: 12345,
+        applicationApiHash: 'abcdef0123456789abcdef0123456789',
+      );
+      addTearDown(service.shutdown);
+      expect(service.hasApplicationCredentials, isTrue);
+      await service.start();
+      expect(service.error, isNull);
+      final parameters = td.requests.firstWhere(
+        (r) => r['@type'] == 'setTdlibParameters',
+      );
+      expect(parameters['api_id'], 12345);
+      expect(parameters['api_hash'], 'abcdef0123456789abcdef0123456789');
+      expect(vault.data.keys.toSet(), {'apiId', 'apiHash', 'databaseKey'});
+    },
+  );
 
   test('existing and restored sessions keep their API identity across build changes', () async {
     final dir = await Directory.systemTemp.createTemp('auralis-saved-auth-');
     addTearDown(() => dir.delete(recursive: true));
     final td = FakeTd(), vault = MemoryVault();
-    vault.data = {'apiId': 22222, 'apiHash': '11111111111111111111111111111111', 'databaseKey': 'saved-key'};
-    final service = TelegramService(dir, vault, transport: td,
+    vault.data = {
+      'apiId': 22222,
+      'apiHash': '11111111111111111111111111111111',
+      'databaseKey': 'saved-key',
+    };
+    final service = TelegramService(
+      dir,
+      vault,
+      transport: td,
       applicationApiId: 12345,
       applicationApiHash: 'abcdef0123456789abcdef0123456789',
     );
     addTearDown(service.shutdown);
     await service.start();
     expect(service.error, isNull);
-    final parameters = td.requests.firstWhere((r) => r['@type'] == 'setTdlibParameters');
+    final parameters = td.requests.firstWhere(
+      (r) => r['@type'] == 'setTdlibParameters',
+    );
     expect(parameters['api_id'], 22222);
     expect(parameters['api_hash'], '11111111111111111111111111111111');
     expect(parameters['database_encryption_key'], 'saved-key');
@@ -47,7 +185,11 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('auralis-build-logout-');
     addTearDown(() => dir.delete(recursive: true));
     final first = FakeTd(), second = FakeTd(), vault = MemoryVault();
-    final service = TelegramService(dir, vault, transport: first, createTransport: () => second,
+    final service = TelegramService(
+      dir,
+      vault,
+      transport: first,
+      createTransport: () => second,
       applicationApiId: 12345,
       applicationApiHash: 'abcdef0123456789abcdef0123456789',
     );
@@ -60,7 +202,12 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     await service.start();
     expect(service.error, isNull);
-    expect(second.requests.any((r) => r['@type'] == 'setTdlibParameters' && r['api_id'] == 12345), isTrue);
+    expect(
+      second.requests.any(
+        (r) => r['@type'] == 'setTdlibParameters' && r['api_id'] == 12345,
+      ),
+      isTrue,
+    );
     expect(vault.data['databaseKey'], key);
   });
 
