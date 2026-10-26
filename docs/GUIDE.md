@@ -166,3 +166,14 @@ Settings includes **Multi-device sync** for connecting and pairing devices, and 
 Click Library Refresh to reload the selected channels and then cache their available artwork and lyrics in the background. The header shows processed tracks. Embedded lyrics are preferred, followed by LRCLIB lookup using title/artist/duration. Missing lyrics and network failures are skipped so the remaining tracks continue; Refresh retries unavailable entries later. Finished artwork and lyric files persist on this device, separately per Telegram session, and are read again after memory eviction or restart. Only extracted artwork/lyrics are kept; temporary audio metadata/playback buffers are cleaned by the existing audio-cache policy. Changing channels, accounts or closing the app stops the pass; clicking Refresh starts a new pass. Imported/pasted lyrics are also saved in this device cache and remain outside portable backups.
 
 On desktop the bottom player stays to the right of the navigation sidebar. Wide layouts use the side Now Playing panel for the cover/title instead of duplicating that preview beneath the sidebar.
+
+
+## Japanese lyric translation
+
+Open Now Playing → Lyrics. For Japanese lyrics, tap the translate icon beside Lyrics options, or choose **Translate Japanese to English** in that menu. Confirm **Translate** to send lyric text to the online services. Tap the icon again to switch between the original and bilingual lyrics. Timed lines keep their original timestamps; plain lyrics work too. The original lyrics and exported/imported LRC content are not overwritten.
+
+This no-key option tries the Google Translate web endpoint, then the documented MyMemory lookup API. Google's web endpoint is unofficial and may change or rate-limit requests; this is not the authenticated Google Cloud Translation API. MyMemory anonymous use is limited to 5,000 characters/day, with 500 bytes per request. Repeated choruses are deduplicated. Machine translation can lose poetic nuance; this feature does not claim a universally best Japanese translation engine.
+
+Translation runs only when requested, not during library Refresh. Only Japanese lyric text is sent—no music files, Telegram credentials or account credentials. Successful translations are cached locally under the current account/session and original lyric content, and can be reused offline. Missing translations need internet. A new source lyric or account cannot reuse another result. Service failures, mismatched line counts and quota errors keep the original and can be retried. No API key or new native/model dependency is needed.
+
+Provider documentation: https://mymemory.translated.net/doc/spec.php and https://mymemory.translated.net/doc/usagelimits.php
