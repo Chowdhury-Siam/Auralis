@@ -281,7 +281,24 @@ void main() {
       expect(player.settings.librarySort, LibrarySort.artist);
       expect(player.current?.title, 'Song -1');
       expect(player.queue, hasLength(1));
-      expect(find.byType(Image), findsNWidgets(4));
+      // Artwork can now arrive from persistent disk cache after refresh.
+      for (
+        var attempt = 0;
+        attempt < 100 && find.byType(Image).evaluate().length < 3;
+        attempt++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(find.byType(Image), findsNWidgets(3));
+      expect(
+        tester.getRect(find.byKey(const ValueKey('player-bar'))).left,
+        greaterThanOrEqualTo(202),
+        reason: 'The desktop dock stays clear of the sidebar',
+      );
+      expect(find.byKey(const ValueKey('open-current-track')), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
