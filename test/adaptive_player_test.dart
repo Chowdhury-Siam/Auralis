@@ -489,8 +489,22 @@ void main() {
         );
         expect(find.byKey(const ValueKey('playback-seek')), findsOneWidget);
         expect(
-          find.descendant(of: layout, matching: find.byType(Scrollable)),
+          find.descendant(
+            of: layout,
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Scrollable &&
+                  axisDirectionToAxis(widget.axisDirection) == Axis.vertical,
+            ),
+          ),
           findsNothing,
+          reason: 'Every control fits without vertical page scrolling',
+        );
+        final artworkPages = find.byKey(const ValueKey('artwork-pages'));
+        expect(artworkPages, findsOneWidget);
+        expect(
+          tester.widget<PageView>(artworkPages).scrollDirection,
+          Axis.horizontal,
         );
         expect(
           find.byKey(const ValueKey('now-playing-queue')),
