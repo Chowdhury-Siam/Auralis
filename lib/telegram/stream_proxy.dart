@@ -45,7 +45,7 @@ class TelegramStreamProxy {
   final TdRequest request;
   final Duration stallTimeout;
   final Future<void> Function(int fileId)? releaseAudio;
-  Future<void> _cleanup = Future.value();
+  Future<void>? _cleanup;
   HttpServer? _server;
   Future<void>? _starting;
   final _token = base64UrlEncode(
@@ -268,27 +268,39 @@ class TelegramStreamProxy {
     _ranges.clear();
     // New sources wait for earlier cleanup, including a quick replay of the
     // same file. A late delete must never remove a new playback buffer.
-    return _cleanup = _cleanup.then((_) async {
-      for (final id in files) {
-        if (releaseAudio case final release?) {
-          try {
-            await release(id);
-          } catch (_) {
-            /* Disconnect or logout may already have closed the file cache. */
+    late final Future<void> cleanup;
+    cleanup = (_cleanup ?? Future<void>.value())
+        .then((_) async {
+          for (final id in files) {
+            if (releaseAudio case final release?) {
+              try {
+                await release(id);
+              } catch (_) {
+                /* Disconnect or logout may already have closed the file cache. */
+              }
+              continue;
+            }
+            for (final operation in [
+              {
+                '@type': 'cancelDownloadFile',
+                'file_id': id,
+                'only_if_pending': false,
+              },
+              {'@type': 'deleteFile', 'file_id': id},
+            ]) {
+              try {
+                await request(operation);
+              } catch (_) {
+                /* Startup cleanup retries files left behind after disconnection. */
+              }
+            }
           }
-          continue;
-        }
-        for (final operation in [
-          {'@type': 'cancelDownloadFile', 'file_id': id, 'only_if_pending': false},
-          {'@type': 'deleteFile', 'file_id': id},
-        ]) {
-          try {
-            await request(operation);
-          } catch (_) {
-            /* Startup cleanup retries files left behind after disconnection. */
-          }
-        }
-      }
-    });
+        })
+        .whenComplete(() {
+          // Keep only pending work. Retaining a completed future also retains its
+          // originating zone, which may already have stopped running during tests.
+          if (identical(_cleanup, cleanup)) _cleanup = null;
+        });
+    return _cleanup = cleanup;
   }
 }
