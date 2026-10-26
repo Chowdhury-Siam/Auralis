@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:auralis/sync/controller.dart';
 import 'package:auralis/sync/document.dart';
+import 'package:auralis/sync/deployment.dart';
 import 'package:auralis/sync/settings_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,6 +66,9 @@ class AccountClient extends Fake implements HttpClient {
   Future<HttpClientRequest> openUrl(String method, Uri uri) async {
     final r = AccountRequest(method, uri, _reply);
     requests.add(r);
+    if (uri.path == '/v1/live') {
+      throw const SocketException('Live transport is offline in account tests');
+    }
     return r;
   }
 
@@ -82,7 +86,7 @@ class AccountClient extends Fake implements HttpClient {
         'configured': true,
         'accounts': true,
         'ownerCreated': true,
-        'version': '0.1.76',
+        'version': currentSyncWorkerVersion,
       });
     }
     if ([
@@ -135,6 +139,29 @@ class AccountClient extends Fake implements HttpClient {
 }
 
 void main() {
+  test('live connections use each account controller HTTP transport', () async {
+    for (final client in [AccountClient(), AccountClient()]) {
+      await HttpOverrides.runZoned(() async {
+        final sync = SyncController(
+          AccountSettings(),
+          AccountVault(),
+          onApplied: () {},
+          paused: () => true,
+        );
+        try {
+          await sync.signIn('https://sync.example', 'alice', 'test-password');
+          final live = client.requests.where((r) => r.uri.path == '/v1/live');
+          expect(live, hasLength(1));
+          expect(live.single.method, 'GET');
+          expect(live.single.uri.scheme, 'https');
+          expect(sync.account!.username, 'alice');
+        } finally {
+          await sync.close();
+        }
+      }, createHttpClient: (_) => client);
+    }
+  });
+
   test(
     'switching isolates libraries, preserves offline edits and device volume',
     () async {
