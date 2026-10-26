@@ -1,7 +1,9 @@
 # GitHub Releases and application updates
 
 Repository: **[Chowdhury-Siam/Auralis](https://github.com/Chowdhury-Siam/Auralis)**.
-Current source target: **v0.1.71** (`0.1.71+72`).
+Current source target: **v0.1.80** (`0.1.80+81`).
+
+Version 0.1.80 replaces horizontal swipe-to-stop with a mini-player that follows the finger and springs back without changing playback. Now Playing expands out of that card and collapses back with a blurred background; upward/downward drags and reduced motion are supported. Older version entries below describe their historical behavior.
 
 Android and Windows build independently; **Publish Auralis release** waits for both
 successful artifacts from the same trusted main commit. **Clean completed Auralis
