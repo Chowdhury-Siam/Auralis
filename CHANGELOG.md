@@ -1,5 +1,32 @@
 # Auralis changes
 
+## 0.1.76
+
+- Added username/password accounts, saved account switching, sign-out choices and password-confirmed account deletion. Each account keeps its own library and offline edits.
+- Added one-use recovery codes and an owner administration page, with revocable sign-ins and encrypted deployment-credential recovery after reinstalling.
+- Redesigned Account & sync and Deploy Database, including automatic Worker updates when an app bundles a newer Worker. Existing private-key Workers migrate using the same secret and database.
+
+## 0.1.75
+
+- Played songs are no longer retained as a growing offline audio cache: previous audio files are removed when playback switches, stops or exits normally.
+- Audio fragments used to extract embedded artwork or lyrics are cleaned up after reading; image and lyric caches are retained. Active playback and metadata reads are protected from deletion.
+- Connecting Telegram while idle clears audio/document cache left by older versions without clearing thumbnails, photos, account data or the library. The current song can still use a temporary playback/seek buffer.
+
+## 0.1.74
+
+- Replaced the clipped next-cover strip in Now Playing with a full-size artwork carousel. Covers follow horizontal swipes and snap completely into view.
+- The artwork stays synchronized with playback controls and supports previous/next swipes, queue boundaries and repeat wrapping.
+
+## 0.1.73
+
+- The Now Playing down arrow smoothly reveals the Library and mini-player underneath as the full player slides down and fades away.
+- The returning mini-player stays protected from accidental taps until the transition finishes. Reduced motion and interrupted navigation remain supported.
+
+## 0.1.72
+
+- Now Playing slides smoothly upward when opened from the mini-player, navigation or desktop lyrics preview, matching its downward close animation.
+- Opening respects reduced motion, and Back or navigation can safely interrupt the transition without restarting playback.
+
 ## 0.1.71
 
 - Fixed sync setup URL validation on Android and Windows: explicit ports, credentials, paths, queries and fragments are rejected before network requests.
