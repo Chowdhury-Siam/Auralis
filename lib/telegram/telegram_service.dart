@@ -29,7 +29,8 @@ class TelegramService extends ChangeNotifier {
   final SecretVault vault;
   final int applicationApiId;
   final String applicationApiHash;
-  bool get hasApplicationCredentials => applicationApiId > 0 &&
+  bool get hasApplicationCredentials =>
+      applicationApiId > 0 &&
       RegExp(r'^[a-fA-F0-9]{32}$').hasMatch(applicationApiHash);
   TdTransport _transport;
   final TdTransport Function() _createTransport;
@@ -44,11 +45,13 @@ class TelegramService extends ChangeNotifier {
     }
     return _transport.request(json);
   }
+
   StreamSubscription<Json>? _subscription;
   Json _secrets = {};
   String state = 'disconnected';
   String? error;
   String? authenticationPhoneNumber;
+  String? authenticationLink;
   bool busy = false;
   bool credentialRecoveryRequired = false;
   final Map<int, MusicChat> _channels = {};
@@ -92,7 +95,9 @@ class TelegramService extends ChangeNotifier {
 
   /// Removes only the local audio copy; Telegram messages and images stay intact.
   Future<void> releaseAudio(int fileId) async {
-    if (!ready || isStreaming(fileId) || _metadataUsers.containsKey(fileId)) return;
+    if (!ready || isStreaming(fileId) || _metadataUsers.containsKey(fileId)) {
+      return;
+    }
     if (_audioDeletes[fileId] case final pending?) return pending;
     final client = transport;
     final cleanup = () async {
@@ -329,7 +334,11 @@ class TelegramService extends ChangeNotifier {
     return null;
   }
 
-  Future<void> start({int? apiId, String? apiHash}) async {
+  Future<void> start({
+    int? apiId,
+    String? apiHash,
+    bool preferSavedIdentity = false,
+  }) async {
     await action(() async {
       if (state != 'disconnected') {
         throw StateError('Finish signing out before connecting again.');
@@ -343,10 +352,18 @@ class TelegramService extends ChangeNotifier {
           'Saved Telegram credentials cannot be unlocked on this device. Restore a password-protected account backup to recover your sign-in, or choose Sign in again to create a new local session.',
         );
       }
+      if (preferSavedIdentity &&
+          _secrets['apiId'] is int &&
+          _secrets['apiHash'] is String) {
+        apiId = null;
+        apiHash = null;
+      }
       // Retain the application identity of existing/restored sessions. Use the
       // build identity only for a fresh sign-in with no saved API details.
-      if (apiId == null && apiHash == null &&
-          !_secrets.containsKey('apiId') && !_secrets.containsKey('apiHash') &&
+      if (apiId == null &&
+          apiHash == null &&
+          !_secrets.containsKey('apiId') &&
+          !_secrets.containsKey('apiHash') &&
           hasApplicationCredentials) {
         _secrets['apiId'] = applicationApiId;
         _secrets['apiHash'] = applicationApiHash;
@@ -461,7 +478,10 @@ class TelegramService extends ChangeNotifier {
         final id = file['id'] as int;
         // Deleting a temporary audio copy isn't new artwork becoming available.
         // Don't turn cleanup into an endless metadata download/retry cycle.
-        if (_audioDeletes.containsKey(id) || file['local']?['downloaded_size'] == 0) return;
+        if (_audioDeletes.containsKey(id) ||
+            file['local']?['downloaded_size'] == 0) {
+          return;
+        }
         if (_covers.containsKey(id) && !_coverSuccess.contains(id)) {
           if (_coverPending[id] == _imageGeneration) {
             _coverDirty.add(id);
@@ -476,16 +496,27 @@ class TelegramService extends ChangeNotifier {
   Future<Json>? _parametersRequest;
   Future<void> _onAuthorization(Json auth) async {
     state = auth['@type'] as String;
-    if(state=='authorizationStateWaitCode') {
-      final info=auth['code_info'];
-      if(info is Map && info['phone_number'] is String) {
-        final reported=(info['phone_number'] as String).trim();
+    authenticationLink =
+        state == 'authorizationStateWaitOtherDeviceConfirmation'
+        ? auth['link'] as String?
+        : null;
+    if (state == 'authorizationStateWaitCode') {
+      final info = auth['code_info'];
+      if (info is Map && info['phone_number'] is String) {
+        final reported = (info['phone_number'] as String).trim();
         try {
-          authenticationPhoneNumber=internationalLoginNumber(reported.startsWith('+') || reported.startsWith('00')?reported:'+$reported');
-        } on FormatException { /* Keep the last known number if Telegram omits it. */ }
+          authenticationPhoneNumber = internationalLoginNumber(
+            reported.startsWith('+') || reported.startsWith('00')
+                ? reported
+                : '+$reported',
+          );
+        } on FormatException {
+          /* Keep the last known number if Telegram omits it. */
+        }
       }
-    } else if(state=='authorizationStateReady' || state=='authorizationStateClosed') {
-      authenticationPhoneNumber=null;
+    } else if (state == 'authorizationStateReady' ||
+        state == 'authorizationStateClosed') {
+      authenticationPhoneNumber = null;
     }
     if (state == 'authorizationStateClosed') {
       _clientClosed = true;
@@ -528,7 +559,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.76',
+          'application_version': '0.1.79',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -542,7 +573,7 @@ class TelegramService extends ChangeNotifier {
   }
 
   Future<void> submit(String value) => action(() async {
-    if(state=='authorizationStateWaitPhoneNumber') {
+    if (state == 'authorizationStateWaitPhoneNumber') {
       await _sendLoginPhoneNumber(value);
       return;
     }
@@ -576,20 +607,31 @@ class TelegramService extends ChangeNotifier {
     await transport.request(request);
   });
 
-  Future<List<PhoneCountry>> loginCountries() async => PhoneCountry.fromResponse(await request({'@type':'getCountries'}));
+  Future<List<PhoneCountry>> loginCountries() async =>
+      PhoneCountry.fromResponse(await request({'@type': 'getCountries'}));
 
   Future<void> _sendLoginPhoneNumber(String input) async {
-    final number=internationalLoginNumber(input),previous=authenticationPhoneNumber;
-    authenticationPhoneNumber=number;
+    final number = internationalLoginNumber(input),
+        previous = authenticationPhoneNumber;
+    authenticationPhoneNumber = number;
     try {
-      await transport.request({'@type':'setAuthenticationPhoneNumber','phone_number':number});
-      if(ready || state=='disconnected') authenticationPhoneNumber=null;
+      await transport.request({
+        '@type': 'setAuthenticationPhoneNumber',
+        'phone_number': number,
+      });
+      if (ready || state == 'disconnected') authenticationPhoneNumber = null;
+    } catch (_) {
+      authenticationPhoneNumber = previous;
+      rethrow;
     }
-    catch (_) {authenticationPhoneNumber=previous;rethrow;}
   }
 
-  Future<void> changeLoginPhoneNumber(String number)=>action(() async {
-    if(state!='authorizationStateWaitCode') throw StateError('The number can be edited while waiting for a login code.');
+  Future<void> changeLoginPhoneNumber(String number) => action(() async {
+    if (state != 'authorizationStateWaitCode') {
+      throw StateError(
+        'The number can be edited while waiting for a login code.',
+      );
+    }
     await _sendLoginPhoneNumber(number);
   });
 
@@ -649,6 +691,80 @@ class TelegramService extends ChangeNotifier {
           .toList(),
       nextMessageId: (result['next_from_message_id'] as int?) ?? 0,
     );
+  }
+
+  /// Only account identity and application API details are shared, never the
+  /// TDLib database/auth key: each device must obtain its own Telegram session.
+  Future<Map<String, dynamic>> cloudIdentity() async {
+    if (!ready || busy) {
+      throw const FormatException('Wait for Telegram to connect.');
+    }
+    final me = await transport.request({'@type': 'getMe'});
+    final id = me['id'];
+    if (id is! int ||
+        id <= 0 ||
+        _secrets['apiId'] is! int ||
+        _secrets['apiHash'] is! String) {
+      throw const FormatException(
+        'Could not read the connected Telegram account.',
+      );
+    }
+    final name = [
+      me['first_name'],
+      me['last_name'],
+    ].whereType<String>().where((v) => v.isNotEmpty).join(' ');
+    return {
+      'userId': id,
+      'name': name.isEmpty
+          ? 'Telegram account'
+          : name.substring(0, name.length > 160 ? 160 : name.length),
+      'apiId': _secrets['apiId'],
+      'apiHash': _secrets['apiHash'],
+    };
+  }
+
+  Future<void> requestCloudLogin() async {
+    if (busy || state != 'authorizationStateWaitPhoneNumber') {
+      throw const FormatException('Wait for Telegram sign-in to become ready.');
+    }
+    await transport.request({
+      '@type': 'requestQrCodeAuthentication',
+      'other_user_ids': <int>[],
+    });
+  }
+
+  Future<void> cancelCloudLogin() async {
+    if (busy || state != 'authorizationStateWaitOtherDeviceConfirmation') {
+      throw const FormatException(
+        'Telegram is not waiting for device approval.',
+      );
+    }
+    // TDLib explicitly supports logOut before authorization; it destroys only
+    // this unapproved device's temporary keys, not another device's session.
+    await transport.request({'@type': 'logOut'});
+    await shutdown();
+    await start();
+  }
+
+  Future<void> confirmCloudLogin(String link, int userId) async {
+    if (!RegExp(r'^tg://login\?token=[A-Za-z0-9_-]{20,256}$').hasMatch(link)) {
+      throw const FormatException('Invalid Telegram device request.');
+    }
+    final current = await cloudIdentity();
+    if (current['userId'] != userId) {
+      throw const FormatException(
+        'This device is signed in to a different Telegram account.',
+      );
+    }
+    final session = await transport.request({
+      '@type': 'confirmQrCodeAuthentication',
+      'link': link,
+    });
+    if (session['@type'] != 'session') {
+      throw const FormatException(
+        'Telegram did not confirm the new device. Retry there.',
+      );
+    }
   }
 
   Future<TelegramAccount> backupAccount() async {
@@ -786,7 +902,7 @@ class TelegramService extends ChangeNotifier {
 
   Future<void> logout() => action(() async {
     await transport.request({'@type': 'logOut'});
-    authenticationPhoneNumber=null;
+    authenticationPhoneNumber = null;
     state = _clientClosed ? 'disconnected' : 'authorizationStateLoggingOut';
     connection = _clientClosed ? 'Offline' : 'Signing out';
     _channels.clear();
@@ -831,7 +947,8 @@ class TelegramService extends ChangeNotifier {
 
   Future<void> shutdown() async {
     state = 'disconnected';
-    authenticationPhoneNumber=null;
+    authenticationLink = null;
+    authenticationPhoneNumber = null;
     clearImageCache();
     await _subscription?.cancel();
     try {
