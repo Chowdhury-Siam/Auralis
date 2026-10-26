@@ -15,6 +15,9 @@ import 'package:auralis/telegram/telegram_service.dart';
 import 'package:auralis/updater.dart';
 
 import 'fakes.dart';
+
+import 'package:auralis/media_cache.dart';
+
 import 'fixtures/cover_data.dart';
 
 void main() {
@@ -347,6 +350,20 @@ void main() {
       expect(find.byTooltip('Add Song -1 to queue'), findsNothing);
       expect(find.byTooltip('Add Song -2 to queue'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
+      telegram.clearImageCache();
+      // File completions run on the real clock; their Dart continuations must
+      // also be pumped before leaving the widget test's fake async zone.
+      for (
+        var attempt = 0;
+        attempt < 500 && MediaCache.hasPending(dir);
+        attempt++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      expect(MediaCache.hasPending(dir), isFalse);
     },
   );
   testWidgets(
