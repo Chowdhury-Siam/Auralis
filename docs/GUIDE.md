@@ -168,12 +168,30 @@ Click Library Refresh to reload the selected channels and then cache their avail
 On desktop the bottom player stays to the right of the navigation sidebar. Wide layouts use the side Now Playing panel for the cover/title instead of duplicating that preview beneath the sidebar.
 
 
-## Japanese lyric translation
+## Lyric translation options
 
-Open Now Playing → Lyrics. For Japanese lyrics, tap the translate icon beside Lyrics options, or choose **Translate Japanese to English** in that menu. Confirm **Translate** to send lyric text to the online services. Tap the icon again to switch between the original and bilingual lyrics. Timed lines keep their original timestamps; plain lyrics work too. The original lyrics and exported/imported LRC content are not overwritten.
+Open Now Playing → Lyrics and tap the translate icon. Both choices are also in Lyrics options:
 
-This no-key option tries the Google Translate web endpoint, then the documented MyMemory lookup API. Google's web endpoint is unofficial and may change or rate-limit requests; this is not the authenticated Google Cloud Translation API. MyMemory anonymous use is limited to 5,000 characters/day, with 500 bytes per request. Repeated choruses are deduplicated. Machine translation can lose poetic nuance; this feature does not claim a universally best Japanese translation engine.
+- **Translate in Auralis**: Japanese → English with Google Translate and MyMemory fallback. Confirm the text-sharing dialog to show English beneath the original. Choose **Show original lyrics** to switch back; choose Translate in Auralis again to reuse the existing result. Successful translations are cached on this device under the current account and lyric content, with offline reuse. Original lyrics and timestamps are not overwritten.
+- **Translate with DeepL**: choose Japanese → English or English → Japanese, then **Copy lyrics & open DeepL**. Paste the copied original lyrics into DeepL’s source box in your browser. The result stays in the browser and is not automatically imported or cached by Auralis. Cancel leaves the clipboard untouched.
 
-Translation runs only when requested, not during library Refresh. Only Japanese lyric text is sent—no music files, Telegram credentials or account credentials. Successful translations are cached locally under the current account/session and original lyric content, and can be reused offline. Missing translations need internet. A new source lyric or account cannot reuse another result. Service failures, mismatched line counts and quota errors keep the original and can be retried. No API key or new native/model dependency is needed.
+Both options need no API key. New in-app translations and the DeepL website need internet; free-service limits and machine-translation errors may apply. Google's no-key web endpoint is unofficial and can change or rate-limit requests. MyMemory anonymous use is limited to 5,000 characters/day and 500 bytes/request. Only the original lyric text is sent for in-app translation; no audio or credentials are sent. DeepL copies the full original text without putting it in a URL or command line.
 
-Provider documentation: https://mymemory.translated.net/doc/spec.php and https://mymemory.translated.net/doc/usagelimits.php
+Translation runs only when requested. Library Refresh continues caching original artwork and lyrics. DeepL works independently of the in-app translation choice and always copies the original text.
+
+DeepL Japanese → English: https://www.deepl.com/en/translator/l/ja/en
+
+DeepL English → Japanese: https://www.deepl.com/en/translator/l/en/ja
+
+
+## Automatic lyric lookup fallbacks
+
+When embedded lyrics are absent or unreadable, Auralis tries **LRCLIB exact lookup → LRCLIB search → lyrics.ovh** in order. A missing/empty response, connection or server error, malformed/oversized result, or seven-second request timeout advances automatically. This same lookup runs when opening lyrics and during library Refresh. No API key is needed.
+
+LRCLIB search candidates must match the normalized title and artist; known duration must be within five seconds. The closest matching result is selected, preferring synchronized lyrics when equally close. Instrumental results stop lookup. lyrics.ovh supplies plain text, so its results use Static mode. Original audio is never sent or cached by lyric lookup. Only song metadata is sent; no Telegram message/channel identifiers or credentials are included.
+
+Successful lyrics and their provider are cached for offline reuse. In **Lyrics options → Find lyrics online**, you can retry the full chain even when a cached lyric exists. A failed/missing retry preserves the current lyric. A new import, song request, account change or shutdown prevents an older request from replacing a newer result. If all sources report no match, import or paste lyrics; if sources are unavailable, retry later. Coverage and live service availability vary by song.
+
+LRCLIB: https://lrclib.net/docs
+
+lyrics.ovh: https://github.com/NTag/lyrics.ovh
