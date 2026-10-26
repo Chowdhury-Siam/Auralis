@@ -402,6 +402,36 @@ void main() {
     });
   }
 
+  testWidgets('automatic expansion advances continuously at frame intervals', (
+    tester,
+  ) async {
+    await mount(tester, openPlayer: false, size: const Size(390, 844));
+    await tester.tap(find.byKey(const ValueKey('open-current-track')));
+    await tester.pump();
+    final surface = find.byKey(const ValueKey('now-playing-container'));
+    var previous = tester.getRect(surface);
+    final initialTop = previous.top;
+    var largestStep = 0.0;
+    for (var frame = 0; frame < 40; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      final current = tester.getRect(surface);
+      final step = previous.top - current.top;
+      expect(step, greaterThanOrEqualTo(-.01));
+      if (step > largestStep) largestStep = step;
+      expect(current.height, greaterThanOrEqualTo(previous.height - .01));
+      previous = current;
+    }
+    expect(
+      largestStep,
+      lessThan(initialTop * .09),
+      reason: 'No frame jumps across a large part of the expansion',
+    );
+    expect(previous.top, lessThan(initialTop * .02));
+    await tester.pumpAndSettle();
+    expect(tester.widget<ClipRRect>(surface).borderRadius, BorderRadius.zero);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'vertical player drags follow the finger and settle in either direction',
     (tester) async {
@@ -417,10 +447,46 @@ void main() {
       await gesture.moveBy(const Offset(0, -30));
       await tester.pump();
       final start = tester.getRect(surface);
+      final blur = tester
+          .widget<ImageFiltered>(
+            find.byKey(const ValueKey('player-transition-blur')),
+          )
+          .imageFilter;
+      final cachedPage = tester
+          .widget<RepaintBoundary>(
+            find.byKey(const ValueKey('player-cached-blur')),
+          )
+          .child;
       await gesture.moveBy(const Offset(0, -210));
       await tester.pump();
       expect(tester.getRect(surface).height, greaterThan(start.height));
-      expect(tester.getRect(surface).top, lessThan(start.top));
+      expect(
+        tester.getRect(surface).top,
+        closeTo(start.top - 210, .5),
+        reason: 'The card follows the finger pixel for pixel without a second easing curve',
+      );
+      expect(
+        identical(
+          tester
+              .widget<ImageFiltered>(
+                find.byKey(const ValueKey('player-transition-blur')),
+              )
+              .imageFilter,
+          blur,
+        ),
+        isTrue,
+      );
+      expect(
+        identical(
+          tester
+              .widget<RepaintBoundary>(
+                find.byKey(const ValueKey('player-cached-blur')),
+              )
+              .child,
+          cachedPage,
+        ),
+        isTrue,
+      );
       await gesture.up();
       await tester.pumpAndSettle();
       expect(
@@ -434,7 +500,7 @@ void main() {
       await gesture.moveBy(const Offset(0, 30));
       await gesture.moveBy(const Offset(0, 40));
       await tester.pump();
-      expect(tester.getRect(surface).top, greaterThan(full.top));
+      expect(tester.getRect(surface).top, closeTo(full.top + 70, .5));
       await gesture.up();
       await tester.pumpAndSettle();
       expect(
@@ -516,7 +582,7 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pump();
     expect(tester.getRect(surface), before);
-    await tester.pump(const Duration(milliseconds: 60));
+    await tester.pump(const Duration(milliseconds: 180));
     expect(tester.getRect(surface).top, greaterThan(before.top));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
