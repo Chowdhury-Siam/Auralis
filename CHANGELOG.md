@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.81
+
+- Smoothed the player card transition with direct finger tracking and one velocity-preserving spring on release, replacing the compounded easing curve. Quick drags are measured before the first expanded frame.
+- Cached the fixed background blur and full player layers, paused decorative tickers during the transition, removed the competing page fade and brought player content in earlier to avoid the blank-card flash.
+- Added pixel-distance, retained-blur and frame-interval motion checks alongside existing gesture, cancellation, resize and reduced-motion coverage.
+
 ## 0.1.80
 
 - Now Playing grows out of the mini-player card and shrinks back into it, with rounded corners, fading content and a blurred page underneath. Tap or drag up to open; use the down arrow or drag down to close. Short drags settle back into place.
