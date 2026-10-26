@@ -1,3 +1,4 @@
+import {AccountStore,equal,profilePage} from './accounts.mjs';
 import {TursoStore} from './turso.mjs';
 const MAX_BODY = 2 * 1024 * 1024;
 export function validate(key, record) {
@@ -53,9 +54,10 @@ async function body(request) {
 }
 export class AuralisRoom {
   constructor(state,env={}) {
-    this.state=state; this.sql=state.storage.sql;
+    this.state=state; this.sql=state.storage.sql;this.env=env;this.scope=null;
     this.turso=env.TURSO_DATABASE_URL && env.TURSO_AUTH_TOKEN ? new TursoStore(env) : null;
     this.queue=Promise.resolve();this.initialized=false;
+    this.sql.exec('CREATE TABLE IF NOT EXISTS room_flags (key TEXT PRIMARY KEY)');
     this.sql.exec('CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, value TEXT NOT NULL, revision INTEGER NOT NULL)');
     this.sql.exec('CREATE INDEX IF NOT EXISTS revisions ON records(revision)');
     this.sql.exec('CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY, revision INTEGER NOT NULL)');
@@ -63,18 +65,28 @@ export class AuralisRoom {
   }
   async fetch(request) {
     const path=new URL(request.url).pathname;
+    if(path.startsWith('/_auth/') || path.startsWith('/v1/auth/') || path.startsWith('/v1/admin/') || path==='/v1/account' || path==='/v1/account/deployment') return new AccountStore(this.state,this.env).fetch(request);
+    if(this.scope===null){this.scope=request.headers.get('X-Auralis-Scope')||'';if(this.turso&&this.scope)this.turso=new TursoStore(this.env,fetch,this.scope);}
+    if(path==='/_account/revoke') {for(const ws of this.state.getWebSockets()){try{if(!request.headers.get('X-Auralis-Session') || ws.deserializeAttachment?.()?.session===request.headers.get('X-Auralis-Session'))ws.close(1008,'Sign in again');}catch{}}return json({ok:true});}
+    if(path==='/_account/erase') {
+      const task=this.queue.then(async()=>{this.sql.exec("INSERT OR IGNORE INTO room_flags VALUES('deleted')");try{if(this.turso)await this.turso.clear();this.sql.exec('DELETE FROM records');this.sql.exec('UPDATE meta SET revision=0 WHERE id=1');for(const ws of this.state.getWebSockets())try{ws.close(1008,'Account deleted');}catch{}return json({ok:true});}catch{this.sql.exec("DELETE FROM room_flags WHERE key='deleted'");return json({error:'Could not delete cloud data. Retry.'},503);}});this.queue=task.catch(()=>{});return task;
+    }
+    if(Array.from(this.sql.exec("SELECT key FROM room_flags WHERE key='deleted'")).length)return json({error:'Account deleted'},410);
     if (path === '/v1/live' && request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
       if (this.state.getWebSockets().length >= 32) return json({error:'Too many devices'},429);
       const pair=new WebSocketPair(); this.state.acceptWebSocket(pair[1]);
+      pair[1].serializeAttachment({session:request.headers.get('X-Auralis-Session'),expires:Number(request.headers.get('X-Auralis-Expires'))});
       pair[1].send('changed'); return new Response(null,{status:101,webSocket:pair[0]});
     }
     if (path !== '/v1/sync' || request.method !== 'POST') return json({error:'Not found'},404);
     try {
       const data=await body(request);
+      if(Array.from(this.sql.exec("SELECT key FROM room_flags WHERE key='deleted'")).length)return json({error:'Account deleted'},410);
       if (!Number.isSafeInteger(data.cursor) || data.cursor < 0 || !data.ops || Array.isArray(data.ops) || Object.keys(data.ops).length > 100) throw new Error('Invalid sync request');
       for (const [key,value] of Object.entries(data.ops)) validate(key,value);
       if(this.turso) {
         const task=this.queue.then(async()=>{
+          if(Array.from(this.sql.exec("SELECT key FROM room_flags WHERE key='deleted'")).length)throw new Error('Account deleted');
           // An older populated DO is never silently replaced by an empty database.
           if(Array.from(this.sql.exec('SELECT count(*) AS n FROM records'))[0].n) throw new Error('Legacy cloud data exists; deploy Turso under a new Worker name');
           if(!this.initialized) {await this.turso.initialize();this.initialized=true;}
@@ -106,25 +118,39 @@ export class AuralisRoom {
       return json(output);
     } catch (error) { return json({error:error instanceof Error ? error.message : 'Invalid sync request'},400); }
   }
-  broadcast() {for (const ws of this.state.getWebSockets()) {try {ws.send('changed');} catch { /* Polling retries disconnected peers. */ }}}
+  broadcast() {for (const ws of this.state.getWebSockets()) {try {const auth=ws.deserializeAttachment?.();if(auth?.expires && auth.expires<=Date.now()/1000){ws.close(1008,'Sign in again');continue;}ws.send('changed');} catch { /* Polling retries disconnected peers. */ }}}
   webSocketMessage(socket,message) { if (message === 'ping') socket.send('pong'); }
   webSocketClose(socket,code) { socket.close(code,''); }
   webSocketError(socket) { try { socket.close(1011,''); } catch { /* Already closed. */ } }
 }
 export default {
-  async fetch(request,env) {
-    const path=new URL(request.url).pathname, configured=/^[a-f0-9]{64}$/.test(env.AURALIS_SYNC_KEY ?? '');
-    const turso=Boolean(env.TURSO_DATABASE_URL && env.TURSO_AUTH_TOKEN),partial=Boolean(env.TURSO_DATABASE_URL || env.TURSO_AUTH_TOKEN) && !turso;
-    if (path === '/health' && request.method === 'GET') return json({service:'auralis-sync',version:env.AURALIS_VERSION ?? '0.1.68',configured:configured && !partial,backend:turso?'turso':'durable-object'});
-    if (!configured) return json({error:'Sync service is not configured'},503);
-    const supplied=request.headers.get('Authorization') ?? '';
-    const hash=async s => new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)));
-    const a=await hash(supplied),b=await hash(`Bearer ${env.AURALIS_SYNC_KEY}`);
-    let difference=0;for(let i=0;i<a.length;i++) difference|=a[i]^b[i];
-    if(difference) return json({error:'Invalid sync key'},401);
-    if(path==='/v1/info' && request.method==='GET') return json({service:'auralis-sync',version:env.AURALIS_VERSION ?? '0.1.68',backend:turso?'turso':'durable-object'});
-    if(partial) return json({error:'Turso configuration is incomplete'},503);
-    if(!['/v1/sync','/v1/live'].includes(path)) return json({error:'Not found'},404);
-    return env.ROOM.get(env.ROOM.idFromName('private-library')).fetch(request);
-  }
+ async fetch(request,env){
+ const path=new URL(request.url).pathname,configured=/^[a-f0-9]{64}$/.test(env.AURALIS_SYNC_KEY??''),accounts=/^[a-f0-9]{64}$/.test(env.JWT_SECRET??'');
+ const turso=Boolean(env.TURSO_DATABASE_URL&&env.TURSO_AUTH_TOKEN),partial=Boolean(env.TURSO_DATABASE_URL||env.TURSO_AUTH_TOKEN)&&!turso;
+ const registry=()=>env.ROOM.get(env.ROOM.idFromName('account-registry'));
+ const forward=(path,method=request.method,body)=>{const headers=new Headers(request.headers);headers.delete('Content-Length');return registry().fetch(new Request('https://internal'+path,{method,headers,...(body?{body}:{}),...(!body&& !['GET','HEAD'].includes(method)?{body:request.body,duplex:'half'}:{})}));};
+ if(path==='/health'&&request.method==='GET'){const state=accounts?await (await forward('/_auth/status','GET')).json():{};return json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.76',configured:configured&&!partial,backend:turso?'turso':'durable-object',accounts,ownerCreated:state.ownerCreated===true});}
+ if(!configured)return json({error:'Sync service is not configured'},503);
+ const key=await equal(request.headers.get('Authorization')??'',`Bearer ${env.AURALIS_SYNC_KEY}`);
+ if(path==='/v1/info'&&request.method==='GET')return key?json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.76',backend:turso?'turso':'durable-object'}):json({error:'Invalid setup secret'},401);
+ if(partial)return json({error:'Turso configuration is incomplete'},503);
+ if(accounts){
+ if(path==='/profile'&&request.method==='GET')return profilePage();
+ if(path==='/v1/bootstrap/deployment'&&request.method==='PUT')return key?forward('/_auth/bootstrap'):json({error:'Invalid setup secret'},401);
+ if(path.startsWith('/v1/auth/')||path.startsWith('/v1/admin/')||path==='/v1/account/deployment'||(path==='/v1/account'&&request.method==='GET'))return forward(path);
+ if(!['/v1/sync','/v1/live','/v1/account'].includes(path))return json({error:'Not found'},404);
+ const session=await forward('/_auth/session','GET');let user;
+ if(session.ok)user=await session.json();else{const state=await (await forward('/_auth/status','GET')).json();if(!key||state.ownerCreated)return json({error:'Sign in again'},401);user={room:'private-library',scope:''};}
+ const room=env.ROOM.get(env.ROOM.idFromName(user.room)),headers=new Headers(request.headers);headers.set('X-Auralis-Scope',user.scope);headers.set('X-Auralis-Session',user.jti||'');headers.set('X-Auralis-Expires',String(user.expires||0));headers.delete('Content-Length');
+ if(path==='/v1/account'&&request.method==='DELETE'){
+ if(!user.id)return json({error:'Account sign-in required'},401);
+ const confirm=await forward('/v1/auth/confirm','POST');if(!confirm.ok)return confirm;
+ const erased=await room.fetch(new Request('https://internal/_account/erase',{method:'POST',headers}));if(!erased.ok)return erased;return forward('/_auth/delete','DELETE','{}');}
+ if(path==='/v1/account')return json({error:'Not found'},404);
+ return room.fetch(new Request(request,{headers}));
+ }
+ if(!key)return json({error:'Invalid sync key'},401);
+ if(!['/v1/sync','/v1/live'].includes(path))return json({error:'Not found'},404);
+ return env.ROOM.get(env.ROOM.idFromName('private-library')).fetch(request);
+ }
 };
