@@ -36,7 +36,14 @@ class TelegramService extends ChangeNotifier {
   bool _clientClosed = false;
   TdTransport get transport => _transport;
   // Resolve the current client even when the playback proxy keeps this tear-off.
-  Future<Json> request(Json json) => _transport.request(json);
+  Future<Json> request(Json json) async {
+    if (json['@type'] == 'downloadFile' && json['priority'] == 32) {
+      // Metadata cleanup or startup migration may still own this disk file.
+      await _audioSweep;
+      await _audioDeletes[json['file_id']];
+    }
+    return _transport.request(json);
+  }
   StreamSubscription<Json>? _subscription;
   Json _secrets = {};
   String state = 'disconnected';
@@ -56,6 +63,89 @@ class TelegramService extends ChangeNotifier {
   final Map<int, int> _coverPending = {};
   int _coverJobs = 0;
   bool Function(int) isStreaming = (_) => false;
+  bool Function() hasActiveStream = () => false;
+  Future<void>? _audioSweep;
+  final Map<int, int> _metadataUsers = {};
+  final Map<int, Future<void>> _audioDeletes = {};
+
+  Future<void> _purgeOldAudio() async {
+    try {
+      await transport.request({
+        '@type': 'optimizeStorage',
+        'size': 0,
+        'ttl': 0,
+        'count': 0,
+        'immunity_delay': 0,
+        'file_types': [
+          {'@type': 'fileTypeAudio'},
+          {'@type': 'fileTypeDocument'},
+        ],
+        'chat_ids': <int>[],
+        'exclude_chat_ids': <int>[],
+        'return_deleted_file_statistics': false,
+        'chat_limit': 0,
+      });
+    } catch (_) {
+      // Offline cleanup must not prevent sign-in or streaming. Retry next login.
+    }
+  }
+
+  /// Removes only the local audio copy; Telegram messages and images stay intact.
+  Future<void> releaseAudio(int fileId) async {
+    if (!ready || isStreaming(fileId) || _metadataUsers.containsKey(fileId)) return;
+    if (_audioDeletes[fileId] case final pending?) return pending;
+    final client = transport;
+    final cleanup = () async {
+      try {
+        await client.request({
+          '@type': 'cancelDownloadFile',
+          'file_id': fileId,
+          'only_if_pending': false,
+        });
+      } catch (_) {
+        /* The download may already have ended. Still try to delete its copy. */
+      }
+      if (isStreaming(fileId) || _metadataUsers.containsKey(fileId)) return;
+      try {
+        await client.request({'@type': 'deleteFile', 'file_id': fileId});
+      } catch (_) {
+        /* A reconnect will sweep any leftover audio files. */
+      }
+    }();
+    _audioDeletes[fileId] = cleanup;
+    try {
+      await cleanup;
+    } finally {
+      if (identical(_audioDeletes[fileId], cleanup)) {
+        _audioDeletes.remove(fileId);
+      }
+    }
+  }
+
+  Future<T?> _withAudioMetadata<T>(
+    int fileId,
+    int generation,
+    Future<T?> Function(CoverRange source) read,
+  ) async {
+    final client = transport;
+    _metadataUsers.update(fileId, (count) => count + 1, ifAbsent: () => 1);
+    try {
+      await _audioSweep;
+      await _audioDeletes[fileId];
+      if (!ready || generation != _imageGeneration) return null;
+      return await read(_metadataSource(fileId, generation));
+    } finally {
+      final remaining = _metadataUsers[fileId]! - 1;
+      if (remaining == 0) {
+        _metadataUsers.remove(fileId);
+      } else {
+        _metadataUsers[fileId] = remaining;
+      }
+      if (identical(client, transport)) {
+        await releaseAudio(fileId);
+      }
+    }
+  }
 
   void clearImageCache() {
     ++_imageGeneration;
@@ -102,9 +192,10 @@ class TelegramService extends ChangeNotifier {
         }
       }
       if (result == null && track.size > 0 && active()) {
-        result = await readEmbeddedCover(
-          _metadataSource(id, generation),
-          track.size,
+        result = await _withAudioMetadata(
+          id,
+          generation,
+          (source) => readEmbeddedCover(source, track.size),
         );
       }
       return active() ? result : null;
@@ -117,7 +208,7 @@ class TelegramService extends ChangeNotifier {
         if (result != null) {
           _coverSuccess.add(id);
           _coverDirty.remove(id);
-        } else if (_coverDirty.remove(id)) {
+        } else if (_coverDirty.remove(id) && isStreaming(id)) {
           _covers.remove(id);
         }
       }
@@ -192,9 +283,10 @@ class TelegramService extends ChangeNotifier {
     final id = track.fileId, generation = _imageGeneration;
     if (!ready || id == null || track.size <= 0) return null;
     try {
-      final text = await readEmbeddedLyrics(
-        _metadataSource(id, generation),
-        track.size,
+      final text = await _withAudioMetadata(
+        id,
+        generation,
+        (source) => readEmbeddedLyrics(source, track.size),
       );
       if (text == null || !ready || generation != _imageGeneration) return null;
       final lyrics = Lyrics.parse(text, embedded: true);
@@ -365,7 +457,11 @@ class TelegramService extends ChangeNotifier {
         };
         notifyListeners();
       case 'updateFile':
-        final id = (json['file'] as Json)['id'] as int;
+        final file = json['file'] as Json;
+        final id = file['id'] as int;
+        // Deleting a temporary audio copy isn't new artwork becoming available.
+        // Don't turn cleanup into an endless metadata download/retry cycle.
+        if (_audioDeletes.containsKey(id) || file['local']?['downloaded_size'] == 0) return;
         if (_covers.containsKey(id) && !_coverSuccess.contains(id)) {
           if (_coverPending[id] == _imageGeneration) {
             _coverDirty.add(id);
@@ -393,6 +489,7 @@ class TelegramService extends ChangeNotifier {
     }
     if (state == 'authorizationStateClosed') {
       _clientClosed = true;
+      _audioSweep = null;
       _parametersRequest = null;
       connection = 'Offline';
       _channels.clear();
@@ -404,6 +501,9 @@ class TelegramService extends ChangeNotifier {
           state == 'authorizationStateClosed') {
         _channels.clear();
       }
+    }
+    if (ready && !hasActiveStream()) {
+      _audioSweep ??= _purgeOldAudio();
     }
     error = null;
     notifyListeners();
@@ -428,7 +528,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.71',
+          'application_version': '0.1.76',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -436,6 +536,7 @@ class TelegramService extends ChangeNotifier {
         );
       }
     } else if (ready) {
+      await _audioSweep;
       await refreshChats();
     }
   }
@@ -737,6 +838,7 @@ class TelegramService extends ChangeNotifier {
       await transport.close();
     } finally {
       _clientClosed = true;
+      _audioSweep = null;
       _parametersRequest = null;
       connection = 'Offline';
       notifyListeners();
