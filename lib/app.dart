@@ -730,7 +730,13 @@ class _PlayerShellState extends State<PlayerShell>
       if (!active()) break;
       try {
         var value = await lyrics.loadCached(track);
-        value ??= await telegram.embeddedLyrics(track);
+        if (value == null) {
+          try {
+            value = await telegram.embeddedLyrics(track);
+          } catch (_) {
+            // An unreadable embedded tag must not block online fallbacks.
+          }
+        }
         if (!active()) break;
         value ??= await lyrics.find(track);
         if (active() && value != null) {
