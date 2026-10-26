@@ -228,7 +228,9 @@ class _PlayerShellState extends State<PlayerShell>
   bool showLyrics = false;
   String collection = 'All songs';
   String? selectedPlaylist;
-  final lyrics = LyricsRepository();
+  late final LyricsRepository lyrics;
+  int _cacheGeneration = 0, _cachedTracks = 0, _cacheTotal = 0;
+  bool _cachingLibrary = false;
   final search = TextEditingController();
   late final ChannelLibrary library;
   late final Listenable _shellUpdates;
@@ -250,6 +252,7 @@ class _PlayerShellState extends State<PlayerShell>
       duration: const Duration(milliseconds: 440),
       reverseDuration: const Duration(milliseconds: 500),
     );
+    lyrics = LyricsRepository(cache: () => telegram.mediaCache);
     library = ChannelLibrary(telegram, player.settings);
     _shellUpdates = Listenable.merge([player, telegram, library]);
     search.addListener(_changed);
@@ -355,6 +358,7 @@ class _PlayerShellState extends State<PlayerShell>
 
   @override
   void dispose() {
+    ++_cacheGeneration;
     _dismissPlayer.dispose();
     lyrics.close();
     library.dispose();
@@ -690,6 +694,61 @@ class _PlayerShellState extends State<PlayerShell>
     },
   );
 
+  Future<void> _refreshLibrary() async {
+    final generation = ++_cacheGeneration;
+    setState(() {
+      _cachingLibrary = false;
+      _cachedTracks = 0;
+    });
+    telegram.clearImageCache();
+    await library.refresh();
+    if (!mounted || generation != _cacheGeneration || !telegram.ready) return;
+    final tracks = List<Track>.of(library.tracks);
+    final scope = telegram.mediaCache.directory?.path;
+    final channels = player.settings.selectedChannels
+        .map((c) => c.id)
+        .join(',');
+    setState(() {
+      _cachingLibrary = true;
+      _cacheTotal = tracks.length;
+    });
+    bool active() =>
+        mounted &&
+        generation == _cacheGeneration &&
+        telegram.ready &&
+        telegram.mediaCache.directory?.path == scope &&
+        player.settings.selectedChannels.map((c) => c.id).join(',') ==
+            channels &&
+        !player.restoringData;
+    for (final track in tracks) {
+      if (!active()) break;
+      try {
+        await telegram.cacheCover(track, active: active);
+      } catch (_) {
+        /* Continue other tracks. */
+      }
+      if (!active()) break;
+      try {
+        var value = await lyrics.loadCached(track);
+        value ??= await telegram.embeddedLyrics(track);
+        if (!active()) break;
+        value ??= await lyrics.find(track);
+        if (active() && value != null) {
+          lyrics.save(track, value);
+          await lyrics.persist(track, value);
+        }
+      } catch (_) {
+        /* Unavailable lyrics do not stop the remaining library. */
+      }
+      if (!active()) break;
+      setState(() => _cachedTracks++);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    }
+    if (mounted && generation == _cacheGeneration) {
+      setState(() => _cachingLibrary = false);
+    }
+  }
+
   Future<void> _stats({bool backup = false}) async {
     await player.flushListeningStats();
     if (!mounted) return;
@@ -886,7 +945,12 @@ class _PlayerShellState extends State<PlayerShell>
                       ),
                       if (destination != _Page.nowPlaying &&
                           player.current != null)
-                        _transport(box.maxWidth < 600, short: short),
+                        Padding(
+                          padding: EdgeInsets.only(
+                            left: compact ? 0 : (narrow ? 72 : 202),
+                          ),
+                          child: _transport(box.maxWidth < 600, short: short),
+                        ),
                     ],
                   ),
                 ),
@@ -1175,8 +1239,7 @@ class _PlayerShellState extends State<PlayerShell>
                         !telegram.ready || library.saving || library.loading
                         ? null
                         : () {
-                            telegram.clearImageCache();
-                            unawaited(library.refresh());
+                            unawaited(_refreshLibrary());
                           },
                     icon: const Icon(Icons.refresh_rounded, size: 20),
                   ),
@@ -1611,9 +1674,11 @@ class _PlayerShellState extends State<PlayerShell>
     final label =
         '$trackText · $channels ${channels == 1 ? 'channel' : 'channels'}';
     return Tooltip(
-      message: label,
+      message: _cachingLibrary
+          ? 'Caching artwork and lyrics: $_cachedTracks / $_cacheTotal'
+          : label,
       child: Text(
-        label,
+        _cachingLibrary ? 'Caching $_cachedTracks / $_cacheTotal' : label,
         key: const ValueKey('library-counts'),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -2819,74 +2884,6 @@ class _PlayerShellState extends State<PlayerShell>
     final progress = duration <= 0
         ? 0.0
         : (audio.position.inMilliseconds / duration).clamp(0.0, 1.0);
-    final preview = Material(
-      color: Colors.transparent,
-      child: InkWell(
-        key: const ValueKey('open-current-track'),
-        borderRadius: BorderRadius.circular(20),
-        onTap: player.current == null
-            ? null
-            : () => _navigate(_Page.nowPlaying),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: SizedBox(
-                  width: narrow ? 44 : 54,
-                  height: narrow ? 44 : 54,
-                  child: Artwork(
-                    seed: player.current?.title ?? 'Auralis',
-                    small: true,
-                    telegram: telegram,
-                    track: player.current,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      player.current?.title ?? 'Nothing playing',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      player.current?.artist ?? 'Choose a track to get started',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _colors.onSurfaceVariant,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (player.current != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Icon(
-                    Icons.open_in_full_rounded,
-                    size: 16,
-                    color: _colors.onSurfaceVariant,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-
     final transportButtons = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -3088,7 +3085,12 @@ class _PlayerShellState extends State<PlayerShell>
                       }
                       return Row(
                         children: [
-                          Expanded(flex: 3, child: preview),
+                          IconButton(
+                            key: const ValueKey('open-current-track'),
+                            tooltip: 'Open Now playing',
+                            onPressed: () => _navigate(_Page.nowPlaying),
+                            icon: const Icon(Icons.open_in_full_rounded),
+                          ),
                           const SizedBox(width: 24),
                           Expanded(
                             flex: 5,
