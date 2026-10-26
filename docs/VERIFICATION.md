@@ -818,3 +818,16 @@ Full Flutter 3.47.1 Linux suite: 234 passed, 23 existing Windows-only tests skip
 The supplied Windows CI report fails only when ui_test deletes its temporary Telegram directory with OS error 32. The refresh media cache introduced asynchronous atomic writes and reads that could still hold a file during deletion. MediaCache now tracks operations across cache instances and exposes a drain for the owning directory. Telegram shutdown invalidates ongoing cover work, closes its transport and awaits that drain. Widget cleanup first unmounts the app, invalidates image work and alternates real-I/O waits with fake-clock pumps until all cache handles have closed. Directory deletion remains strict; failures are neither suppressed nor retried.
 
 Full Flutter 3.47.1 Linux run: 235 passed, 23 existing Windows-only tests skipped, in 32 seconds. Fatal-info analysis, release-note consistency and Android source checks passed. A new regression starts writes through 12 independent cache instances, drains the parent, and then deletes the directory immediately. The original Windows runner was unavailable; its CI job must be rerun to verify OS-specific behavior.
+
+
+## 0.1.84 sidebar placement
+
+Desktop navigation spans the full content height beside the player. The Settings geometry regression passes with the full local suite: 235 passed, 23 platform skips. Static analysis, release note consistency and Android source checks pass. Windows runtime validation remains pending.
+
+
+## 0.1.85 Japanese translation
+
+- Full Flutter suite: 240 passed, 23 platform-specific skips. Fatal-info analyzer, release note consistency and Android source checks pass.
+- New coverage includes timestamp/blank-line preservation, deduplicated choruses, unchanged originals, account/content-isolated persisted cache, offline restart reuse, 429 fallback, HTML entity decoding, quota and alignment errors, oversized responses and late account/song changes. Phone/desktop widget checks cover sharing confirmation, cancellation and original/bilingual toggling.
+- Live smoke check using synthetic Japanese sentences translated through the current network proxy; offline cache reload matched the live result. No API key was used. Free-service availability can change; translation quality has not been benchmarked.
+- Windows/Android native builds and device runtime checks were not run here. Worker is unchanged.
