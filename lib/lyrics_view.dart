@@ -67,10 +67,16 @@ class _LyricsViewState extends State<LyricsView> {
     _loading = false;
     _error = null;
     _synced = _lyrics == null || _lyrics!.lines.isNotEmpty;
-    if (_track != null && !_looked) unawaited(_load(embedded: true));
+    if (_track != null && !_looked) {
+      unawaited(_load(embedded: true, preferCache: true));
+    }
   }
 
-  Future<void> _load({bool embedded = false, bool online = true}) async {
+  Future<void> _load({
+    bool embedded = false,
+    bool online = true,
+    bool preferCache = false,
+  }) async {
     final track = _track;
     if (track == null || _loading) return;
     final generation = ++_generation;
@@ -79,8 +85,10 @@ class _LyricsViewState extends State<LyricsView> {
       _error = null;
     });
     try {
-      Lyrics? lyrics;
-      if (embedded && widget.loadEmbedded != null) {
+      Lyrics? lyrics = preferCache
+          ? await widget.repository.loadCached(track)
+          : null;
+      if (lyrics == null && embedded && widget.loadEmbedded != null) {
         try {
           lyrics = await widget.loadEmbedded!(track);
         } catch (_) {
@@ -346,11 +354,7 @@ class _LyricsViewState extends State<LyricsView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.lyrics_rounded,
-                size: 44,
-                color: _colors.primary,
-              ),
+              Icon(Icons.lyrics_rounded, size: 44, color: _colors.primary),
               const SizedBox(height: 12),
               Text(
                 _error ??
@@ -429,9 +433,7 @@ class _LyricsViewState extends State<LyricsView> {
             backgroundColor: selected
                 ? _colors.primary
                 : _colors.surfaceContainer,
-            foregroundColor: selected
-                ? _colors.onPrimary
-                : _colors.onSurface,
+            foregroundColor: selected ? _colors.onPrimary : _colors.onSurface,
             disabledBackgroundColor: _colors.surfaceContainerLowest,
             disabledForegroundColor: _colors.onSurfaceVariant,
             shape: RoundedRectangleBorder(
@@ -549,7 +551,9 @@ class _LyricsViewState extends State<LyricsView> {
                 IconButton.styleFrom(
                   backgroundColor: _colors.primary,
                   foregroundColor: _colors.onPrimary,
-                  disabledBackgroundColor: _colors.primary.withValues(alpha: .35),
+                  disabledBackgroundColor: _colors.primary.withValues(
+                    alpha: .35,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(
                       audio.playing ? 20 : size / 2,
@@ -711,27 +715,27 @@ class _LyricsViewState extends State<LyricsView> {
         widget.player.settings.reducedMotion ||
         MediaQuery.disableAnimationsOf(context);
     return Material(
-        key: const ValueKey('lyrics-immersive'),
-        color: widget.backgroundColor ?? _colors.surface,
-        child: LayoutBuilder(
-          builder: (context, box) {
-            final short = box.maxHeight < 620;
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1080),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    short ? 8 : 16,
-                    16,
-                    short ? 8 : 16,
-                  ),
-                  child: _layout(reduced: reduced),
+      key: const ValueKey('lyrics-immersive'),
+      color: widget.backgroundColor ?? _colors.surface,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final short = box.maxHeight < 620;
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1080),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  short ? 8 : 16,
+                  16,
+                  short ? 8 : 16,
                 ),
+                child: _layout(reduced: reduced),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -752,9 +756,7 @@ class _LyricsMenuEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final foreground = enabled
-        ? colors.onSurface
-        : colors.onSurfaceVariant;
+    final foreground = enabled ? colors.onSurface : colors.onSurfaceVariant;
     final secondary = colors.onSurfaceVariant.withValues(
       alpha: enabled ? 1 : .48,
     );
@@ -847,7 +849,8 @@ class _SyncedLyricsState extends State<_SyncedLyrics>
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
       final active = widget.lyrics.activeAt(widget.player.audio.position);
-      final waiting = active < 0 || widget.lyrics.lines[active].text.trim().isEmpty;
+      final waiting =
+          active < 0 || widget.lyrics.lines[active].text.trim().isEmpty;
       final scaler = MediaQuery.textScalerOf(context);
       final reduced =
           widget.player.settings.reducedMotion ||
@@ -1062,7 +1065,9 @@ class _SyncedLyricsState extends State<_SyncedLyrics>
               child: LyricsWaitingIndicator(
                 key: const ValueKey('lyrics-waiting'),
                 label: active < 0 ? 'Waiting for lyrics' : 'Instrumental break',
-                playing: widget.player.audio.playing && !widget.player.audio.buffering,
+                playing:
+                    widget.player.audio.playing &&
+                    !widget.player.audio.buffering,
                 reducedMotion: reduced,
               ),
             ),
