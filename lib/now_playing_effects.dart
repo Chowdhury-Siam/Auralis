@@ -11,6 +11,7 @@ class ArtworkTrackSwitcher extends StatefulWidget {
     required this.child,
     required this.identity,
     required this.reducedMotion,
+    this.paged = false,
     this.onNext,
     this.onPrevious,
   });
@@ -18,6 +19,7 @@ class ArtworkTrackSwitcher extends StatefulWidget {
   final Widget child;
   final Object identity;
   final bool reducedMotion;
+  final bool paged;
   final VoidCallback? onNext, onPrevious;
 
   @override
@@ -70,7 +72,7 @@ class _ArtworkTrackSwitcherState extends State<ArtworkTrackSwitcher> {
         onDecrease: widget.onPrevious,
         child: Listener(
           onPointerSignal: canDrag ? _scroll : null,
-          child: GestureDetector(
+          child: widget.paged ? widget.child : GestureDetector(
             behavior: HitTestBehavior.opaque,
             onHorizontalDragStart: canDrag ? (_) {
               setState(() {
@@ -118,6 +120,63 @@ class _ArtworkTrackSwitcherState extends State<ArtworkTrackSwitcher> {
       );
     });
   }
+}
+
+/// Full-size covers follow the finger and snap into place using native paging.
+class ArtworkPager extends StatefulWidget {
+  const ArtworkPager({
+    super.key,
+    required this.index,
+    required this.itemCount,
+    required this.itemBuilder,
+    this.onSelected,
+  });
+
+  final int index, itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+  final ValueChanged<int>? onSelected;
+
+  @override
+  State<ArtworkPager> createState() => _ArtworkPagerState();
+}
+
+class _ArtworkPagerState extends State<ArtworkPager> {
+  late final _pages = PageController(initialPage: widget.index, keepPage: false);
+  int? _swipedPage;
+
+  @override
+  void didUpdateWidget(ArtworkPager oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index == oldWidget.index || widget.index == _swipedPage) return;
+    // Transport controls and automatic track changes also update the cover.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pages.hasClients) return;
+      _pages.jumpToPage(widget.index);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => PageView.builder(
+    key: const ValueKey('artwork-pages'),
+    controller: _pages,
+    itemCount: widget.itemCount,
+    itemBuilder: widget.itemBuilder,
+    physics: widget.onSelected == null
+        ? const NeverScrollableScrollPhysics()
+        : const ClampingScrollPhysics(),
+    onPageChanged: (index) {
+      _swipedPage = index;
+      if (index != widget.index) {
+        widget.onSelected?.call(index);
+      }
+    },
+  );
 }
 
 /// A decorative music pulse; only its small canvas repaints, never the backdrop.
