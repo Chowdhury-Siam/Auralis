@@ -29,10 +29,12 @@ void main() {
     // Image decoding uses the engine, so finish it outside the fake test clock.
     // Reuse these exact bytes so the app resolves the cached MemoryImage and
     // cancels ColorScheme's image-load timeout synchronously.
-    await tester.runAsync(() => ColorScheme.fromImageProvider(
-      provider: MemoryImage(cover),
-      brightness: Brightness.dark,
-    ));
+    await tester.runAsync(
+      () => ColorScheme.fromImageProvider(
+        provider: MemoryImage(cover),
+        brightness: Brightness.dark,
+      ),
+    );
     final audio = FakeAudio();
     final settings = MemorySettings()..reducedMotion = reduced;
     final player =
@@ -109,7 +111,10 @@ void main() {
     tester,
   ) async {
     await mount(tester, reduced: true, size: const Size(1600, 1000));
-    expect(find.byKey(const ValueKey('now-playing-control-card')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('now-playing-control-card')),
+      findsNothing,
+    );
     for (final action in ['shuffle', 'repeat', 'favorite']) {
       final button = find.byKey(ValueKey('now-playing-$action'));
       expect(button.hitTestable(), findsOneWidget);
@@ -119,7 +124,9 @@ void main() {
   });
 
   for (final size in [const Size(390, 844), const Size(1280, 714)]) {
-    testWidgets('artwork swipes switch songs and respect queue edges at $size', (tester) async {
+    testWidgets('artwork swipes switch songs and respect queue edges at $size', (
+      tester,
+    ) async {
       final (_, player) = await mount(tester, reduced: true, size: size);
       final artwork = find.byKey(const ValueKey('now-playing-artwork'));
       await tester.drag(artwork, const Offset(-280, 0));
@@ -144,32 +151,44 @@ void main() {
       await tester.pumpAndSettle();
       await tester.drag(artwork, const Offset(-280, 0));
       await tester.pumpAndSettle();
-      expect(player.current?.id, 'first', reason: 'Repeat wraps the cover carousel');
+      expect(
+        player.current?.id,
+        'first',
+        reason: 'Repeat wraps the cover carousel',
+      );
       expect(artwork.hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('artwork pages reveal full covers and follow transport changes', (tester) async {
+  testWidgets('artwork pages reveal full covers and follow transport changes', (
+    tester,
+  ) async {
     var selected = 0;
     late StateSetter update;
-    await tester.pumpWidget(MaterialApp(home: StatefulBuilder(
-      builder: (context, setState) {
-        update = setState;
-        return Center(child: SizedBox.square(
-          dimension: 240,
-          child: ArtworkPager(
-            index: selected,
-            itemCount: 3,
-            onSelected: (index) => setState(() => selected = index),
-            itemBuilder: (_, index) => ColoredBox(
-              key: ValueKey('test-cover-$index'),
-              color: [Colors.red, Colors.green, Colors.blue][index],
-            ),
-          ),
-        ));
-      },
-    )));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            update = setState;
+            return Center(
+              child: SizedBox.square(
+                dimension: 240,
+                child: ArtworkPager(
+                  index: selected,
+                  itemCount: 3,
+                  onSelected: (index) => setState(() => selected = index),
+                  itemBuilder: (_, index) => ColoredBox(
+                    key: ValueKey('test-cover-$index'),
+                    color: [Colors.red, Colors.green, Colors.blue][index],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
     final pager = find.byType(ArtworkPager);
     final viewport = tester.getRect(pager);
     final gesture = await tester.startGesture(viewport.center);
@@ -178,136 +197,201 @@ void main() {
     await tester.pump();
     final next = tester.getRect(find.byKey(const ValueKey('test-cover-1')));
     expect(next.size, viewport.size);
-    expect(next.intersect(viewport).width, greaterThan(80),
-        reason: 'The next cover follows the finger beyond a fixed narrow preview');
+    expect(
+      next.intersect(viewport).width,
+      greaterThan(80),
+      reason: 'The next cover follows the finger beyond a fixed narrow preview',
+    );
     await gesture.up();
     await tester.pumpAndSettle();
     expect(selected, 1);
-    expect(tester.getRect(find.byKey(const ValueKey('test-cover-1'))), viewport);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('test-cover-1'))),
+      viewport,
+    );
 
     // Small drags snap back, while transport changes synchronize the page.
-    await tester.timedDrag(pager, const Offset(-30, 0),
-        const Duration(milliseconds: 600));
+    await tester.timedDrag(
+      pager,
+      const Offset(-30, 0),
+      const Duration(milliseconds: 600),
+    );
     await tester.pumpAndSettle();
     expect(selected, 1);
-    expect(tester.getRect(find.byKey(const ValueKey('test-cover-1'))), viewport);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('test-cover-1'))),
+      viewport,
+    );
     update(() => selected = 2);
     await tester.pumpAndSettle();
-    expect(tester.getRect(find.byKey(const ValueKey('test-cover-2'))), viewport);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
-
-  testWidgets('artwork wheel gestures coalesce inertia and allow deliberate reversal', (tester) async {
-    var next = 0, previous = 0;
-    await tester.pumpWidget(MaterialApp(home: Center(
-      child: SizedBox.square(dimension: 240, child: ArtworkTrackSwitcher(
-        identity: 'cover',
-        reducedMotion: true,
-        onNext: () => next++,
-        onPrevious: () => previous++,
-        child: const ColoredBox(color: Colors.pink),
-      )),
-    )));
-    final cover = find.byType(ArtworkTrackSwitcher);
-    void wheel(Offset delta, int milliseconds) {
-      tester.binding.handlePointerEvent(PointerScrollEvent(
-        position: tester.getCenter(cover),
-        scrollDelta: delta,
-        timeStamp: Duration(milliseconds: milliseconds),
-      ));
-    }
-    wheel(const Offset(0, 24), 0);
-    wheel(const Offset(0, 30), 10);
-    wheel(const Offset(0, 90), 30);
-    wheel(const Offset(0, 40), 60);
-    expect(next, 1);
-    wheel(const Offset(0, 60), 400);
-    expect(next, 2);
-    wheel(const Offset(-60, 0), 410);
-    expect(previous, 1);
-    await tester.timedDrag(cover, const Offset(30, 0), const Duration(milliseconds: 600));
-    await tester.pumpAndSettle();
-    expect(previous, 1);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
-
-  testWidgets('lyric waiting animation pauses, respects reduced motion and stops offscreen', (tester) async {
-    Widget indicator({bool playing = true, bool reduced = false, bool visible = true}) => MaterialApp(
-      home: TickerMode(enabled: visible, child: LyricsWaitingIndicator(
-        playing: playing,
-        reducedMotion: reduced,
-        label: 'Waiting for lyrics',
-      )),
+    expect(
+      tester.getRect(find.byKey(const ValueKey('test-cover-2'))),
+      viewport,
     );
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    addTearDown(() => tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed));
-    await tester.pumpWidget(indicator());
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(tester.binding.hasScheduledFrame, isTrue);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    await tester.pump();
-    expect(tester.binding.hasScheduledFrame, isFalse);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(tester.binding.hasScheduledFrame, isTrue);
-    await tester.pumpWidget(indicator(playing: false));
-    await tester.pumpAndSettle();
-    expect(tester.binding.hasScheduledFrame, isFalse);
-    await tester.pumpWidget(indicator(reduced: true));
-    await tester.pumpAndSettle();
-    expect(tester.binding.hasScheduledFrame, isFalse);
-    await tester.pumpWidget(indicator(visible: false));
-    await tester.pumpAndSettle();
-    expect(tester.binding.hasScheduledFrame, isFalse);
-    tester.platformDispatcher.accessibilityFeaturesTestValue =
-        FakeAccessibilityFeatures(disableAnimations: true);
-    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
-    await tester.pumpWidget(indicator());
-    await tester.pumpAndSettle();
-    expect(tester.binding.hasScheduledFrame, isFalse);
-    tester.platformDispatcher.clearAccessibilityFeaturesTestValue();
-    await tester.pumpWidget(indicator());
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(tester.binding.hasScheduledFrame, isTrue);
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump();
-    expect(tester.binding.hasScheduledFrame, isFalse);
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('artwork setup permits immediate disposal without a pending image timeout', (
-    tester,
-  ) async {
-    await mount(tester, reduced: true);
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump();
-    // The binding also verifies that no fake timers remain after this test.
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'artwork wheel gestures coalesce inertia and allow deliberate reversal',
+    (tester) async {
+      var next = 0, previous = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: SizedBox.square(
+              dimension: 240,
+              child: ArtworkTrackSwitcher(
+                identity: 'cover',
+                reducedMotion: true,
+                onNext: () => next++,
+                onPrevious: () => previous++,
+                child: const ColoredBox(color: Colors.pink),
+              ),
+            ),
+          ),
+        ),
+      );
+      final cover = find.byType(ArtworkTrackSwitcher);
+      void wheel(Offset delta, int milliseconds) {
+        tester.binding.handlePointerEvent(
+          PointerScrollEvent(
+            position: tester.getCenter(cover),
+            scrollDelta: delta,
+            timeStamp: Duration(milliseconds: milliseconds),
+          ),
+        );
+      }
+
+      wheel(const Offset(0, 24), 0);
+      wheel(const Offset(0, 30), 10);
+      wheel(const Offset(0, 90), 30);
+      wheel(const Offset(0, 40), 60);
+      expect(next, 1);
+      wheel(const Offset(0, 60), 400);
+      expect(next, 2);
+      wheel(const Offset(-60, 0), 410);
+      expect(previous, 1);
+      await tester.timedDrag(
+        cover,
+        const Offset(30, 0),
+        const Duration(milliseconds: 600),
+      );
+      await tester.pumpAndSettle();
+      expect(previous, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'lyric waiting animation pauses, respects reduced motion and stops offscreen',
+    (tester) async {
+      Widget indicator({
+        bool playing = true,
+        bool reduced = false,
+        bool visible = true,
+      }) => MaterialApp(
+        home: TickerMode(
+          enabled: visible,
+          child: LyricsWaitingIndicator(
+            playing: playing,
+            reducedMotion: reduced,
+            label: 'Waiting for lyrics',
+          ),
+        ),
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      await tester.pumpWidget(indicator());
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.binding.hasScheduledFrame, isTrue);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.binding.hasScheduledFrame, isTrue);
+      await tester.pumpWidget(indicator(playing: false));
+      await tester.pumpAndSettle();
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      await tester.pumpWidget(indicator(reduced: true));
+      await tester.pumpAndSettle();
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      await tester.pumpWidget(indicator(visible: false));
+      await tester.pumpAndSettle();
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      await tester.pumpWidget(indicator());
+      await tester.pumpAndSettle();
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      tester.platformDispatcher.clearAccessibilityFeaturesTestValue();
+      await tester.pumpWidget(indicator());
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.binding.hasScheduledFrame, isTrue);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'artwork setup permits immediate disposal without a pending image timeout',
+    (tester) async {
+      await mount(tester, reduced: true);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      // The binding also verifies that no fake timers remain after this test.
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final size in [const Size(390, 844), const Size(1280, 714)]) {
-    testWidgets('mini-player opens upward and reopens at $size', (tester) async {
+    testWidgets('mini-player grows into Now Playing and reopens at $size', (
+      tester,
+    ) async {
       final (audio, player) = await mount(
         tester,
         openPlayer: false,
         size: size,
       );
-      final surface = find.byKey(const ValueKey('now-playing-dismiss'));
+      final surface = find.byKey(const ValueKey('now-playing-container'));
       for (var attempt = 0; attempt < 2; attempt++) {
         await tester.tap(find.byKey(const ValueKey('open-current-track')));
         await tester.pump();
-        final start = tester.widget<SlideTransition>(surface).position.value.dy;
-        expect(start, greaterThan(1));
+        final start = tester.getRect(surface);
+        expect(start.height, lessThan(150));
+        expect(start.top, greaterThan(size.height * .5));
         await tester.pump(const Duration(milliseconds: 150));
-        final middle = tester.widget<SlideTransition>(surface).position.value.dy;
-        expect(middle, inExclusiveRange(0, start));
-        expect(find.byKey(const ValueKey('player-bar')), findsNothing);
+        final middle = tester.getRect(surface);
+        expect(middle.height, greaterThan(start.height));
+        expect(middle.top, lessThan(start.top));
+        expect(
+          find.byKey(const ValueKey('player-transition-blur')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('open-current-track')).hitTestable(),
+          findsNothing,
+        );
         await tester.pumpAndSettle();
-        expect(tester.widget<SlideTransition>(surface).position.value, Offset.zero);
-        expect(find.byKey(const ValueKey('now-playing-play-pause')).hitTestable(),
-            findsOneWidget);
+        expect(
+          tester.widget<ClipRRect>(surface).borderRadius,
+          BorderRadius.zero,
+        );
+        expect(
+          find.byKey(const ValueKey('now-playing-play-pause')).hitTestable(),
+          findsOneWidget,
+        );
         await tester.tap(find.byKey(const ValueKey('close-now-playing')));
         await tester.pumpAndSettle();
         expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
@@ -318,95 +402,220 @@ void main() {
     });
   }
 
-  testWidgets('Back interrupts opening without jumping to the top', (tester) async {
+  testWidgets(
+    'vertical player drags follow the finger and settle in either direction',
+    (tester) async {
+      final (audio, player) = await mount(
+        tester,
+        openPlayer: false,
+        size: const Size(390, 844),
+      );
+      final surface = find.byKey(const ValueKey('now-playing-container'));
+      var gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('open-current-track'))),
+      );
+      await gesture.moveBy(const Offset(0, -30));
+      await tester.pump();
+      final start = tester.getRect(surface);
+      await gesture.moveBy(const Offset(0, -210));
+      await tester.pump();
+      expect(tester.getRect(surface).height, greaterThan(start.height));
+      expect(tester.getRect(surface).top, lessThan(start.top));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('now-playing-play-pause')).hitTestable(),
+        findsOneWidget,
+      );
+      final full = tester.getRect(surface);
+      gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('page-title'))),
+      );
+      await gesture.moveBy(const Offset(0, 30));
+      await gesture.moveBy(const Offset(0, 40));
+      await tester.pump();
+      expect(tester.getRect(surface).top, greaterThan(full.top));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(surface),
+        full,
+        reason: 'A short downward drag returns to the full player',
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('page-title')),
+        const Offset(0, 320),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
+      expect(player.current?.id, 'first');
+      expect(audio.playing, isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'short upward drag returns to the mini-player and resizing stays valid',
+    (tester) async {
+      await mount(tester, openPlayer: false, size: const Size(390, 844));
+      final preview = find.byKey(const ValueKey('open-current-track'));
+      var gesture = await tester.startGesture(tester.getCenter(preview));
+      await gesture.moveBy(const Offset(0, -25));
+      await gesture.moveBy(const Offset(0, -25));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(preview.hitTestable(), findsOneWidget);
+      await tester.tap(preview);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+      tester.view.physicalSize = const Size(844, 390);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+      await tester.pumpAndSettle();
+      expect(preview.hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('the expanding player returns to the page it opened from', (
+    tester,
+  ) async {
+    await mount(tester, openPlayer: false, size: const Size(390, 844));
+    await tester.tap(find.byTooltip('Settings').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open-current-track')));
+    await tester.pump();
+    final background = find.byKey(const ValueKey('player-collapse-background'));
+    expect(
+      find.descendant(of: background, matching: find.text('Backup & Restore')),
+      findsOneWidget,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
+      'Settings',
+    );
+    expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Back interrupts opening without jumping to the top', (
+    tester,
+  ) async {
     await mount(tester, openPlayer: false, size: const Size(390, 844));
     await tester.tap(find.byTooltip('Now playing'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    final surface = find.byKey(const ValueKey('now-playing-dismiss'));
-    final before = tester.widget<SlideTransition>(surface).position.value.dy;
+    final surface = find.byKey(const ValueKey('now-playing-container'));
+    final before = tester.getRect(surface);
     await tester.binding.handlePopRoute();
     await tester.pump();
-    expect(tester.widget<SlideTransition>(surface).position.value.dy,
-        closeTo(before, .001));
+    expect(tester.getRect(surface), before);
     await tester.pump(const Duration(milliseconds: 60));
-    expect(tester.widget<SlideTransition>(surface).position.value.dy,
-        greaterThan(before));
+    expect(tester.getRect(surface).top, greaterThan(before.top));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   for (final systemReduced in [false, true]) {
-    testWidgets('opening is immediate with reduced motion (system: $systemReduced)',
-        (tester) async {
-      await mount(tester, reduced: !systemReduced, openPlayer: false);
-      if (systemReduced) {
-        tester.platformDispatcher.accessibilityFeaturesTestValue =
-            FakeAccessibilityFeatures(disableAnimations: true);
-        addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    testWidgets(
+      'opening is immediate with reduced motion (system: $systemReduced)',
+      (tester) async {
+        await mount(tester, reduced: !systemReduced, openPlayer: false);
+        if (systemReduced) {
+          tester.platformDispatcher.accessibilityFeaturesTestValue =
+              FakeAccessibilityFeatures(disableAnimations: true);
+          addTearDown(
+            tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+          );
+          await tester.pump();
+        }
+        await tester.tap(find.byKey(const ValueKey('open-current-track')));
         await tester.pump();
-      }
-      await tester.tap(find.byKey(const ValueKey('open-current-track')));
-      await tester.pump();
-      final surface = find.byKey(const ValueKey('now-playing-dismiss'));
-      expect(tester.widget<SlideTransition>(surface).position.value, Offset.zero);
-      expect(find.byKey(const ValueKey('now-playing-play-pause')).hitTestable(),
-          findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        final surface = find.byKey(const ValueKey('now-playing-container'));
+        expect(
+          tester.widget<ClipRRect>(surface).borderRadius,
+          BorderRadius.zero,
+        );
+        expect(
+          find.byKey(const ValueKey('now-playing-play-pause')).hitTestable(),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   for (final size in [const Size(390, 844), const Size(1280, 714)]) {
-    testWidgets('down arrow reveals Library and mini-player during collapse at $size', (
-      tester,
-    ) async {
-      final (audio, player) = await mount(tester, size: size);
-      await audio.toggle();
-      await tester.pump();
-      final artwork = find.byKey(const ValueKey('now-playing-artwork'));
-      final before = tester.getTopLeft(artwork);
-      await tester.tap(find.byKey(const ValueKey('close-now-playing')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 150));
-      expect(tester.getTopLeft(artwork).dy, greaterThan(before.dy));
-      final background = find.byKey(const ValueKey('player-collapse-background'));
-      expect(background, findsOneWidget);
-      expect(find.descendant(of: background, matching: find.text('Library')),
-          findsWidgets);
-      expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
-      expect(find.byKey(const ValueKey('open-current-track')).hitTestable(),
-          findsNothing, reason: 'The returning mini-player waits for the animation');
-      expect(
-        tester
-            .widget<IconButton>(find.byKey(const ValueKey('close-now-playing')))
-            .onPressed,
-        isNull,
-      );
-      await tester.pump(const Duration(milliseconds: 100));
-      final surface = find.byKey(const ValueKey('now-playing-dismiss'));
-      final fade = tester.widget<FadeTransition>(find.descendant(
-        of: surface,
-        matching: find.byType(FadeTransition),
-      ).first);
-      expect(fade.opacity.value, inExclusiveRange(0, 1));
-      await tester.pump(const Duration(milliseconds: 180));
-      await tester.pump();
-      expect(audio.playing, isTrue, reason: 'Collapsing keeps music playing');
-      await audio.toggle();
-      await tester.pumpAndSettle();
-      expect(background, findsNothing);
-      expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
-      expect(
-        tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
-        'Library',
-      );
-      expect(player.current?.id, 'first');
-      expect(audio.playing, isFalse);
-      expect(find.byKey(const ValueKey('open-current-track')).hitTestable(),
-          findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'down arrow reveals Library and mini-player during collapse at $size',
+      (tester) async {
+        final (audio, player) = await mount(tester, size: size);
+        await audio.toggle();
+        await tester.pump();
+        final artwork = find.byKey(const ValueKey('now-playing-artwork'));
+        final before = tester.getTopLeft(artwork);
+        await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 150));
+        expect(tester.getTopLeft(artwork).dy, greaterThan(before.dy));
+        final background = find.byKey(
+          const ValueKey('player-collapse-background'),
+        );
+        expect(background, findsOneWidget);
+        expect(
+          find.descendant(of: background, matching: find.text('Library')),
+          findsWidgets,
+        );
+        expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('open-current-track')).hitTestable(),
+          findsNothing,
+          reason: 'The returning mini-player waits for the animation',
+        );
+        expect(
+          tester
+              .widget<IconButton>(
+                find.byKey(const ValueKey('close-now-playing')),
+              )
+              .onPressed,
+          isNull,
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+        final surface = find.byKey(const ValueKey('now-playing-container'));
+        final fade = tester.widget<Opacity>(
+          find.descendant(
+            of: surface,
+            matching: find.byKey(const ValueKey('now-playing-content-opacity')),
+          ),
+        );
+        expect(fade.opacity, inExclusiveRange(0, 1));
+        await tester.pump(const Duration(milliseconds: 180));
+        await tester.pump();
+        expect(audio.playing, isTrue, reason: 'Collapsing keeps music playing');
+        await audio.toggle();
+        await tester.pumpAndSettle();
+        expect(background, findsNothing);
+        expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
+        expect(
+          tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
+          'Library',
+        );
+        expect(player.current?.id, 'first');
+        expect(audio.playing, isFalse);
+        expect(
+          find.byKey(const ValueKey('open-current-track')).hitTestable(),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets('sidebar navigation during dismissal keeps the requested page', (
@@ -470,97 +679,128 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('system Back leaves lyrics and Now Playing without exiting or stopping music', (
-    tester,
-  ) async {
-    var exits = 0;
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      SystemChannels.platform,
-      (call) async {
-        if (call.method == 'SystemNavigator.pop') exits++;
-        return null;
-      },
-    );
-    addTearDown(() => tester.binding.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, null));
-    final (audio, player) = await mount(
-      tester,
-      reduced: true,
-      size: const Size(390, 844),
-    );
-    await audio.toggle();
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Lyrics').last);
-    await tester.pumpAndSettle();
-    expect(find.byType(LyricsView), findsOneWidget);
+  testWidgets(
+    'system Back leaves lyrics and Now Playing without exiting or stopping music',
+    (tester) async {
+      var exits = 0;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'SystemNavigator.pop') exits++;
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final (audio, player) = await mount(
+        tester,
+        reduced: true,
+        size: const Size(390, 844),
+      );
+      await audio.toggle();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Lyrics').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(LyricsView), findsOneWidget);
 
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-    expect(find.byType(LyricsView), findsNothing);
-    expect(find.byKey(const ValueKey('now-playing-play-pause')), findsOneWidget);
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-    expect(tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data, 'Library');
-    expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
-    expect(player.current?.id, 'first');
-    expect(audio.playing, isTrue);
-    expect(exits, 0);
-    expect(tester.takeException(), isNull);
-  });
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(LyricsView), findsNothing);
+      expect(
+        find.byKey(const ValueKey('now-playing-play-pause')),
+        findsOneWidget,
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
+        'Library',
+      );
+      expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
+      expect(player.current?.id, 'first');
+      expect(audio.playing, isTrue);
+      expect(exits, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('Settings is a selected full page and system Back returns to Library', (
-    tester,
-  ) async {
-    await mount(
-      tester,
-      reduced: true,
-      openPlayer: false,
-      size: const Size(390, 844),
-    );
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('settings-page')).hitTestable(), findsOneWidget);
-    expect(find.byType(AlertDialog), findsNothing);
-    expect(find.byType(Dialog), findsNothing);
-    expect(tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex, 3);
-    expect(find.byTooltip('Play queue'), findsNothing);
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-    expect(tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data, 'Library');
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'Settings is a selected full page and system Back returns to Library',
+    (tester) async {
+      await mount(
+        tester,
+        reduced: true,
+        openPlayer: false,
+        size: const Size(390, 844),
+      );
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-page')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(Dialog), findsNothing);
+      expect(
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+        3,
+      );
+      expect(find.byTooltip('Play queue'), findsNothing);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
+        'Library',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('bottom navigation keeps four labels and icons clear of the gesture area', (
-    tester,
-  ) async {
-    tester.view.padding = const FakeViewPadding(bottom: 24);
-    tester.view.viewPadding = const FakeViewPadding(bottom: 24);
-    addTearDown(tester.view.resetPadding);
-    addTearDown(tester.view.resetViewPadding);
-    await mount(
-      tester,
-      reduced: true,
-      openPlayer: false,
-      size: const Size(360, 780),
-    );
-    final navigation = find.byKey(const ValueKey('app-navigation'));
-    final bounds = tester.getRect(navigation);
-    final destinations = find.descendant(
-      of: navigation,
-      matching: find.byType(NavigationDestination),
-    );
-    expect(destinations, findsNWidgets(4));
-    for (final label in ['Library', 'Telegram', 'Now playing', 'Settings']) {
-      final destination = find.widgetWithText(NavigationDestination, label);
-      final icon = find.descendant(of: destination, matching: find.byType(Icon));
-      final text = find.descendant(of: destination, matching: find.text(label));
-      final labelBounds = tester.getRect(text);
-      expect(text.hitTestable(), findsOneWidget);
-      expect(labelBounds.top, greaterThanOrEqualTo(tester.getRect(icon).bottom));
-      expect(labelBounds.bottom, lessThanOrEqualTo(bounds.bottom - 24));
-    }
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'bottom navigation keeps four labels and icons clear of the gesture area',
+    (tester) async {
+      tester.view.padding = const FakeViewPadding(bottom: 24);
+      tester.view.viewPadding = const FakeViewPadding(bottom: 24);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      await mount(
+        tester,
+        reduced: true,
+        openPlayer: false,
+        size: const Size(360, 780),
+      );
+      final navigation = find.byKey(const ValueKey('app-navigation'));
+      final bounds = tester.getRect(navigation);
+      final destinations = find.descendant(
+        of: navigation,
+        matching: find.byType(NavigationDestination),
+      );
+      expect(destinations, findsNWidgets(4));
+      for (final label in ['Library', 'Telegram', 'Now playing', 'Settings']) {
+        final destination = find.widgetWithText(NavigationDestination, label);
+        final icon = find.descendant(
+          of: destination,
+          matching: find.byType(Icon),
+        );
+        final text = find.descendant(
+          of: destination,
+          matching: find.text(label),
+        );
+        final labelBounds = tester.getRect(text);
+        expect(text.hitTestable(), findsOneWidget);
+        expect(
+          labelBounds.top,
+          greaterThanOrEqualTo(tester.getRect(icon).bottom),
+        );
+        expect(labelBounds.bottom, lessThanOrEqualTo(bounds.bottom - 24));
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'playback rebuilds reuse the blur while artwork updates stay live',
