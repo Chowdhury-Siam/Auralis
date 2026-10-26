@@ -8,6 +8,67 @@ import 'package:auralis/models.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 
 void main() {
+  test('changing or stopping tracks deletes only the previous audio buffer', () async {
+    final calls = <Map<String, dynamic>>[];
+    final proxy = TelegramStreamProxy((json) async {
+      calls.add(json);
+      return {};
+    });
+    addTearDown(proxy.close);
+    const first = Track(id: 'first', title: 'First', artist: 'Artist',
+        source: 'Channel', fileId: 1, size: 100);
+    const second = Track(id: 'second', title: 'Second', artist: 'Artist',
+        source: 'Channel', fileId: 2, size: 100);
+    await proxy.uri(first);
+    expect(calls, isEmpty, reason: 'Active audio stays available for seeking');
+    await proxy.uri(second);
+    expect(calls, [
+      {'@type': 'cancelDownloadFile', 'file_id': 1, 'only_if_pending': false},
+      {'@type': 'deleteFile', 'file_id': 1},
+    ]);
+    expect(proxy.isStreaming(2), isTrue);
+    await proxy.stop();
+    expect(calls.last, {'@type': 'deleteFile', 'file_id': 2});
+    expect(proxy.isStreaming(2), isFalse);
+  });
+
+  test('rapid replay waits for old deletion before activating the same file', () async {
+    final deleting = Completer<void>(), finish = Completer<void>();
+    final proxy = TelegramStreamProxy((json) async {
+      if (json['@type'] == 'deleteFile') {
+        if (!deleting.isCompleted) {
+          deleting.complete();
+        }
+        await finish.future;
+      }
+      return {};
+    });
+    addTearDown(() async {
+      if (!finish.isCompleted) {
+        finish.complete();
+      }
+      await proxy.close();
+    });
+    const track = Track(id: 'same', title: 'Same', artist: 'Artist',
+        source: 'Channel', fileId: 7, size: 100);
+    await proxy.uri(track);
+    final old = proxy.uri(track);
+    final oldError = expectLater(old, throwsStateError);
+    await deleting.future;
+    var opened = false;
+    final latest = proxy.uri(track).then((uri) {
+      opened = true;
+      return uri;
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(opened, isFalse);
+    expect(proxy.isStreaming(7), isFalse);
+    finish.complete();
+    await oldError;
+    await latest;
+    expect(proxy.isStreaming(7), isTrue);
+  });
+
   test('new source wins concurrent opens and old URLs expire', () async {
     final proxy = TelegramStreamProxy((_) async => {});
     addTearDown(proxy.close);
