@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import 'lyrics.dart';
+import 'lyrics_translation.dart';
 import 'data_files.dart';
 import 'models.dart';
 import 'player.dart';
@@ -41,7 +42,8 @@ class LyricsView extends StatefulWidget {
 class _LyricsViewState extends State<LyricsView> {
   ColorScheme get _colors => Theme.of(context).colorScheme;
   Track? _track;
-  Lyrics? _lyrics;
+  Lyrics? _lyrics, _translation;
+  bool _translating = false, _showTranslation = false;
   String? _error;
   bool _importing = false;
   bool _loading = false, _synced = true, _looked = false;
@@ -61,6 +63,9 @@ class _LyricsViewState extends State<LyricsView> {
 
   void _reset() {
     _generation++;
+    _translation = null;
+    _translating = false;
+    _showTranslation = false;
     _track = widget.player.current;
     _lyrics = _track == null ? null : widget.repository.cached(_track!);
     _looked = _track != null && widget.repository.contains(_track!);
@@ -82,6 +87,9 @@ class _LyricsViewState extends State<LyricsView> {
     final generation = ++_generation;
     setState(() {
       _loading = true;
+      _translation = null;
+      _translating = false;
+      _showTranslation = false;
       _error = null;
     });
     try {
@@ -232,11 +240,79 @@ class _LyricsViewState extends State<LyricsView> {
     widget.repository.save(track, lyrics);
     setState(() {
       _lyrics = lyrics;
+      _translation = null;
+      _translating = false;
+      _showTranslation = false;
       _looked = true;
       _loading = false;
       _error = null;
       _synced = lyrics.lines.isNotEmpty;
     });
+  }
+
+  Future<void> _translate() async {
+    final source = _lyrics, track = _track;
+    if (source == null || track == null || _loading || _translating) return;
+    if (_translation != null) {
+      setState(() => _showTranslation = !_showTranslation);
+      return;
+    }
+    final generation = _generation;
+    bool active() =>
+        mounted &&
+        generation == _generation &&
+        identical(source, _lyrics) &&
+        identical(track, _track) &&
+        identical(track, widget.player.current);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Japanese → English'),
+        content: const Text(
+          'Translate these lyrics with Google Translate, with MyMemory as a fallback. '
+          'Japanese lyric text is sent to these services. No API key is needed. '
+          'MyMemory has a daily limit. Translations are cached on this device; '
+          'machine translation may miss a song’s meaning.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Translate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !active()) return;
+    setState(() => _translating = true);
+    try {
+      final result = await widget.repository.translateJapanese(
+        track,
+        source,
+        active: active,
+      );
+      if (!active()) return;
+      setState(() {
+        _translation = result;
+        _showTranslation = true;
+      });
+    } catch (error) {
+      if (!mounted || !active()) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is TranslationFailure
+                ? error.message
+                : 'Could not translate. Try again later.',
+          ),
+        ),
+      );
+    } finally {
+      if (active()) setState(() => _translating = false);
+    }
   }
 
   Widget _message(String text) => Center(
@@ -294,6 +370,8 @@ class _LyricsViewState extends State<LyricsView> {
         onSelected: (value) {
           if (value == 'import') {
             unawaited(_import());
+          } else if (value == 'translate') {
+            unawaited(_translate());
           } else if (value == 'embedded') {
             unawaited(_load(embedded: true, online: false));
           } else {
@@ -301,6 +379,19 @@ class _LyricsViewState extends State<LyricsView> {
           }
         },
         itemBuilder: (_) => [
+          _menuAction(
+            value: 'translate',
+            enabled:
+                !_loading &&
+                !_translating &&
+                _lyrics != null &&
+                LyricsTranslator.supports(_lyrics!),
+            icon: Icons.translate_rounded,
+            title: _showTranslation
+                ? 'Show original lyrics'
+                : 'Translate Japanese to English',
+            subtitle: 'Free online translation · cached on this device.',
+          ),
           _menuAction(
             value: 'import',
             enabled: _track != null && !_importing,
@@ -336,7 +427,7 @@ class _LyricsViewState extends State<LyricsView> {
   }
 
   Widget _body() {
-    final lyrics = _lyrics;
+    final lyrics = _showTranslation ? _translation ?? _lyrics : _lyrics;
     if (_track == null) return _message('Choose a track to see its lyrics.');
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (lyrics?.instrumental == true) {
@@ -527,6 +618,23 @@ class _LyricsViewState extends State<LyricsView> {
           ),
         ),
         const SizedBox(width: 8),
+        if (_lyrics != null && LyricsTranslator.supports(_lyrics!))
+          IconButton(
+            key: const ValueKey('lyrics-translate'),
+            tooltip: _translating
+                ? 'Translating Japanese lyrics'
+                : _showTranslation
+                ? 'Show original lyrics'
+                : 'Translate Japanese to English',
+            onPressed: _loading || _translating ? null : _translate,
+            color: _showTranslation ? _colors.primary : null,
+            icon: _translating
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.translate_rounded),
+          ),
         _options(),
       ],
     ),
