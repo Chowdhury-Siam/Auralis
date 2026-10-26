@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:path/path.dart' as p;
 
 import 'models.dart';
 
@@ -10,6 +11,38 @@ import 'models.dart';
 class MediaCache {
   MediaCache(this.directory);
   final Directory? directory;
+  static final _pending = <String, Set<Future<dynamic>>>{};
+  static bool hasPending(Directory root) => _pending.entries.any(
+    (entry) =>
+        (p.equals(root.absolute.path, entry.key) ||
+            p.isWithin(root.absolute.path, entry.key)) &&
+        entry.value.isNotEmpty,
+  );
+  static Future<void> drain(Directory root) async {
+    while (hasPending(root)) {
+      final work = [
+        for (final entry in _pending.entries)
+          if (p.equals(root.absolute.path, entry.key) ||
+              p.isWithin(root.absolute.path, entry.key))
+            ...entry.value,
+      ];
+      await Future.wait(work);
+    }
+  }
+
+  Future<T> _track<T>(Future<T> Function() operation) {
+    if (directory == null) return operation();
+    final path = directory!.absolute.path;
+    final work = _pending.putIfAbsent(path, () => {});
+    late final Future<T> result;
+    result = operation().whenComplete(() {
+      work.remove(result);
+      if (work.isEmpty) _pending.remove(path);
+    });
+    work.add(result);
+    return result;
+  }
+
   String key(Track track) => sha256
       .convert(
         utf8.encode(
@@ -25,7 +58,9 @@ class MediaCache {
         ),
       )
       .toString();
-  Future<Uint8List?> read(Track track, String kind, int limit) async {
+  Future<Uint8List?> read(Track track, String kind, int limit) =>
+      _track(() => _read(track, kind, limit));
+  Future<Uint8List?> _read(Track track, String kind, int limit) async {
     if (directory == null) return null;
     try {
       final file = File('${directory!.path}/${key(track)}.$kind');
@@ -36,7 +71,9 @@ class MediaCache {
     }
   }
 
-  Future<void> write(Track track, String kind, List<int> bytes) async {
+  Future<void> write(Track track, String kind, List<int> bytes) =>
+      _track(() => _write(track, kind, bytes));
+  Future<void> _write(Track track, String kind, List<int> bytes) async {
     if (directory == null) return;
     File? temporary;
     try {
