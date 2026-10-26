@@ -1,6 +1,28 @@
 {
-  "current": "0.1.76",
+  "current": "0.1.79",
   "releases": [
+    {
+      "version": "0.1.79",
+      "changes": [
+        "Fixed widget-test shutdown hangs by releasing completed audio-cleanup futures instead of retaining their original async clock. Pending audio deletions remain serialized before replay.",
+        "Updated adaptive Now Playing checks to allow horizontal artwork swipes while still requiring every control to fit without vertical scrolling. Added a regression check for cleanup across test clocks.",
+        "Live sync uses its account controller's HTTP transport, keeping test requests inside the fake client and closing pending handshakes with their connection."
+      ]
+    },
+    {
+      "version": "0.1.78",
+      "changes": [
+        "Added Include Telegram account to Account & sync. Auralis remembers the linked Telegram identity and protects its application connection values in the private Worker.",
+        "New devices can connect that Telegram account with a six-digit approval code entered on an already connected device. Each device receives its own Telegram session; session databases, login codes and two-step passwords are not copied to sync.",
+        "Added approval expiry, one-use requests, account isolation, unlink controls and phone-login fallback. Existing playback, artwork, audio cleanup and rounded media-control changes are retained."
+      ]
+    },
+    {
+      "version": "0.1.77",
+      "changes": [
+        "Redesigned the Android system media Stop control with a smaller rounded outline, replacing the oversized solid square in the notification and launcher media player. The icon follows Android’s artwork tint and keeps the existing Stop behavior."
+      ]
+    },
     {
       "version": "0.1.76",
       "changes": [
