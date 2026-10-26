@@ -20,6 +20,14 @@ class MainActivity : AudioServiceActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.auralis/platform").setMethodCallHandler { call, result ->
             when (call.method) {
+                "openExternalUrl" -> {
+                    try {
+                        val uri = android.net.Uri.parse(call.arguments as String)
+                        require(uri.scheme == "https" && !uri.host.isNullOrEmpty() && uri.userInfo == null)
+                        startActivity(Intent(Intent.ACTION_VIEW, uri))
+                        result.success(null)
+                    } catch (_: Exception) { result.error("browser", "Could not open the HTTPS link.", null) }
+                }
                 "updateInfo" -> {
                     try { result.success(updates.info()) }
                     catch (_: Exception) { result.error("update_cache", "Android update cache is unavailable.", null) }
