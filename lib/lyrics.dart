@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'models.dart';
+import 'media_cache.dart';
 
 class LyricLine {
   const LyricLine(this.time, this.text);
@@ -156,14 +157,72 @@ class Lyrics {
 
 /// Session-only cache; missing embedded lyrics fall back to LRCLIB on opening.
 class LyricsRepository {
-  LyricsRepository({HttpClient Function()? createClient})
+  LyricsRepository({HttpClient Function()? createClient, this.cache})
     : _createClient = createClient ?? HttpClient.new;
   final HttpClient Function() _createClient;
+  final MediaCache Function()? cache;
+  Future<Lyrics?> loadCached(Track track) async {
+    if (contains(track)) return cached(track);
+    final disk = cache?.call();
+    final bytes = await disk?.read(track, 'lyrics', 2 * 1024 * 1024);
+    if (bytes == null ||
+        _closed ||
+        cache?.call().directory?.path != disk?.directory?.path) {
+      return null;
+    }
+    try {
+      final data = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+      final lines = (data['lines'] as List)
+          .map(
+            (v) =>
+                LyricLine(Duration(milliseconds: v[0] as int), v[1] as String),
+          )
+          .toList();
+      if (lines.length > 2000) return null;
+      final result = Lyrics(
+        data['plain'] as String,
+        lines,
+        instrumental: data['instrumental'] == true,
+        online: data['online'] == true,
+        embedded: data['embedded'] == true,
+        imported: data['imported'] == true,
+      );
+      if (!contains(track)) {
+        _cache[_key(track)] = result;
+        if (_cache.length > 32) _cache.remove(_cache.keys.first);
+      }
+      return cached(track);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> persist(Track track, Lyrics value) async {
+    await cache?.call().write(
+      track,
+      'lyrics',
+      utf8.encode(
+        jsonEncode({
+          'plain': value.plain,
+          'lines': [
+            for (final line in value.lines)
+              [line.time.inMilliseconds, line.text],
+          ],
+          'instrumental': value.instrumental,
+          'online': value.online,
+          'embedded': value.embedded,
+          'imported': value.imported,
+        }),
+      ),
+    );
+  }
+
   final _cache = <String, Lyrics?>{};
   final _pending = <String, Object>{};
   final _clients = <HttpClient>{};
   bool _closed = false;
   String _key(Track track) => jsonEncode([
+    cache?.call().directory?.path,
     track.id,
     track.title,
     track.artist,
@@ -177,10 +236,13 @@ class LyricsRepository {
     _cache.remove(_key(track));
     _cache[_key(track)] = lyrics;
     if (_cache.length > 32) _cache.remove(_cache.keys.first);
+    if (lyrics != null) unawaited(persist(track, lyrics));
   }
 
   Future<Lyrics?> find(Track track) async {
     if (_closed) throw StateError('Lyrics lookup is closed.');
+    final saved = cache == null ? null : await loadCached(track);
+    if (saved != null) return saved;
     final title = track.title.trim(), artist = track.artist.trim();
     if (title.isEmpty ||
         artist.isEmpty ||
@@ -190,6 +252,7 @@ class LyricsRepository {
         'A song title and artist are needed for lookup.',
       );
     }
+    final scope = cache?.call().directory?.path;
     final client = _createClient();
     final key = _key(track), requestId = Object();
     _pending[key] = requestId;
@@ -245,7 +308,10 @@ class LyricsRepository {
             : result;
       })().timeout(const Duration(seconds: 20));
       // An imported/pasted result or a newer request may have won meanwhile.
-      if (identical(_pending[key], requestId)) save(track, lyrics);
+      if (identical(_pending[key], requestId) &&
+          cache?.call().directory?.path == scope) {
+        save(track, lyrics);
+      }
       return lyrics;
     } finally {
       if (identical(_pending[key], requestId)) _pending.remove(key);
