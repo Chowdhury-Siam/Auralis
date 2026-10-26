@@ -44,6 +44,7 @@ class SyncAccountPage extends StatefulWidget {
 class _SyncAccountPageState extends State<SyncAccountPage> {
   SyncController get sync => widget.sync;
   late final _url = TextEditingController(text: sync.serviceUrl);
+  final _telegramPassword = TextEditingController();
   final _username = TextEditingController(),
       _password = TextEditingController(),
       _claim = TextEditingController();
@@ -371,8 +372,162 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
       ),
     ),
   );
+  Future<void> _approveTelegram(String id) async {
+    final code = TextEditingController();
+    final entered = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Approve your new device'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the six-digit code shown in Account & sync on your new device. Only approve a sign-in you started.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: code,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'New device code'),
+              onSubmitted: (value) => Navigator.pop(c, value),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, code.text),
+            child: const Text('Approve'),
+          ),
+        ],
+      ),
+    );
+    Future<void>.delayed(const Duration(seconds: 1), code.dispose);
+    if (entered != null) {
+      await _run(() => sync.approveTelegramDevice(id, entered.trim()));
+    }
+  }
+
+  Widget _telegramCard(bool disabled) => _card([
+    SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: const Text('Include Telegram account'),
+      subtitle: const Text(
+        'Connect the same Telegram account on your other devices with device approval.',
+      ),
+      value: sync.telegramIncluded,
+      onChanged: disabled
+          ? null
+          : (value) => _run(() => sync.setTelegramIncluded(value)),
+    ),
+    if (sync.linkedTelegram case final profile?)
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          profile['name'] as String,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+      ),
+    Text(sync.telegramSyncStatus),
+    if (sync.telegramPairCode case final code?)
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: SelectableText(
+            code,
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 7,
+            ),
+          ),
+        ),
+      ),
+    if (sync.telegram?.state == 'authorizationStateWaitOtherDeviceConfirmation')
+      TextButton(
+        onPressed: disabled ? null : () => _run(sync.useTelegramPhoneSignIn),
+        child: const Text('Use phone sign-in instead'),
+      ),
+    if (sync.telegramNeedsPassword) ...[
+      const SizedBox(height: 12),
+      TextField(
+        controller: _telegramPassword,
+        obscureText: true,
+        autocorrect: false,
+        enableSuggestions: false,
+        enabled: !disabled,
+        decoration: const InputDecoration(
+          labelText: 'Telegram two-step password',
+        ),
+        onSubmitted: (value) => disabled
+            ? null
+            : _run(() async {
+                await sync.submitTelegramPassword(value);
+                if (mounted) _telegramPassword.clear();
+              }),
+      ),
+      const SizedBox(height: 8),
+      FilledButton(
+        onPressed: disabled
+            ? null
+            : () => _run(() async {
+                await sync.submitTelegramPassword(_telegramPassword.text);
+                if (mounted) _telegramPassword.clear();
+              }),
+        child: const Text('Finish Telegram sign-in'),
+      ),
+    ],
+    for (final request in sync.telegramDeviceRequests)
+      Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: OutlinedButton.icon(
+          onPressed: disabled
+              ? null
+              : () => _approveTelegram(request['id'] as String),
+          icon: const Icon(Icons.phonelink_lock_rounded),
+          label: const Text('Approve new Telegram device'),
+        ),
+      ),
+    if (sync.telegramSyncError case final error?)
+      Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Text(
+          error,
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      ),
+    const SizedBox(height: 8),
+    Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        TextButton.icon(
+          onPressed: disabled ? null : () => _run(sync.syncTelegramAccount),
+          icon: const Icon(Icons.sync_rounded),
+          label: const Text('Check Telegram sync'),
+        ),
+        if (sync.linkedTelegram == null && sync.telegram?.ready == true)
+          TextButton(
+            onPressed: disabled
+                ? null
+                : () => _run(() => sync.setTelegramIncluded(true)),
+            child: const Text('Link this Telegram account'),
+          ),
+      ],
+    ),
+    const Text(
+      'Keep Auralis open on a connected device to approve a new sign-in. If none is available, use normal Telegram sign-in. Each device keeps its own session.',
+    ),
+  ]);
   @override
   void dispose() {
+    _telegramPassword.dispose();
     _url.dispose();
     _username.dispose();
     _password.dispose();
@@ -630,6 +785,8 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
                             child: const Text('Cancel'),
                           ),
                       ]),
+                    if (sync.telegramSyncAvailable && !_adding)
+                      _telegramCard(disabled),
                     if (disabled || sync.syncing)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 12),
@@ -648,7 +805,7 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
                       ),
                     const SizedBox(height: 16),
                     const Text(
-                      'Favorites, playlists, recent music, listening statistics, channels and shared preferences sync. Telegram sign-in, music, volume and playback stay on this device.',
+                      'Favorites, playlists, recent music, listening statistics, channels and shared preferences sync. Your linked Telegram account can connect on other devices with approval. Music, volume and playback stay on this device.',
                     ),
                     if (sync.serviceUrl.isNotEmpty)
                       TextButton.icon(
