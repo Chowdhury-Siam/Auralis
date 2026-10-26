@@ -33,9 +33,9 @@ export async function deploy(config,{send=fetch,asset=name=>readFile(new URL(nam
     ...(!existing?{migrations:{new_tag:'v1',new_sqlite_classes:['AuralisRoom']}}:{}),
     bindings:[{type:'durable_object_namespace',name:'ROOM',class_name:'AuralisRoom'},
       {type:'plain_text',name:'AURALIS_VERSION',text:version},{type:'plain_text',name:'TURSO_DATABASE_URL',text:database},
-      {type:'secret_text',name:'TURSO_AUTH_TOKEN',text:databaseToken},{type:'secret_text',name:'AURALIS_SYNC_KEY',text:key}]};
+      {type:'secret_text',name:'TURSO_AUTH_TOKEN',text:databaseToken},{type:'secret_text',name:'AURALIS_SYNC_KEY',text:key},{type:'secret_text',name:'JWT_SECRET',text:key}]};
   const form=new FormData();form.set('metadata',JSON.stringify(metadata));
-  for(const name of ['worker.mjs','turso.mjs']) form.set(name,new Blob([await asset(name)],{type:'application/javascript+module'}),name);
+  for(const name of ['worker.mjs','turso.mjs','accounts.mjs']) form.set(name,new Blob([await asset(name)],{type:'application/javascript+module'}),name);
   progress('Uploading Worker…');
   const upload=await request(`${base}/${path}`,{method:'PUT',headers:{Authorization:`Bearer ${token}`},body:form});
   if(upload.status<200 || upload.status>=300 || upload.data.success!==true) throw new Error(`Worker upload failed (HTTP ${upload.status}).`);
@@ -44,8 +44,10 @@ export async function deploy(config,{send=fetch,asset=name=>readFile(new URL(nam
     try {
       const health=await request(`${url}/health`);
       if(health.status!==200 || health.data.service!=='auralis-sync' || !health.data.configured || health.data.backend!=='turso' || health.data.version!==version) throw new Error('Worker health check failed.');
+      if(health.data.accounts){const probe=await request(`${url}/v1/info`,{headers:{Authorization:`Bearer ${key}`}});if(probe.status!==200||probe.data.service!=='auralis-sync')throw new Error('Ownership verification failed');const saved=await request(`${url}/v1/bootstrap/deployment`,{method:'PUT',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({worker,account,cloudflareToken:token,database,databaseToken,key,automatic:config.automatic!==false})});if(saved.status!==200)throw new Error('Could not save owner recovery credentials');}else{
       const probe=await request(`${url}/v1/sync`,{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:'{"cursor":0,"ops":{}}'});
       if(probe.status!==200 || !probe.data.records || !Number.isSafeInteger(probe.data.cursor)) throw new Error('Worker database check failed.');
+      }
       return url;
     } catch(error) {if(attempt===5) throw error;await wait(2000);}
   }
