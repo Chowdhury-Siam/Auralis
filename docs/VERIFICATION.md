@@ -831,3 +831,28 @@ Desktop navigation spans the full content height beside the player. The Settings
 - New coverage includes timestamp/blank-line preservation, deduplicated choruses, unchanged originals, account/content-isolated persisted cache, offline restart reuse, 429 fallback, HTML entity decoding, quota and alignment errors, oversized responses and late account/song changes. Phone/desktop widget checks cover sharing confirmation, cancellation and original/bilingual toggling.
 - Live smoke check using synthetic Japanese sentences translated through the current network proxy; offline cache reload matched the live result. No API key was used. Free-service availability can change; translation quality has not been benchmarked.
 - Windows/Android native builds and device runtime checks were not run here. Worker is unchanged.
+
+
+## 0.1.86 DeepL website flow
+
+Full Flutter suite: 236 passed, 23 platform-specific skips. Fatal-info analysis is clean; release note consistency and Android source checks pass.
+
+Widget tests verify phone/desktop layouts, confirmation and cancellation, exact original lyric copying without timestamps, both official DeepL language-pair URLs, browser-error retry, and a song change during clipboard completion. No live API calls or API key are involved. Native browser launching and clipboard access still need a Windows/Android device check; the tests inject browser opening and mock clipboard transport.
+
+The previous Google/MyMemory translation client has been removed. DeepL translation happens in the browser after the user pastes the copied text; results are not imported or cached by Auralis. No translation-quality benchmark or claim of perfect lyric meaning is made.
+
+
+## 0.1.87 both translation options
+
+Full Flutter suite: 243 passed, 23 platform-specific skips. Fatal-info analysis is clean and Android source checks pass. Focused translation/lyrics suite: 26 passed.
+
+The translate button and Lyrics options expose both choices. Restored in-app tests verify Japanese/English display, original toggling, cache reuse, timestamps, account/song changes and HTTP failure handling. DeepL tests cover both language directions, original-only clipboard copying, cancellation, browser errors, retry and song changes while opening on phone/desktop layouts. Browser/clipboard transport is mocked in tests; native device checks and live provider quality were not rerun.
+
+
+## 0.1.88 automatic lyric fallbacks
+
+Full Flutter suite: 250 passed, 23 platform-specific skips. Focused lyrics, fallback and lyrics-view suite: 35 passed. Fatal-info analysis is clean; release note consistency and Android source checks pass.
+
+New checks cover missing/empty/503/malformed/oversized source replies advancing to lyrics.ovh, matching search results by artist and duration, synchronized result selection, clean misses versus retryable outages, provider attribution surviving restart, explicit cache-bypassing retry preserving existing lyrics, safely encoded Unicode/path metadata, fake-clock timeout followed by fallback, and shutdown preventing later source requests. The import-race regression now verifies callers receive the newer imported lyric instead of an obsolete online result.
+
+The lyrics.ovh live probe could not connect from this environment (URLError); live provider availability and catalogue coverage are not guaranteed. Native Windows/Android runtime checks were not run. No audio or credentials are uploaded by the lookup pipeline.
