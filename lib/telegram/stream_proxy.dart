@@ -40,9 +40,12 @@ class TelegramStreamProxy {
   TelegramStreamProxy(
     this.request, {
     this.stallTimeout = const Duration(seconds: 45),
+    this.releaseAudio,
   });
   final TdRequest request;
   final Duration stallTimeout;
+  final Future<void> Function(int fileId)? releaseAudio;
+  Future<void> _cleanup = Future.value();
   HttpServer? _server;
   Future<void>? _starting;
   final _token = base64UrlEncode(
@@ -55,6 +58,7 @@ class TelegramStreamProxy {
   int _sequence = 0;
   int _sourceGeneration = 0;
   bool _closing = false;
+  bool get hasActiveSource => _tracks.isNotEmpty;
   bool isStreaming(int fileId) =>
       _tracks.values.any((track) => track.fileId == fileId);
 
@@ -255,23 +259,36 @@ class TelegramStreamProxy {
     await _stopDownloads();
   }
 
-  Future<void> _stopDownloads() async {
+  Future<void> _stopDownloads() {
     final files = _tracks.values.map((t) => t.fileId).whereType<int>().toSet();
     _tracks.clear();
     for (final cancelled in _ranges.values) {
       if (!cancelled.isCompleted) cancelled.complete();
     }
     _ranges.clear();
-    for (final id in files) {
-      try {
-        await request({
-          '@type': 'cancelDownloadFile',
-          'file_id': id,
-          'only_if_pending': false,
-        });
-      } catch (_) {
-        /* Disconnect or logout may already have cancelled it. */
+    // New sources wait for earlier cleanup, including a quick replay of the
+    // same file. A late delete must never remove a new playback buffer.
+    return _cleanup = _cleanup.then((_) async {
+      for (final id in files) {
+        if (releaseAudio case final release?) {
+          try {
+            await release(id);
+          } catch (_) {
+            /* Disconnect or logout may already have closed the file cache. */
+          }
+          continue;
+        }
+        for (final operation in [
+          {'@type': 'cancelDownloadFile', 'file_id': id, 'only_if_pending': false},
+          {'@type': 'deleteFile', 'file_id': id},
+        ]) {
+          try {
+            await request(operation);
+          } catch (_) {
+            /* Startup cleanup retries files left behind after disconnection. */
+          }
+        }
       }
-    }
+    });
   }
 }
