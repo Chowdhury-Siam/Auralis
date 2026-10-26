@@ -65,7 +65,7 @@ export class AuralisRoom {
   }
   async fetch(request) {
     const path=new URL(request.url).pathname;
-    if(path.startsWith('/_auth/') || path.startsWith('/v1/auth/') || path.startsWith('/v1/admin/') || path==='/v1/account' || path==='/v1/account/deployment') return new AccountStore(this.state,this.env).fetch(request);
+    if(path.startsWith('/_auth/') || path.startsWith('/v1/auth/') || path.startsWith('/v1/admin/') || path==='/v1/account' || path==='/v1/account/deployment' || path.startsWith('/v1/account/telegram')) return new AccountStore(this.state,this.env).fetch(request);
     if(this.scope===null){this.scope=request.headers.get('X-Auralis-Scope')||'';if(this.turso&&this.scope)this.turso=new TursoStore(this.env,fetch,this.scope);}
     if(path==='/_account/revoke') {for(const ws of this.state.getWebSockets()){try{if(!request.headers.get('X-Auralis-Session') || ws.deserializeAttachment?.()?.session===request.headers.get('X-Auralis-Session'))ws.close(1008,'Sign in again');}catch{}}return json({ok:true});}
     if(path==='/_account/erase') {
@@ -129,15 +129,15 @@ export default {
  const turso=Boolean(env.TURSO_DATABASE_URL&&env.TURSO_AUTH_TOKEN),partial=Boolean(env.TURSO_DATABASE_URL||env.TURSO_AUTH_TOKEN)&&!turso;
  const registry=()=>env.ROOM.get(env.ROOM.idFromName('account-registry'));
  const forward=(path,method=request.method,body)=>{const headers=new Headers(request.headers);headers.delete('Content-Length');return registry().fetch(new Request('https://internal'+path,{method,headers,...(body?{body}:{}),...(!body&& !['GET','HEAD'].includes(method)?{body:request.body,duplex:'half'}:{})}));};
- if(path==='/health'&&request.method==='GET'){const state=accounts?await (await forward('/_auth/status','GET')).json():{};return json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.76',configured:configured&&!partial,backend:turso?'turso':'durable-object',accounts,ownerCreated:state.ownerCreated===true});}
+ if(path==='/health'&&request.method==='GET'){const state=accounts?await (await forward('/_auth/status','GET')).json():{};return json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.78',configured:configured&&!partial,backend:turso?'turso':'durable-object',accounts,ownerCreated:state.ownerCreated===true});}
  if(!configured)return json({error:'Sync service is not configured'},503);
  const key=await equal(request.headers.get('Authorization')??'',`Bearer ${env.AURALIS_SYNC_KEY}`);
- if(path==='/v1/info'&&request.method==='GET')return key?json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.76',backend:turso?'turso':'durable-object'}):json({error:'Invalid setup secret'},401);
+ if(path==='/v1/info'&&request.method==='GET')return key?json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.78',backend:turso?'turso':'durable-object'}):json({error:'Invalid setup secret'},401);
  if(partial)return json({error:'Turso configuration is incomplete'},503);
  if(accounts){
  if(path==='/profile'&&request.method==='GET')return profilePage();
  if(path==='/v1/bootstrap/deployment'&&request.method==='PUT')return key?forward('/_auth/bootstrap'):json({error:'Invalid setup secret'},401);
- if(path.startsWith('/v1/auth/')||path.startsWith('/v1/admin/')||path==='/v1/account/deployment'||(path==='/v1/account'&&request.method==='GET'))return forward(path);
+ if(path.startsWith('/v1/auth/')||path.startsWith('/v1/admin/')||path==='/v1/account/deployment'||path.startsWith('/v1/account/telegram')||(path==='/v1/account'&&request.method==='GET'))return forward(path);
  if(!['/v1/sync','/v1/live','/v1/account'].includes(path))return json({error:'Not found'},404);
  const session=await forward('/_auth/session','GET');let user;
  if(session.ok)user=await session.json();else{const state=await (await forward('/_auth/status','GET')).json();if(!key||state.ownerCreated)return json({error:'Sign in again'},401);user={room:'private-library',scope:''};}
