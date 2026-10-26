@@ -69,3 +69,12 @@ test('real room handler serializes Turso writes and notifies only committed remo
   assert.equal(Object.keys(restored.records).length,2);assert.equal(restored.cursor,2);assert.equal(notifications,2);
   assert.equal(local.db.prepare('SELECT count(*) AS n FROM records').get().n,0);remote.db.close();local.db.close();
 });
+test('account table scopes isolate records and delete only the selected account',async()=>{
+ const remote=fakeTurso(),a=new TursoStore(env,remote.send,'a'.repeat(32)),b=new TursoStore(env,remote.send,'b'.repeat(32));
+ await a.initialize();await b.initialize();const k=key(['favorite','private']);
+ await a.sync({cursor:0,ops:{[k]:record(true)}},merge);
+ assert.deepEqual((await b.sync({cursor:0,ops:{}},merge)).output.records,{});
+ await b.sync({cursor:0,ops:{[k]:record(true)}},merge);await a.clear();
+ assert.deepEqual((await a.sync({cursor:0,ops:{}},merge)).output.records,{});
+ assert.equal((await b.sync({cursor:0,ops:{}},merge)).output.records[k].value,true);remote.db.close();
+});
