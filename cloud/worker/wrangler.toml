@@ -4,7 +4,7 @@ compatibility_date = "2026-10-01"
 workers_dev = true
 
 [vars]
-AURALIS_VERSION = "0.1.68"
+AURALIS_VERSION = "0.1.76"
 
 [[durable_objects.bindings]]
 name = "ROOM"
@@ -15,4 +15,4 @@ tag = "v1"
 new_sqlite_classes = ["AuralisRoom"]
 
 # Turso deployments should use deploy.mjs or the in-app setup to install
-# TURSO_DATABASE_URL, TURSO_AUTH_TOKEN and AURALIS_SYNC_KEY atomically.
+# TURSO_DATABASE_URL, TURSO_AUTH_TOKEN AURALIS_SYNC_KEY and JWT_SECRET atomically.
