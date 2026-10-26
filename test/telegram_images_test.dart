@@ -233,6 +233,92 @@ void main() {
     },
   );
 
+  test(
+    'metadata buffers are removed after extraction while artwork stays cached',
+    () async {
+      final reading = Completer<void>(), finish = Completer<void>();
+      addTearDown(() {
+        if (!finish.isCompleted) {
+          finish.complete();
+        }
+      });
+      expect(await service.image(90), photo.path);
+      cachedAudio();
+      final normal = td.onRequest!;
+      td.onRequest = (r) async {
+        if (r['@type'] == 'readFilePart') {
+          if (!reading.isCompleted) {
+            reading.complete();
+          }
+          await finish.future;
+        }
+        return normal(r);
+      };
+      final cover = service.cover(song(1));
+      await reading.future;
+      await service.releaseAudio(1);
+      expect(td.requests.where((r) => r['@type'] == 'deleteFile'), isEmpty);
+      finish.complete();
+      expect(await cover, png);
+      expect(td.requests.where((r) => r['@type'] == 'deleteFile').toList(), [
+        {'@type': 'deleteFile', 'file_id': 1},
+      ]);
+      final requests = td.requests.length;
+      expect(await service.cover(song(1)), png);
+      expect(await service.image(90), photo.path);
+      expect(
+        td.requests,
+        hasLength(requests),
+        reason: 'Extracted artwork is retained',
+      );
+      expect(await photo.exists(), isTrue);
+    },
+  );
+
+  test('active playback protects its buffer from metadata cleanup', () async {
+    service.isStreaming = (_) => true;
+    cachedAudio();
+    expect(await service.cover(song(1)), png);
+    await service.releaseAudio(1);
+    expect(td.requests.where((r) => r['@type'] == 'deleteFile'), isEmpty);
+    service.isStreaming = (_) => false;
+    await service.releaseAudio(1);
+    expect(td.requests.last, {'@type': 'deleteFile', 'file_id': 1});
+  });
+
+  test(
+    'deleting a metadata buffer does not endlessly retry a missing cover',
+    () async {
+      td.onRequest = (r) async {
+        if (r['@type'] == 'getFileDownloadedPrefixSize') return {'size': 100};
+        if (r['@type'] == 'readFilePart') {
+          td.events.add({
+            '@type': 'updateFile',
+            'file': {
+              'id': 1,
+              'local': {'downloaded_size': 100},
+            },
+          });
+          return {'data': base64Encode(List.filled(r['count'] as int, 0))};
+        }
+        if (r['@type'] == 'deleteFile') {
+          td.events.add({
+            '@type': 'updateFile',
+            'file': {
+              'id': 1,
+              'local': {'downloaded_size': 0},
+            },
+          });
+        }
+        return null;
+      };
+      expect(await service.cover(song(1)), isNull);
+      final count = td.requests.length;
+      expect(await service.cover(song(1)), isNull);
+      expect(td.requests, hasLength(count));
+    },
+  );
+
   test('embedded cover downloads only bounded metadata ranges', () async {
     final ranges = <int, int>{};
     td.onRequest = (r) async {
@@ -308,20 +394,26 @@ void main() {
   test('at most two metadata jobs run and a busy cover can retry', () async {
     service.isStreaming = (_) => true;
     final pending = <int, Completer<Json>>{};
+    final twoStarted = Completer<void>(), retryStarted = Completer<void>();
     td.onRequest = (r) async {
       if (r['@type'] == 'getFileDownloadedPrefixSize') {
-        return (pending[r['file_id'] as int] = Completer<Json>()).future;
+        final result = pending[r['file_id'] as int] = Completer<Json>();
+        if (pending.length == 2) twoStarted.complete();
+        if (pending.length == 3) retryStarted.complete();
+        return result.future;
       }
       return null;
     };
     final first = service.cover(song(1));
     final second = service.cover(song(2));
     expect(await service.cover(song(3)), isNull);
+    await twoStarted.future;
     expect(pending.keys, [1, 2]);
     pending[1]!.complete({'size': 0});
     pending[2]!.complete({'size': 0});
     await Future.wait([first, second]);
     final retry = service.cover(song(3));
+    await retryStarted.future;
     expect(pending.keys, [1, 2, 3]);
     pending[3]!.complete({'size': 0});
     expect(await retry, isNull);
