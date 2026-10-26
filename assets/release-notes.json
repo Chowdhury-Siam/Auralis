@@ -1,6 +1,13 @@
 {
-  "current": "0.1.82",
+  "current": "0.1.83",
   "releases": [
+    {
+      "version": "0.1.83",
+      "changes": [
+        "Shutdown now drains pending artwork/lyric cache reads and atomic writes before returning, preventing Windows file-lock failures during cleanup.",
+        "Widget-test cleanup pumps pending real file completions before leaving the fake clock. Added a multiple-cache-instance drain regression without retrying or suppressing failed directory deletion."
+      ]
+    },
     {
       "version": "0.1.82",
       "changes": [
