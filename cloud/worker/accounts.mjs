@@ -21,9 +21,9 @@ async function claimsFor(token,env) {
  if(h.alg!=='HS256'||h.typ!=='JWT'||!await crypto.subtle.verify('HMAC',await signingKey(env),un64(p[2]),enc.encode(`${p[0]}.${p[1]}`)))throw Error('Sign in again');
  const c=JSON.parse(dec.decode(un64(p[1])));if(c.aud!=='auralis-sync'||!Number.isSafeInteger(c.exp)||c.exp<=Date.now()/1000||!/^[a-f0-9]{32}$/.test(c.sub)||!/^[a-f0-9]{64}$/.test(c.jti))throw Error('Sign in again');return c;
 }
-async function crypt(value,env,decrypt=false) {
+async function crypt(value,env,decrypt=false,context='auralis-deployment-v1') {
  const key=await crypto.subtle.importKey('raw',await crypto.subtle.digest('SHA-256',enc.encode(`${secret(env)}|auralis-owner-recovery`)),'AES-GCM',false,['encrypt','decrypt']);
- const aad=enc.encode('auralis-deployment-v1');
+ const aad=enc.encode(context);
  if(decrypt)return JSON.parse(dec.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:un64(value.iv),additionalData:aad},key,un64(value.cipher))));
  const iv=crypto.getRandomValues(new Uint8Array(12));return {iv:b64(iv),cipher:b64(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad},key,enc.encode(JSON.stringify(value))))};
 }
@@ -37,6 +37,8 @@ export class AccountStore {
  this.sql.exec('CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY,username TEXT UNIQUE NOT NULL,salt TEXT NOT NULL,password TEXT NOT NULL,recovery TEXT NOT NULL,owner INTEGER NOT NULL,version INTEGER NOT NULL,room TEXT NOT NULL,scope TEXT NOT NULL)');
  this.sql.exec('CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY,account TEXT NOT NULL,expires INTEGER NOT NULL,version INTEGER NOT NULL)');
  this.sql.exec('CREATE TABLE IF NOT EXISTS account_meta (key TEXT PRIMARY KEY,value TEXT NOT NULL)');
+ this.sql.exec('CREATE TABLE IF NOT EXISTS telegram_accounts (account TEXT PRIMARY KEY,value TEXT NOT NULL)');
+ this.sql.exec('CREATE TABLE IF NOT EXISTS telegram_links (id TEXT PRIMARY KEY,account TEXT NOT NULL,requester TEXT NOT NULL,value TEXT NOT NULL,expires INTEGER NOT NULL,status TEXT NOT NULL,approver TEXT)');
  this.sql.exec('CREATE TABLE IF NOT EXISTS auth_limits (key TEXT PRIMARY KEY,window INTEGER NOT NULL,count INTEGER NOT NULL)');}
  first(sql,...args){return Array.from(this.sql.exec(sql,...args))[0];}
  get ownerCreated(){return Boolean(this.first("SELECT value FROM account_meta WHERE key='owner-created'"));}
@@ -49,6 +51,52 @@ export class AccountStore {
  async session(u,code){const now=Math.floor(Date.now()/1000),expires=now+30*86400,jti=random();this.sql.exec('DELETE FROM sessions WHERE expires<=?',now);if(this.first('SELECT count(*) AS n FROM sessions WHERE account=?',u.id).n>=32)throw Error('Sign out of an older device first');this.sql.exec('INSERT INTO sessions VALUES(?,?,?,?)',jti,u.id,expires,u.version);return {user:this.public(u),token:await tokenFor({aud:'auralis-sync',sub:u.id,jti,iat:now,exp:expires},this.env),expires,...(code?{recoveryCode:code}:{})};}
  async revoke(u,jti=''){await this.env.ROOM.get(this.env.ROOM.idFromName(u.room)).fetch(new Request('https://internal/_account/revoke',{method:'POST',headers:{'X-Auralis-Session':jti,'X-Auralis-Scope':u.scope}}));}
  async saveDeployment(data){const keys=['worker','account','cloudflareToken','database','databaseToken','key'];if(keys.some(k=>typeof data[k]!=='string'||!data[k]||data[k].length>4096)||!await equal(data.key,secret(this.env)))throw Error('Deployment credentials must match this Worker');this.sql.exec("INSERT INTO account_meta VALUES('deployment',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",JSON.stringify(await crypt({...Object.fromEntries(keys.map(k=>[k,data[k]])),automatic:data.automatic!==false},this.env)));}
+ async telegramProfile(u){const r=this.first('SELECT value FROM telegram_accounts WHERE account=?',u.id);return r?await crypt(JSON.parse(r.value),this.env,true,'auralis-telegram:'+u.id):null;}
+ active(u){if(!this.first('SELECT id FROM accounts WHERE id=?',u.id)||!this.first('SELECT id FROM sessions WHERE id=? AND account=? AND version=? AND expires>?',u.jti,u.id,u.version,Math.floor(Date.now()/1000)))throw Error('Sign in again');}
+ async telegram(request,u,path){
+ const now=Math.floor(Date.now()/1000);this.sql.exec('DELETE FROM telegram_links WHERE expires<=?',now);
+ if(path==='/v1/account/telegram'){
+ if(request.method==='GET'){const profile=await this.telegramProfile(u);return json({enabled:profile?.disabled!==true,profile:profile?.disabled?null:profile});}
+ if(request.method==='PUT'){
+ const data=await body(request);
+ if(!Number.isSafeInteger(data.userId)||data.userId<=0||!Number.isSafeInteger(data.apiId)||data.apiId<=0||typeof data.apiHash!=='string'||!/^[a-fA-F0-9]{32}$/.test(data.apiHash)||typeof data.name!=='string'||!data.name.trim()||data.name.length>160)throw Error('Invalid Telegram account');
+ const initial=this.first('SELECT value FROM telegram_accounts WHERE account=?',u.id)?.value??null;
+ const previous=initial?await crypt(JSON.parse(initial),this.env,true,'auralis-telegram:'+u.id):null;
+ if(data.automatic===true && previous?.disabled)throw Error('Telegram account sync is disabled');
+ if(previous&&!previous.disabled&&previous.userId!==data.userId)throw Error('Disable the current Telegram link before linking another account');
+ const profile={userId:data.userId,name:data.name.trim(),apiId:data.apiId,apiHash:data.apiHash};
+ const encrypted=JSON.stringify(await crypt(profile,this.env,false,'auralis-telegram:'+u.id));this.active(u);
+ this.state.storage.transactionSync(()=>{if((this.first('SELECT value FROM telegram_accounts WHERE account=?',u.id)?.value??null)!==initial)throw Error('Telegram link changed. Retry sync');this.sql.exec('INSERT INTO telegram_accounts VALUES(?,?) ON CONFLICT(account) DO UPDATE SET value=excluded.value',u.id,encrypted);});return json({enabled:true,profile});}
+ if(request.method==='DELETE'){
+ const encrypted=JSON.stringify(await crypt({disabled:true},this.env,false,'auralis-telegram:'+u.id));this.active(u);
+ this.state.storage.transactionSync(()=>{this.sql.exec('INSERT INTO telegram_accounts VALUES(?,?) ON CONFLICT(account) DO UPDATE SET value=excluded.value',u.id,encrypted);this.sql.exec('DELETE FROM telegram_links WHERE account=?',u.id);});return json({enabled:false,profile:null});}
+ }
+ const profile=await this.telegramProfile(u);if(!profile||profile.disabled)return json({error:'Link your Telegram account on a signed-in device first'},409);
+ if(path==='/v1/account/telegram/requests'){
+ if(request.method==='GET')return json({requests:Array.from(this.sql.exec("SELECT id,expires FROM telegram_links WHERE account=? AND requester<>? AND status='pending' ORDER BY expires DESC LIMIT 8",u.id,u.jti)).map(r=>({id:r.id,expires:r.expires}))});
+ if(request.method==='POST'){
+ const data=await body(request);if(typeof data.link!=='string'||!/^tg:\/\/login\?token=[A-Za-z0-9_-]{20,256}$/.test(data.link))throw Error('Invalid Telegram device link');
+ // Rate limit only creating a fresh request; token refreshes remain bounded.
+ const recent=this.first('SELECT expires FROM telegram_links WHERE account=? AND requester=? ORDER BY expires DESC LIMIT 1',u.id,u.jti);if(recent&&recent.expires>now+115)return json({error:'Wait a moment before retrying device sign-in'},429);
+ const id=random(),code=String(crypto.getRandomValues(new Uint32Array(1))[0]%1000000).padStart(6,'0'),expires=now+120;
+ const encrypted=JSON.stringify(await crypt({link:data.link,code},this.env,false,'auralis-telegram-link:'+u.id+':'+id));this.active(u);
+ this.state.storage.transactionSync(()=>{this.sql.exec('DELETE FROM telegram_links WHERE account=? AND requester=?',u.id,u.jti);if(this.first('SELECT count(*) AS n FROM telegram_links WHERE account=?',u.id).n>=8)throw Error('Too many pending device requests');this.sql.exec('INSERT INTO telegram_links VALUES(?,?,?,?,?,?,NULL)',id,u.id,u.jti,encrypted,expires,'pending');});return json({id,code,expires});}
+ }
+ const match=/^\/v1\/account\/telegram\/requests\/([a-f0-9]{64})(?:\/(claim|complete))?$/.exec(path);if(!match)return json({error:'Not found'},404);
+ const row=this.first('SELECT * FROM telegram_links WHERE id=? AND account=?',match[1],u.id);if(!row)return json({error:'Device request expired. Retry on the new device.'},404);
+ if(!match[2]&&request.method==='GET'&&row.requester===u.jti)return json({state:row.status,expires:row.expires});
+ if(!match[2]&&request.method==='DELETE'&&row.requester===u.jti){this.sql.exec('DELETE FROM telegram_links WHERE id=?',row.id);return json({ok:true});}
+ if(match[2]==='claim'&&request.method==='POST'){
+ if(row.requester===u.jti||row.status!=='pending')return json({error:'Approve from another signed-in device'},409);
+ const data=await body(request);this.rate(request,'telegram:'+u.id);
+ const saved=await crypt(JSON.parse(row.value),this.env,true,'auralis-telegram-link:'+u.id+':'+row.id);
+ if(typeof data.code!=='string'||!/^\d{6}$/.test(data.code)||!await equal(data.code,saved.code))return json({error:'The code does not match the new device'},400);
+ this.active(u);if(!this.first("UPDATE telegram_links SET status='claiming',approver=? WHERE id=? AND account=? AND status='pending' AND expires>? RETURNING id",u.jti,row.id,u.id,Math.floor(Date.now()/1000)))return json({error:'Device request was already used'},409);
+ return json({link:saved.link,userId:profile.userId});}
+ if(match[2]==='complete'&&request.method==='POST'&&row.approver===u.jti&&row.status==='claiming'){
+ const data=await body(request);this.active(u);this.sql.exec("UPDATE telegram_links SET status=?,value='' WHERE id=? AND approver=?",data.ok===true?'approved':'failed',row.id,u.jti);return json({ok:true});}
+ return json({error:'Not permitted'},403);
+ }
  async dispatch(request){const path=new URL(request.url).pathname;
  if(path==='/_auth/status')return json({ownerCreated:this.ownerCreated});
  if(path==='/_auth/bootstrap'&&request.method==='PUT'){await this.saveDeployment(await body(request));return json({ok:true});}
@@ -65,15 +113,16 @@ export class AccountStore {
  const data=await body(request),name=username(data.username);this.rate(request,name);const u=this.first('SELECT * FROM accounts WHERE username=?',name);
  if(!u||typeof data.recoveryCode!=='string'||!await equal(await digest(data.recoveryCode.trim(),this.env),u.recovery))return json({error:'Invalid username or recovery code'},401);
  const pass=password(data.newPassword),salt=random(),code=random(),hash=await passwordHash(pass,salt,this.env),recovery=await digest(code,this.env);
- this.state.storage.transactionSync(()=>{if(!this.first('UPDATE accounts SET salt=?,password=?,recovery=?,version=version+1 WHERE id=? AND recovery=? RETURNING id',salt,hash,recovery,u.id,u.recovery))throw Error('Recovery code already used');this.sql.exec('DELETE FROM sessions WHERE account=?',u.id);});await this.revoke(u);return json(await this.session(this.first('SELECT * FROM accounts WHERE id=?',u.id),code));}
+ this.state.storage.transactionSync(()=>{if(!this.first('UPDATE accounts SET salt=?,password=?,recovery=?,version=version+1 WHERE id=? AND recovery=? RETURNING id',salt,hash,recovery,u.id,u.recovery))throw Error('Recovery code already used');this.sql.exec('DELETE FROM sessions WHERE account=?',u.id);this.sql.exec('DELETE FROM telegram_links WHERE account=?',u.id);});await this.revoke(u);return json(await this.session(this.first('SELECT * FROM accounts WHERE id=?',u.id),code));}
  let u;try{u=await this.identity(request);}catch{return json({error:'Sign in again'},401);}
+ if(path.startsWith('/v1/account/telegram'))return this.telegram(request,u,path);
  if(path==='/_auth/session')return json({...this.public(u),jti:u.jti,expires:u.expires});
  if(path==='/v1/account'&&request.method==='GET')return json({user:this.public(u)});
- if(path==='/v1/auth/logout'&&request.method==='POST'){this.sql.exec('DELETE FROM sessions WHERE id=?',u.jti);await this.revoke(u,u.jti);return json({ok:true});}
+ if(path==='/v1/auth/logout'&&request.method==='POST'){this.sql.exec('DELETE FROM sessions WHERE id=?',u.jti);this.sql.exec('DELETE FROM telegram_links WHERE requester=? OR approver=?',u.jti,u.jti);await this.revoke(u,u.jti);return json({ok:true});}
  if(path==='/v1/auth/confirm'&&request.method==='POST'){const data=await body(request);this.rate(request,u.username);if(typeof data.password!=='string'||data.password.length>128||!await equal(await passwordHash(data.password,u.salt,this.env),u.password))return json({error:'Incorrect password'},401);return json(this.public(u));}
- if(path==='/_auth/delete'&&request.method==='DELETE'){this.state.storage.transactionSync(()=>{this.sql.exec('DELETE FROM sessions WHERE account=?',u.id);this.sql.exec('DELETE FROM accounts WHERE id=?',u.id);if(u.owner)this.sql.exec("DELETE FROM account_meta WHERE key='deployment'");});return json({ok:true});}
+ if(path==='/_auth/delete'&&request.method==='DELETE'){this.state.storage.transactionSync(()=>{this.sql.exec('DELETE FROM sessions WHERE account=?',u.id);this.sql.exec('DELETE FROM telegram_links WHERE account=?',u.id);this.sql.exec('DELETE FROM accounts WHERE id=?',u.id);this.sql.exec('DELETE FROM telegram_accounts WHERE account=?',u.id);this.sql.exec('DELETE FROM telegram_links WHERE account=?',u.id);if(u.owner)this.sql.exec("DELETE FROM account_meta WHERE key='deployment'");});return json({ok:true});}
  if(path==='/v1/account/deployment'&&u.owner){if(request.method==='PUT'){await this.saveDeployment(await body(request));return json({ok:true});}if(request.method==='DELETE'){this.sql.exec("DELETE FROM account_meta WHERE key='deployment'");return json({ok:true});}if(request.method==='GET'){const saved=this.first("SELECT value FROM account_meta WHERE key='deployment'");return json({deployment:saved?await crypt(JSON.parse(saved.value),this.env,true):null,version:this.env.AURALIS_VERSION});}}
- if(path==='/v1/admin/reset'&&request.method==='POST'&&u.owner){const data=await body(request),name=username(data.username),pass=password(data.newPassword);this.rate(request,name);const target=this.first('SELECT * FROM accounts WHERE username=?',name);if(!target||target.id===u.id)throw Error('Use recovery for your own account, or enter another username');const salt=random(),code=random(),hash=await passwordHash(pass,salt,this.env);this.sql.exec('UPDATE accounts SET salt=?,password=?,recovery=?,version=version+1 WHERE id=?',salt,hash,await digest(code,this.env),target.id);this.sql.exec('DELETE FROM sessions WHERE account=?',target.id);await this.revoke(target);return json({ok:true,recoveryCode:code});}
+ if(path==='/v1/admin/reset'&&request.method==='POST'&&u.owner){const data=await body(request),name=username(data.username),pass=password(data.newPassword);this.rate(request,name);const target=this.first('SELECT * FROM accounts WHERE username=?',name);if(!target||target.id===u.id)throw Error('Use recovery for your own account, or enter another username');const salt=random(),code=random(),hash=await passwordHash(pass,salt,this.env);this.sql.exec('UPDATE accounts SET salt=?,password=?,recovery=?,version=version+1 WHERE id=?',salt,hash,await digest(code,this.env),target.id);this.sql.exec('DELETE FROM sessions WHERE account=?',target.id);this.sql.exec('DELETE FROM telegram_links WHERE account=?',target.id);await this.revoke(target);return json({ok:true,recoveryCode:code});}
  return json({error:'Not permitted'},403);}
  async fetch(request){try{return await this.dispatch(request);}catch(e){return json({error:e instanceof SyntaxError?'Invalid request':e.message||'Account request failed'},e.status||400);}}
 }
