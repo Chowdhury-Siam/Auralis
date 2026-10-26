@@ -1,5 +1,15 @@
 # Auralis changes
 
+## 0.1.85
+
+- Added on-demand Japanese-to-English lyrics with a translation button and original/bilingual toggle on phone and desktop. Original lyrics, timestamps and instrumental gaps remain intact.
+- Free Google Translate web lookup falls back to the MyMemory API without an API key. The lyrics dialog explains text sharing and free-service limits; unavailable services show a retry message.
+- Translations persist in the account-scoped device cache, keyed by original lyric content. Late song/account changes and failed responses cannot replace the original or cache an error.
+
+## 0.1.84
+
+- The desktop sidebar now spans the full window height, keeping its tagline and Settings button at the bottom beside the player bar.
+
 ## 0.1.83
 
 - Shutdown now drains pending artwork/lyric cache reads and atomic writes before returning, preventing Windows file-lock failures during cleanup.
