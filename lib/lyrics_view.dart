@@ -4,9 +4,11 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 import 'lyrics.dart';
 import 'lyrics_translation.dart';
+import 'external_links.dart';
 import 'data_files.dart';
 import 'models.dart';
 import 'player.dart';
@@ -26,8 +28,10 @@ class LyricsView extends StatefulWidget {
     this.backgroundColor,
     this.loadEmbedded,
     this.files = const DataFiles(),
+    this.openLink = openExternalLink,
   });
   final DataFiles files;
+  final Future<void> Function(String) openLink;
   final PlayerController player;
   final LyricsRepository repository;
   final Widget artwork;
@@ -44,6 +48,7 @@ class _LyricsViewState extends State<LyricsView> {
   Track? _track;
   Lyrics? _lyrics, _translation;
   bool _translating = false, _showTranslation = false;
+  bool _openingDeepL = false;
   String? _error;
   bool _importing = false;
   bool _loading = false, _synced = true, _looked = false;
@@ -111,7 +116,7 @@ class _LyricsViewState extends State<LyricsView> {
         lyrics = null;
       }
       if (lyrics == null && online) {
-        lyrics = await widget.repository.find(track);
+        lyrics = await widget.repository.find(track, refresh: !preferCache);
       }
       if (!mounted || generation != _generation) return;
       final result = lyrics;
@@ -250,7 +255,7 @@ class _LyricsViewState extends State<LyricsView> {
     });
   }
 
-  Future<void> _translate() async {
+  Future<void> _translateInApp() async {
     final source = _lyrics, track = _track;
     if (source == null || track == null || _loading || _translating) return;
     if (_translation != null) {
@@ -315,6 +320,97 @@ class _LyricsViewState extends State<LyricsView> {
     }
   }
 
+  Future<void> _openDeepL() async {
+    final source = _lyrics, track = _track;
+    if (source == null || track == null || _loading || _openingDeepL) return;
+    final generation = _generation;
+    bool active() =>
+        mounted &&
+        generation == _generation &&
+        identical(source, _lyrics) &&
+        identical(track, widget.player.current);
+    var direction = 'ja/en';
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          scrollable: true,
+          title: const Text('Translate with DeepL'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Copy the original lyrics and open DeepL in your browser. '
+                'Paste the lyrics there to translate. Results stay in the browser. No API key is needed.',
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: direction,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Translation direction',
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'ja/en',
+                    child: Text('Japanese → English'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'en/ja',
+                    child: Text('English → Japanese'),
+                  ),
+                ],
+                onChanged: (value) =>
+                    update(() => direction = value ?? direction),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, direction),
+              child: const Text('Copy lyrics & open DeepL'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !active()) return;
+    setState(() => _openingDeepL = true);
+    try {
+      final text = source.lines.isEmpty
+          ? source.plain
+          : source.lines.map((line) => line.text).join('\n');
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!active()) return;
+      final url = selected == 'en/ja'
+          ? 'https://www.deepl.com/en/translator/l/en/ja'
+          : 'https://www.deepl.com/en/translator/l/ja/en';
+      await widget.openLink(url);
+      if (!mounted || !active()) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lyrics copied. Paste them into DeepL to translate.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted || !active()) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not copy lyrics or open DeepL. Please try again.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _openingDeepL = false);
+    }
+  }
+
   Widget _message(String text) => Center(
     child: SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -345,6 +441,34 @@ class _LyricsViewState extends State<LyricsView> {
     ),
   );
 
+  List<PopupMenuEntry<String>> _translationActions() => [
+    _menuAction(
+      value: 'translate',
+      enabled:
+          !_loading &&
+          !_translating &&
+          !_openingDeepL &&
+          _lyrics != null &&
+          LyricsTranslator.supports(_lyrics!),
+      icon: Icons.translate_rounded,
+      title: _showTranslation ? 'Show original lyrics' : 'Translate in Auralis',
+      subtitle: 'Japanese → English · Google / MyMemory · cached.',
+    ),
+    _menuAction(
+      value: 'deepl',
+      enabled:
+          !_loading &&
+          !_translating &&
+          !_openingDeepL &&
+          _lyrics != null &&
+          !_lyrics!.instrumental &&
+          _lyrics!.plain.trim().isNotEmpty,
+      icon: Icons.open_in_new_rounded,
+      title: 'Translate with DeepL',
+      subtitle: 'Copy lyrics and translate in your browser.',
+    ),
+  ];
+
   Widget _options() {
     final theme = Theme.of(context);
     return Theme(
@@ -371,7 +495,9 @@ class _LyricsViewState extends State<LyricsView> {
           if (value == 'import') {
             unawaited(_import());
           } else if (value == 'translate') {
-            unawaited(_translate());
+            unawaited(_translateInApp());
+          } else if (value == 'deepl') {
+            unawaited(_openDeepL());
           } else if (value == 'embedded') {
             unawaited(_load(embedded: true, online: false));
           } else {
@@ -379,19 +505,7 @@ class _LyricsViewState extends State<LyricsView> {
           }
         },
         itemBuilder: (_) => [
-          _menuAction(
-            value: 'translate',
-            enabled:
-                !_loading &&
-                !_translating &&
-                _lyrics != null &&
-                LyricsTranslator.supports(_lyrics!),
-            icon: Icons.translate_rounded,
-            title: _showTranslation
-                ? 'Show original lyrics'
-                : 'Translate Japanese to English',
-            subtitle: 'Free online translation · cached on this device.',
-          ),
+          ..._translationActions(),
           _menuAction(
             value: 'import',
             enabled: _track != null && !_importing,
@@ -411,8 +525,10 @@ class _LyricsViewState extends State<LyricsView> {
             value: 'find',
             enabled: _track != null && !_loading,
             icon: Icons.search_rounded,
-            title: 'Find lyrics on LRCLIB',
-            subtitle: 'Search online using song details.',
+            title: 'Find lyrics online',
+            subtitle: _lyrics?.provider != null
+                ? 'Current: ${_lyrics!.provider}. Retry all sources.'
+                : 'LRCLIB → search → lyrics.ovh automatically.',
           ),
           _menuAction(
             value: 'paste',
@@ -462,7 +578,7 @@ class _LyricsViewState extends State<LyricsView> {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 480),
                 child: const Text(
-                  'Missing embedded lyrics are looked up automatically on LRCLIB using this song’s title, artist and duration. You can retry, import a file or paste lyrics.',
+                  'Missing embedded lyrics are looked up automatically using LRCLIB and lyrics.ovh. Only song title, artist and duration are sent. You can retry, import a file or paste lyrics.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -618,22 +734,26 @@ class _LyricsViewState extends State<LyricsView> {
           ),
         ),
         const SizedBox(width: 8),
-        if (_lyrics != null && LyricsTranslator.supports(_lyrics!))
-          IconButton(
+        if (_lyrics != null &&
+            !_lyrics!.instrumental &&
+            _lyrics!.plain.trim().isNotEmpty)
+          PopupMenuButton<String>(
             key: const ValueKey('lyrics-translate'),
-            tooltip: _translating
-                ? 'Translating Japanese lyrics'
-                : _showTranslation
-                ? 'Show original lyrics'
-                : 'Translate Japanese to English',
-            onPressed: _loading || _translating ? null : _translate,
-            color: _showTranslation ? _colors.primary : null,
+            tooltip: 'Translate lyrics',
+            enabled: !_loading && !_openingDeepL && !_translating,
+            constraints: const BoxConstraints(minWidth: 280, maxWidth: 320),
             icon: _translating
                 ? const SizedBox.square(
                     dimension: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.translate_rounded),
+                : Icon(
+                    Icons.translate_rounded,
+                    color: _showTranslation ? _colors.primary : null,
+                  ),
+            itemBuilder: (_) => _translationActions(),
+            onSelected: (value) =>
+                unawaited(value == 'deepl' ? _openDeepL() : _translateInApp()),
           ),
         _options(),
       ],
