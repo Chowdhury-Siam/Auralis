@@ -107,18 +107,26 @@ extension AccountSync on SyncController {
     _changed();
   }
 
-  Future<void> _saveAccounts() => vault.write({
-    'format': 2,
-    'service': serviceUrl,
-    'localOwner': _localOwner,
-    'profiles': _profiles,
-    'active': _account?.identity,
-    'legacy': _legacy,
-  });
+  Future<void> _saveAccounts() {
+    final snapshot = detached({
+      'format': 2,
+      'service': serviceUrl,
+      'localOwner': _localOwner,
+      'telegramOwner': _telegramOwner,
+      'profiles': _profiles,
+      'active': _account?.identity,
+      'legacy': _legacy,
+    });
+    final write = _accountWrites.then((_) => vault.write(snapshot));
+    _accountWrites = write.catchError((Object _) {});
+    return write;
+  }
+
   Future<bool> _loadAccounts(Map<String, dynamic> saved) async {
     if (saved['format'] != 2) return false;
     _serviceUrl = saved['service'] as String? ?? '';
     _localOwner = saved['localOwner'] as String?;
+    _telegramOwner = saved['telegramOwner'] as String?;
     _legacy = saved['legacy'] is Map
         ? Map<String, dynamic>.from(saved['legacy'] as Map)
         : null;
@@ -304,6 +312,7 @@ extension AccountSync on SyncController {
       _activate(user.url, user.token);
       await settings.save();
       deploymentError = null;
+      _resetTelegramSync();
       revision++;
       onApplied();
     } catch (_) {
@@ -328,6 +337,7 @@ extension AccountSync on SyncController {
     if (connected) {
       unawaited(sync());
       unawaited(checkWorkerUpdates());
+      _telegramChanged();
     }
   }
 
@@ -456,6 +466,7 @@ extension AccountSync on SyncController {
       await _saveAccounts();
       revision++;
       onApplied();
+      _resetTelegramSync();
       status = 'Signed out. Local library ${keepLocal ? 'kept' : 'cleared'}.';
       error = null;
       deploymentError = null;
@@ -577,6 +588,7 @@ extension AccountSync on SyncController {
       if (owner) await _forgetDeploymentLocal(endpoint);
       revision++;
       onApplied();
+      _resetTelegramSync();
       status = 'Account deleted. Other accounts and Telegram sign-in are kept.';
       error = null;
     } finally {
