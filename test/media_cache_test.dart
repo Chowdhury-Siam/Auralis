@@ -7,6 +7,32 @@ import 'package:auralis/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'shutdown drain waits for all cache instances before directory deletion',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'auralis-cache-drain-',
+      );
+      const track = Track(
+        id: 'drain',
+        title: 'Drain',
+        artist: 'Artist',
+        source: 'Channel',
+      );
+      final work = [
+        for (var i = 0; i < 12; i++)
+          MediaCache(Directory('${root.path}/account-$i'))
+              .write(track, 'art', List.filled(65536, i)),
+      ];
+      expect(MediaCache.hasPending(root), isTrue);
+      await MediaCache.drain(root);
+      expect(MediaCache.hasPending(root), isFalse);
+      await Future.wait(work);
+      await root.delete(recursive: true);
+      expect(await root.exists(), isFalse);
+    },
+  );
+
   test('all refreshed lyrics survive memory eviction, restart and account isolation', () async {
     final directory = await Directory.systemTemp.createTemp(
       'auralis-media-cache-',
