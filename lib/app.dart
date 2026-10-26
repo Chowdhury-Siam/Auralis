@@ -3005,6 +3005,8 @@ class _AuthFormState extends State<AuthForm> {
             onPressed:td.busy?null:()=>setState(() {_editingNumber=false;_phoneError=null;value.clear();}),
             child:const Text('Cancel number change'),
           )),
+        ] else if(td.state=='authorizationStateWaitOtherDeviceConfirmation') ...[
+          const Text('Open Settings → Account & sync to see this device’s sign-in code and approve it on a connected device, or choose phone sign-in there.'),
         ] else if (label != null) ...[
           if(td.state=='authorizationStateWaitCode') ...[
             Text(td.authenticationPhoneNumber==null?'Enter the code sent by Telegram.':'Code sent to ${td.authenticationPhoneNumber}',key:const ValueKey('login-code-number')),
