@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
 import 'models.dart';
@@ -237,6 +238,7 @@ class _PlayerShellState extends State<PlayerShell>
   Rect? _dockBounds;
   Size? _dockViewport;
   double _playerDragStart = 0;
+  double _playerTravel = 1;
   bool _closingPlayer = false;
   PlayerController get player => widget.player;
   TelegramService get telegram => widget.telegram;
@@ -311,15 +313,23 @@ class _PlayerShellState extends State<PlayerShell>
         } else {
           _dockBounds = null;
         }
+        // A second pointer event can arrive before the first expanded frame.
+        _playerTravel = math.max(
+          1,
+          _dockBounds?.top ??
+              (surface is RenderBox && surface.hasSize
+                  ? surface.size.height
+                  : 1),
+        );
       }
       if (reduced) {
         _dismissPlayer.reset();
       } else {
-        // Reverse the downward dismissal for an eased upward entrance.
         if (draggingDock) {
           _dismissPlayer.value = 1;
         } else {
-          _dismissPlayer.reverse(from: destination == page ? null : 1);
+          if (destination != page) _dismissPlayer.value = 1;
+          _movePlayer(0);
         }
       }
     }
@@ -353,7 +363,7 @@ class _PlayerShellState extends State<PlayerShell>
     super.dispose();
   }
 
-  Future<void> _closeNowPlaying() async {
+  Future<void> _closeNowPlaying({double? velocity}) async {
     if (_closingPlayer || destination != _Page.nowPlaying) return;
     final reduced =
         player.settings.reducedMotion ||
@@ -362,7 +372,7 @@ class _PlayerShellState extends State<PlayerShell>
     if (!reduced) {
       try {
         // Continue from the current position if Back interrupts opening.
-        await _dismissPlayer.forward().orCancel;
+        await _movePlayer(1, velocity: velocity).orCancel;
       } on TickerCanceled {
         return;
       }
@@ -443,27 +453,48 @@ class _PlayerShellState extends State<PlayerShell>
 
   void _dragPlayer(DragUpdateDetails details) {
     if (_reducedPlayerMotion) return;
-    final height = _surfaceKey.currentContext?.size?.height ?? 1;
-    _dismissPlayer.value = (_dismissPlayer.value + details.delta.dy / height)
-        .clamp(0.0, 1.0);
+    _dismissPlayer.value =
+        (_dismissPlayer.value + details.delta.dy / _playerTravel).clamp(
+          0.0,
+          1.0,
+        );
+  }
+
+  TickerFuture _movePlayer(double target, {double? velocity}) {
+    return _dismissPlayer.animateWith(
+      SpringSimulation(
+        SpringDescription.withDurationAndBounce(
+          duration: const Duration(milliseconds: 500),
+        ),
+        _dismissPlayer.value,
+        target,
+        (velocity ?? _dismissPlayer.velocity).clamp(-6.0, 6.0),
+        tolerance: const Tolerance(distance: .0002, velocity: .005),
+        snapToEnd: true,
+      ),
+    );
   }
 
   void _settlePlayer(DragEndDetails details) {
-    if (_dismissPlayer.value > .18 || (details.primaryVelocity ?? 0) > 650) {
-      unawaited(_closeNowPlaying());
+    final speed = details.primaryVelocity ?? 0;
+    final closing = speed.abs() > 500 ? speed > 0 : _dismissPlayer.value > .18;
+    if (closing) {
+      unawaited(_closeNowPlaying(velocity: speed / _playerTravel));
     } else if (_reducedPlayerMotion) {
       _dismissPlayer.reset();
     } else {
-      _dismissPlayer.reverse();
+      _movePlayer(0, velocity: speed / _playerTravel);
     }
   }
 
   void _settleDock(DragEndDetails details) {
     if (_reducedPlayerMotion) return;
-    if (_dismissPlayer.value < .82 || (details.primaryVelocity ?? 0) < -350) {
-      _dismissPlayer.reverse();
+    final speed = details.primaryVelocity ?? 0;
+    final opening = speed.abs() > 500 ? speed < 0 : _dismissPlayer.value < .82;
+    if (opening) {
+      _movePlayer(0, velocity: speed / _playerTravel);
     } else {
-      unawaited(_closeNowPlaying());
+      unawaited(_closeNowPlaying(velocity: speed / _playerTravel));
     }
   }
 
@@ -493,6 +524,7 @@ class _PlayerShellState extends State<PlayerShell>
               ),
               saved.bottom.clamp(1.0, full.height),
             );
+      _playerTravel = math.max(1, mini.top);
       final content = GestureDetector(
         // The artwork pager keeps horizontal gestures; lyrics keeps scrolling.
         onVerticalDragStart: showLyrics || _closingPlayer
@@ -509,7 +541,7 @@ class _PlayerShellState extends State<PlayerShell>
                 if (_reducedPlayerMotion) {
                   _dismissPlayer.reset();
                 } else if (_playerDragStart < .18) {
-                  _dismissPlayer.reverse();
+                  _movePlayer(0);
                 }
               },
         child: Stack(
@@ -538,35 +570,39 @@ class _PlayerShellState extends State<PlayerShell>
           ],
         ),
       );
-      final background = RepaintBoundary(child: _collapseBackground());
+      // Keep the page and fixed blur in one cached layer during the gesture.
+      final background = RepaintBoundary(
+        key: const ValueKey('player-cached-blur'),
+        child: ImageFiltered(
+          key: const ValueKey('player-transition-blur'),
+          imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: TickerMode(
+            enabled: false,
+            child: RepaintBoundary(child: _collapseBackground()),
+          ),
+        ),
+      );
       return AnimatedBuilder(
         animation: _dismissPlayer,
-        child: content,
+        child: RepaintBoundary(child: content),
         builder: (context, content) {
           final progress = 1 - _dismissPlayer.value;
-          final eased = Curves.easeInOutCubicEmphasized.transform(progress);
-          final bounds = Rect.lerp(mini, full, eased)!;
-          final contentOpacity = const Interval(.25, .85).transform(progress);
+          // Geometry follows the controller directly, including during a drag.
+          // The release simulation supplies the easing exactly once.
+          final bounds = Rect.lerp(mini, full, progress)!;
+          final contentOpacity = const Interval(.08, .7).transform(progress);
           final miniOpacity = 1 - const Interval(0, .3).transform(progress);
           final transitioning = _dismissPlayer.value > 0 || _closingPlayer;
           return ClipRect(
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (transitioning)
-                  ImageFiltered(
-                    key: const ValueKey('player-transition-blur'),
-                    imageFilter: ui.ImageFilter.blur(
-                      sigmaX: 8 * eased,
-                      sigmaY: 8 * eased,
-                    ),
-                    child: background,
-                  ),
+                if (transitioning) background,
                 Positioned.fromRect(
                   rect: bounds,
                   child: ClipRRect(
                     key: const ValueKey('now-playing-container'),
-                    borderRadius: BorderRadius.circular(28 * (1 - eased)),
+                    borderRadius: BorderRadius.circular(28 * (1 - progress)),
                     child: ColoredBox(
                       color: _colors.surfaceContainerLow,
                       child: Stack(
@@ -587,9 +623,12 @@ class _PlayerShellState extends State<PlayerShell>
                                 ignoring:
                                     _closingPlayer ||
                                     _dismissPlayer.isAnimating,
-                                child: SizedBox.fromSize(
-                                  size: full.size,
-                                  child: content,
+                                child: TickerMode(
+                                  enabled: !transitioning,
+                                  child: SizedBox.fromSize(
+                                    size: full.size,
+                                    child: content,
+                                  ),
                                 ),
                               ),
                             ),
@@ -769,7 +808,11 @@ class _PlayerShellState extends State<PlayerShell>
                                               const SizedBox.shrink(),
                                           duration: Duration(
                                             milliseconds:
-                                                player.settings.reducedMotion ||
+                                                destination ==
+                                                        _Page.nowPlaying ||
+                                                    player
+                                                        .settings
+                                                        .reducedMotion ||
                                                     MediaQuery.disableAnimationsOf(
                                                       context,
                                                     )
