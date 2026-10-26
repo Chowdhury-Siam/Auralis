@@ -1,6 +1,6 @@
 # Account & sync
 
-Auralis 0.1.76 supports username/password accounts on a self-hosted Cloudflare
+Auralis 0.1.78 supports username/password accounts on a self-hosted Cloudflare
 Worker with a Turso database. Open Settings → Account & sync to validate a Worker,
 deploy the service, and sign in or create an account. Other devices need the same
 Worker URL, username and password.
@@ -46,7 +46,8 @@ that account's saved snapshot and outbox or an empty library. It never uploads t
 previous user's favorites or statistics to the next user. Settings and pending
 operations are journaled in protected local storage before committing a switch;
 startup can recover an interrupted settings write. Device volume, music, playback
-and Telegram sign-in are kept outside shared fields.
+and Telegram session keys remain on their own devices. Telegram account linking
+is synchronized separately, as described below.
 
 Switch account lists remembered users and Workers. Expired sign-ins require a
 password again. Forgetting a saved account is blocked while it has unsynced edits.
@@ -85,14 +86,63 @@ both the owner password and its recovery code has no application bypass.
 ## What syncs
 
 Favorites, playlists, recent music, listening statistics, selected channels,
-library sort and repeat preference. Music bytes, Telegram credentials, device
-volume, downloads and live playback are excluded. Existing field clocks,
+library sort and repeat preference, plus the linked Telegram identity and its
+application API details. Telegram auth keys and session databases, music bytes,
+device volume, downloads and live playback are excluded. Existing field clocks,
 tombstones, per-device listening counters and durable outboxes remain unchanged.
 WebSockets notify the matching account, with polling as fallback.
 
 There is no hosted default cloud. The service limits accounts to 100 per Worker,
 saved sessions to 32 per account, live sockets to 32 per room and records to 50,000
 per account. Authentication attempts are limited by address and username.
+
+## Include Telegram account
+
+Account & sync now includes an **Include Telegram account** switch and a Telegram
+status card. Sign in to Telegram on a trusted device while signed in to Auralis;
+the first linked identity is included automatically. Its user ID, display name
+and application API details are encrypted with an account-bound AES-GCM context
+inside your private Worker. No Telegram auth key, TDLib database, login code,
+two-step password or music is uploaded.
+
+On a new device, sign in to the same Auralis account. Auralis starts a fresh
+Telegram login using the linked application details and displays a six-digit
+approval code in Account & sync. Keep Auralis open on an already connected device,
+open its Account & sync page, tap **Approve new Telegram device** and enter the
+code displayed on the new device. Telegram creates an independent authorization
+for that device. If Telegram requests a two-step password, enter it on the new
+device; it goes directly to Telegram.
+
+Device requests expire after two minutes. TDLib refreshes its login links as
+needed, so use the currently displayed code. A request can be claimed only once,
+by a different signed-in Auralis session belonging to the same account. Only a
+matching code reveals its encrypted temporary login token to the approver. The
+token is erased after completion; requests are cleared by unlinking, sign-out,
+password recovery and account deletion. Failed approval waits for a fresh request.
+
+If no connected device is available, select **Use phone sign-in instead** on the
+new device, then use normal Telegram sign-in in the Telegram tab. This cancels
+only that device's unapproved login. Existing sessions keep their original API
+identity; syncing never silently replaces a healthy local account.
+
+Switching Auralis accounts does not automatically link the previous user's
+Telegram. If this device is signed in to another Telegram identity, the card asks
+you to sign out locally before connecting the linked identity. To intentionally
+associate the current Telegram account with another Auralis account, use **Link
+this Telegram account**. Turn Include Telegram account off before replacing an
+existing link with a different Telegram identity.
+
+Turning the switch off removes the cloud link and pending requests while keeping
+local Telegram sign-ins. Other devices observe that disabled state and cannot
+silently recreate the link. Auralis account deletion also clears its linked
+Telegram data. Independently authorized Telegram devices remain signed in; manage
+or revoke those sessions through Telegram's Devices settings.
+
+Telegram documents that copying one authorization into parallel main connections
+can invalidate the authorization with AUTH_KEY_DUPLICATED. This flow uses fresh
+per-device authorization instead:
+https://core.telegram.org/api/errors
+https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1request_qr_code_authentication.html
 
 ## Deployment and validation
 
@@ -106,7 +156,7 @@ edits, rollback, restart recovery, owner credential access and responsive forms.
 These checks use fakes and SQLite; live Cloudflare deployment and real-device
 multi-account timing require your deployment credentials.
 
-For this source delivery, 52 focused Flutter checks and 34 backend/release checks
-passed, and static analysis reported no issues. The broader suite did not finish
-in this runtime because an existing image-driven widget test stalled; no live
-Worker deployment or device build was performed.
+The Telegram-link tests cover code verification, expiry, one-use tokens,
+per-account isolation, unlinking, preserving local API identity, phone fallback,
+local-only two-step passwords and phone/landscape/desktop layouts. Live Telegram
+approval and device builds are not exercised by these simulated checks.
