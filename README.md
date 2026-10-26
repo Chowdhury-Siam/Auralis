@@ -238,7 +238,7 @@ API credentials and the TDLib database key are encrypted with **Windows DPAPI** 
 
 Downloaded audio and images remain plaintext in TDLib's app-data cache. There is no automatic cache eviction setting yet. Logout does not promise secure erasure of cached media or backups.
 
-Artwork uses Telegram or embedded metadata. Opening lyrics automatically contacts LRCLIB if embedded lyrics are unavailable; only the song title, artist and duration are sent, with no Telegram credentials, channel names, or message IDs. Android media controls receive the current cover and use the monochrome Auralis logo. Optional multi-device sync sends collection/listening metadata to your private service; Telegram credentials and music are excluded. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
+Artwork uses Telegram or embedded metadata. Opening lyrics automatically contacts LRCLIB if embedded lyrics are unavailable; only the song title, artist and duration are sent, with no Telegram credentials, channel names, or message IDs. Android media controls receive the current cover and use the monochrome Auralis logo. Optional multi-device sync shares collection/listening metadata and can include your linked Telegram account. Its application connection values are encrypted in your private Worker; new devices require Telegram device approval. Telegram auth keys, session databases and music stay on their own devices. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
 
 ---
 
@@ -306,11 +306,11 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.76+77**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.79+80**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
-Current limits include no local music importer, equalizer, crossfade, persistent queue, cloud playlist sync, QR login, or automatic cache eviction. Windows global media controls and tray mode are not included. Native dependency licensing/source review and hardware, accessibility, and performance checks remain outstanding before claiming production readiness.
+Current limits include no local music importer, equalizer, crossfade, persistent queue, cloud playlist sync, a standalone camera QR scanner, or automatic cache eviction. Windows global media controls and tray mode are not included. Native dependency licensing/source review and hardware, accessibility, and performance checks remain outstanding before claiming production readiness.
 
 ---
 
