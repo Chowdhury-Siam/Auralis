@@ -302,6 +302,13 @@ void main() {
         reason: 'The desktop dock stays clear of the sidebar',
       );
       expect(find.byKey(const ValueKey('open-current-track')), findsOneWidget);
+      expect(
+        tester.getRect(find.byTooltip('Settings')).center.dy,
+        greaterThan(
+          tester.getRect(find.byKey(const ValueKey('player-bar'))).top,
+        ),
+        reason: 'Sidebar Settings stays beside the bottom player',
+      );
       expect(tester.takeException(), isNull);
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
