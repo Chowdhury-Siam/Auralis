@@ -185,7 +185,11 @@ class AndroidAudioHandler extends BaseAudioHandler {
           MediaControl.skipToPrevious,
           audio.playing ? MediaControl.pause : MediaControl.play,
           MediaControl.skipToNext,
-          MediaControl.stop,
+          const MediaControl(
+            androidIcon: 'drawable/ic_media_stop_rounded',
+            label: 'Stop',
+            action: MediaAction.stop,
+          ),
         ],
         systemActions: const {MediaAction.seek},
         androidCompactActionIndices: const [0, 1, 2],
