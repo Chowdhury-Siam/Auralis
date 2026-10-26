@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -135,7 +136,9 @@ class _AuralisAppState extends State<AuralisApp> {
     } catch (_) {
       // A failed full-size cover must not discard a usable preview palette.
     }
-    if (!hasPalette && mounted && generation == _generation &&
+    if (!hasPalette &&
+        mounted &&
+        generation == _generation &&
         _scheme != _fallback) {
       setState(() => _scheme = _fallback);
     }
@@ -154,8 +157,13 @@ class _AuralisAppState extends State<AuralisApp> {
     debugShowCheckedModeBanner: false,
     title: 'Auralis',
     themeAnimationDuration: Duration(
-      milliseconds: widget.player.settings.reducedMotion ||
-          WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.disableAnimations
+      milliseconds:
+          widget.player.settings.reducedMotion ||
+              WidgetsBinding
+                  .instance
+                  .platformDispatcher
+                  .accessibilityFeatures
+                  .disableAnimations
           ? 0
           : 350,
     ),
@@ -215,6 +223,7 @@ class _PlayerShellState extends State<PlayerShell>
     with SingleTickerProviderStateMixin {
   ColorScheme get _colors => Theme.of(context).colorScheme;
   _Page destination = _Page.library;
+  _Page _playerOrigin = _Page.library;
   bool showLyrics = false;
   String collection = 'All songs';
   String? selectedPlaylist;
@@ -223,8 +232,11 @@ class _PlayerShellState extends State<PlayerShell>
   late final ChannelLibrary library;
   late final Listenable _shellUpdates;
   late final AnimationController _dismissPlayer;
-  late final Animation<Offset> _dismissOffset;
-  late final Animation<double> _collapseOpacity;
+  final _dockKey = GlobalKey();
+  final _surfaceKey = GlobalKey();
+  Rect? _dockBounds;
+  Size? _dockViewport;
+  double _playerDragStart = 0;
   bool _closingPlayer = false;
   PlayerController get player => widget.player;
   TelegramService get telegram => widget.telegram;
@@ -233,30 +245,36 @@ class _PlayerShellState extends State<PlayerShell>
     super.initState();
     _dismissPlayer = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 360),
-      reverseDuration: const Duration(milliseconds: 420),
+      duration: const Duration(milliseconds: 440),
+      reverseDuration: const Duration(milliseconds: 500),
     );
-    _dismissOffset = _dismissPlayer
-        .drive(CurveTween(curve: Curves.easeInCubic))
-        .drive(Tween<Offset>(begin: Offset.zero, end: const Offset(0, 1.05)));
-    _collapseOpacity = _dismissPlayer
-        .drive(CurveTween(curve: const Interval(.45, 1, curve: Curves.easeOut)))
-        .drive(Tween<double>(begin: 1, end: 0));
     library = ChannelLibrary(telegram, player.settings);
     _shellUpdates = Listenable.merge([player, telegram, library]);
     search.addListener(_changed);
-    _syncedChannels = player.settings.selectedChannels.map((c) => c.id).join(',');
+    _syncedChannels = player.settings.selectedChannels
+        .map((c) => c.id)
+        .join(',');
     widget.sync?.addListener(_syncChanged);
     if (widget.installedVersion != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(maybeShowWhatsNew(context, player.settings, widget.installedVersion!));
+        if (mounted) {
+          unawaited(
+            maybeShowWhatsNew(
+              context,
+              player.settings,
+              widget.installedVersion!,
+            ),
+          );
+        }
       });
     }
   }
 
   String _syncedChannels = '';
   void _syncChanged() {
-    final channels = player.settings.selectedChannels.map((c) => c.id).join(',');
+    final channels = player.settings.selectedChannels
+        .map((c) => c.id)
+        .join(',');
     if (channels != _syncedChannels) {
       _syncedChannels = channels;
       if (telegram.ready && !player.restoringData) unawaited(library.refresh());
@@ -267,20 +285,42 @@ class _PlayerShellState extends State<PlayerShell>
     if (mounted) setState(() {});
   }
 
-  void _navigate(_Page page, {bool openLyrics = false}) {
-    final opening = page == _Page.nowPlaying &&
-        (destination != page || _closingPlayer);
-    final reduced = player.settings.reducedMotion ||
+  void _navigate(
+    _Page page, {
+    bool openLyrics = false,
+    bool draggingDock = false,
+  }) {
+    final opening =
+        page == _Page.nowPlaying && (destination != page || _closingPlayer);
+    final reduced =
+        player.settings.reducedMotion ||
         MediaQuery.disableAnimationsOf(context);
     if (page != _Page.nowPlaying) {
       // Cancel a pending close before another page (or a new open) takes over.
       _dismissPlayer.reset();
     } else if (opening) {
+      if (destination != page) {
+        _playerOrigin = destination;
+        _dockViewport = MediaQuery.sizeOf(context);
+        final dock = _dockKey.currentContext?.findRenderObject();
+        final surface = _surfaceKey.currentContext?.findRenderObject();
+        if (dock is RenderBox && surface is RenderBox && dock.hasSize) {
+          _dockBounds =
+              surface.globalToLocal(dock.localToGlobal(Offset.zero)) &
+              dock.size;
+        } else {
+          _dockBounds = null;
+        }
+      }
       if (reduced) {
         _dismissPlayer.reset();
       } else {
         // Reverse the downward dismissal for an eased upward entrance.
-        _dismissPlayer.reverse(from: destination == page ? null : 1);
+        if (draggingDock) {
+          _dismissPlayer.value = 1;
+        } else {
+          _dismissPlayer.reverse(from: destination == page ? null : 1);
+        }
       }
     }
     setState(() {
@@ -331,7 +371,7 @@ class _PlayerShellState extends State<PlayerShell>
     setState(() {
       // A sidebar navigation during dismissal takes precedence.
       if (destination == _Page.nowPlaying) {
-        destination = _Page.library;
+        destination = _playerOrigin;
         showLyrics = false;
       }
       _closingPlayer = false;
@@ -347,7 +387,7 @@ class _PlayerShellState extends State<PlayerShell>
       return ExcludeFocus(
         child: ExcludeSemantics(
           child: IgnorePointer(
-            child: ColoredBox(
+            child: Material(
               key: const ValueKey('player-collapse-background'),
               color: Theme.of(context).scaffoldBackgroundColor,
               child: Column(
@@ -363,7 +403,7 @@ class _PlayerShellState extends State<PlayerShell>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _header(narrow, short: short, page: _Page.library),
+                          _header(narrow, short: short, page: _playerOrigin),
                           SizedBox(height: short ? 10 : 22),
                           if (widget.updater != null)
                             Padding(
@@ -375,14 +415,20 @@ class _PlayerShellState extends State<PlayerShell>
                           if (player.error ?? player.audio.error
                               case final String error)
                             _banner(error),
-                          Expanded(child: _library()),
+                          Expanded(
+                            child: switch (_playerOrigin) {
+                              _Page.telegram => _telegram(),
+                              _Page.settings => _settingsPage(),
+                              _ => _library(),
+                            },
+                          ),
                         ],
                       ),
                     ),
                   ),
                   if (player.current != null)
                     _transport(box.maxWidth < 600, short: short),
-                  if (compact) _bottomNavigation(page: _Page.library),
+                  if (compact) _bottomNavigation(page: _playerOrigin),
                 ],
               ),
             ),
@@ -392,54 +438,217 @@ class _PlayerShellState extends State<PlayerShell>
     },
   );
 
-  Widget _playerSurface({required Widget child}) => ClipRect(
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        if (_closingPlayer && destination == _Page.nowPlaying)
-          _collapseBackground(),
-        SlideTransition(
-          key: const ValueKey('now-playing-dismiss'),
-          position: destination == _Page.nowPlaying
-              ? _dismissOffset
-              : const AlwaysStoppedAnimation(Offset.zero),
-          child: FadeTransition(
-            opacity: destination == _Page.nowPlaying
-                ? _collapseOpacity
-                : const AlwaysStoppedAnimation(1.0),
-            child: AbsorbPointer(
-              absorbing: _closingPlayer && destination == _Page.nowPlaying,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (destination == _Page.nowPlaying)
-                    NowPlayingBackdrop(
-                      key: const ValueKey('now-playing-backdrop'),
-                      identity: (
-                        player.current?.id,
-                        player.current?.fileId,
-                        player.current?.coverFileId,
-                        player.current?.coverPreview,
-                        player.current?.title,
-                        player.current?.size,
-                      ),
-                      artworkUpdates: telegram,
-                      reducedMotion: player.settings.reducedMotion,
-                      artwork: Artwork(
-                        seed: player.current?.title ?? 'Auralis',
-                        telegram: telegram,
-                        track: player.current,
-                        small: true,
-                      ),
-                    ),
-                  child,
-                ],
+  bool get _reducedPlayerMotion =>
+      player.settings.reducedMotion || MediaQuery.disableAnimationsOf(context);
+
+  void _dragPlayer(DragUpdateDetails details) {
+    if (_reducedPlayerMotion) return;
+    final height = _surfaceKey.currentContext?.size?.height ?? 1;
+    _dismissPlayer.value = (_dismissPlayer.value + details.delta.dy / height)
+        .clamp(0.0, 1.0);
+  }
+
+  void _settlePlayer(DragEndDetails details) {
+    if (_dismissPlayer.value > .18 || (details.primaryVelocity ?? 0) > 650) {
+      unawaited(_closeNowPlaying());
+    } else if (_reducedPlayerMotion) {
+      _dismissPlayer.reset();
+    } else {
+      _dismissPlayer.reverse();
+    }
+  }
+
+  void _settleDock(DragEndDetails details) {
+    if (_reducedPlayerMotion) return;
+    if (_dismissPlayer.value < .82 || (details.primaryVelocity ?? 0) < -350) {
+      _dismissPlayer.reverse();
+    } else {
+      unawaited(_closeNowPlaying());
+    }
+  }
+
+  Widget _playerSurface({required Widget child}) => LayoutBuilder(
+    key: _surfaceKey,
+    builder: (context, box) {
+      if (destination != _Page.nowPlaying) return child;
+      final full = Offset.zero & box.biggest;
+      final viewport = MediaQuery.sizeOf(context);
+      final previousViewport = _dockViewport ?? viewport;
+      final saved = _dockBounds?.shift(
+        Offset(0, viewport.height - previousViewport.height),
+      );
+      final mini = saved == null
+          ? Rect.fromLTWH(
+              12,
+              math.max(0, full.height - 120),
+              math.max(0, full.width - 24),
+              100,
+            )
+          : Rect.fromLTRB(
+              saved.left.clamp(0.0, full.width),
+              saved.top.clamp(0.0, math.max(0, full.height - 1)),
+              (saved.right + viewport.width - previousViewport.width).clamp(
+                1.0,
+                full.width,
+              ),
+              saved.bottom.clamp(1.0, full.height),
+            );
+      final content = GestureDetector(
+        // The artwork pager keeps horizontal gestures; lyrics keeps scrolling.
+        onVerticalDragStart: showLyrics || _closingPlayer
+            ? null
+            : (_) {
+                _playerDragStart = _dismissPlayer.value;
+                _dismissPlayer.stop();
+              },
+        onVerticalDragUpdate: showLyrics || _closingPlayer ? null : _dragPlayer,
+        onVerticalDragEnd: showLyrics || _closingPlayer ? null : _settlePlayer,
+        onVerticalDragCancel: showLyrics || _closingPlayer
+            ? null
+            : () {
+                if (_reducedPlayerMotion) {
+                  _dismissPlayer.reset();
+                } else if (_playerDragStart < .18) {
+                  _dismissPlayer.reverse();
+                }
+              },
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            NowPlayingBackdrop(
+              key: const ValueKey('now-playing-backdrop'),
+              identity: (
+                player.current?.id,
+                player.current?.fileId,
+                player.current?.coverFileId,
+                player.current?.coverPreview,
+                player.current?.title,
+                player.current?.size,
+              ),
+              artworkUpdates: telegram,
+              reducedMotion: player.settings.reducedMotion,
+              artwork: Artwork(
+                seed: player.current?.title ?? 'Auralis',
+                telegram: telegram,
+                track: player.current,
+                small: true,
               ),
             ),
-          ),
+            child,
+          ],
         ),
-      ],
-    ),
+      );
+      final background = RepaintBoundary(child: _collapseBackground());
+      return AnimatedBuilder(
+        animation: _dismissPlayer,
+        child: content,
+        builder: (context, content) {
+          final progress = 1 - _dismissPlayer.value;
+          final eased = Curves.easeInOutCubicEmphasized.transform(progress);
+          final bounds = Rect.lerp(mini, full, eased)!;
+          final contentOpacity = const Interval(.25, .85).transform(progress);
+          final miniOpacity = 1 - const Interval(0, .3).transform(progress);
+          final transitioning = _dismissPlayer.value > 0 || _closingPlayer;
+          return ClipRect(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (transitioning)
+                  ImageFiltered(
+                    key: const ValueKey('player-transition-blur'),
+                    imageFilter: ui.ImageFilter.blur(
+                      sigmaX: 8 * eased,
+                      sigmaY: 8 * eased,
+                    ),
+                    child: background,
+                  ),
+                Positioned.fromRect(
+                  rect: bounds,
+                  child: ClipRRect(
+                    key: const ValueKey('now-playing-container'),
+                    borderRadius: BorderRadius.circular(28 * (1 - eased)),
+                    child: ColoredBox(
+                      color: _colors.surfaceContainerLow,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          OverflowBox(
+                            alignment: Alignment.topCenter,
+                            minWidth: full.width,
+                            maxWidth: full.width,
+                            minHeight: full.height,
+                            maxHeight: full.height,
+                            child: Opacity(
+                              key: const ValueKey(
+                                'now-playing-content-opacity',
+                              ),
+                              opacity: contentOpacity,
+                              child: IgnorePointer(
+                                ignoring:
+                                    _closingPlayer ||
+                                    _dismissPlayer.isAnimating,
+                                child: SizedBox.fromSize(
+                                  size: full.size,
+                                  child: content,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (miniOpacity > 0 && player.current != null)
+                            Positioned(
+                              left: 12,
+                              right: 12,
+                              top: 0,
+                              height: mini.height,
+                              child: IgnorePointer(
+                                child: ExcludeSemantics(
+                                  child: Opacity(
+                                    opacity: miniOpacity,
+                                    child: Row(
+                                      children: [
+                                        SizedBox.square(
+                                          dimension: 40,
+                                          child: Artwork(
+                                            seed: player.current!.title,
+                                            telegram: telegram,
+                                            track: player.current,
+                                            small: true,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            player.current!.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Icon(
+                                          player.audio.playing
+                                              ? Icons.pause_rounded
+                                              : Icons.play_arrow_rounded,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
   );
 
   Future<void> _stats({bool backup = false}) async {
@@ -491,10 +700,14 @@ class _PlayerShellState extends State<PlayerShell>
             bindings: {
               const SingleActivator(LogicalKeyboardKey.escape): _back,
               const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () =>
-                  player.restoringData ? null : unawaited(player.audio.toggle()),
+                  player.restoringData
+                  ? null
+                  : unawaited(player.audio.toggle()),
               const SingleActivator(LogicalKeyboardKey.mediaTrackNext): () =>
                   unawaited(player.next()),
-              const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): () =>
+              const SingleActivator(
+                LogicalKeyboardKey.mediaTrackPrevious,
+              ): () =>
                   unawaited(player.previous()),
             },
             child: Focus(
@@ -527,7 +740,8 @@ class _PlayerShellState extends State<PlayerShell>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      if (!(destination == _Page.nowPlaying && showLyrics)) ...[
+                                      if (!(destination == _Page.nowPlaying &&
+                                          showLyrics)) ...[
                                         _header(narrow, short: short),
                                         SizedBox(height: short ? 10 : 22),
                                       ],
@@ -551,7 +765,8 @@ class _PlayerShellState extends State<PlayerShell>
                                           // new page without squeezing an outgoing
                                           // full player into its smaller viewport.
                                           layoutBuilder: (current, _) =>
-                                              current ?? const SizedBox.shrink(),
+                                              current ??
+                                              const SizedBox.shrink(),
                                           duration: Duration(
                                             milliseconds:
                                                 player.settings.reducedMotion ||
@@ -589,10 +804,11 @@ class _PlayerShellState extends State<PlayerShell>
                                                           telegram: telegram,
                                                           track: player.current,
                                                         ),
-                                                        onBack: () =>
-                                                            setState(() {
-                                                              showLyrics = false;
-                                                            }),
+                                                        onBack: () => setState(
+                                                          () {
+                                                            showLyrics = false;
+                                                          },
+                                                        ),
                                                       )
                                                     : _nowPlaying(),
                                             },
@@ -609,7 +825,12 @@ class _PlayerShellState extends State<PlayerShell>
                                     destination == _Page.telegram))
                               Container(
                                 width: (box.maxWidth * .23).clamp(280, 360),
-                                margin: const EdgeInsets.fromLTRB(0, 20, 20, 20),
+                                margin: const EdgeInsets.fromLTRB(
+                                  0,
+                                  20,
+                                  20,
+                                  20,
+                                ),
                                 padding: const EdgeInsets.all(20),
                                 decoration: BoxDecoration(
                                   color: _colors.surfaceContainerLow,
@@ -620,7 +841,8 @@ class _PlayerShellState extends State<PlayerShell>
                           ],
                         ),
                       ),
-                      if (destination != _Page.nowPlaying && player.current != null)
+                      if (destination != _Page.nowPlaying &&
+                          player.current != null)
                         _transport(box.maxWidth < 600, short: short),
                     ],
                   ),
@@ -705,7 +927,11 @@ class _PlayerShellState extends State<PlayerShell>
           Text(
             'A LITTLE CLOSER TO MUSIC',
             textAlign: TextAlign.center,
-            style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 8, letterSpacing: 1.4),
+            style: TextStyle(
+              color: _colors.onSurfaceVariant,
+              fontSize: 8,
+              letterSpacing: 1.4,
+            ),
           ),
         SizedBox(
           height: short
@@ -743,7 +969,9 @@ class _PlayerShellState extends State<PlayerShell>
                       children: [
                         Icon(
                           icon,
-                          color: destination == i ? _colors.primary : _colors.onSurfaceVariant,
+                          color: destination == i
+                              ? _colors.primary
+                              : _colors.onSurfaceVariant,
                           size: 23,
                         ),
                         if (!narrow) ...[
@@ -754,7 +982,9 @@ class _PlayerShellState extends State<PlayerShell>
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: destination == i ? _colors.primary : _colors.onSurfaceVariant,
+                                color: destination == i
+                                    ? _colors.primary
+                                    : _colors.onSurfaceVariant,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -773,7 +1003,11 @@ class _PlayerShellState extends State<PlayerShell>
             padding: const EdgeInsets.all(12),
             child: Text(
               'YOUR MUSIC. YOUR SPACE.\n\nIndependent. Open source.',
-              style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 10, height: 1.4),
+              style: TextStyle(
+                color: _colors.onSurfaceVariant,
+                fontSize: 10,
+                height: 1.4,
+              ),
             ),
           ),
         IconButton(
@@ -790,7 +1024,11 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _header(bool narrow, {bool short = false, _Page? page}) => LayoutBuilder(
+  Widget _header(
+    bool narrow, {
+    bool short = false,
+    _Page? page,
+  }) => LayoutBuilder(
     builder: (context, box) {
       final destination = page ?? this.destination;
       final inlineCounts =
@@ -1511,10 +1749,7 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Widget _trackTile(
-    Track track, {
-    required VoidCallback onPlay,
-  }) {
+  Widget _trackTile(Track track, {required VoidCallback onPlay}) {
     final active = player.current?.id == track.id;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -1564,7 +1799,10 @@ class _PlayerShellState extends State<PlayerShell>
               if (track.duration > Duration.zero)
                 Text(
                   clockText(track.duration),
-                  style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: _colors.onSurfaceVariant,
+                  ),
                 ),
               IconButton(
                 tooltip: 'Add ${track.title} to queue',
@@ -1612,7 +1850,10 @@ class _PlayerShellState extends State<PlayerShell>
                   children: [
                     Text(
                       'Select channels to combine their music in Library.',
-                      style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 12),
+                      style: TextStyle(
+                        color: _colors.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
                     ),
                     Wrap(
                       spacing: 8,
@@ -1620,7 +1861,10 @@ class _PlayerShellState extends State<PlayerShell>
                       children: [
                         Text(
                           '${channels.length} channels · ${telegram.connection}',
-                          style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _colors.onSurfaceVariant,
+                          ),
                         ),
                         TextButton.icon(
                           onPressed: telegram.busy
@@ -1689,7 +1933,10 @@ class _PlayerShellState extends State<PlayerShell>
                       library.selected(channels[i].id)
                           ? 'Selected for Library'
                           : 'Add music to Library',
-                      style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 11),
+                      style: TextStyle(
+                        color: _colors.onSurfaceVariant,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 ),
@@ -1730,7 +1977,11 @@ class _PlayerShellState extends State<PlayerShell>
             Text(
               'Connect Telegram to browse music shared in channels you can access. Audio stays on your device.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: _colors.onSurfaceVariant, height: 1.6, fontSize: 12),
+              style: TextStyle(
+                color: _colors.onSurfaceVariant,
+                height: 1.6,
+                fontSize: 12,
+              ),
             ),
             const SizedBox(height: 24),
             AuthForm(telegram: telegram),
@@ -1738,7 +1989,11 @@ class _PlayerShellState extends State<PlayerShell>
             Text(
               'Credentials are encrypted on this device.\nLogin codes and passwords are never saved.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 10, height: 1.6),
+              style: TextStyle(
+                color: _colors.onSurfaceVariant,
+                fontSize: 10,
+                height: 1.6,
+              ),
             ),
             const SizedBox(height: 20),
           ],
@@ -1747,21 +2002,24 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _artworkSwitcher({required Widget child, bool paged = false}) => ArtworkTrackSwitcher(
-    key: const ValueKey('artwork-track-switcher'),
-    paged: paged,
-    identity: (player.current?.id, player.index),
-    reducedMotion: player.settings.reducedMotion,
-    onNext: !player.restoringData && player.current != null &&
-        player.queue.length > 1 &&
-        (player.index + 1 < player.queue.length || player.repeat)
-        ? () => unawaited(player.next())
-        : null,
-    onPrevious: !player.restoringData && player.index > 0
-        ? () => unawaited(player.playAt(player.index - 1))
-        : null,
-    child: child,
-  );
+  Widget _artworkSwitcher({required Widget child, bool paged = false}) =>
+      ArtworkTrackSwitcher(
+        key: const ValueKey('artwork-track-switcher'),
+        paged: paged,
+        identity: (player.current?.id, player.index),
+        reducedMotion: player.settings.reducedMotion,
+        onNext:
+            !player.restoringData &&
+                player.current != null &&
+                player.queue.length > 1 &&
+                (player.index + 1 < player.queue.length || player.repeat)
+            ? () => unawaited(player.next())
+            : null,
+        onPrevious: !player.restoringData && player.index > 0
+            ? () => unawaited(player.playAt(player.index - 1))
+            : null,
+        child: child,
+      );
 
   Widget _miniNowPlaying(BoxConstraints box, Track? track) {
     final coverSize = math.min(
@@ -1773,7 +2031,11 @@ class _PlayerShellState extends State<PlayerShell>
       children: [
         Text(
           'NOW PLAYING',
-          style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 10, letterSpacing: 1.5),
+          style: TextStyle(
+            color: _colors.onSurfaceVariant,
+            fontSize: 10,
+            letterSpacing: 1.5,
+          ),
         ),
         const SizedBox(height: 14),
         Expanded(
@@ -1889,17 +2151,17 @@ class _PlayerShellState extends State<PlayerShell>
             Color? foreground,
             Key? key,
           }) => IconButton(
-              key: key,
-              tooltip: tooltip,
-              onPressed: onPressed,
-              style: IconButton.styleFrom(
-                minimumSize: const Size(48, 48),
-                backgroundColor: background,
-                foregroundColor: foreground ?? _colors.primary,
-                disabledBackgroundColor: Colors.transparent,
-                shape: const CircleBorder(),
-              ),
-              icon: Icon(icon, size: 24),
+            key: key,
+            tooltip: tooltip,
+            onPressed: onPressed,
+            style: IconButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              backgroundColor: background,
+              foregroundColor: foreground ?? _colors.primary,
+              disabledBackgroundColor: Colors.transparent,
+              shape: const CircleBorder(),
+            ),
+            icon: Icon(icon, size: 24),
           );
 
           Widget artwork() => LayoutBuilder(
@@ -1944,8 +2206,11 @@ class _PlayerShellState extends State<PlayerShell>
                           paged: true,
                           child: ArtworkPager(
                             index: player.index,
-                            itemCount: player.queue.length +
-                                (player.repeat && player.queue.length > 1 ? 1 : 0),
+                            itemCount:
+                                player.queue.length +
+                                (player.repeat && player.queue.length > 1
+                                    ? 1
+                                    : 0),
                             onSelected: player.restoringData
                                 ? null
                                 : (index) => unawaited(
@@ -2044,12 +2309,18 @@ class _PlayerShellState extends State<PlayerShell>
                 children: [
                   Text(
                     clockText(audio.position),
-                    style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _colors.onSurfaceVariant,
+                    ),
                   ),
                   const Spacer(),
                   Text(
                     clockText(audio.duration),
-                    style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _colors.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -2126,57 +2397,61 @@ class _PlayerShellState extends State<PlayerShell>
             key: const ValueKey('now-playing-modes'),
             height: 48,
             child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  pill(
-                    key: const ValueKey('now-playing-shuffle'),
-                    tooltip: 'Shuffle upcoming tracks',
-                    icon: Icons.shuffle_rounded,
-                    onPressed: hasNext ? player.shuffle : null,
-                    background: Colors.transparent,
-                  ),
-                  const SizedBox(width: 20),
-                  pill(
-                    key: const ValueKey('now-playing-repeat'),
-                    tooltip: switch (player.repeatMode) {
-                      PlaybackRepeat.off => 'Repeat: off',
-                      PlaybackRepeat.all => 'Repeat: queue',
-                      PlaybackRepeat.one => 'Repeat: one track',
-                    },
-                    icon: player.repeatMode == PlaybackRepeat.one
-                        ? Icons.repeat_one_rounded
-                        : Icons.repeat_rounded,
-                    onPressed: player.toggleRepeat,
-                    background: player.repeat
-                        ? _colors.primary.withValues(alpha: .16)
-                        : Colors.transparent,
-                    foreground: player.repeat ? _colors.primary : _colors.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 20),
-                  pill(
-                    key: const ValueKey('now-playing-favorite'),
-                    tooltip: favorite
-                        ? 'Remove from favorites'
-                        : 'Add to favorites',
-                    icon: favorite
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    background: favorite
-                        ? _colors.primary.withValues(alpha: .12)
-                        : Colors.transparent,
-                    foreground: favorite ? _colors.primary : _colors.onSurfaceVariant,
-                    onPressed: track == null
-                        ? null
-                        : () async {
-                            try {
-                              await player.toggleFavorite(track);
-                            } on StateError catch (e) {
-                              _notice(e.message);
-                            }
-                          },
-                  ),
-                ],
-              ),
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                pill(
+                  key: const ValueKey('now-playing-shuffle'),
+                  tooltip: 'Shuffle upcoming tracks',
+                  icon: Icons.shuffle_rounded,
+                  onPressed: hasNext ? player.shuffle : null,
+                  background: Colors.transparent,
+                ),
+                const SizedBox(width: 20),
+                pill(
+                  key: const ValueKey('now-playing-repeat'),
+                  tooltip: switch (player.repeatMode) {
+                    PlaybackRepeat.off => 'Repeat: off',
+                    PlaybackRepeat.all => 'Repeat: queue',
+                    PlaybackRepeat.one => 'Repeat: one track',
+                  },
+                  icon: player.repeatMode == PlaybackRepeat.one
+                      ? Icons.repeat_one_rounded
+                      : Icons.repeat_rounded,
+                  onPressed: player.toggleRepeat,
+                  background: player.repeat
+                      ? _colors.primary.withValues(alpha: .16)
+                      : Colors.transparent,
+                  foreground: player.repeat
+                      ? _colors.primary
+                      : _colors.onSurfaceVariant,
+                ),
+                const SizedBox(width: 20),
+                pill(
+                  key: const ValueKey('now-playing-favorite'),
+                  tooltip: favorite
+                      ? 'Remove from favorites'
+                      : 'Add to favorites',
+                  icon: favorite
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  background: favorite
+                      ? _colors.primary.withValues(alpha: .12)
+                      : Colors.transparent,
+                  foreground: favorite
+                      ? _colors.primary
+                      : _colors.onSurfaceVariant,
+                  onPressed: track == null
+                      ? null
+                      : () async {
+                          try {
+                            await player.toggleFavorite(track);
+                          } on StateError catch (e) {
+                            _notice(e.message);
+                          }
+                        },
+                ),
+              ],
+            ),
           );
 
           final actions = LayoutBuilder(
@@ -2247,10 +2522,7 @@ class _PlayerShellState extends State<PlayerShell>
                   children: [
                     Expanded(flex: 5, child: artwork()),
                     const SizedBox(width: 28),
-                    Expanded(
-                      flex: 6,
-                      child: controls,
-                    ),
+                    Expanded(flex: 6, child: controls),
                   ],
                 )
               : Column(
@@ -2296,7 +2568,9 @@ class _PlayerShellState extends State<PlayerShell>
                       SizedBox(
                         height: previewHeight,
                         child: Material(
-                          color: _colors.surfaceContainerLow.withValues(alpha: .72),
+                          color: _colors.surfaceContainerLow.withValues(
+                            alpha: .72,
+                          ),
                           borderRadius: BorderRadius.circular(22),
                           clipBehavior: Clip.antiAlias,
                           child: InkWell(
@@ -2419,7 +2693,11 @@ class _PlayerShellState extends State<PlayerShell>
           Text(
             description,
             textAlign: TextAlign.center,
-            style: TextStyle(color: _colors.onSurfaceVariant, height: 1.8, fontSize: 12),
+            style: TextStyle(
+              color: _colors.onSurfaceVariant,
+              height: 1.8,
+              fontSize: 12,
+            ),
           ),
           if (action != null) ...[const SizedBox(height: 24), action],
         ],
@@ -2447,7 +2725,11 @@ class _PlayerShellState extends State<PlayerShell>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.volume_up_rounded, size: 16, color: _colors.onSurfaceVariant),
+            Icon(
+              Icons.volume_up_rounded,
+              size: 16,
+              color: _colors.onSurfaceVariant,
+            ),
             const SizedBox(width: 4),
             SizedBox(
               width: narrow ? 84 : 100,
@@ -2539,7 +2821,10 @@ class _PlayerShellState extends State<PlayerShell>
                       player.current?.artist ?? 'Choose a track to get started',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 11),
+                      style: TextStyle(
+                        color: _colors.onSurfaceVariant,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
@@ -2675,7 +2960,10 @@ class _PlayerShellState extends State<PlayerShell>
                     player.current?.artist ?? 'Choose a track',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 10, color: _colors.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: _colors.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -2684,123 +2972,96 @@ class _PlayerShellState extends State<PlayerShell>
         ),
       ),
     );
-    final reduced = player.settings.reducedMotion ||
+    final reduced =
+        player.settings.reducedMotion ||
         MediaQuery.disableAnimationsOf(context);
-    final track = player.current!;
-    Widget stopBackground(Alignment alignment) => Material(
-      color: _colors.errorContainer,
-      borderRadius: BorderRadius.circular(28),
-      child: Align(
-        alignment: alignment,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Icon(Icons.stop_circle_rounded, color: _colors.onErrorContainer),
-        ),
-      ),
-    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: Semantics(
-        hint: 'Swipe left or right to stop playback',
-        onDismiss: () => unawaited(_stopDock(track)),
-        child: Dismissible(
-          key: ValueKey(('dismiss-player', track.id)),
-          direction: player.restoringData
-              ? DismissDirection.none
-              : DismissDirection.horizontal,
-          movementDuration: Duration(milliseconds: reduced ? 0 : 220),
-          resizeDuration: null,
-          background: stopBackground(Alignment.centerLeft),
-          secondaryBackground: stopBackground(Alignment.centerRight),
-          confirmDismiss: (_) async {
-            await _stopDock(track);
-            // clear() removes this dock after stopping audio and its stream.
-            // No dismissed child is left in the tree while that work awaits.
-            return false;
-          },
-          child: Material(
-            key: const ValueKey('player-bar'),
-            color: _colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(28),
-            clipBehavior: Clip.antiAlias,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                narrow ? 12 : 18,
-                narrow ? 4 : 10,
-                narrow ? 12 : 18,
-                narrow ? 8 : 12,
-              ),
-              child: narrow
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        progressBar,
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Expanded(child: compactPreview),
-                            const SizedBox(width: 4),
-                            transportButtons,
-                          ],
-                        ),
-                      ],
-                    )
-                  : LayoutBuilder(
-                      builder: (context, box) {
-                        if (short) {
-                          return Row(
-                            children: [
-                              Expanded(child: compactPreview),
-                              const SizedBox(width: 12),
-                              Expanded(child: progressBar),
-                              const SizedBox(width: 12),
-                              transportButtons,
-                            ],
-                          );
-                        }
-                        if (box.maxWidth < 960) {
-                          return Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(child: compactPreview),
-                                  transportButtons,
-                                ],
-                              ),
-                              progressBar,
-                            ],
-                          );
-                        }
+      child: PlayerDockMotion(
+        key: _dockKey,
+        reducedMotion: reduced,
+        enabled: !player.restoringData,
+        onExpandStart: (_) => _navigate(_Page.nowPlaying, draggingDock: true),
+        onExpandUpdate: _dragPlayer,
+        onExpandEnd: _settleDock,
+        onExpandCancel: () {
+          if (!_reducedPlayerMotion && destination == _Page.nowPlaying) {
+            unawaited(_closeNowPlaying());
+          }
+        },
+        child: Material(
+          key: const ValueKey('player-bar'),
+          color: _colors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(28),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              narrow ? 12 : 18,
+              narrow ? 4 : 10,
+              narrow ? 12 : 18,
+              narrow ? 8 : 12,
+            ),
+            child: narrow
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      progressBar,
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(child: compactPreview),
+                          const SizedBox(width: 4),
+                          transportButtons,
+                        ],
+                      ),
+                    ],
+                  )
+                : LayoutBuilder(
+                    builder: (context, box) {
+                      if (short) {
                         return Row(
                           children: [
-                            Expanded(flex: 3, child: preview),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              flex: 5,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [transportButtons, progressBar],
-                              ),
-                            ),
+                            Expanded(child: compactPreview),
+                            const SizedBox(width: 12),
+                            Expanded(child: progressBar),
+                            const SizedBox(width: 12),
+                            transportButtons,
                           ],
                         );
-                      },
-                    ),
-            ),
+                      }
+                      if (box.maxWidth < 960) {
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(child: compactPreview),
+                                transportButtons,
+                              ],
+                            ),
+                            progressBar,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(flex: 3, child: preview),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            flex: 5,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [transportButtons, progressBar],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
           ),
         ),
       ),
     );
-  }
-
-  Future<void> _stopDock(Track track) async {
-    if (player.restoringData || !identical(player.current, track)) return;
-    try {
-      await player.clear();
-    } catch (_) {
-      _notice('Could not stop playback. Please try again.');
-    }
   }
 
   Widget _settingsPage() => Align(
@@ -2830,7 +3091,12 @@ class _PlayerShellState extends State<PlayerShell>
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.new_releases_outlined),
             title: const Text('What’s new'),
-            onTap: () => showInstalledChanges(context, widget.installedVersion ?? widget.updater?.currentVersion ?? currentReleaseVersion),
+            onTap: () => showInstalledChanges(
+              context,
+              widget.installedVersion ??
+                  widget.updater?.currentVersion ??
+                  currentReleaseVersion,
+            ),
           ),
           const Divider(),
           if (widget.updater != null) ...[
@@ -2852,7 +3118,8 @@ class _PlayerShellState extends State<PlayerShell>
               onPressed: () => showLicensePage(
                 context: context,
                 applicationName: 'Auralis',
-                applicationVersion: widget.updater?.currentVersion ?? currentReleaseVersion,
+                applicationVersion:
+                    widget.updater?.currentVersion ?? currentReleaseVersion,
               ),
               child: const Text('Licenses'),
             ),
@@ -2905,7 +3172,7 @@ class _AuthFormState extends State<AuthForm> {
       phone = TextEditingController();
   String? _lastState;
   PhoneCountry? _country;
-  bool _editingNumber=false;
+  bool _editingNumber = false;
   String? _phoneError;
   @override
   void dispose() {
@@ -2925,17 +3192,17 @@ class _AuthFormState extends State<AuthForm> {
         apiId.clear();
         apiHash.clear();
         phone.clear();
-        _country=null;
+        _country = null;
       }
-      if(td.state!='authorizationStateWaitCode') _editingNumber=false;
-      _phoneError=null;
+      if (td.state != 'authorizationStateWaitCode') _editingNumber = false;
+      _phoneError = null;
       _lastState = td.state;
     }
     final initial = td.state == 'disconnected';
-    final enteringPhone=td.state=='authorizationStateWaitPhoneNumber' || _editingNumber;
+    final enteringPhone =
+        td.state == 'authorizationStateWaitPhoneNumber' || _editingNumber;
     final label = switch (td.state) {
-      'authorizationStateWaitPhoneNumber' =>
-        'Phone number',
+      'authorizationStateWaitPhoneNumber' => 'Phone number',
       'authorizationStateWaitCode' => 'Login code from Telegram',
       'authorizationStateWaitPassword' => 'Two-step verification password',
       'authorizationStateWaitEmailAddress' =>
@@ -2944,17 +3211,27 @@ class _AuthFormState extends State<AuthForm> {
       _ => null,
     };
     Future<void> submit() async {
-      if(enteringPhone) {
+      if (enteringPhone) {
         try {
-          final number=internationalLoginNumber(phone.text,country:_country);
-          setState(()=>_phoneError=null);
-          if(_editingNumber) {
+          final number = internationalLoginNumber(
+            phone.text,
+            country: _country,
+          );
+          setState(() => _phoneError = null);
+          if (_editingNumber) {
             await td.changeLoginPhoneNumber(number);
-            if(mounted && td.error==null) setState(() {_editingNumber=false;value.clear();});
+            if (mounted && td.error == null) {
+              setState(() {
+                _editingNumber = false;
+                value.clear();
+              });
+            }
           } else {
             await td.submit(number);
           }
-        } on FormatException catch(e) {if(mounted) setState(()=>_phoneError=e.message);}
+        } on FormatException catch (e) {
+          if (mounted) setState(() => _phoneError = e.message);
+        }
       } else if (initial) {
         if (td.hasApplicationCredentials) {
           await td.start();
@@ -2976,11 +3253,17 @@ class _AuthFormState extends State<AuthForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (initial && td.hasApplicationCredentials)
-          const Text('Sign in with your Telegram account to access your music channels.')
+          const Text(
+            'Sign in with your Telegram account to access your music channels.',
+          )
         else if (initial) ...[
           Text(
             'Create an API application at my.telegram.org, then enter its details here.',
-            style: TextStyle(fontSize: 12, color: _colors.onSurfaceVariant, height: 1.6),
+            style: TextStyle(
+              fontSize: 12,
+              color: _colors.onSurfaceVariant,
+              height: 1.6,
+            ),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -2996,31 +3279,69 @@ class _AuthFormState extends State<AuthForm> {
             enableSuggestions: false,
             decoration: const InputDecoration(labelText: 'Telegram API hash'),
           ),
-        ] else if(enteringPhone) ...[
+        ] else if (enteringPhone) ...[
           PhoneNumberInput(
-            controller:phone,country:_country,enabled:!td.busy,loadCountries:td.loginCountries,
-            onCountryChanged:(country)=>setState(() {_country=country;_phoneError=null;}),onSubmitted:submit,
+            controller: phone,
+            country: _country,
+            enabled: !td.busy,
+            loadCountries: td.loginCountries,
+            onCountryChanged: (country) => setState(() {
+              _country = country;
+              _phoneError = null;
+            }),
+            onSubmitted: submit,
           ),
-          if(_editingNumber) Align(alignment:Alignment.centerLeft,child:TextButton(
-            onPressed:td.busy?null:()=>setState(() {_editingNumber=false;_phoneError=null;value.clear();}),
-            child:const Text('Cancel number change'),
-          )),
-        ] else if(td.state=='authorizationStateWaitOtherDeviceConfirmation') ...[
-          const Text('Open Settings → Account & sync to see this device’s sign-in code and approve it on a connected device, or choose phone sign-in there.'),
+          if (_editingNumber)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: td.busy
+                    ? null
+                    : () => setState(() {
+                        _editingNumber = false;
+                        _phoneError = null;
+                        value.clear();
+                      }),
+                child: const Text('Cancel number change'),
+              ),
+            ),
+        ] else if (td.state ==
+            'authorizationStateWaitOtherDeviceConfirmation') ...[
+          const Text(
+            'Open Settings → Account & sync to see this device’s sign-in code and approve it on a connected device, or choose phone sign-in there.',
+          ),
         ] else if (label != null) ...[
-          if(td.state=='authorizationStateWaitCode') ...[
-            Text(td.authenticationPhoneNumber==null?'Enter the code sent by Telegram.':'Code sent to ${td.authenticationPhoneNumber}',key:const ValueKey('login-code-number')),
-            Align(alignment:Alignment.centerLeft,child:TextButton.icon(
-              key:const ValueKey('change-login-number'),
-              onPressed:td.busy?null:()=>setState(() {
-                final sent=td.authenticationPhoneNumber;
-                if(sent!=null) {
-                  final prefix=_country==null?null:'+${_country!.callingCode}';
-                  phone.text=prefix!=null && sent.startsWith(prefix)?sent.substring(prefix.length):sent;
-                }
-                _editingNumber=true;_phoneError=null;value.clear();
-              }),icon:const Icon(Icons.edit_rounded,size:18),label:const Text('Change number'),
-            )),
+          if (td.state == 'authorizationStateWaitCode') ...[
+            Text(
+              td.authenticationPhoneNumber == null
+                  ? 'Enter the code sent by Telegram.'
+                  : 'Code sent to ${td.authenticationPhoneNumber}',
+              key: const ValueKey('login-code-number'),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('change-login-number'),
+                onPressed: td.busy
+                    ? null
+                    : () => setState(() {
+                        final sent = td.authenticationPhoneNumber;
+                        if (sent != null) {
+                          final prefix = _country == null
+                              ? null
+                              : '+${_country!.callingCode}';
+                          phone.text = prefix != null && sent.startsWith(prefix)
+                              ? sent.substring(prefix.length)
+                              : sent;
+                        }
+                        _editingNumber = true;
+                        _phoneError = null;
+                        value.clear();
+                      }),
+                icon: const Icon(Icons.edit_rounded, size: 18),
+                label: const Text('Change number'),
+              ),
+            ),
           ],
           TextField(
             key: ValueKey(td.state),
@@ -3028,12 +3349,20 @@ class _AuthFormState extends State<AuthForm> {
             obscureText: td.state == 'authorizationStateWaitPassword',
             autocorrect: false,
             enableSuggestions: false,
-            enabled:!td.busy,
-            keyboardType:td.state=='authorizationStateWaitCode' || td.state=='authorizationStateWaitEmailCode'?TextInputType.number:TextInputType.text,
-            autofillHints:td.state=='authorizationStateWaitCode' || td.state=='authorizationStateWaitEmailCode'?const [AutofillHints.oneTimeCode]:null,
+            enabled: !td.busy,
+            keyboardType:
+                td.state == 'authorizationStateWaitCode' ||
+                    td.state == 'authorizationStateWaitEmailCode'
+                ? TextInputType.number
+                : TextInputType.text,
+            autofillHints:
+                td.state == 'authorizationStateWaitCode' ||
+                    td.state == 'authorizationStateWaitEmailCode'
+                ? const [AutofillHints.oneTimeCode]
+                : null,
             decoration: InputDecoration(labelText: label),
             onSubmitted: td.busy ? null : (_) => submit(),
-          )
+          ),
         ] else
           Text(switch (td.state) {
             'authorizationStateWaitRegistration' => 'Create your Telegram account in the official app first, then restart Auralis.',
@@ -3105,7 +3434,13 @@ class _AuthFormState extends State<AuthForm> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Text(initial ? 'Connect Telegram' : _editingNumber?'Send new code':'Continue'),
+                  : Text(
+                      initial
+                          ? 'Connect Telegram'
+                          : _editingNumber
+                          ? 'Send new code'
+                          : 'Continue',
+                    ),
             ),
           ),
       ],
