@@ -5,6 +5,10 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:crypto/crypto.dart';
+
+import '../media_cache.dart';
+
 import 'package:path/path.dart' as p;
 
 import '../models.dart';
@@ -27,6 +31,21 @@ class TelegramService extends ChangeNotifier {
        _transport = transport ?? (createTransport ?? TdTransport.new)();
   final Directory directory;
   final SecretVault vault;
+  MediaCache get mediaCache {
+    final key = _secrets['databaseKey'];
+    return MediaCache(
+      key is String && key.isNotEmpty
+          ? Directory(
+              p.join(
+                directory.path,
+                'media-cache',
+                sha256.convert(utf8.encode(key)).toString(),
+              ),
+            )
+          : null,
+    );
+  }
+
   final int applicationApiId;
   final String applicationApiHash;
   bool get hasApplicationCredentials =>
@@ -160,6 +179,23 @@ class TelegramService extends ChangeNotifier {
     _coverDirty.clear();
   }
 
+  Future<Uint8List?> cacheCover(
+    Track track, {
+    required bool Function() active,
+  }) async {
+    while (_coverJobs >= 2 && ready && active()) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    if (!ready || !active()) return null;
+    final disk = mediaCache;
+    final bytes = await cover(track);
+    // The same Telegram file can appear in more than one channel/track entry.
+    if (ready && active() && bytes != null) {
+      await disk.write(track, 'art', bytes);
+    }
+    return bytes;
+  }
+
   Future<Uint8List?> cover(Track track) {
     final id = track.fileId;
     if (!ready || id == null) return Future.value(null);
@@ -181,7 +217,13 @@ class TelegramService extends ChangeNotifier {
     final id = track.fileId!;
     Uint8List? result;
     bool active() => ready && generation == _imageGeneration;
+    final disk = mediaCache;
     try {
+      final saved = await disk.read(track, 'art', maxCoverBytes);
+      if (saved != null && isCoverImage(saved) && active()) {
+        result = saved;
+        return result;
+      }
       if (track.coverFileId case final thumbnail?) {
         try {
           final path = await image(thumbnail);
@@ -203,6 +245,12 @@ class TelegramService extends ChangeNotifier {
           (source) => readEmbeddedCover(source, track.size),
         );
       }
+      if (result == null &&
+          track.coverPreview != null &&
+          isCoverImage(track.coverPreview!)) {
+        result = track.coverPreview;
+      }
+      if (active() && result != null) await disk.write(track, 'art', result);
       return active() ? result : null;
     } catch (_) {
       return null;
@@ -559,7 +607,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.81',
+          'application_version': '0.1.82',
         }));
       } on TdException catch (e) {
         throw FormatException(
