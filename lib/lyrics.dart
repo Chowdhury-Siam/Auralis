@@ -21,8 +21,10 @@ class Lyrics {
     this.online = false,
     this.embedded = false,
     this.imported = false,
+    this.provider,
   });
   final String plain;
+  final String? provider;
   final List<LyricLine> lines;
   final bool instrumental, online, embedded, imported;
 
@@ -67,6 +69,7 @@ class Lyrics {
     bool embedded = false,
     bool imported = false,
     bool instrumental = false,
+    String? provider,
   }) {
     if (text.length > 256 * 1024 || (plain?.length ?? 0) > 256 * 1024) {
       throw const FormatException('Lyrics are too long.');
@@ -135,6 +138,7 @@ class Lyrics {
     return Lyrics(
       (plain?.trim().isNotEmpty ?? false) ? plain!.trim() : fallback,
       grouped,
+      provider: provider,
       online: online,
       embedded: embedded,
       imported: imported,
@@ -156,7 +160,7 @@ class Lyrics {
   }
 }
 
-/// Session-only cache; missing embedded lyrics fall back to LRCLIB on opening.
+/// Bounded memory and optional device cache, with sequential online fallbacks.
 class LyricsRepository {
   LyricsRepository({HttpClient Function()? createClient, this.cache})
     : _createClient = createClient ?? HttpClient.new;
@@ -192,6 +196,9 @@ class LyricsRepository {
       final result = Lyrics(
         data['plain'] as String,
         lines,
+        provider: data['provider'] is String
+            ? data['provider'] as String
+            : null,
         instrumental: data['instrumental'] == true,
         online: data['online'] == true,
         embedded: data['embedded'] == true,
@@ -214,6 +221,7 @@ class LyricsRepository {
       utf8.encode(
         jsonEncode({
           'plain': value.plain,
+          'provider': value.provider,
           'lines': [
             for (final line in value.lines)
               [line.time.inMilliseconds, line.text],
@@ -249,9 +257,9 @@ class LyricsRepository {
     if (lyrics != null) unawaited(persist(track, lyrics));
   }
 
-  Future<Lyrics?> find(Track track) async {
+  Future<Lyrics?> find(Track track, {bool refresh = false}) async {
     if (_closed) throw StateError('Lyrics lookup is closed.');
-    final saved = cache == null ? null : await loadCached(track);
+    final saved = refresh || cache == null ? null : await loadCached(track);
     if (saved != null) return saved;
     final title = track.title.trim(), artist = track.artist.trim();
     if (title.isEmpty ||
@@ -263,19 +271,90 @@ class LyricsRepository {
       );
     }
     final scope = cache?.call().directory?.path;
-    final client = _createClient();
     final key = _key(track), requestId = Object();
     _pending[key] = requestId;
-    _clients.add(client);
-    client.connectionTimeout = const Duration(seconds: 10);
+    bool current() =>
+        !_closed &&
+        identical(_pending[key], requestId) &&
+        cache?.call().directory?.path == scope;
+    Lyrics? superseded() => !_closed && cache?.call().directory?.path == scope
+        ? cached(track)
+        : null;
+    final signature = {'track_name': title, 'artist_name': artist};
+    final providers = <Future<Lyrics?> Function()>[
+      () async => _lrclib(
+        await _fetch(
+          Uri.https('lrclib.net', '/api/get', {
+            ...signature,
+            if (track.duration.inSeconds >= 1 &&
+                track.duration.inSeconds <= 3600)
+              'duration': '${track.duration.inSeconds}',
+          }),
+        ),
+      ),
+      () async => _search(
+        await _fetch(Uri.https('lrclib.net', '/api/search', signature)),
+        track,
+      ),
+      () async {
+        final data = await _fetch(
+          Uri(
+            scheme: 'https',
+            host: 'api.lyrics.ovh',
+            pathSegments: ['v1', artist, title],
+          ),
+        );
+        if (data == null) return null;
+        if (data is! Map || data['lyrics'] is! String) {
+          throw const FormatException('Invalid lyrics.ovh response.');
+        }
+        // This provider supplies plain text, so do not manufacture sync timings.
+        final text = (data['lyrics'] as String).trim();
+        if (text.isEmpty) return null;
+        final parsed = Lyrics.parse(text, online: true, provider: 'lyrics.ovh');
+        return Lyrics(
+          parsed.plain,
+          const [],
+          online: true,
+          provider: 'lyrics.ovh',
+        );
+      },
+    ];
+    var failed = false;
     try {
-      final lyrics = await (() async {
-        final uri = Uri.https('lrclib.net', '/api/get', {
-          'track_name': title,
-          'artist_name': artist,
-          if (track.duration.inSeconds >= 1 && track.duration.inSeconds <= 3600)
-            'duration': '${track.duration.inSeconds}',
-        });
+      for (final lookup in providers) {
+        if (!current()) return superseded();
+        Lyrics? result;
+        try {
+          result = await lookup();
+        } catch (_) {
+          failed = true;
+        }
+        if (!current()) return superseded();
+        if (result != null) {
+          save(track, result);
+          return result;
+        }
+      }
+      // Unavailability is retryable and must never become a cached "not found".
+      if (failed) {
+        throw const HttpException(
+          'Lyrics sources are unavailable. Try again later.',
+        );
+      }
+      if (cached(track) == null) save(track, null);
+      return null;
+    } finally {
+      if (identical(_pending[key], requestId)) _pending.remove(key);
+    }
+  }
+
+  Future<dynamic> _fetch(Uri uri) async {
+    final client = _createClient();
+    _clients.add(client);
+    client.connectionTimeout = const Duration(seconds: 5);
+    try {
+      return await (() async {
         final request = await client.getUrl(uri);
         request.followRedirects = false;
         request.headers.set('Accept', 'application/json');
@@ -286,48 +365,87 @@ class LyricsRepository {
         final response = await request.close();
         if (response.statusCode == 404) return null;
         if (response.statusCode != 200) {
-          throw const HttpException(
-            'Lyrics service is unavailable. Try again later.',
-          );
+          throw const HttpException('Lyrics source unavailable.');
         }
-        final bytes = <int>[];
+        final bytes = BytesBuilder(copy: false);
         await for (final chunk in response) {
           if (bytes.length + chunk.length > 512 * 1024) {
             throw const FormatException('Lyrics response is too large.');
           }
-          bytes.addAll(chunk);
+          bytes.add(chunk);
         }
-        final data = jsonDecode(utf8.decode(bytes));
-        if (data is! Map<String, dynamic> ||
-            (data['plainLyrics'] != null && data['plainLyrics'] is! String) ||
-            (data['syncedLyrics'] != null && data['syncedLyrics'] is! String)) {
-          throw const FormatException(
-            'The lyrics service returned an invalid response.',
-          );
-        }
-        final result = Lyrics.parse(
-          data['syncedLyrics'] as String? ?? '',
-          plain: data['plainLyrics'] as String?,
-          online: true,
-          instrumental: data['instrumental'] == true,
-        );
-        return result.plain.isEmpty &&
-                result.lines.isEmpty &&
-                !result.instrumental
-            ? null
-            : result;
-      })().timeout(const Duration(seconds: 20));
-      // An imported/pasted result or a newer request may have won meanwhile.
-      if (identical(_pending[key], requestId) &&
-          cache?.call().directory?.path == scope) {
-        save(track, lyrics);
-      }
-      return lyrics;
+        return jsonDecode(utf8.decode(bytes.takeBytes()));
+      })().timeout(const Duration(seconds: 7));
     } finally {
-      if (identical(_pending[key], requestId)) _pending.remove(key);
       _clients.remove(client);
       client.close(force: true);
     }
+  }
+
+  static Lyrics? _lrclib(dynamic data) {
+    if (data == null) return null;
+    if (data is! Map ||
+        (data['plainLyrics'] != null && data['plainLyrics'] is! String) ||
+        (data['syncedLyrics'] != null && data['syncedLyrics'] is! String)) {
+      throw const FormatException('Invalid LRCLIB response.');
+    }
+    final result = Lyrics.parse(
+      data['syncedLyrics'] as String? ?? '',
+      plain: data['plainLyrics'] as String?,
+      online: true,
+      instrumental: data['instrumental'] == true,
+      provider: 'LRCLIB',
+    );
+    return result.instrumental ||
+            result.plain.trim().isNotEmpty ||
+            result.lines.any((line) => line.text.trim().isNotEmpty)
+        ? result
+        : null;
+  }
+
+  static String _matchText(String text) =>
+      text.toLowerCase().replaceAll(RegExp(r'[\s\-_.:,!?/()（）「」・]+'), '');
+
+  static Lyrics? _search(dynamic data, Track track) {
+    if (data == null) return null;
+    if (data is! List) {
+      throw const FormatException('Invalid LRCLIB search response.');
+    }
+    final title = _matchText(track.title), artist = _matchText(track.artist);
+    if (title.isEmpty || artist.isEmpty) return null;
+    Lyrics? best;
+    var bestScore = double.infinity;
+    for (final row in data.take(100)) {
+      if (row is! Map ||
+          row['trackName'] is! String ||
+          row['artistName'] is! String ||
+          _matchText(row['trackName'] as String) != title ||
+          _matchText(row['artistName'] as String) != artist) {
+        continue;
+      }
+      final duration = row['duration'];
+      final known = duration is num && duration.isFinite && duration > 0;
+      final difference = track.duration > Duration.zero && known
+          ? (duration - track.duration.inMilliseconds / 1000).abs().toDouble()
+          : 0.0;
+      if (difference > 5) continue;
+      Lyrics? result;
+      try {
+        result = _lrclib(row);
+      } catch (_) {
+        continue;
+      }
+      if (result == null) continue;
+      final score =
+          difference * 10 +
+          (track.duration > Duration.zero && !known ? 1000 : 0) +
+          (result.lines.isEmpty ? 1 : 0);
+      if (score < bestScore) {
+        best = result;
+        bestScore = score;
+      }
+    }
+    return best;
   }
 
   void close() {
