@@ -7,9 +7,11 @@ import 'package:flutter/foundation.dart';
 
 import '../data_backup.dart';
 import '../storage.dart';
+import '../telegram/telegram_service.dart';
 import 'document.dart';
 import 'deployment.dart';
 part 'accounts.dart';
+part 'telegram_account.dart';
 
 class SyncController extends ChangeNotifier {
   SyncController(
@@ -18,13 +20,22 @@ class SyncController extends ChangeNotifier {
     required this.onApplied,
     required this.paused,
     this.deploymentVault,
+    this.telegram,
   }) {
     settings.captureSync = _capture;
     settings.onSaved = _schedule;
+    telegram?.addListener(_telegramChanged);
+    if (telegram != null) {
+      _telegramTimer = Timer.periodic(
+        const Duration(seconds: 8),
+        (_) => unawaited(syncTelegramAccount()),
+      );
+    }
   }
   final AppSettings settings;
   final SecretVault vault;
   final SecretVault? deploymentVault;
+  final TelegramService? telegram;
   final VoidCallback onApplied;
   final bool Function() paused;
   HttpClient _client = HttpClient()
@@ -37,6 +48,20 @@ class SyncController extends ChangeNotifier {
   Map<String, dynamic>? _legacy;
   bool accountBusy = false, workerUpdating = false;
   String? deploymentError;
+  String? _telegramOwner,
+      _telegramCode,
+      _telegramRequestId,
+      _telegramPublishedLink,
+      _telegramError;
+  String _telegramStatus = 'Connect an Auralis account to include Telegram.';
+  bool _telegramPhoneFallback = false,
+      _telegramIncluded = true,
+      _telegramPolling = false,
+      _telegramOperating = false;
+  Map<String, dynamic>? _telegramProfile;
+  List<Map<String, dynamic>> _telegramRequests = [];
+  Timer? _telegramTimer, _telegramDebounce;
+  int _telegramEpoch = 0;
   bool _closed = false, syncing = false, _again = false;
   int _generation = 0, revision = 0;
   DateTime? _lastStatsUpload;
@@ -45,6 +70,7 @@ class SyncController extends ChangeNotifier {
   int? _connectingLive;
   StreamSubscription<dynamic>? _live;
   Future<void>? _running;
+  Future<void> _accountWrites = Future<void>.value();
   String status = 'Connect your devices to sync your library.';
   String? error;
   bool get connected => _url != null;
@@ -76,6 +102,7 @@ class SyncController extends ChangeNotifier {
       final saved = await vault.read();
       if (await _loadAccounts(saved)) {
         unawaited(checkWorkerUpdates());
+        unawaited(syncTelegramAccount());
         return;
       }
       if (saved['url'] is String && saved['key'] is String) {
@@ -278,7 +305,8 @@ class SyncController extends ChangeNotifier {
     status = 'Syncing your library…';
     _changed();
     try {
-      if (document.state['bootstrap'] == true && !await _bootstrap(generation)) {
+      if (document.state['bootstrap'] == true &&
+          !await _bootstrap(generation)) {
         return;
       }
       var more = true;
@@ -353,6 +381,7 @@ class SyncController extends ChangeNotifier {
     final pending = WebSocket.connect(
       '${_url!.replaceFirst('https:', 'wss:')}/v1/live',
       headers: {'Authorization': 'Bearer $_key'},
+      customClient: _client,
     );
     unawaited(
       pending.then<void>((socket) {
@@ -442,6 +471,7 @@ class SyncController extends ChangeNotifier {
   }
 
   void resume() {
+    unawaited(syncTelegramAccount());
     unawaited(checkWorkerUpdates());
     if (connected) {
       unawaited(sync());
@@ -465,6 +495,9 @@ class SyncController extends ChangeNotifier {
       /* Durable outbox retries on next launch. */
     }
     _closed = true;
+    _telegramTimer?.cancel();
+    _telegramDebounce?.cancel();
+    telegram?.removeListener(_telegramChanged);
     _generation++;
     _debounce?.cancel();
     _poll?.cancel();
