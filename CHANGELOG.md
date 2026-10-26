@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.82
+
+- Library Refresh now preloads artwork and available embedded/online lyrics in the background, with progress in the library header. Extracted artwork and lyrics persist in an account-scoped device cache for reuse after restart; audio remains temporary.
+- Cache work stops on another refresh, channel/account changes or shutdown. Failed and unavailable entries do not stop the remaining library. Explicit lyric import and lookup actions remain available.
+- Moved the desktop bottom player to the right of the sidebar and removed its redundant artwork/title preview in wide layouts, keeping the playback controls and seek bar in the main content area.
+
 ## 0.1.81
 
 - Smoothed the player card transition with direct finger tracking and one velocity-preserving spring on release, replacing the compounded easing curve. Quick drags are measured before the first expanded frame.
