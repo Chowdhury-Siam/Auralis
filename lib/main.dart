@@ -54,7 +54,7 @@ Future<void> main() async {
     await audio.volume(settings.volume);
     final player = PlayerController(
       audio,
-      TelegramStreamProxy(telegram.request),
+      TelegramStreamProxy(telegram.request, releaseAudio: telegram.releaseAudio),
       settings,
     );
     final artworkDirectory = Platform.isAndroid
@@ -95,6 +95,7 @@ Future<void> main() async {
           : SecretVault(File(p.join(root.path, 'sync-deployment.dpapi'))),
     );
     telegram.isStreaming = player.proxy.isStreaming;
+    telegram.hasActiveStream = () => player.proxy.hasActiveSource;
     AppUpdater? updater;
     Future<void>? shutdownFuture;
     Future<void> shutdown() => shutdownFuture ??= () async {
