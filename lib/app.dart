@@ -816,141 +816,155 @@ class _PlayerShellState extends State<PlayerShell>
                     ? _bottomNavigation()
                     : null,
                 body: SafeArea(
-                  child: Column(
+                  child: Row(
                     children: [
+                      if (!compact && !immersiveLyrics)
+                        _navigation(narrow, short: short),
                       Expanded(
-                        child: Row(
+                        child: Column(
                           children: [
-                            if (!compact && !immersiveLyrics)
-                              _navigation(narrow, short: short),
                             Expanded(
-                              child: _playerSurface(
-                                child: Padding(
-                                  padding: immersiveLyrics
-                                      ? EdgeInsets.zero
-                                      : EdgeInsets.fromLTRB(
-                                          narrow ? 16 : 30,
-                                          short ? 12 : 26,
-                                          narrow ? 16 : 26,
-                                          0,
-                                        ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      if (!(destination == _Page.nowPlaying &&
-                                          showLyrics)) ...[
-                                        _header(narrow, short: short),
-                                        SizedBox(height: short ? 10 : 22),
-                                      ],
-                                      if (widget.updater != null)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 12,
-                                          ),
-                                          child: UpdateBanner(
-                                            updater: widget.updater!,
-                                          ),
-                                        ),
-                                      if (widget.startupWarning != null)
-                                        _banner(widget.startupWarning!),
-                                      if (player.error ?? player.audio.error
-                                          case final String error)
-                                        _banner(error),
-                                      Expanded(
-                                        child: AnimatedSwitcher(
-                                          // The dock/nav reappear on exit. Fade in the
-                                          // new page without squeezing an outgoing
-                                          // full player into its smaller viewport.
-                                          layoutBuilder: (current, _) =>
-                                              current ??
-                                              const SizedBox.shrink(),
-                                          duration: Duration(
-                                            milliseconds:
-                                                destination ==
-                                                        _Page.nowPlaying ||
-                                                    player
-                                                        .settings
-                                                        .reducedMotion ||
-                                                    MediaQuery.disableAnimationsOf(
-                                                      context,
-                                                    )
-                                                ? 0
-                                                : 180,
-                                          ),
-                                          child: KeyedSubtree(
-                                            key: ValueKey((
-                                              destination,
-                                              showLyrics,
-                                            )),
-                                            child: switch (destination) {
-                                              _Page.library => _library(),
-                                              _Page.telegram => _telegram(),
-                                              _Page.settings => _settingsPage(),
-                                              _Page.nowPlaying =>
-                                                showLyrics
-                                                    ? LyricsView(
-                                                        backgroundColor:
-                                                            Colors.transparent,
-                                                        player: player,
-                                                        repository: lyrics,
-                                                        files: widget.dataFiles,
-                                                        loadEmbedded: telegram
-                                                            .embeddedLyrics,
-                                                        artwork: Artwork(
-                                                          seed:
-                                                              player
-                                                                  .current
-                                                                  ?.title ??
-                                                              'Auralis',
-                                                          telegram: telegram,
-                                                          track: player.current,
-                                                        ),
-                                                        onBack: () => setState(
-                                                          () {
-                                                            showLyrics = false;
-                                                          },
-                                                        ),
-                                                      )
-                                                    : _nowPlaying(),
-                                            },
-                                          ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _playerSurface(
+                                      child: Padding(
+                                        padding: immersiveLyrics
+                                            ? EdgeInsets.zero
+                                            : EdgeInsets.fromLTRB(
+                                                narrow ? 16 : 30,
+                                                short ? 12 : 26,
+                                                narrow ? 16 : 26,
+                                                0,
+                                              ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            if (!(destination ==
+                                                    _Page.nowPlaying &&
+                                                showLyrics)) ...[
+                                              _header(narrow, short: short),
+                                              SizedBox(height: short ? 10 : 22),
+                                            ],
+                                            if (widget.updater != null)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 12,
+                                                ),
+                                                child: UpdateBanner(
+                                                  updater: widget.updater!,
+                                                ),
+                                              ),
+                                            if (widget.startupWarning != null)
+                                              _banner(widget.startupWarning!),
+                                            if (player.error ??
+                                                    player.audio.error
+                                                case final String error)
+                                              _banner(error),
+                                            Expanded(
+                                              child: AnimatedSwitcher(
+                                                // The dock/nav reappear on exit. Fade in the
+                                                // new page without squeezing an outgoing
+                                                // full player into its smaller viewport.
+                                                layoutBuilder: (current, _) =>
+                                                    current ??
+                                                    const SizedBox.shrink(),
+                                                duration: Duration(
+                                                  milliseconds:
+                                                      destination ==
+                                                              _Page
+                                                                  .nowPlaying ||
+                                                          player
+                                                              .settings
+                                                              .reducedMotion ||
+                                                          MediaQuery.disableAnimationsOf(
+                                                            context,
+                                                          )
+                                                      ? 0
+                                                      : 180,
+                                                ),
+                                                child: KeyedSubtree(
+                                                  key: ValueKey((
+                                                    destination,
+                                                    showLyrics,
+                                                  )),
+                                                  child: switch (destination) {
+                                                    _Page.library => _library(),
+                                                    _Page.telegram =>
+                                                      _telegram(),
+                                                    _Page.settings =>
+                                                      _settingsPage(),
+                                                    _Page.nowPlaying =>
+                                                      showLyrics
+                                                          ? LyricsView(
+                                                              backgroundColor:
+                                                                  Colors
+                                                                      .transparent,
+                                                              player: player,
+                                                              repository:
+                                                                  lyrics,
+                                                              files: widget
+                                                                  .dataFiles,
+                                                              loadEmbedded: telegram
+                                                                  .embeddedLyrics,
+                                                              artwork: Artwork(
+                                                                seed:
+                                                                    player
+                                                                        .current
+                                                                        ?.title ??
+                                                                    'Auralis',
+                                                                telegram:
+                                                                    telegram,
+                                                                track: player
+                                                                    .current,
+                                                              ),
+                                                              onBack: () =>
+                                                                  setState(() {
+                                                                    showLyrics =
+                                                                        false;
+                                                                  }),
+                                                            )
+                                                          : _nowPlaying(),
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                ),
+                                  if (wide &&
+                                      (destination == _Page.library ||
+                                          destination == _Page.telegram))
+                                    Container(
+                                      width: (box.maxWidth * .23).clamp(
+                                        280,
+                                        360,
+                                      ),
+                                      margin: const EdgeInsets.fromLTRB(
+                                        0,
+                                        20,
+                                        20,
+                                        20,
+                                      ),
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        color: _colors.surfaceContainerLow,
+                                        borderRadius: BorderRadius.circular(28),
+                                      ),
+                                      child: _nowPlaying(compact: true),
+                                    ),
+                                ],
                               ),
                             ),
-                            if (wide &&
-                                (destination == _Page.library ||
-                                    destination == _Page.telegram))
-                              Container(
-                                width: (box.maxWidth * .23).clamp(280, 360),
-                                margin: const EdgeInsets.fromLTRB(
-                                  0,
-                                  20,
-                                  20,
-                                  20,
-                                ),
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: _colors.surfaceContainerLow,
-                                  borderRadius: BorderRadius.circular(28),
-                                ),
-                                child: _nowPlaying(compact: true),
-                              ),
+                            if (destination != _Page.nowPlaying &&
+                                player.current != null)
+                              _transport(box.maxWidth < 600, short: short),
                           ],
                         ),
                       ),
-                      if (destination != _Page.nowPlaying &&
-                          player.current != null)
-                        Padding(
-                          padding: EdgeInsets.only(
-                            left: compact ? 0 : (narrow ? 72 : 202),
-                          ),
-                          child: _transport(box.maxWidth < 600, short: short),
-                        ),
                     ],
                   ),
                 ),
