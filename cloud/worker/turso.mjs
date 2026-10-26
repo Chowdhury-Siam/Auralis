@@ -14,8 +14,10 @@ export function databaseUrl(value) {
 }
 export const statement=(sql,...args)=>({sql,args:args.map(value=>typeof value==='number'?{type:'integer',value:String(value)}:{type:'text',value})});
 export class TursoStore {
-  constructor(env,send=fetch) {this.url=databaseUrl(env.TURSO_DATABASE_URL);this.token=env.TURSO_AUTH_TOKEN;this.send=send;}
+  constructor(env,send=fetch,scope='') {if(scope && !/^[a-f0-9]{32}$/.test(scope)) throw new Error('Invalid account scope');this.scope=scope;this.url=databaseUrl(env.TURSO_DATABASE_URL);this.token=env.TURSO_AUTH_TOKEN;this.send=send;}
+  async clear() {await this.initialize();await this.batch([statement('DELETE FROM auralis_records'),statement('UPDATE auralis_meta SET revision=0 WHERE id=1')]);}
   async batch(statements) {
+    if(this.scope) statements=statements.map(s=>({...s,sql:s.sql.replace(/\bauralis_/g,`auralis_${this.scope}_`)}));
     const steps=[{stmt:statement('BEGIN IMMEDIATE')}];
     for(const stmt of statements) steps.push({condition:{type:'ok',step:steps.length-1},stmt});
     const commit=steps.length;steps.push({condition:{type:'ok',step:commit-1},stmt:statement('COMMIT')});
