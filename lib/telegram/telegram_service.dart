@@ -607,7 +607,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.82',
+          'application_version': '0.1.83',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -1002,6 +1002,7 @@ class TelegramService extends ChangeNotifier {
     try {
       await transport.close();
     } finally {
+      await MediaCache.drain(directory);
       _clientClosed = true;
       _audioSweep = null;
       _parametersRequest = null;
