@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.83
+
+- Shutdown now drains pending artwork/lyric cache reads and atomic writes before returning, preventing Windows file-lock failures during cleanup.
+- Widget-test cleanup pumps pending real file completions before leaving the fake clock. Added a multiple-cache-instance drain regression without retrying or suppressing failed directory deletion.
+
 ## 0.1.82
 
 - Library Refresh now preloads artwork and available embedded/online lyrics in the background, with progress in the library header. Extracted artwork and lyrics persist in an account-scoped device cache for reuse after restart; audio remains temporary.
