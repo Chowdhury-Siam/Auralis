@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/physics.dart';
 
 /// Artwork-local navigation: one swipe or one wheel burst changes one song.
 class ArtworkTrackSwitcher extends StatefulWidget {
@@ -43,7 +44,8 @@ class _ArtworkTrackSwitcherState extends State<ArtworkTrackSwitcher> {
         : signal.scrollDelta.dy;
     if (delta == 0) return;
     GestureBinding.instance.pointerSignalResolver.register(signal, (_) {
-      final newBurst = _lastWheel == null ||
+      final newBurst =
+          _lastWheel == null ||
           signal.timeStamp - _lastWheel! > const Duration(milliseconds: 220) ||
           _wheelDistance.sign != delta.sign;
       _lastWheel = signal.timeStamp;
@@ -61,64 +63,88 @@ class _ArtworkTrackSwitcherState extends State<ArtworkTrackSwitcher> {
 
   @override
   Widget build(BuildContext context) {
-    final reduced = widget.reducedMotion || MediaQuery.disableAnimationsOf(context);
-    return LayoutBuilder(builder: (context, box) {
-      final width = math.max(1.0, box.maxWidth);
-      final canDrag = widget.onNext != null || widget.onPrevious != null;
-      return Semantics(
-        label: 'Album artwork',
-        hint: canDrag ? 'Swipe artwork to change songs' : null,
-        onIncrease: widget.onNext,
-        onDecrease: widget.onPrevious,
-        child: Listener(
-          onPointerSignal: canDrag ? _scroll : null,
-          child: widget.paged ? widget.child : GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragStart: canDrag ? (_) {
-              setState(() {
-                _drag = 0;
-                _dragging = true;
-              });
-            } : null,
-            onHorizontalDragUpdate: canDrag ? (event) => setState(() {
-              _drag = (_drag + event.delta.dx).clamp(-width * .35, width * .35);
-            }) : null,
-            onHorizontalDragCancel: canDrag ? _resetDrag : null,
-            onHorizontalDragEnd: canDrag ? (event) {
-              final velocity = event.primaryVelocity ?? 0;
-              final committed = _drag.abs() >= math.min(80, width * .18) ||
-                  (_drag.abs() >= 12 && velocity.abs() >= 600);
-              final direction = velocity.abs() >= 600 ? velocity : _drag;
-              _resetDrag();
-              if (committed) {
-                (direction < 0 ? widget.onNext : widget.onPrevious)?.call();
-              }
-            } : null,
-            child: AnimatedSlide(
-              key: const ValueKey('artwork-drag-feedback'),
-              offset: reduced ? Offset.zero : Offset(_drag / width, 0),
-              duration: Duration(milliseconds: reduced || _dragging ? 0 : 220),
-              curve: Curves.easeOutCubic,
-              child: AnimatedSwitcher(
-                duration: Duration(milliseconds: reduced ? 0 : 240),
-                layoutBuilder: (current, previous) => Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    for (final oldChild in previous)
-                      IgnorePointer(child: ExcludeSemantics(child: oldChild)),
-                    ?current,
-                  ],
-                ),
-                child: KeyedSubtree(
-                  key: ValueKey(widget.identity),
-                  child: widget.child,
-                ),
-              ),
-            ),
+    final reduced =
+        widget.reducedMotion || MediaQuery.disableAnimationsOf(context);
+    return LayoutBuilder(
+      builder: (context, box) {
+        final width = math.max(1.0, box.maxWidth);
+        final canDrag = widget.onNext != null || widget.onPrevious != null;
+        return Semantics(
+          label: 'Album artwork',
+          hint: canDrag ? 'Swipe artwork to change songs' : null,
+          onIncrease: widget.onNext,
+          onDecrease: widget.onPrevious,
+          child: Listener(
+            onPointerSignal: canDrag ? _scroll : null,
+            child: widget.paged
+                ? widget.child
+                : GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragStart: canDrag
+                        ? (_) {
+                            setState(() {
+                              _drag = 0;
+                              _dragging = true;
+                            });
+                          }
+                        : null,
+                    onHorizontalDragUpdate: canDrag
+                        ? (event) => setState(() {
+                            _drag = (_drag + event.delta.dx).clamp(
+                              -width * .35,
+                              width * .35,
+                            );
+                          })
+                        : null,
+                    onHorizontalDragCancel: canDrag ? _resetDrag : null,
+                    onHorizontalDragEnd: canDrag
+                        ? (event) {
+                            final velocity = event.primaryVelocity ?? 0;
+                            final committed =
+                                _drag.abs() >= math.min(80, width * .18) ||
+                                (_drag.abs() >= 12 && velocity.abs() >= 600);
+                            final direction = velocity.abs() >= 600
+                                ? velocity
+                                : _drag;
+                            _resetDrag();
+                            if (committed) {
+                              (direction < 0
+                                      ? widget.onNext
+                                      : widget.onPrevious)
+                                  ?.call();
+                            }
+                          }
+                        : null,
+                    child: AnimatedSlide(
+                      key: const ValueKey('artwork-drag-feedback'),
+                      offset: reduced ? Offset.zero : Offset(_drag / width, 0),
+                      duration: Duration(
+                        milliseconds: reduced || _dragging ? 0 : 220,
+                      ),
+                      curve: Curves.easeOutCubic,
+                      child: AnimatedSwitcher(
+                        duration: Duration(milliseconds: reduced ? 0 : 240),
+                        layoutBuilder: (current, previous) => Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            for (final oldChild in previous)
+                              IgnorePointer(
+                                child: ExcludeSemantics(child: oldChild),
+                              ),
+                            ?current,
+                          ],
+                        ),
+                        child: KeyedSubtree(
+                          key: ValueKey(widget.identity),
+                          child: widget.child,
+                        ),
+                      ),
+                    ),
+                  ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }
 
@@ -141,7 +167,10 @@ class ArtworkPager extends StatefulWidget {
 }
 
 class _ArtworkPagerState extends State<ArtworkPager> {
-  late final _pages = PageController(initialPage: widget.index, keepPage: false);
+  late final _pages = PageController(
+    initialPage: widget.index,
+    keepPage: false,
+  );
   int? _swipedPage;
 
   @override
@@ -211,8 +240,12 @@ class _LyricsWaitingIndicatorState extends State<LyricsWaitingIndicator>
   }
 
   void _sync() {
-    final animate = widget.playing && _foreground && !widget.reducedMotion &&
-        !MediaQuery.disableAnimationsOf(context) && TickerMode.valuesOf(context).enabled;
+    final animate =
+        widget.playing &&
+        _foreground &&
+        !widget.reducedMotion &&
+        !MediaQuery.disableAnimationsOf(context) &&
+        TickerMode.valuesOf(context).enabled;
     if (animate && !_motion.isAnimating) _motion.repeat();
     if (!animate && _motion.isAnimating) _motion.stop();
   }
@@ -299,7 +332,11 @@ class _MusicPulsePainter extends CustomPainter {
       final x = size.width / 2 + (bar - 3) * 12;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(x, size.height / 2), width: 5, height: height),
+          Rect.fromCenter(
+            center: Offset(x, size.height / 2),
+            width: 5,
+            height: height,
+          ),
           const Radius.circular(3),
         ),
         paint,
@@ -407,9 +444,12 @@ class _NowPlayingBackdropState extends State<NowPlayingBackdrop> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Theme.of(context).colorScheme.surface.withValues(alpha: .60),
-                      Theme.of(context).colorScheme.surface.withValues(alpha: .70),
-                      Theme.of(context).colorScheme.surface.withValues(alpha: .92),
+                      Theme.of(context).colorScheme.surface
+                          .withValues(alpha: .60),
+                      Theme.of(context).colorScheme.surface
+                          .withValues(alpha: .70),
+                      Theme.of(context).colorScheme.surface
+                          .withValues(alpha: .92),
                     ],
                     stops: [0, .55, 1],
                   ),
@@ -501,4 +541,95 @@ class _ArtworkMotionState extends State<ArtworkMotion> {
       },
     );
   }
+}
+
+/// The whole mini-player follows a sideways drag, then returns to its place.
+/// Seeking and buttons retain their own gesture recognizers inside the card.
+class PlayerDockMotion extends StatefulWidget {
+  const PlayerDockMotion({
+    super.key,
+    required this.child,
+    required this.reducedMotion,
+    required this.enabled,
+    required this.onExpandStart,
+    required this.onExpandUpdate,
+    required this.onExpandEnd,
+    required this.onExpandCancel,
+  });
+  final Widget child;
+  final bool reducedMotion, enabled;
+  final GestureDragStartCallback onExpandStart;
+  final GestureDragUpdateCallback onExpandUpdate;
+  final GestureDragEndCallback onExpandEnd;
+  final GestureDragCancelCallback onExpandCancel;
+  @override
+  State<PlayerDockMotion> createState() => _PlayerDockMotionState();
+}
+
+class _PlayerDockMotionState extends State<PlayerDockMotion>
+    with SingleTickerProviderStateMixin {
+  late final _offset = AnimationController.unbounded(vsync: this);
+
+  void _returnToRest([double velocity = 0]) {
+    if (widget.reducedMotion) {
+      _offset.value = 0;
+    } else {
+      _offset.animateWith(
+        SpringSimulation(
+          const SpringDescription(mass: 1, stiffness: 280, damping: 28),
+          _offset.value,
+          0,
+          velocity.clamp(-1800.0, 1800.0),
+        ),
+      );
+    }
+  }
+
+  @override
+  void didUpdateWidget(PlayerDockMotion oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enabled || widget.reducedMotion != oldWidget.reducedMotion) {
+      _offset.stop();
+      _offset.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _offset.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) => GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: widget.enabled ? (_) => _offset.stop() : null,
+      onHorizontalDragUpdate: widget.enabled
+          ? (details) {
+              _offset.value = (_offset.value + details.delta.dx).clamp(
+                -box.maxWidth * .92,
+                box.maxWidth * .92,
+              );
+            }
+          : null,
+      onHorizontalDragEnd: widget.enabled
+          ? (details) => _returnToRest(details.primaryVelocity ?? 0)
+          : null,
+      onHorizontalDragCancel: widget.enabled ? _returnToRest : null,
+      onVerticalDragStart: widget.enabled ? widget.onExpandStart : null,
+      onVerticalDragUpdate: widget.enabled ? widget.onExpandUpdate : null,
+      onVerticalDragEnd: widget.enabled ? widget.onExpandEnd : null,
+      onVerticalDragCancel: widget.enabled ? widget.onExpandCancel : null,
+      child: AnimatedBuilder(
+        animation: _offset,
+        child: widget.child,
+        builder: (context, child) => Transform.translate(
+          key: const ValueKey('mini-player-drag'),
+          offset: Offset(_offset.value, 0),
+          child: child,
+        ),
+      ),
+    ),
+  );
 }
