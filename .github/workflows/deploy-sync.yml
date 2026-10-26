@@ -31,7 +31,7 @@ jobs:
           node-version: '24'
       - name: Validate service and deployment settings
         run: |
-          node --test worker.test.mjs turso.test.mjs deploy.test.mjs
+          node --test accounts.test.mjs worker.test.mjs turso.test.mjs deploy.test.mjs
           test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID" && test -n "$TURSO_DATABASE_URL" && test -n "$TURSO_AUTH_TOKEN"
           [[ "$WORKER_NAME" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]
           [[ "$AURALIS_SYNC_KEY" =~ ^[a-f0-9]{64}$ ]]
