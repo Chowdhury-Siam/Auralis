@@ -88,6 +88,7 @@ Future<void> main() async {
         ? AndroidSecretVault(File(p.join(root.path, 'sync-credentials.aesgcm')))
         : SecretVault(File(p.join(root.path, 'sync-credentials.dpapi')));
     final sync = SyncController(settings, syncVault,
+      telegram: telegram,
       onApplied: player.refreshSettings,
       paused: () => player.restoringData,
       deploymentVault: Platform.isAndroid
