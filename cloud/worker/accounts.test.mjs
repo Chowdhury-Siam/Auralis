@@ -63,3 +63,64 @@ test('recovery can be redeemed only once under concurrent requests; authenticati
  let last;for(let i=0;i<22;i++)last=await s.call('/v1/auth/login',{data:{username:'alice',password:'wrong'}});assert.equal(last.status,429);
  }finally{s.close();}
 });
+const tgProfile={userId:123456,name:'Telegram user',apiId:12345,apiHash:'f'.repeat(32)};
+const tgLink='tg://login?token='+'a'.repeat(43);
+test('Telegram linked identity is encrypted, scoped per Auralis account, and unlink cannot be undone by automatic sync',async()=>{
+ const s=service();try{const alice=(await register(s)).data,bob=(await register(s,'bob','')).data;
+ assert.equal((await s.call('/v1/account/telegram',{token:alice.token,method:'PUT',data:{...tgProfile,databaseKey:'never store this'}})).status,200);
+ const row=s.stores.get('account-registry').db.prepare('SELECT value FROM telegram_accounts WHERE account=?').get(alice.user.id).value;
+ assert.equal(row.includes(tgProfile.apiHash),false);assert.equal(row.includes('databaseKey'),false);
+ assert.deepEqual((await s.call('/v1/account/telegram',{token:alice.token})).data.profile,tgProfile);
+ assert.equal((await s.call('/v1/account/telegram',{token:bob.token})).data.profile,null);
+ const db=s.stores.get('account-registry').db;db.prepare('INSERT INTO telegram_accounts VALUES(?,?)').run(bob.user.id,row);
+ assert.equal((await s.call('/v1/account/telegram',{token:bob.token})).status,400);db.prepare('DELETE FROM telegram_accounts WHERE account=?').run(bob.user.id);
+ assert.equal((await s.call('/v1/account/telegram',{token:alice.token,method:'DELETE'})).status,200);
+ assert.equal((await s.call('/v1/account/telegram',{token:alice.token,method:'PUT',data:{...tgProfile,automatic:true}})).status,400);
+ assert.equal((await s.call('/v1/account/telegram',{token:alice.token})).data.enabled,false);
+ assert.equal((await s.call('/v1/account/telegram',{token:alice.token,method:'PUT',data:tgProfile})).status,200);
+ }finally{s.close();}
+});
+test('Telegram device requests require another session and matching code; the token is disclosed once and erased on completion',async()=>{
+ const s=service();try{const a=(await register(s)).data,b=(await s.call('/v1/auth/login',{data:{username:'alice',password:'test-password'}})).data;
+ await s.call('/v1/account/telegram',{token:a.token,method:'PUT',data:tgProfile});
+ const request=(await s.call('/v1/account/telegram/requests',{token:b.token,data:{link:tgLink}})).data;
+ const listing=(await s.call('/v1/account/telegram/requests',{token:a.token})).data;assert.equal(listing.requests[0].id,request.id);assert.equal(JSON.stringify(listing).includes(tgLink),false);assert.equal(JSON.stringify(listing).includes(request.code),false);
+ const path='/v1/account/telegram/requests/'+request.id;
+ assert.equal((await s.call(path+'/claim',{token:b.token,data:{code:request.code}})).status,409);
+ assert.equal((await s.call(path+'/claim',{token:a.token,data:{code:request.code==='000000'?'000001':'000000'}})).status,400);
+ const claimed=await s.call(path+'/claim',{token:a.token,data:{code:request.code}});assert.equal(claimed.data.link,tgLink);assert.equal(claimed.data.userId,tgProfile.userId);
+ assert.equal((await s.call(path+'/claim',{token:a.token,data:{code:request.code}})).status,409);
+ assert.equal((await s.call(path+'/complete',{token:b.token,data:{ok:true}})).status,403);
+ assert.equal((await s.call(path+'/complete',{token:a.token,data:{ok:true}})).status,200);
+ assert.equal((await s.call(path,{token:b.token})).data.state,'approved');
+ assert.equal(s.stores.get('account-registry').db.prepare('SELECT value FROM telegram_links WHERE id=?').get(request.id).value,'');
+ }finally{s.close();}
+});
+test('Telegram requests reject foreign accounts, malformed tokens, expiry and logout',async()=>{
+ const s=service();try{const a=(await register(s)).data,requester=(await s.call('/v1/auth/login',{data:{username:'alice',password:'test-password'}})).data,b=(await register(s,'bob','')).data;
+ await s.call('/v1/account/telegram',{token:a.token,method:'PUT',data:tgProfile});await s.call('/v1/account/telegram',{token:b.token,method:'PUT',data:tgProfile});
+ for(const link of ['https://evil.example/token','tg://login?token=short',tgLink+'&x=y'])assert.equal((await s.call('/v1/account/telegram/requests',{token:requester.token,data:{link}})).status,400);
+ const r=(await s.call('/v1/account/telegram/requests',{token:requester.token,data:{link:tgLink}})).data,path='/v1/account/telegram/requests/'+r.id;
+ assert.equal((await s.call(path+'/claim',{token:b.token,data:{code:r.code}})).status,404);
+ s.stores.get('account-registry').db.prepare('UPDATE telegram_links SET expires=0 WHERE id=?').run(r.id);
+ assert.equal((await s.call(path+'/claim',{token:a.token,data:{code:r.code}})).status,404);
+ const next=(await s.call('/v1/account/telegram/requests',{token:requester.token,data:{link:tgLink}})).data;
+ await s.call('/v1/auth/logout',{token:requester.token,data:{}});
+ assert.equal((await s.call('/v1/account/telegram/requests/'+next.id+'/claim',{token:a.token,data:{code:next.code}})).status,404);
+ }finally{s.close();}
+});
+test('Auralis deletion removes its encrypted Telegram link and pending requests',async()=>{
+ const s=service();try{const a=(await register(s)).data,b=(await s.call('/v1/auth/login',{data:{username:'alice',password:'test-password'}})).data;
+ await s.call('/v1/account/telegram',{token:a.token,method:'PUT',data:tgProfile});await s.call('/v1/account/telegram/requests',{token:b.token,data:{link:tgLink}});
+ assert.equal((await s.call('/v1/account',{token:a.token,method:'DELETE',data:{password:'test-password'}})).status,200);
+ const db=s.stores.get('account-registry').db;assert.equal(db.prepare('SELECT count(*) AS n FROM telegram_accounts').get().n,0);assert.equal(db.prepare('SELECT count(*) AS n FROM telegram_links').get().n,0);
+ }finally{s.close();}
+});
+
+test('only one approving session can claim a Telegram login token concurrently',async()=>{
+ const s=service();try{const a=(await register(s)).data,b=(await s.call('/v1/auth/login',{data:{username:'alice',password:'test-password'}})).data,c=(await s.call('/v1/auth/login',{data:{username:'alice',password:'test-password'}})).data;
+ await s.call('/v1/account/telegram',{token:a.token,method:'PUT',data:tgProfile});const r=(await s.call('/v1/account/telegram/requests',{token:b.token,data:{link:tgLink}})).data;
+ const results=await Promise.all([a,c].map(u=>s.call('/v1/account/telegram/requests/'+r.id+'/claim',{token:u.token,data:{code:r.code}})));
+ assert.equal(results.filter(r=>r.status===200).length,1);assert.equal(results.filter(r=>r.status===409).length,1);
+ }finally{s.close();}
+});
