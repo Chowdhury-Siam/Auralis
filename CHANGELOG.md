@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.94
+
+- Fixed the compact Library collection dropdown overflowing in narrow windows when Recently played or another long label is selected. The pill keeps its natural width when space permits and constrains the selected text when needed.
+- Added a regression check using Flutter’s wide fallback test font, which reproduces the Windows CI failure. Setup screenshot tests now load the Windows font on Windows and the Linux font on Linux.
+
 ## 0.1.93
 
 - Redesigned Settings as a searchable directory with compact grouped rows and rounded outer corners, followed by focused General, Appearance, Lyrics & artwork, Data & sync, Privacy & security, App updates and About pages.
