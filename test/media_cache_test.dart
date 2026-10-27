@@ -7,6 +7,25 @@ import 'package:auralis/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('saved artwork survives restart until explicitly cleared, keeping lyrics intact', () async {
+    final dir = await Directory.systemTemp.createTemp('auralis-retained-art-');
+    addTearDown(() => dir.delete(recursive: true));
+    const track = Track(
+      id: 'art',
+      title: 'Art',
+      artist: 'Artist',
+      source: 'Music',
+    );
+    final cache = MediaCache(dir);
+    await cache.write(track, 'art', [1, 2, 3]);
+    await cache.write(track, 'lyrics', [4, 5, 6]);
+    final restarted = MediaCache(dir);
+    expect(await restarted.read(track, 'art', 100), [1, 2, 3]);
+    await restarted.clearArtwork();
+    expect(await restarted.read(track, 'art', 100), isNull);
+    expect(await restarted.read(track, 'lyrics', 100), [4, 5, 6]);
+  });
+
   test(
     'shutdown drain waits for all cache instances before directory deletion',
     () async {
