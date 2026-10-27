@@ -134,6 +134,13 @@ void main() {
     final file = File('${dir.path}/settings.json');
     final settings = AppSettings(file)
       ..volume = 23
+      ..lyricsFirst = LyricsSource.lyricsOvh
+      ..lyricsFallback = null
+      ..translationFirst = TranslationSource.myMemory
+      ..translationFallback = TranslationSource.google
+      ..translationDirection = TranslationDirection.englishJapanese
+      ..artworkPreload = 20
+      ..keepArtwork = false
       ..reducedMotion = true
       ..librarySort = LibrarySort.artist
       ..selectedChannels = [
@@ -147,6 +154,17 @@ void main() {
     final restored = AppSettings(file);
     await restored.load();
     expect(restored.volume, 45);
+    expect(restored.lyricsFirst, LyricsSource.lyricsOvh);
+    expect(restored.lyricsFallback, isNull);
+    expect(restored.translationFirst, TranslationSource.myMemory);
+    expect(restored.translationFallback, TranslationSource.google);
+    expect(restored.translationDirection, TranslationDirection.englishJapanese);
+    expect(restored.artworkPreload, 20);
+    expect(restored.keepArtwork, isFalse);
+    final defaults = AppSettings(File('unused-defaults'));
+    expect(defaults.artworkPreload, 10);
+    expect(defaults.keepArtwork, isTrue);
+    expect(defaults.automaticLyrics && defaults.automaticTranslation, isTrue);
     expect(restored.reducedMotion, isFalse);
     expect(restored.toJson()['reducedMotion'], isFalse);
     restored.applyJson({...restored.toJson(), 'reducedMotion': true});
