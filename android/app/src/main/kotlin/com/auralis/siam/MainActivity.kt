@@ -12,6 +12,7 @@ class MainActivity : AudioServiceActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val vault = VaultCipher()
     private val updates by lazy { AndroidUpdateInstaller(this, io) }
+    private val setup by lazy { DeviceSetup(this) }
     private var pending: MethodChannel.Result? = null
     private var selectedRead: Uri? = null
     private var selectedWrite: Uri? = null
@@ -20,6 +21,12 @@ class MainActivity : AudioServiceActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.auralis/platform").setMethodCallHandler { call, result ->
             when (call.method) {
+                "setupStatus" -> {
+                    try { result.success(setup.status()) }
+                    catch (_: Exception) { result.error("setup_status", "Device settings could not be checked.", null) }
+                }
+                "setupNotifications" -> setup.notifications(result)
+                "setupBattery" -> setup.battery(result)
                 "openExternalUrl" -> {
                     try {
                         val uri = android.net.Uri.parse(call.arguments as String)
@@ -123,7 +130,13 @@ class MainActivity : AudioServiceActivity() {
         pending?.success(null)
         pending = null
         updates.close()
+        setup.close()
         io.shutdown()
         super.onDestroy()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        setup.onPermissionsResult(requestCode)
     }
 }
