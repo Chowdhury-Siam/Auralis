@@ -3,27 +3,27 @@ import 'package:flutter/material.dart';
 enum SettingsSection {
   general(
     'General',
-    Icons.widgets_outlined,
+    Icons.widgets_rounded,
     'setup welcome volume sleep timer playback',
   ),
   appearance(
     'Appearance',
-    Icons.palette_outlined,
+    Icons.palette_rounded,
     'compact library navigation pill corner radius theme layout',
   ),
   media(
     'Lyrics & artwork',
-    Icons.lyrics_outlined,
+    Icons.lyrics_rounded,
     'automatic translate translation japanese english google mymemory deepl fallback source provider covers preload cache retain',
   ),
   data(
     'Data & sync',
-    Icons.cloud_sync_outlined,
+    Icons.cloud_sync_rounded,
     'listening stats statistics time rankings activity export csv json backup restore recovery account worker devices telegram',
   ),
   privacy(
     'Privacy & security',
-    Icons.lock_outline_rounded,
+    Icons.lock_rounded,
     'credentials encryption keystore dpapi login password logout sign out telegram',
   ),
   updates(
@@ -33,7 +33,7 @@ enum SettingsSection {
   ),
   about(
     'About',
-    Icons.info_outline_rounded,
+    Icons.info_rounded,
     'auralis version licenses licence agpl libmpv tdlib whats new changes',
   );
 
@@ -86,7 +86,7 @@ class SettingsDirectory extends StatelessWidget {
               onSubmitted: (_) => FocusScope.of(context).unfocus(),
               decoration: InputDecoration(
                 hintText: 'Search settings…',
-                prefixIcon: const Icon(Icons.search_rounded),
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
                 suffixIcon: value.text.isEmpty
                     ? null
                     : IconButton(
@@ -97,20 +97,24 @@ class SettingsDirectory extends StatelessWidget {
                 filled: true,
                 fillColor: colors.surfaceContainerHigh,
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 18,
+                  horizontal: 16,
+                  vertical: 12,
                 ),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(32),
+                  borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
                 ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: colors.primary),
+                ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(32),
+                  borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             if (results.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 28),
@@ -134,30 +138,48 @@ class SettingsDirectory extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 3),
                 child: Material(
-                  color: colors.surfaceContainerHigh,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(i == 0 ? 28 : 6),
-                    bottom: Radius.circular(i == results.length - 1 ? 28 : 6),
+                  color: colors.surfaceContainerLow,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(i == 0 ? 20 : 6),
+                      bottom: Radius.circular(i == results.length - 1 ? 20 : 6),
+                    ),
+                    side: BorderSide(
+                      color: colors.outlineVariant.withValues(alpha: .35),
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: ListTile(
                     key: ValueKey('settings-${results[i].name}'),
-                    minTileHeight: 62,
+                    minTileHeight: 56,
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 4,
+                      horizontal: 14,
+                      vertical: 2,
                     ),
-                    horizontalTitleGap: 18,
-                    leading: Icon(
-                      results[i].icon,
-                      size: 25,
+                    horizontalTitleGap: 12,
+                    leading: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: colors.primaryContainer.withValues(alpha: .55),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        results[i].icon,
+                        size: 20,
+                        color: colors.primary,
+                      ),
+                    ),
+                    trailing: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
                       color: colors.onSurfaceVariant,
                     ),
                     title: Text(
                       results[i].title,
                       style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     onTap: () {
