@@ -24,6 +24,9 @@ import 'sync/controller.dart';
 import 'sync/settings_view.dart';
 import 'release_notes.dart';
 import 'media_cache.dart';
+import 'app_navigation.dart';
+import 'setup_view.dart';
+import 'settings_view.dart';
 
 const accent = Color(0xFFC7B5FF),
     surface = Color(0xFF19171E),
@@ -39,6 +42,7 @@ class AuralisApp extends StatefulWidget {
     this.installedVersion,
     this.updater,
     this.dataFiles = const DataFiles(),
+    this.showSetup = false,
   });
   final PlayerController player;
   final TelegramService telegram;
@@ -47,6 +51,7 @@ class AuralisApp extends StatefulWidget {
   final String? installedVersion;
   final AppUpdater? updater;
   final DataFiles dataFiles;
+  final bool showSetup;
   @override
   State<AuralisApp> createState() => _AuralisAppState();
 }
@@ -62,10 +67,12 @@ class _AuralisAppState extends State<AuralisApp> {
   Object? _artworkIdentity;
   int _generation = 0;
   final _palettes = <Uint8List, Future<ColorScheme?>>{};
+  late bool _settingUp;
 
   @override
   void initState() {
     super.initState();
+    _settingUp = widget.showSetup;
     widget.player.addListener(_artworkChanged);
     widget.telegram.addListener(_artworkChanged);
     _artworkChanged();
@@ -185,15 +192,28 @@ class _AuralisAppState extends State<AuralisApp> {
       ),
       dividerColor: _scheme.outlineVariant,
     ),
-    home: PlayerShell(
-      player: widget.player,
-      telegram: widget.telegram,
-      startupWarning: widget.startupWarning,
-      updater: widget.updater,
-      sync: widget.sync,
-      installedVersion: widget.installedVersion,
-      dataFiles: widget.dataFiles,
-    ),
+    home: _settingUp
+        ? SetupView(
+            player: widget.player,
+            telegram: widget.telegram,
+            version: widget.installedVersion ?? currentReleaseVersion,
+            files: widget.dataFiles,
+            connectBuilder: (_) => PlayerShell(
+              player: widget.player,
+              telegram: widget.telegram,
+              setupMode: true,
+            ),
+            onFinished: () => setState(() => _settingUp = false),
+          )
+        : PlayerShell(
+            player: widget.player,
+            telegram: widget.telegram,
+            startupWarning: widget.startupWarning,
+            updater: widget.updater,
+            sync: widget.sync,
+            installedVersion: widget.installedVersion,
+            dataFiles: widget.dataFiles,
+          ),
   );
 }
 
@@ -209,6 +229,7 @@ class PlayerShell extends StatefulWidget {
     this.installedVersion,
     this.updater,
     this.dataFiles = const DataFiles(),
+    this.setupMode = false,
   });
   final PlayerController player;
   final TelegramService telegram;
@@ -217,6 +238,7 @@ class PlayerShell extends StatefulWidget {
   final String? installedVersion;
   final AppUpdater? updater;
   final DataFiles dataFiles;
+  final bool setupMode;
   @override
   State<PlayerShell> createState() => _PlayerShellState();
 }
@@ -233,6 +255,8 @@ class _PlayerShellState extends State<PlayerShell>
   int _cacheGeneration = 0, _cachedTracks = 0, _cacheTotal = 0;
   bool _cachingLibrary = false;
   final search = TextEditingController();
+  final settingsSearch = TextEditingController();
+  SettingsSection? _settingsSection;
   late final ChannelLibrary library;
   late final Listenable _shellUpdates;
   late final AnimationController _dismissPlayer;
@@ -496,6 +520,10 @@ class _PlayerShellState extends State<PlayerShell>
         }
       }
     }
+    if (page == _Page.settings) {
+      _settingsSection = null;
+      settingsSearch.clear();
+    }
     setState(() {
       destination = page;
       _closingPlayer = false;
@@ -505,7 +533,9 @@ class _PlayerShellState extends State<PlayerShell>
   }
 
   void _back() {
-    if (destination == _Page.nowPlaying) {
+    if (destination == _Page.settings && _settingsSection != null) {
+      setState(() => _settingsSection = null);
+    } else if (destination == _Page.nowPlaying) {
       if (showLyrics) {
         setState(() => showLyrics = false);
       } else {
@@ -531,6 +561,7 @@ class _PlayerShellState extends State<PlayerShell>
     library.dispose();
     widget.sync?.removeListener(_syncChanged);
     search.dispose();
+    settingsSearch.dispose();
     super.dispose();
   }
 
@@ -1025,6 +1056,44 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
+  Future<void> _openSetup() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (context) => SetupView(
+        player: player,
+        telegram: telegram,
+        version: widget.installedVersion ?? currentReleaseVersion,
+        files: widget.dataFiles,
+        connectBuilder: (_) =>
+            PlayerShell(player: player, telegram: telegram, setupMode: true),
+        onFinished: () => Navigator.of(context).pop(),
+      ),
+    ),
+  );
+
+  Future<void> _searchLibrary() async {
+    _navigate(_Page.library);
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Search library'),
+        content: TextField(
+          controller: search,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Song, artist or channel',
+          ),
+          onSubmitted: (_) => Navigator.pop(context),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openTelegram() => _navigate(_Page.telegram);
 
   void _notice(String value) {
@@ -1039,6 +1108,25 @@ class _PlayerShellState extends State<PlayerShell>
     listenable: _shellUpdates,
     builder: (context, _) => LayoutBuilder(
       builder: (context, box) {
+        if (widget.setupMode) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Connect Telegram'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: _telegram(),
+              ),
+            ),
+          );
+        }
         final immersiveLyrics = destination == _Page.nowPlaying && showLyrics;
         final compact = box.maxWidth < 900;
         final narrow = box.maxWidth < 1180;
@@ -1134,35 +1222,13 @@ class _PlayerShellState extends State<PlayerShell>
   );
 
   Widget _bottomNavigation({_Page? page, bool transitionCopy = false}) =>
-      NavigationBar(
+      AppNavigation(
         key: transitionCopy ? null : const ValueKey('app-navigation'),
-        height: 80,
-        backgroundColor: _colors.surfaceContainerLowest,
-        selectedIndex: (page ?? destination).index,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        onDestinationSelected: (i) => _navigate(_Page.values[i]),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.library_music_rounded),
-            label: 'Library',
-            tooltip: 'Library',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.send_rounded),
-            label: 'Telegram',
-            tooltip: 'Telegram',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.album_rounded),
-            label: 'Now playing',
-            tooltip: 'Now playing',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune_rounded),
-            label: 'Settings',
-            tooltip: 'Settings',
-          ),
-        ],
+        style: player.settings.navigationStyle,
+        radius: player.settings.navigationRadius,
+        selected: (page ?? destination).index,
+        onSelected: (i) => _navigate(_Page.values[i]),
+        onSearch: _searchLibrary,
       );
 
   Widget _navigation(bool narrow, {bool short = false}) => Container(
@@ -1313,6 +1379,36 @@ class _PlayerShellState extends State<PlayerShell>
       final inlineCounts =
           box.maxWidth >= 560 &&
           MediaQuery.textScalerOf(context).scale(12) <= 16;
+      if (destination == _Page.settings) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            IconButton.filledTonal(
+              tooltip: _settingsSection == null
+                  ? 'Back to Library'
+                  : 'Back to Settings',
+              style: IconButton.styleFrom(
+                backgroundColor: _colors.surfaceContainerHigh,
+                foregroundColor: _colors.onSurfaceVariant,
+              ),
+              onPressed: _back,
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            SizedBox(height: short ? 8 : 18),
+            Text(
+              _settingsSection?.title ?? 'Settings',
+              key: const ValueKey('page-title'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: narrow ? 28 : 32,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -.7,
+              ),
+            ),
+          ],
+        );
+      }
       return destination == _Page.nowPlaying
           ? Row(
               children: [
@@ -1874,35 +1970,81 @@ class _PlayerShellState extends State<PlayerShell>
           ),
           const SizedBox(height: 8),
           if (!compact || selectedPlaylist == null)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final label in [
-                    'All songs',
-                    'Favorites',
-                    'Playlists',
-                    'Recently played',
-                  ])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(label),
-                        selected: collection == label,
-                        onSelected: (_) => setState(() {
-                          collection = label;
-                          selectedPlaylist = null;
-                          search.clear();
-                        }),
+            if (player.settings.compactLibrary)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: _colors.primaryContainer,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      key: const ValueKey('library-collection-menu'),
+                      value: collection,
+                      items: [
+                        for (final label in [
+                          'All songs',
+                          'Favorites',
+                          'Playlists',
+                          'Recently played',
+                        ])
+                          DropdownMenuItem(value: label, child: Text(label)),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            collection = value;
+                            selectedPlaylist = null;
+                            search.clear();
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              )
+            else
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final label in [
+                      'All songs',
+                      'Favorites',
+                      'Playlists',
+                      'Recently played',
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(label),
+                          selected: collection == label,
+                          onSelected: (_) => setState(() {
+                            collection = label;
+                            selectedPlaylist = null;
+                            search.clear();
+                          }),
+                        ),
                       ),
-                    ),
-                  if (collection == 'Recently played' &&
-                      player.settings.recentIds.isNotEmpty)
-                    TextButton(
-                      onPressed: player.clearRecent,
-                      child: const Text('Clear history'),
-                    ),
-                ],
+                    if (collection == 'Recently played' &&
+                        player.settings.recentIds.isNotEmpty)
+                      TextButton(
+                        onPressed: player.clearRecent,
+                        child: const Text('Clear history'),
+                      ),
+                  ],
+                ),
+              ),
+          if (player.settings.compactLibrary &&
+              collection == 'Recently played' &&
+              player.settings.recentIds.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: player.clearRecent,
+                child: const Text('Clear history'),
               ),
             ),
           if (collection == 'Playlists' && selectedPlaylist != null)
@@ -3432,121 +3574,174 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
+  List<Widget> _settingsContent(SettingsSection section) => switch (section) {
+    SettingsSection.general => [
+      ListTile(
+        leading: const Icon(Icons.auto_awesome_rounded),
+        title: const Text('Set up Auralis'),
+        subtitle: const Text('Connection, appearance and playback preferences'),
+        onTap: _openSetup,
+      ),
+      ListTile(
+        leading: const Icon(Icons.volume_up_outlined),
+        title: const Text('Volume controls'),
+        subtitle: Text(
+          Theme.of(context).platform == TargetPlatform.android
+              ? 'Use your phone’s volume buttons.'
+              : '↑ / ↓ changes volume and shows the level on screen.',
+        ),
+      ),
+      const ListTile(
+        leading: Icon(Icons.bedtime_outlined),
+        title: Text('Sleep timer'),
+        subtitle: Text(
+          'Use the clock control in Now Playing to stop after a duration or at the end of a song.',
+        ),
+      ),
+    ],
+    SettingsSection.appearance => [
+      AppearancePreferences(
+        settings: player.settings,
+        onChanged: () {
+          player.refreshSettings();
+          unawaited(
+            player.settings.save().catchError((Object _) {
+              _notice('Could not save appearance. Please try again.');
+            }),
+          );
+        },
+      ),
+    ],
+    SettingsSection.media => [_lyricPreferences(), _artworkPreferences()],
+    SettingsSection.data => [
+      ListTile(
+        leading: const Icon(Icons.bar_chart_rounded),
+        title: const Text('Listening stats'),
+        subtitle: const Text('Listening time & export'),
+        onTap: () => _stats(),
+      ),
+      ListTile(
+        leading: const Icon(Icons.backup_outlined),
+        title: const Text('Backup & Restore'),
+        subtitle: const Text('Stats, collections and preferences'),
+        onTap: () => _stats(backup: true),
+      ),
+      if (widget.sync != null) SyncSettings(controller: widget.sync!),
+    ],
+    SettingsSection.privacy => [
+      const ListTile(
+        leading: Icon(Icons.shield_outlined),
+        title: Text('Protected on this device'),
+        subtitle: Text(
+          'Telegram credentials are encrypted with Android Keystore or Windows DPAPI. Login codes and two-step verification passwords are never saved.',
+        ),
+      ),
+      ListTile(
+        leading: const Icon(Icons.send_rounded),
+        title: Text(telegram.ready ? 'Telegram connected' : 'Connect Telegram'),
+        subtitle: const Text('Manage your sign-in and selected channels'),
+        onTap: _openTelegram,
+      ),
+      if (telegram.ready)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: telegram.busy
+                ? null
+                : () async {
+                    await player.clear();
+                    await telegram.logout();
+                    if (telegram.ready && telegram.error != null) {
+                      _notice(telegram.error!);
+                    }
+                    if (!telegram.ready) {
+                      player.settings.selectedChannels = [];
+                      try {
+                        await player.settings.save();
+                      } catch (_) {
+                        _notice(
+                          'Signed out, but the old channel selection could not be removed from settings.',
+                        );
+                      }
+                      if (mounted) _openTelegram();
+                    }
+                  },
+            child: const Text('Sign out of Telegram'),
+          ),
+        ),
+    ],
+    SettingsSection.updates => [
+      if (widget.updater != null)
+        UpdateSettings(updater: widget.updater!, showHeading: false),
+    ],
+    SettingsSection.about => [
+      ListTile(
+        leading: const Icon(Icons.graphic_eq_rounded),
+        title: const Text('Auralis'),
+        subtitle: Text(
+          '${widget.updater?.currentVersion ?? currentReleaseVersion} · AGPL-3.0-or-later\nlibmpv · TDLib',
+        ),
+      ),
+      ListTile(
+        leading: const Icon(Icons.new_releases_outlined),
+        title: const Text('What’s new'),
+        onTap: () => showInstalledChanges(
+          context,
+          widget.installedVersion ??
+              widget.updater?.currentVersion ??
+              currentReleaseVersion,
+        ),
+      ),
+      ListTile(
+        leading: const Icon(Icons.description_outlined),
+        title: const Text('Licenses'),
+        onTap: () => showLicensePage(
+          context: context,
+          applicationName: 'Auralis',
+          applicationVersion:
+              widget.updater?.currentVersion ?? currentReleaseVersion,
+        ),
+      ),
+    ],
+  };
+
   Widget _settingsPage() => Align(
-    alignment: Alignment.topCenter,
+    alignment: Alignment.topLeft,
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 760),
-      child: ListTileTheme(
-        data: ListTileThemeData(
-          dense: true,
-          minVerticalPadding: 6,
-          minLeadingWidth: 24,
-          horizontalTitleGap: 10,
-          titleTextStyle: Theme.of(context).textTheme.titleSmall!
-              .copyWith(fontSize: 14, color: _colors.onSurface),
-          subtitleTextStyle: Theme.of(context).textTheme.bodySmall!
-              .copyWith(fontSize: 11, color: _colors.onSurfaceVariant),
-          contentPadding: EdgeInsets.zero,
-        ),
-        child: ListView(
-          key: const ValueKey('settings-page'),
-          padding: EdgeInsets.only(bottom: _dockPadding),
-          children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.bar_chart_rounded),
-              title: const Text('Listening stats'),
-              subtitle: const Text('Listening time & export'),
-              onTap: () => _stats(),
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.backup_outlined),
-              title: const Text('Backup & Restore'),
-              subtitle: const Text('Stats, collections and preferences'),
-              onTap: () => _stats(backup: true),
-            ),
-            if (widget.sync != null) SyncSettings(controller: widget.sync!),
-            _lyricPreferences(),
-            _artworkPreferences(),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.new_releases_outlined),
-              title: const Text('What’s new'),
-              onTap: () => showInstalledChanges(
-                context,
-                widget.installedVersion ??
-                    widget.updater?.currentVersion ??
-                    currentReleaseVersion,
-              ),
-            ),
-            const Divider(),
-            if (widget.updater != null) ...[
-              ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                title: const Text('App updates'),
-                children: [
-                  UpdateSettings(updater: widget.updater!, showHeading: false),
+      child: KeyedSubtree(
+        key: const ValueKey('settings-page'),
+        child: _settingsSection == null
+            ? SettingsDirectory(
+                search: settingsSearch,
+                sections: [
+                  for (final section in SettingsSection.values)
+                    if (section != SettingsSection.updates ||
+                        widget.updater != null)
+                      section,
                 ],
-              ),
-              const Divider(),
-            ],
-            const SizedBox(height: 6),
-            Text(
-              'Auralis ${widget.updater?.currentVersion ?? currentReleaseVersion} · AGPL-3.0-or-later\nlibmpv · TDLib',
-              style: TextStyle(
-                color: _colors.onSurfaceVariant,
-                fontSize: 11,
-                height: 1.4,
-              ),
-            ),
-            Text(
-              Theme.of(context).platform == TargetPlatform.android
-                  ? 'Use your phone’s volume buttons.'
-                  : '↑ / ↓ changes volume.',
-              style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () => showLicensePage(
-                  context: context,
-                  applicationName: 'Auralis',
-                  applicationVersion:
-                      widget.updater?.currentVersion ?? currentReleaseVersion,
+                onSelected: (section) =>
+                    setState(() => _settingsSection = section),
+                bottomPadding: _dockPadding,
+              )
+            : ListTileTheme(
+                data: ListTileThemeData(
+                  dense: true,
+                  minVerticalPadding: 8,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  titleTextStyle: Theme.of(context).textTheme.titleSmall!
+                      .copyWith(color: _colors.onSurface),
+                  subtitleTextStyle: Theme.of(context).textTheme.bodySmall!
+                      .copyWith(color: _colors.onSurfaceVariant),
                 ),
-                child: const Text('Licenses'),
-              ),
-            ),
-            if (telegram.ready)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: telegram.busy
-                      ? null
-                      : () async {
-                          await player.clear();
-                          await telegram.logout();
-                          if (telegram.ready && telegram.error != null) {
-                            _notice(telegram.error!);
-                          }
-                          if (!telegram.ready) {
-                            player.settings.selectedChannels = [];
-                            try {
-                              await player.settings.save();
-                            } catch (_) {
-                              _notice(
-                                'Signed out, but the old channel selection could not be removed from settings.',
-                              );
-                            }
-                            if (mounted) _openTelegram();
-                          }
-                        },
-                  child: const Text('Sign out of Telegram'),
+                child: ListView(
+                  key: PageStorageKey(
+                    'settings-${_settingsSection!.name}-content',
+                  ),
+                  padding: EdgeInsets.only(bottom: _dockPadding),
+                  children: _settingsContent(_settingsSection!),
                 ),
               ),
-          ],
-        ),
       ),
     ),
   );
@@ -3703,7 +3898,7 @@ class _AuthFormState extends State<AuthForm> {
         ] else if (td.state ==
             'authorizationStateWaitOtherDeviceConfirmation') ...[
           const Text(
-            'Open Settings → Account & sync to see this device’s sign-in code and approve it on a connected device, or choose phone sign-in there.',
+            'Open Settings → Data & sync → Account & sync to see this device’s sign-in code and approve it on a connected device, or choose phone sign-in there.',
           ),
         ] else if (label != null) ...[
           if (td.state == 'authorizationStateWaitCode') ...[
