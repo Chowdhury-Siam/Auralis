@@ -57,16 +57,87 @@ class _LyricsViewState extends State<LyricsView> {
   @override
   void initState() {
     super.initState();
+    widget.repository.addListener(_repositoryChanged);
     _reset();
   }
 
   @override
   void didUpdateWidget(LyricsView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(widget.player.current, _track)) _reset();
+    if (oldWidget.repository != widget.repository) {
+      oldWidget.repository.removeListener(_repositoryChanged);
+      widget.repository.addListener(_repositoryChanged);
+    }
+    if (!identical(widget.player.current, _track) ||
+        oldWidget.repository != widget.repository ||
+        _lastTranslationOptions != _translationOptions) {
+      _reset();
+    }
+  }
+
+  Object? _lastTranslationOptions;
+  Object? _automaticTranslationAttempt;
+  Object get _translationOptions => (
+    widget.player.settings.automaticTranslation,
+    widget.player.settings.translationFirst,
+    widget.player.settings.translationFallback,
+    widget.player.settings.translationDirection,
+  );
+
+  void _repositoryChanged() {
+    if (!mounted || _track == null || _loading || _importing) return;
+    final source = widget.repository.cached(_track!);
+    if (source == null) return;
+    final translated = widget.repository.translated(_track!, source);
+    if (!identical(source, _lyrics)) {
+      setState(() {
+        ++_generation;
+        _lyrics = source;
+        _translation = null;
+        _translating = false;
+        _showTranslation = false;
+        _looked = true;
+        _synced = source.lines.isNotEmpty;
+      });
+    }
+    if (widget.player.settings.automaticTranslation &&
+        translated != null &&
+        !identical(translated, _translation)) {
+      setState(() {
+        _translation = translated;
+        _showTranslation = true;
+      });
+    }
+    _translateAutomatically();
+  }
+
+  void _translateAutomatically() {
+    final attempt = (_lyrics, _translationOptions);
+    if (widget.player.settings.automaticTranslation &&
+        _lyrics != null &&
+        _automaticTranslationAttempt != attempt &&
+        _translation == null &&
+        !_translating &&
+        !_loading &&
+        LyricsTranslator.supports(
+          _lyrics!,
+          direction: widget.player.settings.translationDirection,
+        )) {
+      _automaticTranslationAttempt = attempt;
+      unawaited(_translateInApp(automatic: true));
+    }
+  }
+
+  @override
+  void dispose() {
+    ++_generation;
+    widget.repository.removeListener(_repositoryChanged);
+    super.dispose();
   }
 
   void _reset() {
+    _lastTranslationOptions = _translationOptions;
+    _automaticTranslationAttempt = null;
     _generation++;
     _translation = null;
     _translating = false;
@@ -78,7 +149,15 @@ class _LyricsViewState extends State<LyricsView> {
     _error = null;
     _synced = _lyrics == null || _lyrics!.lines.isNotEmpty;
     if (_track != null && !_looked) {
-      unawaited(_load(embedded: true, preferCache: true));
+      unawaited(
+        _load(
+          embedded: true,
+          online: widget.player.settings.automaticLyrics,
+          preferCache: true,
+        ),
+      );
+    } else {
+      _translateAutomatically();
     }
   }
 
@@ -139,6 +218,7 @@ class _LyricsViewState extends State<LyricsView> {
         setState(() {
           _loading = false;
         });
+        _translateAutomatically();
       }
     }
   }
@@ -242,7 +322,6 @@ class _LyricsViewState extends State<LyricsView> {
 
   void _useLyrics(Track track, Lyrics lyrics) {
     _generation++;
-    widget.repository.save(track, lyrics);
     setState(() {
       _lyrics = lyrics;
       _translation = null;
@@ -253,9 +332,11 @@ class _LyricsViewState extends State<LyricsView> {
       _error = null;
       _synced = lyrics.lines.isNotEmpty;
     });
+    widget.repository.save(track, lyrics);
+    _translateAutomatically();
   }
 
-  Future<void> _translateInApp() async {
+  Future<void> _translateInApp({bool automatic = false}) async {
     final source = _lyrics, track = _track;
     if (source == null || track == null || _loading || _translating) return;
     if (_translation != null) {
@@ -269,29 +350,34 @@ class _LyricsViewState extends State<LyricsView> {
         identical(source, _lyrics) &&
         identical(track, _track) &&
         identical(track, widget.player.current);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Japanese → English'),
-        content: const Text(
-          'Translate these lyrics with Google Translate, with MyMemory as a fallback. '
-          'Japanese lyric text is sent to these services. No API key is needed. '
-          'MyMemory has a daily limit. Translations are cached on this device; '
-          'machine translation may miss a song’s meaning.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Translate'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !active()) return;
+    final confirmed =
+        automatic ||
+        widget.player.settings.automaticTranslation ||
+        await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(widget.player.settings.translationDirection.label),
+                content: Text(
+                  'Translate with ${widget.player.settings.translationFirst.label}'
+                  '${widget.player.settings.translationFallback == null ? '' : ', then ${widget.player.settings.translationFallback!.label}'}. '
+                  'Lyric text is sent to these services. No API key is needed. '
+                  'MyMemory has a daily limit. Translations are cached on this device; '
+                  'machine translation may miss a song’s meaning.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Translate'),
+                  ),
+                ],
+              ),
+            ) ==
+            true;
+    if (!confirmed || !active()) return;
     setState(() => _translating = true);
     try {
       final result = await widget.repository.translateJapanese(
@@ -305,7 +391,7 @@ class _LyricsViewState extends State<LyricsView> {
         _showTranslation = true;
       });
     } catch (error) {
-      if (!mounted || !active()) return;
+      if (!mounted || !active() || automatic) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -449,10 +535,14 @@ class _LyricsViewState extends State<LyricsView> {
           !_translating &&
           !_openingDeepL &&
           _lyrics != null &&
-          LyricsTranslator.supports(_lyrics!),
+          LyricsTranslator.supports(
+            _lyrics!,
+            direction: widget.player.settings.translationDirection,
+          ),
       icon: Icons.translate_rounded,
       title: _showTranslation ? 'Show original lyrics' : 'Translate in Auralis',
-      subtitle: 'Japanese → English · Google / MyMemory · cached.',
+      subtitle:
+          '${widget.player.settings.translationDirection.label} · ${widget.player.settings.translationFirst.label}',
     ),
     _menuAction(
       value: 'deepl',
@@ -528,7 +618,7 @@ class _LyricsViewState extends State<LyricsView> {
             title: 'Find lyrics online',
             subtitle: _lyrics?.provider != null
                 ? 'Current: ${_lyrics!.provider}. Retry all sources.'
-                : 'LRCLIB → search → lyrics.ovh automatically.',
+                : 'Uses the source order in Settings.',
           ),
           _menuAction(
             value: 'paste',
