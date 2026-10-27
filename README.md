@@ -147,6 +147,13 @@ Android APKs now always use optimized release mode. Run **Set up Android signing
 
 ### First launch
 
+A fresh install opens an illustrated setup flow for Telegram, optional Android device settings, backup restore, lyrics, artwork, library layout and navigation. You can skip optional steps and reopen **Settings → General → Set up Auralis** later. Existing installations keep their current library and go straight to the app. Appearance choices remain available under **Settings → Appearance**.
+
+| Welcome | Navigation | Translation menu |
+| --- | --- | --- |
+| ![Auralis setup welcome](docs/screenshots/setup-welcome-390.png) | ![Navigation choices](docs/screenshots/setup-navigation-390.png) | ![Compact translation menu](docs/screenshots/translation-menu-390.png) |
+
+
 1. Open **Telegram** in Auralis. Release builds configured with the application's Telegram credentials do not ask for an API ID or API hash.
 2. Choose your country/calling code and enter your phone number, or paste a full international number beginning with `+`. Enter the Telegram login code and two-step password if requested. The code page shows the destination number; use **Change number** to correct it and request a replacement code.
 3. Select one or more channels and choose **Open Library**.
@@ -195,9 +202,9 @@ Open **Now Playing** from navigation or the floating player’s artwork/title. T
 
 The bottom player floats above the page, showing content through its margins and behind sideways movement. Releasing a drag springs it back while music continues. Desktop layouts include the song artwork. Repeat and sleep controls are on Now Playing; Android volume uses hardware buttons and desktop volume uses Up/Down keys.
 
-Embedded lyrics load when supported tags are available. Use **Lyrics options** to retry reading the music file, import `.lrc`, or paste text. If saved or embedded lyrics are missing, automatic lookup uses the source order in **Settings → Lyrics & translation**. Defaults are LRCLIB exact/search then lyrics.ovh; either source can be first and the fallback can be disabled. **Find lyrics** retries the lookup. Back and the single options menu are at the top; the source footer is removed. **Follow song** returns to automatic scrolling after you browse elsewhere.
+Embedded lyrics load when supported tags are available. Use **Lyrics options** to retry reading the music file, import `.lrc`, or paste text. If saved or embedded lyrics are missing, automatic lookup uses the source order in **Settings → Lyrics & artwork → Lyrics & translation**. Defaults are LRCLIB exact/search then lyrics.ovh; either source can be first and the fallback can be disabled. **Find lyrics** retries the lookup. Back and the single options menu are at the top; the source footer is removed. **Follow song** returns to automatic scrolling after you browse elsewhere.
 
-Favorites, playlists, listening statistics, recent music, channels and shared preferences can sync across Android and Windows through your own Cloudflare Worker and Turso database. Open Settings → Account & sync to deploy, sign in with a username, switch accounts or recover access. Owner credentials enable automatic updates when an app bundles a newer Worker. See [multi-device sync setup](docs/SYNC.md). Artwork, original lyrics and translations have an account-scoped device cache and are excluded from backups. In-app translation runs automatically by default; choose Japanese → English or English → Japanese and Google Translate/MyMemory provider order in Settings. DeepL’s website option remains available from Lyrics. Word-level karaoke is not included.
+Favorites, playlists, listening statistics, recent music, channels and shared preferences can sync across Android and Windows through your own Cloudflare Worker and Turso database. Open Settings → Data & sync → Account & sync to deploy, sign in with a username, switch accounts or recover access. Owner credentials enable automatic updates when an app bundles a newer Worker. See [multi-device sync setup](docs/SYNC.md). Artwork, original lyrics and translations have an account-scoped device cache and are excluded from backups. In-app translation runs automatically by default; choose Japanese → English or English → Japanese and Google Translate/MyMemory provider order in Settings. DeepL’s website option remains available from Lyrics. Word-level karaoke is not included.
 
 See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality notes](docs/GUIDE.md#streaming-audio-quality).
 
@@ -209,9 +216,9 @@ See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality note
 
 | Task | Where to go |
 | --- | --- |
-| View listening time, rankings, and daily activity | **Settings → Listening stats** |
+| View listening time, rankings, and daily activity | **Settings → Data & sync → Listening stats** |
 | Export stats as CSV or JSON | **Listening stats → Export CSV / Export JSON** |
-| Create or restore a backup | **Settings → Backup & Restore** |
+| Create or restore a backup | **Settings → Data & sync → Backup & Restore** |
 | Recover the data replaced by the last restore | **Restore recovery copy** in the backup section |
 
 A backup includes listening stats, favorites, playlists, recent music, channel selections, and preferences. **Include Telegram account** is enabled when connected: it adds your Telegram session, API details and database key inside a password-encrypted backup. Music files, artwork, lyrics, the queue and sleep timers are excluded.
@@ -228,12 +235,13 @@ See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for val
 
 | Setting or action | Purpose |
 | --- | --- |
-| **Lyrics & translation** | Automatic lookup/translation, direction, and primary/fallback providers |
-| **Artwork** | Upcoming cover preload count and permanent or temporary artwork |
-| **Listening stats** | Review listening activity and export data |
-| **Backup & Restore** | Save and recover your Telegram account, collections, stats, and preferences |
+| **General / Appearance** | Reopen setup, choose compact library navigation, phone navigation style and corner radius |
+| **Lyrics & artwork → Lyrics & translation** | Automatic lookup/translation, direction, and primary/fallback providers |
+| **Lyrics & artwork → Artwork** | Upcoming cover preload count and permanent or temporary artwork |
+| **Data & sync → Listening stats** | Review listening activity and export data |
+| **Data & sync → Backup & Restore** | Save and recover your Telegram account, collections, stats, and preferences |
 | **App updates** | Check stable releases and choose whether to install |
-| **Sign out of Telegram** | Stop playback, clear queue/channel selections, and forget saved API credentials after successful logout |
+| **Privacy & security → Sign out of Telegram** | Stop playback, clear queue/channel selections, and forget saved API credentials after successful logout |
 
 API credentials and the TDLib database key are encrypted with **Windows DPAPI** or **Android Keystore**. Login codes and two-step verification passwords are not saved by Auralis. Android's Windows installer/update controls are disabled; upgrade by installing an APK signed with the same key.
 
@@ -276,7 +284,7 @@ GitHub Actions builds Android and Windows independently. A separate **Publish Au
 - Optional Android x64 artifacts are attached when available for that same commit.
 - A separate cleanup action removes green runs after publishing and failures after a minimum ten-minute retention period. It keeps active runs and artifacts still needed for publication.
 - `CHANGELOG.md` generates matching GitHub and bundled app release notes. Settings has **What’s new**, installed updates show their changes once, and update notices include **What changed**.
-- Both Android and Windows check for new stable updates automatically when enabled. Android can download a verified APK automatically; installation still requires confirmation. There is no Play Store publishing flow.
+- Both Android and Windows check for new stable updates automatically when enabled. Android can download a verified APK automatically; tap Install update to start installation. Android 12+ requests a self-update without further confirmation where allowed, with a system prompt as fallback. There is no Play Store publishing flow.
 - Pull requests and other branches build artifacts without publishing. Published files/tags are not overwritten.
 
 See [build/publish/cleanup and release notes](docs/RELEASE_PIPELINE.md), [sync setup](docs/SYNC.md), [Android signing](docs/ANDROID.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
@@ -307,7 +315,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.90+91**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.93+94**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
@@ -353,7 +361,7 @@ Third-party libraries retain their own licenses, including Flutter's generated h
 
 
 Android 0.1.52 uses the package ID `com.auralis.siam` and includes automatic
-update checks/downloads with Android-confirmed installation. This package needs
+update checks/downloads with user-initiated Android self-updates. This package needs
 one manual install because the ID changed. Keep your existing app until your
 available backups have been restored. See [Android setup and migration](docs/ANDROID.md)
 for signing, updates, and unreadable Telegram credential recovery.
