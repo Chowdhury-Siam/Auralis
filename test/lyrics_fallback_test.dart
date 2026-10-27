@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:auralis/lyrics.dart';
 import 'package:auralis/media_cache.dart';
 import 'package:auralis/models.dart';
+import 'package:auralis/storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'lyrics_test.dart' show song;
@@ -23,6 +24,145 @@ class WaitingClient extends Client {
 }
 
 void main() {
+  test(
+    'automatic preparation finds and translates while preserving originals',
+    () async {
+      final preferences = AppSettings(File('unused'));
+      final client = Client([
+        jsonResponse({'syncedLyrics': '[00:02]今日は晴れです。'}),
+        jsonResponse([
+          [
+            ['It is sunny today.', '今日は晴れです。'],
+          ],
+          null,
+          'ja',
+        ]),
+      ]);
+      final repository = LyricsRepository(
+        preferences: preferences,
+        createClient: () => client,
+      );
+      addTearDown(repository.close);
+      final source = await repository.prepare(
+        song,
+        active: () => true,
+        loadEmbedded: (_) async => null,
+      );
+      expect(client.requests.map((r) => r.host), [
+        'lrclib.net',
+        'translate.googleapis.com',
+      ]);
+      expect(source!.lines.single.text, '今日は晴れです。');
+      expect(repository.cached(song), same(source));
+      expect(
+        repository.translated(song, source)!.lines.single.text,
+        '今日は晴れです。\nIt is sunny today.',
+      );
+    },
+  );
+
+  test(
+    'background translation continues after the lyrics view stops waiting',
+    () async {
+      final client = WaitingClient();
+      final repository = LyricsRepository(createClient: () => client);
+      final source = Lyrics.parse('[00:02]今日は晴れです。');
+      repository.save(song, source);
+      addTearDown(repository.close);
+      var viewActive = true;
+      final view = repository.translateJapanese(
+        song,
+        source,
+        active: () => viewActive,
+      );
+      final background = repository.translateJapanese(
+        song,
+        source,
+        active: () => true,
+      );
+      expect(view, same(background));
+      await Future<void>.delayed(Duration.zero);
+      viewActive = false;
+      client.ready.complete(
+        Request(
+          jsonResponse([
+            [
+              ['Sunny', '今日は晴れです。'],
+            ],
+            null,
+            'ja',
+          ]),
+        ),
+      );
+      expect((await background).plain, '今日は晴れです。\nSunny');
+      expect(repository.translated(song, source), isNotNull);
+      expect(client.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'a new lyric import wins over a late embedded-lyric preparation',
+    () async {
+      final preferences = AppSettings(File('unused'))
+        ..automaticTranslation = false;
+      final repository = LyricsRepository(
+        preferences: preferences,
+        createClient: () =>
+            throw StateError('Imported lyrics must avoid lookup'),
+      );
+      addTearDown(repository.close);
+      final embedded = Completer<Lyrics?>();
+      final work = repository.prepare(
+        song,
+        active: () => true,
+        loadEmbedded: (_) => embedded.future,
+      );
+      await Future<void>.delayed(Duration.zero);
+      final imported = Lyrics.parse('Imported original', imported: true);
+      repository.save(song, imported);
+      embedded.complete(
+        Lyrics.parse('Older embedded original', embedded: true),
+      );
+      expect(await work, same(imported));
+      expect(repository.cached(song), same(imported));
+    },
+  );
+
+  test(
+    'lyrics source order and disabled fallback follow preferences',
+    () async {
+      final preferences = AppSettings(File('unused'))
+        ..lyricsFirst = LyricsSource.lyricsOvh
+        ..lyricsFallback = LyricsSource.lrclib
+        ..automaticTranslation = false;
+      final client = Client([
+        jsonResponse({'lyrics': 'Preferred original words'}),
+      ]);
+      final repository = LyricsRepository(
+        preferences: preferences,
+        createClient: () => client,
+      );
+      addTearDown(repository.close);
+      final result = await repository.prepare(
+        song,
+        active: () => true,
+        loadEmbedded: (_) async => null,
+      );
+      expect(result!.provider, 'lyrics.ovh');
+      expect(client.requests.single.host, 'api.lyrics.ovh');
+      preferences.lyricsFirst = LyricsSource.lrclib;
+      preferences.lyricsFallback = null;
+      final missing = Client([Response([], statusCode: 404), jsonResponse([])]);
+      final onlyPrimary = LyricsRepository(
+        preferences: preferences,
+        createClient: () => missing,
+      );
+      addTearDown(onlyPrimary.close);
+      expect(await onlyPrimary.find(song), isNull);
+      expect(missing.requests.map((r) => r.host), ['lrclib.net', 'lrclib.net']);
+    },
+  );
+
   test('missing, empty, invalid, oversized and failed first sources fall through to lyrics.ovh', () async {
     for (final first in [
       Response([], statusCode: 404),
