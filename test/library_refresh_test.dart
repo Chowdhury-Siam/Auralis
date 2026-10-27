@@ -122,18 +122,37 @@ void main() {
       addTearDown(() async {
         if (telegram.pause?.isCompleted == false) telegram.pause!.complete();
         await tester.pumpWidget(const SizedBox());
-        for (var i = 0; i < 300 && MediaCache.hasPending(directory); i++) {
-          await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        var closed = false;
+        // Keep pumping until shutdown itself finishes; disk completion can
+        // schedule more work after a momentarily empty pending-file set.
+        final cleanup = Future.wait([
+          player.shutdown(),
+          telegram.shutdown(),
+          MediaCache.drain(directory),
+        ]).whenComplete(() => closed = true);
+        for (var i = 0; i < 1500 && !closed; i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
           await tester.pump();
         }
-        await tester.runAsync(() async {
-          await player.shutdown();
-          await telegram.shutdown();
-          await MediaCache.drain(directory);
-          await directory.delete(recursive: true);
-        });
+        expect(
+          closed,
+          isTrue,
+          reason: 'Shutdown did not drain the media cache',
+        );
+        await cleanup;
+        await tester.runAsync(() => directory.delete(recursive: true));
       });
       final counts = <String>[];
+      Future<void> refresh() async {
+        // Start real filesystem work outside the fake widget clock.
+        await tester.runAsync(
+          () => tester.tap(find.byKey(const ValueKey('library-refresh'))),
+        );
+        await tester.pump();
+      }
+
       Future<void> until(bool Function() complete) async {
         for (var i = 0; i < 1500; i++) {
           await tester.runAsync(
@@ -158,7 +177,7 @@ void main() {
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
       telegram.pause = Completer<void>();
-      await tester.tap(find.byKey(const ValueKey('library-refresh')));
+      await refresh();
       await until(() => telegram.artworkRequests.isNotEmpty);
       expect(find.text('Caching 0 / 3'), findsOneWidget);
       telegram.pause!.complete();
@@ -175,7 +194,7 @@ void main() {
       Future<void> fullyCachedRefresh() async {
         counts.clear();
         final scans = telegram.scans, checks = telegram.checks;
-        await tester.tap(find.byKey(const ValueKey('library-refresh')));
+        await refresh();
         await until(
           () =>
               telegram.scans > scans &&
@@ -198,7 +217,7 @@ void main() {
       await fullyCachedRefresh();
       tracks.add(song(43));
       telegram.pause = Completer<void>();
-      await tester.tap(find.byKey(const ValueKey('library-refresh')));
+      await refresh();
       await until(() => telegram.artworkRequests.length == 3);
       expect(find.text('Caching 0 / 1'), findsOneWidget);
       telegram.pause!.complete();
@@ -206,6 +225,9 @@ void main() {
       expect(telegram.artworkRequests.last, '43');
       expect(telegram.lyricRequests.last, '43');
       expect(tester.takeException(), isNull);
+      // Exercise teardown with disk work that originates in the fake clock too.
+      unawaited(disk.write(song(999), 'art', png));
+      expect(MediaCache.hasPending(directory), isTrue);
       await tester.pumpWidget(const SizedBox());
     },
   );
