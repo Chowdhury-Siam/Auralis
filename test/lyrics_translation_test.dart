@@ -102,13 +102,45 @@ void main() {
     // Changed lyric text and another account cannot reuse that translation.
     await expectLater(
       offline.translate(track, Lyrics.parse('新しい歌'), active: () => true),
-      throwsStateError,
+      throwsA(isA<TranslationFailure>()),
     );
     disk = MediaCache(Directory('${dir.path}/bob'));
     await expectLater(
       offline.translate(track, japanese, active: () => true),
-      throwsStateError,
+      throwsA(isA<TranslationFailure>()),
     );
+  });
+
+  test('configured MyMemory first falls back to Google and supports English to Japanese', () async {
+    final primary = Client([Response([], statusCode: 503)]);
+    final secondary = Client([google('こんにちは')]);
+    final clients = [primary, secondary];
+    final translator = LyricsTranslator(
+      createClient: () => clients.removeAt(0),
+    );
+    addTearDown(translator.close);
+    final source = Lyrics.parse('[00:02]Hello');
+    expect(
+      LyricsTranslator.supports(
+        source,
+        direction: TranslationDirection.englishJapanese,
+      ),
+      isTrue,
+    );
+    final result = await translator.translate(
+      track,
+      source,
+      active: () => true,
+      first: TranslationSource.myMemory,
+      fallback: TranslationSource.google,
+      direction: TranslationDirection.englishJapanese,
+    );
+    expect(primary.requests.single.host, 'api.mymemory.translated.net');
+    expect(primary.requests.single.queryParameters['langpair'], 'en|ja');
+    expect(secondary.requests.single.queryParameters['sl'], 'en');
+    expect(secondary.requests.single.queryParameters['tl'], 'ja');
+    expect(result.lines.single.text, 'Hello\nこんにちは');
+    expect(source.lines.single.text, 'Hello');
   });
 
   test(
