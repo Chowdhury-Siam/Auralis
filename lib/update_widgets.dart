@@ -32,7 +32,7 @@ class UpdateSettings extends StatelessWidget {
           ),
           subtitle: Text(
             updater.isAndroid
-                ? 'At startup and every thirty minutes. Android asks before installation.'
+                ? 'At startup and every thirty minutes. Tap Install update to install.'
                 : 'At startup and every thirty minutes',
           ),
           value: updater.settings.automaticUpdates,
@@ -175,19 +175,17 @@ class UpdateBanner extends StatelessWidget {
 }
 
 Future<void> confirmUpdate(BuildContext context, AppUpdater updater) async {
+  if (updater.isAndroid) {
+    await updater.install();
+    return;
+  }
   final accepted = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: Text(
-        updater.isAndroid
-            ? 'Install Android update?'
-            : 'Install update and restart?',
-      ),
+      title: const Text('Install update and restart?'),
       content: Text(
-        updater.isAndroid
-            ? 'Version ${updater.available?.version} has passed its SHA-256 checksum check. Android will ask you to confirm installation. If prompted, allow updates from Auralis. Your settings and Telegram session stay on this device.'
-            : 'The ${updater.available?.version} installer passed its SHA-256 checksum check. '
-                  'Auralis will close and open the Windows installer. Complete its steps to install and reopen Auralis. Your settings and Telegram session stay on this device.',
+        'The ${updater.available?.version} installer passed its SHA-256 checksum check. '
+        'Auralis will close and open the Windows installer. Complete its steps to install and reopen Auralis. Your settings and Telegram session stay on this device.',
       ),
       actions: [
         TextButton(
