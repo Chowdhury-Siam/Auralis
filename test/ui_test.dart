@@ -287,7 +287,7 @@ void main() {
       // Artwork can now arrive from persistent disk cache after refresh.
       for (
         var attempt = 0;
-        attempt < 100 && find.byType(Image).evaluate().length < 3;
+        attempt < 100 && find.byType(Image).evaluate().length < 4;
         attempt++
       ) {
         await tester.runAsync(
@@ -295,7 +295,14 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 30));
       }
-      expect(find.byType(Image), findsNWidgets(3));
+      expect(find.byType(Image), findsNWidgets(4));
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('player-bar')),
+          matching: find.byType(Image),
+        ),
+        findsOneWidget,
+      );
       expect(
         tester.getRect(find.byKey(const ValueKey('player-bar'))).left,
         greaterThanOrEqualTo(202),
@@ -453,6 +460,10 @@ void main() {
         expect(find.text('Use instant page transitions'), findsNothing);
         expect(find.text('Listening stats'), findsOneWidget);
         expect(find.text('Backup & Restore'), findsOneWidget);
+        expect(find.text('Check automatically'), findsNothing);
+        await tester.ensureVisible(find.text('App updates'));
+        await tester.tap(find.text('App updates'));
+        await tester.pumpAndSettle();
         expect(find.text('Check automatically'), findsOneWidget);
         expect(tester.takeException(), isNull);
         expect(find.byType(AlertDialog), findsNothing);
