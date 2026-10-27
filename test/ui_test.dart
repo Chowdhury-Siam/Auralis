@@ -454,6 +454,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Find your next favorite'), findsOneWidget);
         expect(tester.takeException(), isNull);
+        await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Settings'));
         await tester.pumpAndSettle();
         expect(find.text('Reduce motion'), findsNothing);
