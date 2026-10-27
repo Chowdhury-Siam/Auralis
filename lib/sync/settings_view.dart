@@ -12,9 +12,9 @@ class SyncSettings extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: controller,
     builder: (context, _) => Card(
-      margin: const EdgeInsets.symmetric(vertical: 12),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         leading: const Icon(Icons.cloud_sync_rounded),
         title: const Text('Account & sync'),
         subtitle: Text(
