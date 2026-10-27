@@ -1,9 +1,11 @@
 package com.auralis.siam
 
 import android.app.Activity
+import android.app.PendingIntent
 import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageInfo
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -12,6 +14,7 @@ import androidx.core.content.FileProvider
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.lang.ref.WeakReference
 import java.security.MessageDigest
 import java.util.concurrent.ExecutorService
 import java.util.zip.ZipFile
@@ -22,7 +25,8 @@ class AndroidUpdateInstaller(private val activity: Activity, private val io: Exe
         const val PERMISSION_REQUEST = 4201
     }
     private data class Request(val file: File, val version: String, val digest: String)
-    private var pending: Pair<Request, MethodChannel.Result>? = null
+    @Volatile private var pending: Pair<Request, MethodChannel.Result>? = null
+    @Volatile private var sessionId = -1
     private val directory: File
         get() = File(activity.cacheDir, "auralis-updates").canonicalFile
     private val abi: String?
@@ -62,6 +66,8 @@ class AndroidUpdateInstaller(private val activity: Activity, private val io: Exe
                             activity.startActivityForResult(
                                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                                     Uri.parse("package:${activity.packageName}")), PERMISSION_REQUEST)
+                        } else if (Build.VERSION.SDK_INT >= 31) {
+                            installSession(request, result)
                         } else {
                             val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.updates", request.file.canonicalFile)
                             val intent = Intent(Intent.ACTION_VIEW)
@@ -85,6 +91,56 @@ class AndroidUpdateInstaller(private val activity: Activity, private val io: Exe
                 }
             }
         }
+    }
+
+    @android.annotation.TargetApi(31)
+    private fun installSession(request: Request, result: MethodChannel.Result) {
+        io.execute {
+            val installer = activity.packageManager.packageInstaller
+            var id = -1
+            try {
+                val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+                params.setAppPackageName(activity.packageName)
+                params.setSize(request.file.length())
+                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                id = installer.createSession(params)
+                sessionId = id
+                UpdateInstallReceiver.owner = WeakReference(this)
+                installer.openSession(id).use { session ->
+                    session.openWrite("base.apk", 0, request.file.length()).use { output ->
+                        request.file.inputStream().use { it.copyTo(output) }
+                        session.fsync(output)
+                    }
+                    val callback = Intent(activity, UpdateInstallReceiver::class.java)
+                        .setAction(UpdateInstallReceiver.ACTION)
+                    val sender = PendingIntent.getBroadcast(activity, id, callback,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+                    check(pending?.second === result) { "Installation was closed before submission" }
+                    session.commit(sender.intentSender)
+                }
+            } catch (_: Exception) {
+                if (id >= 0) runCatching { installer.abandonSession(id) }
+                activity.runOnUiThread {
+                    if (pending?.second !== result) return@runOnUiThread
+                    sessionId = -1
+                    pending = null
+                    result.error("update_installer", "Android could not start the update. Your download is kept; try again.", null)
+                }
+            }
+        }
+    }
+
+    internal fun installResult(id: Int, status: Int, message: String?): Boolean {
+        if (id != sessionId) return false
+        val current = pending ?: return false
+        sessionId = -1
+        pending = null
+        if (status == PackageInstaller.STATUS_SUCCESS) {
+            current.second.success(true)
+        } else {
+            current.second.error("update_installer", message ?: "Android did not install the update. Try again.", null)
+        }
+        return true
     }
 
     fun onActivityResult(requestCode: Int): Boolean {
@@ -148,7 +204,9 @@ class AndroidUpdateInstaller(private val activity: Activity, private val io: Exe
     }
 
     fun close() {
+        if (UpdateInstallReceiver.owner?.get() === this) UpdateInstallReceiver.owner = null
         pending?.second?.error("update_cancelled", "Installation was interrupted. Reopen Auralis and try again.", null)
         pending = null
+        sessionId = -1
     }
 }
