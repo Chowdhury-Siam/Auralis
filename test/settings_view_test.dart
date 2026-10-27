@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:auralis/app.dart';
 import 'package:auralis/player.dart';
+import 'package:auralis/models.dart';
+import 'package:auralis/preference_widgets.dart';
 import 'package:auralis/settings_view.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
@@ -50,6 +52,109 @@ void main() {
       expect(SettingsSection.appearance.matches('banana'), isFalse);
     },
   );
+
+  testWidgets('themed settings cards and anchored menus retain real choices', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final settings = SavedSettings()
+      ..compactLibrary = true
+      ..navigationStyle = AppNavigationStyle.expressive;
+    final player = PlayerController(
+      FakeAudio(),
+      TelegramStreamProxy((_) async => {}),
+      settings,
+    );
+    final telegram = TelegramService(
+      Directory('unused'),
+      MemoryVault(),
+      transport: FakeTd(),
+    );
+    final updater = AppUpdater(
+      currentVersion: '0.1.99',
+      directory: Directory('unused'),
+      settings: settings,
+      target: UpdateTarget.android,
+      androidAbi: 'arm64-v8a',
+    );
+    addTearDown(player.shutdown);
+    addTearDown(telegram.shutdown);
+    addTearDown(updater.dispose);
+    final boundary = GlobalKey();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: boundary,
+        child: AuralisApp(player: player, telegram: telegram, updater: updater),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('library-collection-menu')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byType(PopupMenuItem<int>).first).width,
+      lessThanOrEqualTo(280),
+    );
+    await tester.tap(find.text('Favorites').last);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Library collection: Favorites'), findsOneWidget);
+    await tester.tap(find.byTooltip('Settings').first);
+    await tester.pumpAndSettle();
+    for (final section in SettingsSection.values) {
+      await tester.enterText(
+        find.byKey(const ValueKey('settings-search')),
+        section.title,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('settings-${section.name}')));
+      await tester.pumpAndSettle();
+      expect(find.byType(PreferenceCard), findsWidgets);
+      final colors = Theme.of(tester.element(find.byType(PreferenceCard).first))
+          .colorScheme;
+      final card = find
+          .descendant(
+            of: find.byType(PreferenceCard).first,
+            matching: find.byType(Material),
+          )
+          .first;
+      expect(tester.widget<Material>(card).color, colors.surfaceContainerLow);
+      if (section == SettingsSection.appearance) {
+        await tester.tap(find.byTooltip('App navigation: Expressive pill'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Classic pill').last);
+        await tester.pumpAndSettle();
+        expect(settings.navigationStyle, AppNavigationStyle.classic);
+        expect(settings.saves, greaterThan(0));
+      }
+      if (section == SettingsSection.media) {
+        await tester.tap(find.byKey(const ValueKey('lyrics-preferences')));
+        await tester.pumpAndSettle();
+        final trigger = find.byTooltip('Lyrics fallback: lyrics.ovh');
+        await Scrollable.ensureVisible(tester.element(trigger));
+        await tester.pumpAndSettle();
+        await tester.tap(trigger);
+        await tester.pumpAndSettle();
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(
+          settings.lyricsFallback,
+          isNotNull,
+          reason: 'Dismiss is not None',
+        );
+        await tester.tap(trigger);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('None').last);
+        await tester.pumpAndSettle();
+        expect(settings.lyricsFallback, isNull);
+      }
+      expect(tester.takeException(), isNull, reason: section.title);
+      await tester.tap(find.byTooltip('Back to Settings'));
+      await tester.pumpAndSettle();
+    }
+    await tester.pumpWidget(const SizedBox());
+  });
 
   for (final size in [
     const Size(390, 844),
