@@ -70,6 +70,45 @@ class DataBackup {
         !PlaybackRepeat.values.any((v) => v.name == data['repeatMode'])) {
       throw const FormatException('Invalid playback preferences.');
     }
+    for (final name in [
+      'automaticLyrics',
+      'automaticTranslation',
+      'keepArtwork',
+    ]) {
+      if (data.containsKey(name) && data[name] is! bool) {
+        throw const FormatException('Invalid media preference.');
+      }
+    }
+    if (data.containsKey('artworkPreload') &&
+        (data['artworkPreload'] is! int ||
+            (data['artworkPreload'] as int) < 0 ||
+            (data['artworkPreload'] as int) > 50)) {
+      throw const FormatException('Invalid artwork preload count.');
+    }
+    for (final (first, fallback, values) in [
+      (
+        'lyricsFirst',
+        'lyricsFallback',
+        LyricsSource.values.map((v) => v.name).toSet(),
+      ),
+      (
+        'translationFirst',
+        'translationFallback',
+        TranslationSource.values.map((v) => v.name).toSet(),
+      ),
+    ]) {
+      if ((data.containsKey(first) && !values.contains(data[first])) ||
+          (data[fallback] != null && !values.contains(data[fallback])) ||
+          (data[first] != null && data[first] == data[fallback])) {
+        throw const FormatException('Invalid provider order.');
+      }
+    }
+    if (data.containsKey('translationDirection') &&
+        !TranslationDirection.values.any(
+          (v) => v.name == data['translationDirection'],
+        )) {
+      throw const FormatException('Invalid translation direction.');
+    }
     void ids(Object? value, int maximum) {
       if (value is! List || value.length > maximum) {
         throw const FormatException('Invalid collection size.');
@@ -118,6 +157,15 @@ class DataBackup {
       'reducedMotion',
       'automaticUpdates',
       'volume',
+      'automaticLyrics',
+      'automaticTranslation',
+      'keepArtwork',
+      'artworkPreload',
+      'lyricsFirst',
+      'lyricsFallback',
+      'translationFirst',
+      'translationFallback',
+      'translationDirection',
       'librarySort',
       'repeatMode',
       'favoriteIds',
