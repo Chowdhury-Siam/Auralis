@@ -47,40 +47,56 @@ void main() {
     await directory.delete(recursive: true);
   });
 
-  testWidgets('configured builds hide API fields and use phone, code and password sign-in', (tester) async {
-    final td = FakeTd(), vault = MemoryVault();
-    final service = TelegramService(directory, vault, transport: td,
-      applicationApiId: 12345, applicationApiHash: oldHash,
-    );
-    addTearDown(service.shutdown);
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(
-      listenable: service,
-      builder: (_, _) => AuthForm(telegram: service),
-    ))));
-    expect(find.text('Telegram API ID'), findsNothing);
-    expect(find.text('Telegram API hash'), findsNothing);
-    expect(find.text('Connect Telegram'), findsOneWidget);
-    await tester.runAsync(() => service.start());
-    td.auth('authorizationStateWaitPhoneNumber');
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '+12025550123');
-    await tester.tap(find.text('Continue'));
-    await tester.pumpAndSettle();
-    expect(td.requests.last['@type'], 'setAuthenticationPhoneNumber');
-    td.auth('authorizationStateWaitCode');
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '12345');
-    await tester.tap(find.text('Continue'));
-    await tester.pumpAndSettle();
-    expect(td.requests.last['@type'], 'checkAuthenticationCode');
-    td.auth('authorizationStateWaitPassword');
-    await tester.pumpAndSettle();
-    expect(tester.widget<TextField>(find.byType(TextField)).obscureText, isTrue);
-    expect(vault.data.keys.toSet(), {'apiId', 'apiHash', 'databaseKey'});
-    expect(find.text('Telegram API ID'), findsNothing);
-    expect(find.text('Telegram API hash'), findsNothing);
-    await tester.pumpWidget(const SizedBox());
-  });
+  testWidgets(
+    'configured builds hide API fields and use phone, code and password sign-in',
+    (tester) async {
+      final td = FakeTd(), vault = MemoryVault();
+      final service = TelegramService(
+        directory,
+        vault,
+        transport: td,
+        applicationApiId: 12345,
+        applicationApiHash: oldHash,
+      );
+      addTearDown(service.shutdown);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: service,
+              builder: (_, _) => AuthForm(telegram: service),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Telegram API ID'), findsNothing);
+      expect(find.text('Telegram API hash'), findsNothing);
+      expect(find.text('Connect Telegram'), findsOneWidget);
+      await tester.runAsync(() => service.start());
+      td.auth('authorizationStateWaitPhoneNumber');
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '+12025550123');
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(td.requests.last['@type'], 'setAuthenticationPhoneNumber');
+      td.auth('authorizationStateWaitCode');
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '12345');
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(td.requests.last['@type'], 'checkAuthenticationCode');
+      td.auth('authorizationStateWaitPassword');
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).obscureText,
+        isTrue,
+      );
+      expect(vault.data.keys.toSet(), {'apiId', 'apiHash', 'databaseKey'});
+      expect(find.text('Telegram API ID'), findsNothing);
+      expect(find.text('Telegram API hash'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   test('logout forgets API details, waits for close, and next account gets a fresh client', () async {
     final first = ClosingTd(), next = ClosingTd(), vault = MemoryVault();
@@ -260,6 +276,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Privacy & security'));
+      await tester.pumpAndSettle();
       td.onRequest = (r) async {
         if (r['@type'] == 'logOut') throw TdException(429, 'simulated retry');
         return null;
@@ -279,6 +297,8 @@ void main() {
       expect(find.byTooltip('Settings').hitTestable(), findsOneWidget);
       td.onRequest = null;
       await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Privacy & security'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Sign out of Telegram'));
       await tester.pumpAndSettle();
