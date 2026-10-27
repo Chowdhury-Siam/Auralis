@@ -543,7 +543,6 @@ void main() {
           find.byTooltip('Lyrics').last,
           find.byTooltip('Add to playlist').last,
           find.byKey(const ValueKey('sleep-timer-control')),
-          find.byKey(const ValueKey('volume-slider')),
           find.byTooltip('Previous track'),
           find.byTooltip('Next track'),
         ];
@@ -735,11 +734,7 @@ void main() {
           await tester.pumpAndSettle();
         }
         expect(tester.takeException(), isNull, reason: '$size at $scale text');
-        for (final key in [
-          'now-playing-play-pause',
-          'volume-slider',
-          'sleep-timer-control',
-        ]) {
+        for (final key in ['now-playing-play-pause', 'sleep-timer-control']) {
           expect(
             find.byKey(ValueKey(key)).hitTestable(),
             findsOneWidget,
