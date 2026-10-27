@@ -184,6 +184,22 @@ class TelegramService extends ChangeNotifier {
     _coverDirty.clear();
   }
 
+  Future<Uint8List?> _savedCover(Track track, MediaCache disk) async {
+    final bytes = await disk.read(track, 'art', maxCoverBytes);
+    return bytes != null && isCoverImage(bytes) ? bytes : null;
+  }
+
+  Future<bool> hasCachedCover(Track track) async {
+    if (!ready) return false;
+    if (!keepArtwork) return cachedCover(track) != null;
+    final disk = mediaCache, generation = _imageGeneration;
+    final saved = await _savedCover(track, disk);
+    return ready &&
+        generation == _imageGeneration &&
+        mediaCache.directory?.path == disk.directory?.path &&
+        saved != null;
+  }
+
   Future<Uint8List?> cacheCover(
     Track track, {
     required bool Function() active,
@@ -192,13 +208,22 @@ class TelegramService extends ChangeNotifier {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
     if (!ready || !active()) return null;
-    final disk = mediaCache;
+    final disk = mediaCache, generation = _imageGeneration;
+    bool current() =>
+        ready &&
+        active() &&
+        generation == _imageGeneration &&
+        mediaCache.directory?.path == disk.directory?.path;
     final bytes = await cover(track);
-    // The same Telegram file can appear in more than one channel/track entry.
-    if (keepArtwork && ready && active() && bytes != null) {
+    // Aliases of one Telegram file need their own key, but never rewrite saved art.
+    if (keepArtwork &&
+        current() &&
+        bytes != null &&
+        await _savedCover(track, disk) == null &&
+        current()) {
       await disk.write(track, 'art', bytes);
     }
-    return bytes;
+    return current() ? bytes : null;
   }
 
   Future<Uint8List?> cover(Track track) {
@@ -225,10 +250,8 @@ class TelegramService extends ChangeNotifier {
     bool active() => ready && generation == _imageGeneration;
     final disk = mediaCache;
     try {
-      final saved = keepArtwork
-          ? await disk.read(track, 'art', maxCoverBytes)
-          : null;
-      if (saved != null && isCoverImage(saved) && active()) {
+      final saved = keepArtwork ? await _savedCover(track, disk) : null;
+      if (saved != null && active()) {
         result = saved;
         return result;
       }
@@ -618,7 +641,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.94',
+          'application_version': '0.1.96',
         }));
       } on TdException catch (e) {
         throw FormatException(
