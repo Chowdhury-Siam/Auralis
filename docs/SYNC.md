@@ -1,7 +1,7 @@
 # Account & sync
 
 Auralis 0.1.78 supports username/password accounts on a self-hosted Cloudflare
-Worker with a Turso database. Open Settings → Account & sync to validate a Worker,
+Worker with a Turso database. Open Settings → Data & sync → Account & sync to validate a Worker,
 deploy the service, and sign in or create an account. Other devices need the same
 Worker URL, username and password.
 
