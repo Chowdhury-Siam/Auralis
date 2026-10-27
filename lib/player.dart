@@ -73,7 +73,10 @@ class MpvBackend extends AudioBackend {
     await _focus();
     // media_kit defaults to five seconds. An uncached Telegram seek can need
     // longer before the loopback proxy receives its first bytes.
-    await (_player.platform as NativePlayer).setProperty('network-timeout', '60');
+    await (_player.platform as NativePlayer).setProperty(
+      'network-timeout',
+      '60',
+    );
     error = null;
     position = Duration.zero;
     duration = Duration.zero;
@@ -112,7 +115,9 @@ class MpvBackend extends AudioBackend {
   }
 
   @override
-  Future<void> volume(double value) => _player.setVolume(value);
+  Future<void> volume(double value) => _player.setVolume(
+    defaultTargetPlatform == TargetPlatform.android ? 100 : value,
+  );
   @override
   Future<void> stop() async {
     await _player.stop();
@@ -276,10 +281,13 @@ class PlayerController extends ChangeNotifier {
   void refreshSettings() {
     if (!_closed) notifyListeners();
   }
+
   late final StreamSubscription<String> _proxyErrors;
   final List<Track> queue = [];
   int index = -1, _generation = 0;
   bool loading = false, _closed = false, _pauseAfterOpen = false;
+  bool shuffleEnabled = false;
+  List<Track> _shuffleOrder = [];
   Timer? _sleepTimer;
   DateTime? sleepUntil;
   bool sleepAfterTrack = false;
@@ -476,6 +484,7 @@ class PlayerController extends ChangeNotifier {
       }
     }
     if (index < 0) return;
+    if (from != null && shuffleEnabled) _shuffleUpcoming();
     await _open(track);
   }
 
@@ -559,9 +568,29 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _shuffleUpcoming() {
+    _shuffleOrder = queue.skip(index + 1).toList();
+    queue.replaceRange(
+      index + 1,
+      queue.length,
+      [..._shuffleOrder]..shuffle(Random.secure()),
+    );
+  }
+
   void shuffle() {
-    final upcoming = queue.skip(index + 1).toList()..shuffle(Random.secure());
-    queue.replaceRange(index + 1, queue.length, upcoming);
+    shuffleEnabled = !shuffleEnabled;
+    if (shuffleEnabled) {
+      _shuffleUpcoming();
+    } else {
+      final remaining = queue.skip(index + 1).toList();
+      final ordered = <Track>[];
+      for (final track in _shuffleOrder) {
+        final position = remaining.indexWhere((t) => identical(t, track));
+        if (position >= 0) ordered.add(remaining.removeAt(position));
+      }
+      queue.replaceRange(index + 1, queue.length, [...ordered, ...remaining]);
+      _shuffleOrder = [];
+    }
     notifyListeners();
   }
 
@@ -588,6 +617,8 @@ class PlayerController extends ChangeNotifier {
     await audio.stop();
     await proxy.stop();
     queue.clear();
+    shuffleEnabled = false;
+    _shuffleOrder = [];
     index = -1;
     notifyListeners();
   }
