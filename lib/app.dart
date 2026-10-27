@@ -1973,34 +1973,44 @@ class _PlayerShellState extends State<PlayerShell>
             if (player.settings.compactLibrary)
               Align(
                 alignment: Alignment.centerLeft,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: _colors.primaryContainer,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      key: const ValueKey('library-collection-menu'),
-                      value: collection,
-                      items: [
-                        for (final label in [
-                          'All songs',
-                          'Favorites',
-                          'Playlists',
-                          'Recently played',
-                        ])
-                          DropdownMenuItem(value: label, child: Text(label)),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            collection = value;
-                            selectedPlaylist = null;
-                            search.clear();
-                          });
-                        }
-                      },
+                child: IntrinsicWidth(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: _colors.primaryContainer,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        key: const ValueKey('library-collection-menu'),
+                        isExpanded: true,
+                        value: collection,
+                        items: [
+                          for (final label in [
+                            'All songs',
+                            'Favorites',
+                            'Playlists',
+                            'Recently played',
+                          ])
+                            DropdownMenuItem(
+                              value: label,
+                              child: Text(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              collection = value;
+                              selectedPlaylist = null;
+                              search.clear();
+                            });
+                          }
+                        },
+                      ),
                     ),
                   ),
                 ),
