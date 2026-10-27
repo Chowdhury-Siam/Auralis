@@ -4,7 +4,9 @@ import 'dart:io';
 
 import 'package:auralis/storage.dart';
 import 'package:auralis/updater.dart';
+import 'package:auralis/update_widgets.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 
@@ -279,7 +281,7 @@ void main() {
     expect(updates.downloaded, isNotNull);
     await updates.install();
     expect(updates.error, isNull);
-    expect(updates.status, contains('Android installer opened'));
+    expect(updates.status, contains('Android update submitted'));
     expect(exited, isFalse);
     expect(attempts, 2);
   });
@@ -314,6 +316,76 @@ void main() {
       expect(client.requests, hasLength(2));
       expect(installed, isFalse);
       expect(await updates.downloaded!.readAsBytes(), installerBytes);
+    },
+  );
+
+  testWidgets(
+    'Android install buttons open the installer without an app dialog',
+    (tester) async {
+      var calls = 0;
+      late Completer<void> started, finish;
+      final updates = AppUpdater(
+        currentVersion: '0.1.0',
+        directory: dir,
+        settings: settings,
+        client: Client([metadata(androidRelease()), Response(installerBytes)]),
+        target: UpdateTarget.android,
+        androidAbi: 'arm64-v8a',
+        installAndroid: (file, version, digest) async {
+          expect(await file.readAsBytes(), installerBytes);
+          expect(digest, sha256.convert(installerBytes).toString());
+          calls++;
+          started.complete();
+          await finish.future;
+        },
+      );
+      addTearDown(updates.dispose);
+      await tester.runAsync(() async {
+        await updates.check();
+        await updates.download();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                UpdateBanner(updater: updates),
+                UpdateSettings(updater: updates),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(calls, 0);
+      for (final buttonType in [TextButton, FilledButton]) {
+        await tester.runAsync(() async {
+          started = Completer<void>();
+          finish = Completer<void>();
+          await tester.tap(find.widgetWithText(buttonType, 'Install update'));
+          await started.future;
+        });
+        await tester.pump();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(updates.installing, isTrue);
+        expect(
+          find
+              .widgetWithText(TextButton, 'Install update')
+              .evaluate()
+              .single
+              .widget,
+          isA<TextButton>().having(
+            (button) => button.onPressed,
+            'disabled while installing',
+            isNull,
+          ),
+        );
+        await tester.runAsync(() async => finish.complete());
+        await tester.pumpAndSettle();
+        expect(updates.installing, isFalse);
+        expect(updates.error, isNull);
+      }
+      expect(calls, 2);
+      await tester.pumpWidget(const SizedBox());
     },
   );
 
@@ -548,15 +620,36 @@ void main() {
       expect(client.requests.length, 2);
     },
   );
-  test('release notes come from the verified release metadata and are bounded', () {
-    final json=release()..['body']='Changes for this version';
-    final update=ReleaseUpdate.fromJson(json,repository,StableVersion.parse('0.1.0'))!;
-    expect(update.notes,'Changes for this version');
-    json['body']='x'*13000;
-    expect(ReleaseUpdate.fromJson(json,repository,StableVersion.parse('0.1.0'))!.notes.length,12000);
-    json.remove('body');
-    expect(ReleaseUpdate.fromJson(json,repository,StableVersion.parse('0.1.0'))!.notes,isEmpty);
-  });
+  test(
+    'release notes come from the verified release metadata and are bounded',
+    () {
+      final json = release()..['body'] = 'Changes for this version';
+      final update = ReleaseUpdate.fromJson(
+        json,
+        repository,
+        StableVersion.parse('0.1.0'),
+      )!;
+      expect(update.notes, 'Changes for this version');
+      json['body'] = 'x' * 13000;
+      expect(
+        ReleaseUpdate.fromJson(
+          json,
+          repository,
+          StableVersion.parse('0.1.0'),
+        )!.notes.length,
+        12000,
+      );
+      json.remove('body');
+      expect(
+        ReleaseUpdate.fromJson(
+          json,
+          repository,
+          StableVersion.parse('0.1.0'),
+        )!.notes,
+        isEmpty,
+      );
+    },
+  );
 
   test(
     'automatic update preference persists independently of existing settings',
