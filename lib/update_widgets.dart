@@ -4,8 +4,13 @@ import 'updater.dart';
 import 'release_notes.dart';
 
 class UpdateSettings extends StatelessWidget {
-  const UpdateSettings({super.key, required this.updater});
+  const UpdateSettings({
+    super.key,
+    required this.updater,
+    this.showHeading = true,
+  });
   final AppUpdater updater;
+  final bool showHeading;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: updater,
@@ -13,10 +18,11 @@ class UpdateSettings extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          'App updates',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
+        if (showHeading)
+          const Text(
+            'App updates',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(
@@ -68,7 +74,13 @@ class UpdateSettings extends StatelessWidget {
             ),
             if (updater.available != null)
               TextButton(
-                onPressed: () => showReleaseChanges(context, '${updater.available!.version}', updater.available!.notes.isEmpty ? 'Release notes are not available for this update.' : updater.available!.notes),
+                onPressed: () => showReleaseChanges(
+                  context,
+                  '${updater.available!.version}',
+                  updater.available!.notes.isEmpty
+                      ? 'Release notes are not available for this update.'
+                      : updater.available!.notes,
+                ),
                 child: const Text('What changed'),
               ),
             if (updater.available != null && updater.downloaded == null)
@@ -122,23 +134,38 @@ class UpdateBanner extends StatelessWidget {
                     : 'Auralis ${release.version} is available.',
                 style: const TextStyle(fontSize: 12),
               ),
-              Wrap(spacing: 8, children: [
-                TextButton(
-                  onPressed: () => showReleaseChanges(context, '${release.version}', release.notes.isEmpty ? 'Release notes are not available for this update.' : release.notes),
-                  child: const Text('What changed'),
-                ),
-                if (updater.error == null)
+              Wrap(
+                spacing: 8,
+                children: [
                   TextButton(
-                    onPressed: updater.downloading || updater.installing ? null : () async {
-                      if (updater.downloaded == null) {
-                        await updater.download();
-                      } else if (context.mounted) {
-                        await confirmUpdate(context, updater);
-                      }
-                    },
-                    child: Text(updater.downloaded == null ? 'Download' : updater.installLabel),
+                    onPressed: () => showReleaseChanges(
+                      context,
+                      '${release.version}',
+                      release.notes.isEmpty
+                          ? 'Release notes are not available for this update.'
+                          : release.notes,
+                    ),
+                    child: const Text('What changed'),
                   ),
-              ]),
+                  if (updater.error == null)
+                    TextButton(
+                      onPressed: updater.downloading || updater.installing
+                          ? null
+                          : () async {
+                              if (updater.downloaded == null) {
+                                await updater.download();
+                              } else if (context.mounted) {
+                                await confirmUpdate(context, updater);
+                              }
+                            },
+                      child: Text(
+                        updater.downloaded == null
+                            ? 'Download'
+                            : updater.installLabel,
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
