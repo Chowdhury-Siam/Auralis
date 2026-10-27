@@ -666,6 +666,8 @@ void main() {
             image.dispose();
           });
         }
+        await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Settings').first);
         await tester.pumpAndSettle();
         expect(
