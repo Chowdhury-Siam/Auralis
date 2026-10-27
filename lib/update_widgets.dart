@@ -38,12 +38,40 @@ class UpdateSettings extends StatelessWidget {
           value: updater.settings.automaticUpdates,
           onChanged: updater.setAutomatic,
         ),
-        Text(
-          'Installed: ${updater.currentVersion}',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
         const SizedBox(height: 8),
-        Text(updater.status, style: Theme.of(context).textTheme.bodySmall),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.system_update_alt_rounded,
+                color: Theme.of(context).colorScheme.primary,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Installed: ${updater.currentVersion}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      updater.status,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
         if (updater.error != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -65,12 +93,13 @@ class UpdateSettings extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            TextButton(
+            FilledButton.tonalIcon(
+              icon: const Icon(Icons.refresh_rounded, size: 18),
               onPressed:
                   updater.checking || updater.downloading || updater.installing
                   ? null
                   : updater.check,
-              child: Text(updater.checking ? 'Checking…' : 'Check now'),
+              label: Text(updater.checking ? 'Checking…' : 'Check now'),
             ),
             if (updater.available != null)
               TextButton(
