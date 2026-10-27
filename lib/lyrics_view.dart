@@ -427,7 +427,7 @@ class _LyricsViewState extends State<LyricsView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Copy the original lyrics and open DeepL in your browser. '
+                'Copy the original lyrics, including available timestamps, and open DeepL in your browser. '
                 'Paste the lyrics there to translate. Results stay in the browser. No API key is needed.',
               ),
               const SizedBox(height: 16),
@@ -468,9 +468,7 @@ class _LyricsViewState extends State<LyricsView> {
     if (selected == null || !active()) return;
     setState(() => _openingDeepL = true);
     try {
-      final text = source.lines.isEmpty
-          ? source.plain
-          : source.lines.map((line) => line.text).join('\n');
+      final text = source.timestampedText;
       await Clipboard.setData(ClipboardData(text: text));
       if (!active()) return;
       final url = selected == 'en/ja'
@@ -555,11 +553,11 @@ class _LyricsViewState extends State<LyricsView> {
           _lyrics!.plain.trim().isNotEmpty,
       icon: Icons.open_in_new_rounded,
       title: 'Translate with DeepL',
-      subtitle: 'Copy lyrics and translate in your browser.',
+      subtitle: 'Copy lyrics with timestamps to your browser.',
     ),
   ];
 
-  Widget _options() {
+  Widget _menuSurface(Widget child) {
     final theme = Theme.of(context);
     return Theme(
       data: theme.copyWith(
@@ -567,70 +565,74 @@ class _LyricsViewState extends State<LyricsView> {
           color: _colors.surfaceContainerHigh,
           surfaceTintColor: Colors.transparent,
           shadowColor: Colors.black.withValues(alpha: .42),
-          elevation: 16,
-          menuPadding: const EdgeInsets.all(8),
+          elevation: 6,
+          menuPadding: const EdgeInsets.all(6),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
             side: BorderSide(color: _colors.outlineVariant),
           ),
         ),
       ),
-      child: PopupMenuButton<String>(
-        tooltip: 'Lyrics options',
-        position: PopupMenuPosition.under,
-        constraints: const BoxConstraints(minWidth: 280, maxWidth: 300),
-        offset: const Offset(0, 10),
-        icon: const Icon(Icons.more_horiz_rounded),
-        onSelected: (value) {
-          if (value == 'import') {
-            unawaited(_import());
-          } else if (value == 'translate') {
-            unawaited(_translateInApp());
-          } else if (value == 'deepl') {
-            unawaited(_openDeepL());
-          } else if (value == 'embedded') {
-            unawaited(_load(embedded: true, online: false));
-          } else {
-            unawaited(value == 'paste' ? _paste() : _load());
-          }
-        },
-        itemBuilder: (_) => [
-          ..._translationActions(),
-          _menuAction(
-            value: 'import',
-            enabled: _track != null && !_importing,
-            icon: Icons.file_open_rounded,
-            title: 'Import .lrc file',
-            subtitle: 'Use a local synced-lyrics file.',
-          ),
-          if (widget.loadEmbedded != null)
-            _menuAction(
-              value: 'embedded',
-              enabled: _track != null && !_loading,
-              icon: Icons.music_note_rounded,
-              title: 'Read lyrics from music file',
-              subtitle: 'Try embedded lyrics from this track.',
-            ),
-          _menuAction(
-            value: 'find',
-            enabled: _track != null && !_loading,
-            icon: Icons.search_rounded,
-            title: 'Find lyrics online',
-            subtitle: _lyrics?.provider != null
-                ? 'Current: ${_lyrics!.provider}. Retry all sources.'
-                : 'Uses the source order in Settings.',
-          ),
-          _menuAction(
-            value: 'paste',
-            enabled: _track != null,
-            icon: Icons.content_paste_rounded,
-            title: 'Paste lyrics',
-            subtitle: 'Enter plain text or timestamped LRC.',
-          ),
-        ],
-      ),
+      child: child,
     );
   }
+
+  Widget _options() => _menuSurface(
+    PopupMenuButton<String>(
+      tooltip: 'Lyrics options',
+      position: PopupMenuPosition.under,
+      constraints: const BoxConstraints(minWidth: 280, maxWidth: 300),
+      offset: const Offset(0, 10),
+      icon: const Icon(Icons.more_horiz_rounded),
+      onSelected: (value) {
+        if (value == 'import') {
+          unawaited(_import());
+        } else if (value == 'translate') {
+          unawaited(_translateInApp());
+        } else if (value == 'deepl') {
+          unawaited(_openDeepL());
+        } else if (value == 'embedded') {
+          unawaited(_load(embedded: true, online: false));
+        } else {
+          unawaited(value == 'paste' ? _paste() : _load());
+        }
+      },
+      itemBuilder: (_) => [
+        ..._translationActions(),
+        _menuAction(
+          value: 'import',
+          enabled: _track != null && !_importing,
+          icon: Icons.file_open_rounded,
+          title: 'Import .lrc file',
+          subtitle: 'Use a local synced-lyrics file.',
+        ),
+        if (widget.loadEmbedded != null)
+          _menuAction(
+            value: 'embedded',
+            enabled: _track != null && !_loading,
+            icon: Icons.music_note_rounded,
+            title: 'Read lyrics from music file',
+            subtitle: 'Try embedded lyrics from this track.',
+          ),
+        _menuAction(
+          value: 'find',
+          enabled: _track != null && !_loading,
+          icon: Icons.search_rounded,
+          title: 'Find lyrics online',
+          subtitle: _lyrics?.provider != null
+              ? 'Current: ${_lyrics!.provider}. Retry all sources.'
+              : 'Uses the source order in Settings.',
+        ),
+        _menuAction(
+          value: 'paste',
+          enabled: _track != null,
+          icon: Icons.content_paste_rounded,
+          title: 'Paste lyrics',
+          subtitle: 'Enter plain text or timestamped LRC.',
+        ),
+      ],
+    ),
+  );
 
   Widget _body() {
     final lyrics = _showTranslation ? _translation ?? _lyrics : _lyrics;
@@ -827,23 +829,28 @@ class _LyricsViewState extends State<LyricsView> {
         if (_lyrics != null &&
             !_lyrics!.instrumental &&
             _lyrics!.plain.trim().isNotEmpty)
-          PopupMenuButton<String>(
-            key: const ValueKey('lyrics-translate'),
-            tooltip: 'Translate lyrics',
-            enabled: !_loading && !_openingDeepL && !_translating,
-            constraints: const BoxConstraints(minWidth: 280, maxWidth: 320),
-            icon: _translating
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    Icons.translate_rounded,
-                    color: _showTranslation ? _colors.primary : null,
-                  ),
-            itemBuilder: (_) => _translationActions(),
-            onSelected: (value) =>
-                unawaited(value == 'deepl' ? _openDeepL() : _translateInApp()),
+          _menuSurface(
+            PopupMenuButton<String>(
+              key: const ValueKey('lyrics-translate'),
+              tooltip: 'Translate lyrics',
+              enabled: !_loading && !_openingDeepL && !_translating,
+              position: PopupMenuPosition.under,
+              offset: const Offset(0, 8),
+              constraints: const BoxConstraints(minWidth: 260, maxWidth: 300),
+              icon: _translating
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      Icons.translate_rounded,
+                      color: _showTranslation ? _colors.primary : null,
+                    ),
+              itemBuilder: (_) => _translationActions(),
+              onSelected: (value) => unawaited(
+                value == 'deepl' ? _openDeepL() : _translateInApp(),
+              ),
+            ),
           ),
         _options(),
       ],
