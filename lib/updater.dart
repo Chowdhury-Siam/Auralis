@@ -401,7 +401,7 @@ class AppUpdater extends ChangeNotifier {
           release.version.toString(),
           release.sha256,
         );
-        status = 'Android installer opened. Confirm the update on your device.';
+        status = 'Android update submitted. Follow any system prompt.';
         return;
       }
       // Yutaka's direct executable handoff: no PowerShell policy or ready file.
