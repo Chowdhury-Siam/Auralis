@@ -111,7 +111,16 @@ void main() {
         expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
         expect(
           tester.getTopLeft(find.byKey(const ValueKey('settings-search'))).dx,
-          tester.getTopLeft(find.byKey(const ValueKey('page-title'))).dx,
+          tester
+              .getTopLeft(
+                find
+                    .ancestor(
+                      of: find.byTooltip('Back to Library'),
+                      matching: find.byType(IconButton),
+                    )
+                    .first,
+              )
+              .dx,
         );
         if (size.width == 390) {
           await tester.runAsync(() async {
