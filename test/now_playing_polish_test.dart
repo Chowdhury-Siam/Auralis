@@ -190,6 +190,8 @@ void main() {
     await tester.tap(find.byTooltip('Settings').first);
     await tester.pumpAndSettle();
     expect(find.byType(DropdownButton<LyricsSource>), findsNothing);
+    await tester.tap(find.text('Lyrics & artwork'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Lyrics & translation'));
     await tester.pumpAndSettle();
     final first = tester.widget<DropdownButton<LyricsSource>>(
@@ -779,7 +781,7 @@ void main() {
     await tester.pump();
     final background = find.byKey(const ValueKey('player-collapse-background'));
     expect(
-      find.descendant(of: background, matching: find.text('Backup & Restore')),
+      find.descendant(of: background, matching: find.text('Data & sync')),
       findsOneWidget,
     );
     await tester.pumpAndSettle();
@@ -966,6 +968,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Reduce motion'), findsNothing);
     expect(find.text('Use instant page transitions'), findsNothing);
+    expect(find.text('Data & sync'), findsOneWidget);
+    expect(find.text('Lyrics & artwork'), findsOneWidget);
+    await tester.tap(find.text('Data & sync'));
+    await tester.pumpAndSettle();
     expect(find.text('Listening stats'), findsOneWidget);
     expect(find.text('Backup & Restore'), findsOneWidget);
     expect(tester.takeException(), isNull);
