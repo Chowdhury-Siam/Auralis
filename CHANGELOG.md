@@ -1,5 +1,15 @@
 # Auralis changes
 
+## 0.1.96
+
+- Library Refresh now checks the saved cache first and queues only tracks missing artwork or lyrics. The progress total counts those tracks, and a fully cached library has no caching pass.
+- Cached artwork and lyrics are reused without rewriting their files. Missing or invalid entries can be retried; cache keys still isolate accounts and changed song metadata.
+
+## 0.1.95
+
+- Matched Settings to Auralis with its compact header, accent-colored back control and icon tiles, quieter rounded category surfaces, and the same search-field shape as Library.
+- Settings uses the active artwork color scheme throughout; category search, navigation and existing controls remain available.
+
 ## 0.1.94
 
 - Fixed the compact Library collection dropdown overflowing in narrow windows when Recently played or another long label is selected. The pill keeps its natural width when space permits and constrains the selected text when needed.
