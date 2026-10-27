@@ -1,5 +1,19 @@
 # Auralis changes
 
+## 0.1.90
+
+- Made Listening Stats compact with tighter totals, a seven-day chart, tabbed rankings and expandable backup controls. Settings groups lyrics, artwork and updates into compact sections.
+- Removed volume sliders. Android uses the device volume buttons; desktop Up/Down keys change playback volume and show a temporary on-screen percentage while preserving text editing and dialog navigation.
+- The mini-player floats over the page with content visible behind its margins and sideways movement. Desktop layouts include artwork and track information. Now Playing keeps its smooth collapse into the same retained player card.
+- Shuffle is a visible on/off mode, with selected styling and restoration of upcoming order when disabled. Playback and queued additions are preserved.
+- Current-song lyrics and bilingual translation load automatically. Choose primary/fallback lyric and translation providers, including disabling a fallback, and Japanese–English direction in Settings. Original lyrics, imports, timestamps, cache reuse and the DeepL website option remain available.
+- Artwork preloads and decodes the current song plus the next 10 queued songs by default. The window follows queue changes and can be adjusted. Saved artwork is kept indefinitely by default; temporary artwork can be selected without retaining music files.
+
+## 0.1.89
+
+- Fixed the pause and layout jump when Now Playing lands in the mini-player. The original page and player bar stay mounted, and the card and cached background blur fade away to reveal the real controls before the spring finishes.
+- The spring now settles at a pixel-based tolerance, avoiding an invisible tail that kept the mini-player locked. Opening, dragging, cancellation, navigation and reduced motion keep the same playback behavior.
+
 ## 0.1.88
 
 - Lyrics automatically fall back from LRCLIB exact lookup to LRCLIB search and then lyrics.ovh when a source is missing, empty, unavailable, invalid or timed out. Embedded lyrics remain first, and both translation options remain available.
