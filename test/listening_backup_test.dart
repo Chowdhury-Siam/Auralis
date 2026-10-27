@@ -92,6 +92,52 @@ void main() {
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
 
+  test('media preferences round-trip and old backups retain safe defaults', () {
+    final settings = MemorySettings()
+      ..lyricsFirst = LyricsSource.lyricsOvh
+      ..lyricsFallback = LyricsSource.lrclib
+      ..translationFirst = TranslationSource.myMemory
+      ..translationFallback = TranslationSource.google
+      ..artworkPreload = 20;
+    final saved = DataBackup.parse(
+      DataBackup.create(settings, DateTime.now()).encode(),
+    );
+    final restored = MemorySettings()..applyJson(saved.snapshot);
+    expect(restored.lyricsFirst, LyricsSource.lyricsOvh);
+    expect(restored.translationFirst, TranslationSource.myMemory);
+    expect(restored.artworkPreload, 20);
+    final legacy = {...saved.snapshot}
+      ..removeWhere(
+        (key, _) => const {
+          'automaticLyrics',
+          'automaticTranslation',
+          'keepArtwork',
+          'artworkPreload',
+          'lyricsFirst',
+          'lyricsFallback',
+          'translationFirst',
+          'translationFallback',
+          'translationDirection',
+        }.contains(key),
+      );
+    DataBackup.validateSnapshot(legacy);
+    restored.applyJson(legacy);
+    expect(
+      restored.automaticLyrics &&
+          restored.automaticTranslation &&
+          restored.keepArtwork,
+      isTrue,
+    );
+    expect(restored.artworkPreload, 10);
+    expect(
+      () => DataBackup.validateSnapshot({
+        ...saved.snapshot,
+        'artworkPreload': -1,
+      }),
+      throwsFormatException,
+    );
+  });
+
   test('observed active playback counts; seeks, buffering, pauses and long gaps do not inflate time', () async {
     final audio = SampleAudio()..duration = song.duration;
     var elapsed = Duration.zero;
@@ -365,6 +411,86 @@ void main() {
   );
 
   testWidgets(
+    'compact stats show the overview and keep rankings usable with large text',
+    (tester) async {
+      final settings = MemoryDataSettings()..reducedMotion = true;
+      settings.listening.record(song, 125000, 2, DateTime.now());
+      final before = jsonEncode(settings.listening.toJson());
+      final player = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy((_) async => {}),
+        settings,
+      );
+      addTearDown(player.shutdown);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      for (final (size, scale) in [
+        (const Size(360, 480), 1.0),
+        (const Size(320, 568), 2.0),
+        (const Size(1280, 800), 1.0),
+      ]) {
+        tester.view.physicalSize = size;
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData.dark().copyWith(
+              textTheme: ThemeData.dark().textTheme.apply(
+                fontFamily: 'Segoe UI',
+              ),
+            ),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
+            home: StatsDataDialog(player: player, files: ChosenFiles()),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (scale == 1) {
+          expect(
+            find.text(song.title).hitTestable(),
+            findsOneWidget,
+            reason: 'The activity overview and first ranked track fit without scrolling',
+          );
+          expect(
+            tester.getSize(find.byKey(const ValueKey('stats-summary'))).height,
+            lessThan(110),
+          );
+        }
+        final tabs = find.byKey(const ValueKey('stats-ranking-tabs'));
+        await tester.ensureVisible(tabs);
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.descendant(of: tabs, matching: find.text('Artists')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(song.artist), findsOneWidget);
+        expect(find.text(song.title), findsNothing);
+        await tester.tap(
+          find.descendant(of: tabs, matching: find.text('Tracks')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(song.title), findsOneWidget);
+        expect(find.text('Create backup'), findsNothing);
+        expect(jsonEncode(settings.listening.toJson()), before);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      }
+      // An empty history must also render a finite, zero-valued activity chart.
+      settings.listening = ListeningStats();
+      await tester.pumpWidget(
+        MaterialApp(home: StatsDataDialog(player: player)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Play some music'), findsOneWidget);
+      expect(find.byKey(const ValueKey('stats-ranking-tabs')), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
     'stats layouts, CSV/JSON export, backup, restore preview and cancellation',
     (tester) async {
       final settings = MemoryDataSettings()
@@ -442,6 +568,7 @@ void main() {
         jsonDecode(files.contents[testExportPath('stats.json')]!)['format'],
         'auralis-listening-stats',
       );
+      await click('Backup & Restore');
       files.chosenSave = testExportPath('backup.json');
       await click('Create backup');
       expect(
@@ -521,18 +648,23 @@ void main() {
         settings,
       );
       addTearDown(player.shutdown);
-      await tester.pumpWidget(MaterialApp(
-        home: StatsDataDialog(
-          player: player,
-          files: const AndroidDataFiles(),
-          openBackupSection: true,
-          onRestored: () async => throw StateError('Refresh failed'),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatsDataDialog(
+            player: player,
+            files: const AndroidDataFiles(),
+            openBackupSection: true,
+            onRestored: () async => throw StateError('Refresh failed'),
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Restore backup'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Restore failed (document_permission)'), findsOneWidget);
+      expect(
+        find.textContaining('Restore failed (document_permission)'),
+        findsOneWidget,
+      );
       expect(settings.volume, 23);
       expect(settings.recovery, isNull);
       denied = false;
