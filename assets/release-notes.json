@@ -1,6 +1,20 @@
 {
-  "current": "0.1.94",
+  "current": "0.1.96",
   "releases": [
+    {
+      "version": "0.1.96",
+      "changes": [
+        "Library Refresh now checks the saved cache first and queues only tracks missing artwork or lyrics. The progress total counts those tracks, and a fully cached library has no caching pass.",
+        "Cached artwork and lyrics are reused without rewriting their files. Missing or invalid entries can be retried; cache keys still isolate accounts and changed song metadata."
+      ]
+    },
+    {
+      "version": "0.1.95",
+      "changes": [
+        "Matched Settings to Auralis with its compact header, accent-colored back control and icon tiles, quieter rounded category surfaces, and the same search-field shape as Library.",
+        "Settings uses the active artwork color scheme throughout; category search, navigation and existing controls remain available."
+      ]
+    },
     {
       "version": "0.1.94",
       "changes": [
