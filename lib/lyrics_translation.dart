@@ -16,7 +16,7 @@ class TranslationFailure implements Exception {
   String toString() => message;
 }
 
-/// Optional, on-demand Japanese-to-English lyrics. Never replaces source lyrics.
+/// Cached bilingual lyrics. Source text and timestamps are always retained.
 class LyricsTranslator {
   LyricsTranslator({HttpClient Function()? createClient, this.cache})
     : _createClient = createClient ?? HttpClient.new;
@@ -25,15 +25,26 @@ class LyricsTranslator {
   final _clients = <HttpClient>{};
   bool _closed = false;
   static final _japanese = RegExp(r'[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]');
-  static bool supports(Lyrics lyrics) =>
+  static final _english = RegExp(r'[A-Za-z]');
+  static bool _needsTranslation(String text, TranslationDirection direction) =>
+      direction == TranslationDirection.japaneseEnglish
+      ? _japanese.hasMatch(text)
+      : _english.hasMatch(text) && !_japanese.hasMatch(text);
+  static bool supports(
+    Lyrics lyrics, {
+    TranslationDirection direction = TranslationDirection.japaneseEnglish,
+  }) =>
       !lyrics.instrumental &&
-      (_japanese.hasMatch(lyrics.plain) ||
-          lyrics.lines.any((line) => _japanese.hasMatch(line.text)));
+      (_needsTranslation(lyrics.plain, direction) ||
+          lyrics.lines.any((line) => _needsTranslation(line.text, direction)));
 
   Future<Lyrics> translate(
     Track track,
     Lyrics source, {
     required bool Function() active,
+    TranslationSource first = TranslationSource.google,
+    TranslationSource? fallback = TranslationSource.myMemory,
+    TranslationDirection direction = TranslationDirection.japaneseEnglish,
   }) async {
     final elapsed = Stopwatch()..start();
     final disk = cache?.call();
@@ -57,7 +68,12 @@ class LyricsTranslator {
         .convert(
           utf8.encode(
             jsonEncode([
-              'free-ja-en-v1',
+              direction == TranslationDirection.japaneseEnglish
+                  ? 'free-ja-en-v1'
+                  : 'free-en-ja-v1',
+              if (first != TranslationSource.google ||
+                  fallback != TranslationSource.myMemory)
+                [first.name, fallback?.name],
               source.plain,
               for (final line in source.lines)
                 [line.time.inMilliseconds, line.text],
@@ -65,7 +81,7 @@ class LyricsTranslator {
           ),
         )
         .toString();
-    final kind = 'translation-en-$fingerprint';
+    final kind = 'translation-${direction.target}-$fingerprint';
     final bytes = await disk?.read(track, kind, 2 * 1024 * 1024);
     check();
     if (bytes != null) {
@@ -83,10 +99,12 @@ class LyricsTranslator {
     final parts = rows
         .expand((row) => row.split('\n'))
         .toSet()
-        .where((row) => _japanese.hasMatch(row))
+        .where((row) => _needsTranslation(row, direction))
         .toList();
     if (parts.isEmpty) {
-      throw const TranslationFailure('No Japanese lyrics to translate.');
+      throw const TranslationFailure(
+        'No lyrics in the selected source language to translate.',
+      );
     }
     if (parts.length > 500 ||
         parts.fold<int>(0, (n, s) => n + s.length) > 20000 ||
@@ -108,29 +126,52 @@ class LyricsTranslator {
       batch.add(part);
     }
     if (batch.isNotEmpty) batches.add(batch);
-    var googleAvailable = true;
+    final unavailable = <TranslationSource>{};
     for (final batch in batches) {
       check();
       final text = batch.join('\n');
       List<String>? output;
-      if (googleAvailable) {
+      for (final provider in [
+        first,
+        if (fallback != null && fallback != first) fallback,
+      ]) {
+        if (unavailable.contains(provider)) continue;
         try {
           final data = await _request(
-            Uri.https('translate.googleapis.com', '/translate_a/single', {
-              'client': 'gtx',
-              'sl': 'ja',
-              'tl': 'en',
-              'dt': 't',
-              'q': text,
-            }),
+            provider == TranslationSource.google
+                ? Uri.https('translate.googleapis.com', '/translate_a/single', {
+                    'client': 'gtx',
+                    'sl': direction.source,
+                    'tl': direction.target,
+                    'dt': 't',
+                    'q': text,
+                  })
+                : Uri.https('api.mymemory.translated.net', '/get', {
+                    'q': text,
+                    'langpair': '${direction.source}|${direction.target}',
+                    'mt': '1',
+                  }),
           );
-          if (data is List && data.isNotEmpty && data[0] is List) {
-            final segments = data[0] as List;
-            if (segments.every(
-              (v) => v is List && v.isNotEmpty && v[0] is String,
-            )) {
+          check();
+          if (provider == TranslationSource.google) {
+            if (data is List && data.isNotEmpty && data[0] is List) {
+              final segments = data[0] as List;
+              if (segments.every(
+                (v) => v is List && v.isNotEmpty && v[0] is String,
+              )) {
+                output = _aligned(
+                  segments.map((v) => v[0] as String).join(),
+                  batch.length,
+                );
+              }
+            }
+          } else if (data is Map &&
+              data['quotaFinished'] != true &&
+              '${data['responseStatus']}' == '200') {
+            final result = data['responseData'];
+            if (result is Map && result['translatedText'] is String) {
               output = _aligned(
-                segments.map((v) => v[0] as String).join(),
+                _decodeEntities(result['translatedText'] as String),
                 batch.length,
               );
             }
@@ -138,36 +179,12 @@ class LyricsTranslator {
         } catch (_) {
           check();
         }
-        if (output == null) googleAvailable = false;
-      }
-      check();
-      if (output == null) {
-        final data = await _request(
-          Uri.https('api.mymemory.translated.net', '/get', {
-            'q': text,
-            'langpair': 'ja|en',
-            'mt': '1',
-          }),
-        );
-        check();
-        if (data is! Map ||
-            data['quotaFinished'] == true ||
-            '${data['responseStatus']}' != '200') {
-          throw const TranslationFailure(
-            'The free translator is unavailable or its daily limit was reached. Try again later.',
-          );
-        }
-        final result = data['responseData'];
-        if (result is Map && result['translatedText'] is String) {
-          output = _aligned(
-            _decodeEntities(result['translatedText'] as String),
-            batch.length,
-          );
-        }
+        if (output != null) break;
+        unavailable.add(provider);
       }
       if (output == null) {
         throw const TranslationFailure(
-          'The translator changed the lyric line breaks. Original lyrics were kept; please try again later.',
+          'The selected translators are unavailable, limited, or changed lyric line breaks. Original lyrics were kept; try again later.',
         );
       }
       for (var i = 0; i < batch.length; i++) {
