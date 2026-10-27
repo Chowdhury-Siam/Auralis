@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
@@ -24,6 +23,7 @@ import 'stats_view.dart';
 import 'sync/controller.dart';
 import 'sync/settings_view.dart';
 import 'release_notes.dart';
+import 'media_cache.dart';
 
 const accent = Color(0xFFC7B5FF),
     surface = Color(0xFF19171E),
@@ -86,6 +86,7 @@ class _AuralisAppState extends State<AuralisApp> {
   }
 
   void _artworkChanged() {
+    widget.telegram.keepArtwork = widget.player.settings.keepArtwork;
     final track = widget.player.current;
     final cover = track != null && track.fileId != null && widget.telegram.ready
         ? widget.telegram.cover(track)
@@ -242,6 +243,12 @@ class _PlayerShellState extends State<PlayerShell>
   double _playerDragStart = 0;
   double _playerTravel = 1;
   bool _closingPlayer = false;
+  Timer? _volumeTimer;
+  bool _showVolume = false;
+  Object? _artworkWindow, _lyricRequest;
+  Track? _metadataTrack;
+  bool _metadataPlaybackStarted = false;
+  int _artworkGeneration = 0, _lyricGeneration = 0;
   PlayerController get player => widget.player;
   TelegramService get telegram => widget.telegram;
   @override
@@ -252,9 +259,19 @@ class _PlayerShellState extends State<PlayerShell>
       duration: const Duration(milliseconds: 440),
       reverseDuration: const Duration(milliseconds: 500),
     );
-    lyrics = LyricsRepository(cache: () => telegram.mediaCache);
+    lyrics = LyricsRepository(
+      cache: () => telegram.mediaCache,
+      preferences: player.settings,
+    );
     library = ChannelLibrary(telegram, player.settings);
     _shellUpdates = Listenable.merge([player, telegram, library]);
+    player.addListener(_prepareMedia);
+    telegram.addListener(_prepareMedia);
+    library.addListener(_prepareMedia);
+    HardwareKeyboard.instance.addHandler(_volumeKey);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _prepareMedia();
+    });
     search.addListener(_changed);
     _syncedChannels = player.settings.selectedChannels
         .map((c) => c.id)
@@ -273,6 +290,149 @@ class _PlayerShellState extends State<PlayerShell>
         }
       });
     }
+  }
+
+  bool _volumeKey(KeyEvent event) {
+    if (!mounted ||
+        player.restoringData ||
+        (event is! KeyDownEvent && event is! KeyRepeatEvent) ||
+        ![
+          TargetPlatform.windows,
+          TargetPlatform.linux,
+          TargetPlatform.macOS,
+        ].contains(Theme.of(context).platform) ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return false;
+    }
+    final editing = FocusManager.instance.primaryFocus?.context;
+    if (editing?.widget is EditableText ||
+        editing?.findAncestorWidgetOfExactType<EditableText>() != null) {
+      return false;
+    }
+    final step = event.logicalKey == LogicalKeyboardKey.arrowUp
+        ? 5
+        : event.logicalKey == LogicalKeyboardKey.arrowDown
+        ? -5
+        : 0;
+    if (step == 0) return false;
+    unawaited(player.setVolume(player.settings.volume + step));
+    _volumeTimer?.cancel();
+    setState(() => _showVolume = true);
+    _volumeTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (mounted) setState(() => _showVolume = false);
+    });
+    return true;
+  }
+
+  void _prepareMedia() {
+    if (!mounted) return;
+    final settings = player.settings;
+    telegram.keepArtwork = settings.keepArtwork;
+    final scope = telegram.mediaCache.directory?.path;
+    final track = player.current;
+    if (!identical(track, _metadataTrack)) {
+      _metadataTrack = track;
+      _metadataPlaybackStarted = false;
+    }
+    _metadataPlaybackStarted =
+        _metadataPlaybackStarted || player.loading || player.audio.playing;
+    final source = player.queue.isNotEmpty ? player.queue : library.tracks;
+    final start = player.queue.isNotEmpty ? math.max(0, player.index) : 0;
+    final count = math.min(
+      source.length,
+      settings.artworkPreload + (track == null ? 0 : 1),
+    );
+    final window = <Track>[
+      for (var offset = 0; offset < count; offset++)
+        if (start + offset < source.length || player.repeat)
+          source[(start + offset) % source.length],
+    ];
+    final artworkKey = (
+      telegram.ready,
+      scope,
+      settings.keepArtwork,
+      settings.artworkPreload,
+      window.map((t) => (t.id, t.fileId, t.coverFileId, t.size)).join('|'),
+    );
+    if (artworkKey != _artworkWindow) {
+      _artworkWindow = artworkKey;
+      final generation = ++_artworkGeneration;
+      bool active() =>
+          mounted &&
+          generation == _artworkGeneration &&
+          telegram.ready &&
+          scope == telegram.mediaCache.directory?.path;
+      if (active()) unawaited(_warmArtwork(window, active));
+    }
+    final lyricKey = (
+      telegram.ready,
+      scope,
+      track,
+      _metadataPlaybackStarted,
+      settings.automaticLyrics,
+      settings.automaticTranslation,
+      settings.lyricsFirst,
+      settings.lyricsFallback,
+      settings.translationFirst,
+      settings.translationFallback,
+      settings.translationDirection,
+    );
+    if (lyricKey != _lyricRequest) {
+      _lyricRequest = lyricKey;
+      final generation = ++_lyricGeneration;
+      bool active() =>
+          mounted &&
+          generation == _lyricGeneration &&
+          telegram.ready &&
+          identical(player.current, track) &&
+          scope == telegram.mediaCache.directory?.path;
+      if (track != null &&
+          _metadataPlaybackStarted &&
+          settings.automaticLyrics &&
+          active()) {
+        unawaited(
+          lyrics
+              .prepare(
+                track,
+                active: active,
+                loadEmbedded: telegram.embeddedLyrics,
+              )
+              .catchError((Object _) => null),
+        );
+      }
+    }
+  }
+
+  Future<void> _warmArtwork(List<Track> tracks, bool Function() active) async {
+    for (final track in tracks) {
+      if (!active()) return;
+      final bytes = await telegram.cacheCover(track, active: active);
+      if (!mounted || !active()) return;
+      if (bytes == null) continue;
+      for (final width in [96, 640]) {
+        if (!mounted || !active()) return;
+        await precacheImage(
+          ResizeImage(MemoryImage(bytes), width: width),
+          context,
+          onError: (_, _) {},
+        );
+        if (!active()) return;
+      }
+    }
+  }
+
+  double get _dockPadding {
+    if (player.current == null) return 16;
+    final size = MediaQuery.sizeOf(context);
+    final width =
+        size.width -
+        (size.width >= 1180
+            ? 202
+            : size.width >= 900
+            ? 72
+            : 0);
+    return (size.height < 560 || width >= 1020 ? 96 : 128) +
+        math.max(0, MediaQuery.textScalerOf(context).scale(1) - 1) * 48;
   }
 
   String _syncedChannels = '';
@@ -359,6 +519,13 @@ class _PlayerShellState extends State<PlayerShell>
   @override
   void dispose() {
     ++_cacheGeneration;
+    ++_artworkGeneration;
+    ++_lyricGeneration;
+    _volumeTimer?.cancel();
+    HardwareKeyboard.instance.removeHandler(_volumeKey);
+    player.removeListener(_prepareMedia);
+    telegram.removeListener(_prepareMedia);
+    library.removeListener(_prepareMedia);
     _dismissPlayer.dispose();
     lyrics.close();
     library.dispose();
@@ -393,61 +560,124 @@ class _PlayerShellState extends State<PlayerShell>
     });
   }
 
-  Widget _collapseBackground() => LayoutBuilder(
-    builder: (context, box) {
-      final compact = MediaQuery.sizeOf(context).width < 900;
-      final narrow = MediaQuery.sizeOf(context).width < 1180;
-      final short = box.maxHeight < 560;
-      return ExcludeFocus(
-        child: ExcludeSemantics(
-          child: IgnorePointer(
-            child: Material(
-              key: const ValueKey('player-collapse-background'),
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        narrow ? 16 : 30,
-                        short ? 12 : 26,
-                        narrow ? 16 : 26,
-                        0,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _header(narrow, short: short, page: _playerOrigin),
-                          SizedBox(height: short ? 10 : 22),
-                          if (widget.updater != null)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: UpdateBanner(updater: widget.updater!),
+  Widget _pageContent(_Page page, {required bool narrow, bool short = false}) {
+    final immersiveLyrics = page == _Page.nowPlaying && showLyrics;
+    return Padding(
+      padding: immersiveLyrics
+          ? EdgeInsets.zero
+          : EdgeInsets.fromLTRB(
+              narrow ? 16 : 30,
+              short ? 12 : 26,
+              narrow ? 16 : 26,
+              0,
+            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!immersiveLyrics) ...[
+            _header(narrow, short: short, page: page),
+            SizedBox(height: short ? 10 : 22),
+          ],
+          if (widget.updater != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: UpdateBanner(updater: widget.updater!),
+            ),
+          if (widget.startupWarning != null) _banner(widget.startupWarning!),
+          if (player.error ?? player.audio.error case final String error)
+            _banner(error),
+          Expanded(
+            child: AnimatedSwitcher(
+              layoutBuilder: (current, _) => current ?? const SizedBox.shrink(),
+              duration: Duration(
+                milliseconds: page == _Page.nowPlaying || _reducedPlayerMotion
+                    ? 0
+                    : 180,
+              ),
+              child: KeyedSubtree(
+                key: ValueKey((page, immersiveLyrics)),
+                child: switch (page) {
+                  _Page.library => _library(),
+                  _Page.telegram => _telegram(),
+                  _Page.settings => _settingsPage(),
+                  _Page.nowPlaying =>
+                    immersiveLyrics
+                        ? LyricsView(
+                            backgroundColor: Colors.transparent,
+                            player: player,
+                            repository: lyrics,
+                            files: widget.dataFiles,
+                            loadEmbedded: telegram.embeddedLyrics,
+                            artwork: Artwork(
+                              seed: player.current?.title ?? 'Auralis',
+                              telegram: telegram,
+                              track: player.current,
                             ),
-                          if (widget.startupWarning != null)
-                            _banner(widget.startupWarning!),
-                          if (player.error ?? player.audio.error
-                              case final String error)
-                            _banner(error),
-                          Expanded(
-                            child: switch (_playerOrigin) {
-                              _Page.telegram => _telegram(),
-                              _Page.settings => _settingsPage(),
-                              _ => _library(),
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (player.current != null)
-                    _transport(box.maxWidth < 600, short: short),
-                  if (compact) _bottomNavigation(page: _playerOrigin),
-                ],
+                            onBack: () => setState(() => showLyrics = false),
+                          )
+                        : _nowPlaying(),
+                },
               ),
             ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _originContent({bool transitionCopy = false}) => LayoutBuilder(
+    builder: (context, box) {
+      final viewport = MediaQuery.sizeOf(context);
+      final page = destination == _Page.nowPlaying
+          ? _playerOrigin
+          : destination;
+      final compact = viewport.width < 900;
+      final narrow = viewport.width < 1180;
+      final short = viewport.height < 560;
+      final wide = viewport.width >= 1220 && viewport.height >= 620;
+      return Stack(
+        key: const ValueKey('floating-player-layer'),
+        fit: StackFit.expand,
+        children: [
+          Column(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _pageContent(page, narrow: narrow, short: short),
+                    ),
+                    if (wide &&
+                        (page == _Page.library || page == _Page.telegram))
+                      Container(
+                        width: (viewport.width * .23).clamp(280, 360),
+                        margin: EdgeInsets.fromLTRB(0, 20, 20, _dockPadding),
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: _colors.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        child: _nowPlaying(compact: true),
+                      ),
+                  ],
+                ),
+              ),
+              if (compact)
+                _bottomNavigation(page: page, transitionCopy: transitionCopy),
+            ],
+          ),
+          if (player.current != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: compact ? 80 + MediaQuery.paddingOf(context).bottom : 0,
+              child: _transport(
+                viewport.width < 600,
+                short: short,
+                transitionCopy: transitionCopy,
+              ),
+            ),
+        ],
       );
     },
   );
@@ -468,12 +698,17 @@ class _PlayerShellState extends State<PlayerShell>
     return _dismissPlayer.animateWith(
       SpringSimulation(
         SpringDescription.withDurationAndBounce(
-          duration: const Duration(milliseconds: 500),
+          duration: const Duration(milliseconds: 440),
         ),
         _dismissPlayer.value,
         target,
         (velocity ?? _dismissPlayer.velocity).clamp(-6.0, 6.0),
-        tolerance: const Tolerance(distance: .0002, velocity: .005),
+        // Stop once the remaining motion is below a logical pixel, rather than
+        // keeping the finished-looking card locked for a long spring tail.
+        tolerance: Tolerance(
+          distance: 1 / _playerTravel,
+          velocity: 10 / _playerTravel,
+        ),
         snapToEnd: true,
       ),
     );
@@ -505,7 +740,7 @@ class _PlayerShellState extends State<PlayerShell>
   Widget _playerSurface({required Widget child}) => LayoutBuilder(
     key: _surfaceKey,
     builder: (context, box) {
-      if (destination != _Page.nowPlaying) return child;
+      final expanded = destination == _Page.nowPlaying;
       final full = Offset.zero & box.biggest;
       final viewport = MediaQuery.sizeOf(context);
       final previousViewport = _dockViewport ?? viewport;
@@ -529,163 +764,177 @@ class _PlayerShellState extends State<PlayerShell>
               saved.bottom.clamp(1.0, full.height),
             );
       _playerTravel = math.max(1, mini.top);
-      final content = GestureDetector(
-        // The artwork pager keeps horizontal gestures; lyrics keeps scrolling.
-        onVerticalDragStart: showLyrics || _closingPlayer
-            ? null
-            : (_) {
-                _playerDragStart = _dismissPlayer.value;
-                _dismissPlayer.stop();
-              },
-        onVerticalDragUpdate: showLyrics || _closingPlayer ? null : _dragPlayer,
-        onVerticalDragEnd: showLyrics || _closingPlayer ? null : _settlePlayer,
-        onVerticalDragCancel: showLyrics || _closingPlayer
-            ? null
-            : () {
-                if (_reducedPlayerMotion) {
-                  _dismissPlayer.reset();
-                } else if (_playerDragStart < .18) {
-                  _movePlayer(0);
-                }
-              },
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            NowPlayingBackdrop(
-              key: const ValueKey('now-playing-backdrop'),
-              identity: (
-                player.current?.id,
-                player.current?.fileId,
-                player.current?.coverFileId,
-                player.current?.coverPreview,
-                player.current?.title,
-                player.current?.size,
+      final content = expanded
+          ? RepaintBoundary(
+              child: GestureDetector(
+                // The artwork pager keeps horizontal gestures; lyrics keeps scrolling.
+                onVerticalDragStart: showLyrics || _closingPlayer
+                    ? null
+                    : (_) {
+                        _playerDragStart = _dismissPlayer.value;
+                        _dismissPlayer.stop();
+                      },
+                onVerticalDragUpdate: showLyrics || _closingPlayer
+                    ? null
+                    : _dragPlayer,
+                onVerticalDragEnd: showLyrics || _closingPlayer
+                    ? null
+                    : _settlePlayer,
+                onVerticalDragCancel: showLyrics || _closingPlayer
+                    ? null
+                    : () {
+                        if (_reducedPlayerMotion) {
+                          _dismissPlayer.reset();
+                        } else if (_playerDragStart < .18) {
+                          _movePlayer(0);
+                        }
+                      },
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    NowPlayingBackdrop(
+                      key: const ValueKey('now-playing-backdrop'),
+                      identity: (
+                        player.current?.id,
+                        player.current?.fileId,
+                        player.current?.coverFileId,
+                        player.current?.coverPreview,
+                        player.current?.title,
+                        player.current?.size,
+                      ),
+                      artworkUpdates: telegram,
+                      reducedMotion: player.settings.reducedMotion,
+                      artwork: Artwork(
+                        seed: player.current?.title ?? 'Auralis',
+                        telegram: telegram,
+                        track: player.current,
+                        small: true,
+                      ),
+                    ),
+                    SafeArea(
+                      top: false,
+                      child: _pageContent(
+                        _Page.nowPlaying,
+                        narrow: viewport.width < 1180,
+                        short: viewport.height < 560,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              artworkUpdates: telegram,
-              reducedMotion: player.settings.reducedMotion,
-              artwork: Artwork(
-                seed: player.current?.title ?? 'Auralis',
-                telegram: telegram,
-                track: player.current,
-                small: true,
+            )
+          : null;
+      // Fade a fixed, cached blur over the retained page. The real dock stays
+      // underneath the card, so landing never swaps in a different mini-player.
+      final background = expanded
+          ? RepaintBoundary(
+              key: const ValueKey('player-cached-blur'),
+              child: ImageFiltered(
+                key: const ValueKey('player-transition-blur'),
+                imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: TickerMode(
+                  enabled: false,
+                  child: ExcludeFocus(
+                    child: ExcludeSemantics(
+                      child: IgnorePointer(
+                        child: Material(
+                          key: const ValueKey('player-collapse-background'),
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          child: _originContent(transitionCopy: true),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-            child,
-          ],
-        ),
-      );
-      // Keep the page and fixed blur in one cached layer during the gesture.
-      final background = RepaintBoundary(
-        key: const ValueKey('player-cached-blur'),
-        child: ImageFiltered(
-          key: const ValueKey('player-transition-blur'),
-          imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: TickerMode(
-            enabled: false,
-            child: RepaintBoundary(child: _collapseBackground()),
-          ),
-        ),
-      );
+            )
+          : null;
       return AnimatedBuilder(
         animation: _dismissPlayer,
-        child: RepaintBoundary(child: content),
-        builder: (context, content) {
+        child: RepaintBoundary(
+          key: const ValueKey('player-origin-page'),
+          child: child,
+        ),
+        builder: (context, origin) {
           final progress = 1 - _dismissPlayer.value;
           // Geometry follows the controller directly, including during a drag.
           // The release simulation supplies the easing exactly once.
           final bounds = Rect.lerp(mini, full, progress)!;
           final contentOpacity = const Interval(.08, .7).transform(progress);
-          final miniOpacity = 1 - const Interval(0, .3).transform(progress);
-          final transitioning = _dismissPlayer.value > 0 || _closingPlayer;
+          final blurOpacity = const Interval(.08, .55).transform(progress);
+          final cardOpacity = const Interval(0, .3).transform(progress);
+          final transitioning =
+              expanded && (_dismissPlayer.value > 0 || _closingPlayer);
           return ClipRect(
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (transitioning) background,
-                Positioned.fromRect(
-                  rect: bounds,
-                  child: ClipRRect(
-                    key: const ValueKey('now-playing-container'),
-                    borderRadius: BorderRadius.circular(28 * (1 - progress)),
-                    child: ColoredBox(
-                      color: _colors.surfaceContainerLow,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          OverflowBox(
-                            alignment: Alignment.topCenter,
-                            minWidth: full.width,
-                            maxWidth: full.width,
-                            minHeight: full.height,
-                            maxHeight: full.height,
-                            child: Opacity(
-                              key: const ValueKey(
-                                'now-playing-content-opacity',
-                              ),
-                              opacity: contentOpacity,
-                              child: IgnorePointer(
-                                ignoring:
-                                    _closingPlayer ||
-                                    _dismissPlayer.isAnimating,
-                                child: TickerMode(
-                                  enabled: !transitioning,
-                                  child: SizedBox.fromSize(
-                                    size: full.size,
-                                    child: content,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (miniOpacity > 0 && player.current != null)
-                            Positioned(
-                              left: 12,
-                              right: 12,
-                              top: 0,
-                              height: mini.height,
-                              child: IgnorePointer(
-                                child: ExcludeSemantics(
-                                  child: Opacity(
-                                    opacity: miniOpacity,
-                                    child: Row(
-                                      children: [
-                                        SizedBox.square(
-                                          dimension: 40,
-                                          child: Artwork(
-                                            seed: player.current!.title,
-                                            telegram: telegram,
-                                            track: player.current,
-                                            small: true,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            player.current!.title,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Icon(
-                                          player.audio.playing
-                                              ? Icons.pause_rounded
-                                              : Icons.play_arrow_rounded,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                Offstage(
+                  offstage: expanded && !transitioning,
+                  child: TickerMode(
+                    enabled: !expanded,
+                    child: ExcludeFocus(
+                      excluding: expanded,
+                      child: ExcludeSemantics(
+                        excluding: expanded,
+                        child: IgnorePointer(ignoring: expanded, child: origin),
                       ),
                     ),
                   ),
                 ),
+                if (transitioning)
+                  Opacity(
+                    key: const ValueKey('player-transition-blur-opacity'),
+                    opacity: blurOpacity,
+                    child: background,
+                  ),
+                if (expanded)
+                  Positioned.fromRect(
+                    rect: bounds,
+                    child: Opacity(
+                      key: const ValueKey('player-transition-card-opacity'),
+                      opacity: cardOpacity,
+                      child: ClipRRect(
+                        key: const ValueKey('now-playing-container'),
+                        borderRadius: BorderRadius.circular(
+                          28 * (1 - progress),
+                        ),
+                        child: ColoredBox(
+                          color: _colors.surfaceContainerLow,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              OverflowBox(
+                                alignment: Alignment.topCenter,
+                                minWidth: full.width,
+                                maxWidth: full.width,
+                                minHeight: full.height,
+                                maxHeight: full.height,
+                                child: Opacity(
+                                  key: const ValueKey(
+                                    'now-playing-content-opacity',
+                                  ),
+                                  opacity: contentOpacity,
+                                  child: IgnorePointer(
+                                    ignoring:
+                                        _closingPlayer ||
+                                        _dismissPlayer.isAnimating,
+                                    child: TickerMode(
+                                      enabled: !transitioning,
+                                      child: SizedBox.fromSize(
+                                        size: full.size,
+                                        child: content,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           );
@@ -794,7 +1043,6 @@ class _PlayerShellState extends State<PlayerShell>
         final compact = box.maxWidth < 900;
         final narrow = box.maxWidth < 1180;
         final short = box.maxHeight < 560;
-        final wide = box.maxWidth >= 1220 && box.maxHeight >= 620;
         return PopScope<Object?>(
           canPop: destination == _Page.library,
           onPopInvokedWithResult: (didPop, _) {
@@ -818,159 +1066,62 @@ class _PlayerShellState extends State<PlayerShell>
               autofocus: true,
               child: Scaffold(
                 backgroundColor: immersiveLyrics ? _colors.surface : null,
-                bottomNavigationBar: compact && destination != _Page.nowPlaying
-                    ? _bottomNavigation()
-                    : null,
                 body: SafeArea(
-                  child: Row(
+                  bottom: !compact,
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      if (!compact && !immersiveLyrics)
-                        _navigation(narrow, short: short),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: _playerSurface(
-                                      child: Padding(
-                                        padding: immersiveLyrics
-                                            ? EdgeInsets.zero
-                                            : EdgeInsets.fromLTRB(
-                                                narrow ? 16 : 30,
-                                                short ? 12 : 26,
-                                                narrow ? 16 : 26,
-                                                0,
-                                              ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            if (!(destination ==
-                                                    _Page.nowPlaying &&
-                                                showLyrics)) ...[
-                                              _header(narrow, short: short),
-                                              SizedBox(height: short ? 10 : 22),
-                                            ],
-                                            if (widget.updater != null)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                  bottom: 12,
-                                                ),
-                                                child: UpdateBanner(
-                                                  updater: widget.updater!,
-                                                ),
-                                              ),
-                                            if (widget.startupWarning != null)
-                                              _banner(widget.startupWarning!),
-                                            if (player.error ??
-                                                    player.audio.error
-                                                case final String error)
-                                              _banner(error),
-                                            Expanded(
-                                              child: AnimatedSwitcher(
-                                                // The dock/nav reappear on exit. Fade in the
-                                                // new page without squeezing an outgoing
-                                                // full player into its smaller viewport.
-                                                layoutBuilder: (current, _) =>
-                                                    current ??
-                                                    const SizedBox.shrink(),
-                                                duration: Duration(
-                                                  milliseconds:
-                                                      destination ==
-                                                              _Page
-                                                                  .nowPlaying ||
-                                                          player
-                                                              .settings
-                                                              .reducedMotion ||
-                                                          MediaQuery.disableAnimationsOf(
-                                                            context,
-                                                          )
-                                                      ? 0
-                                                      : 180,
-                                                ),
-                                                child: KeyedSubtree(
-                                                  key: ValueKey((
-                                                    destination,
-                                                    showLyrics,
-                                                  )),
-                                                  child: switch (destination) {
-                                                    _Page.library => _library(),
-                                                    _Page.telegram =>
-                                                      _telegram(),
-                                                    _Page.settings =>
-                                                      _settingsPage(),
-                                                    _Page.nowPlaying =>
-                                                      showLyrics
-                                                          ? LyricsView(
-                                                              backgroundColor:
-                                                                  Colors
-                                                                      .transparent,
-                                                              player: player,
-                                                              repository:
-                                                                  lyrics,
-                                                              files: widget
-                                                                  .dataFiles,
-                                                              loadEmbedded: telegram
-                                                                  .embeddedLyrics,
-                                                              artwork: Artwork(
-                                                                seed:
-                                                                    player
-                                                                        .current
-                                                                        ?.title ??
-                                                                    'Auralis',
-                                                                telegram:
-                                                                    telegram,
-                                                                track: player
-                                                                    .current,
-                                                              ),
-                                                              onBack: () =>
-                                                                  setState(() {
-                                                                    showLyrics =
-                                                                        false;
-                                                                  }),
-                                                            )
-                                                          : _nowPlaying(),
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                          ],
+                      Row(
+                        children: [
+                          if (!compact && !immersiveLyrics)
+                            _navigation(narrow, short: short),
+                          Expanded(
+                            child: _playerSurface(child: _originContent()),
+                          ),
+                        ],
+                      ),
+                      if (_showVolume)
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          child: IgnorePointer(
+                            child: Semantics(
+                              liveRegion: true,
+                              label:
+                                  'Volume ${player.settings.volume.round()} percent',
+                              child: Material(
+                                key: const ValueKey('volume-osd'),
+                                elevation: 6,
+                                color: _colors.surfaceContainerHigh,
+                                borderRadius: BorderRadius.circular(18),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        player.settings.volume == 0
+                                            ? Icons.volume_off_rounded
+                                            : Icons.volume_up_rounded,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        '${player.settings.volume.round()}%',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ),
-                                  if (wide &&
-                                      (destination == _Page.library ||
-                                          destination == _Page.telegram))
-                                    Container(
-                                      width: (box.maxWidth * .23).clamp(
-                                        280,
-                                        360,
-                                      ),
-                                      margin: const EdgeInsets.fromLTRB(
-                                        0,
-                                        20,
-                                        20,
-                                        20,
-                                      ),
-                                      padding: const EdgeInsets.all(20),
-                                      decoration: BoxDecoration(
-                                        color: _colors.surfaceContainerLow,
-                                        borderRadius: BorderRadius.circular(28),
-                                      ),
-                                      child: _nowPlaying(compact: true),
-                                    ),
-                                ],
+                                ),
                               ),
                             ),
-                            if (destination != _Page.nowPlaying &&
-                                player.current != null)
-                              _transport(box.maxWidth < 600, short: short),
-                          ],
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -982,36 +1133,37 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _bottomNavigation({_Page? page}) => NavigationBar(
-    key: const ValueKey('app-navigation'),
-    height: 80,
-    backgroundColor: _colors.surfaceContainerLowest,
-    selectedIndex: (page ?? destination).index,
-    labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-    onDestinationSelected: (i) => _navigate(_Page.values[i]),
-    destinations: const [
-      NavigationDestination(
-        icon: Icon(Icons.library_music_rounded),
-        label: 'Library',
-        tooltip: 'Library',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.send_rounded),
-        label: 'Telegram',
-        tooltip: 'Telegram',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.album_rounded),
-        label: 'Now playing',
-        tooltip: 'Now playing',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.tune_rounded),
-        label: 'Settings',
-        tooltip: 'Settings',
-      ),
-    ],
-  );
+  Widget _bottomNavigation({_Page? page, bool transitionCopy = false}) =>
+      NavigationBar(
+        key: transitionCopy ? null : const ValueKey('app-navigation'),
+        height: 80,
+        backgroundColor: _colors.surfaceContainerLowest,
+        selectedIndex: (page ?? destination).index,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        onDestinationSelected: (i) => _navigate(_Page.values[i]),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.library_music_rounded),
+            label: 'Library',
+            tooltip: 'Library',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.send_rounded),
+            label: 'Telegram',
+            tooltip: 'Telegram',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.album_rounded),
+            label: 'Now playing',
+            tooltip: 'Now playing',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.tune_rounded),
+            label: 'Settings',
+            tooltip: 'Settings',
+          ),
+        ],
+      );
 
   Widget _navigation(bool narrow, {bool short = false}) => Container(
     width: narrow ? 72 : 202,
@@ -1650,6 +1802,7 @@ class _PlayerShellState extends State<PlayerShell>
                       : 'No playlists match this search.',
                 )
               : ListView.builder(
+                  padding: EdgeInsets.only(bottom: _dockPadding),
                   itemCount: entries.length,
                   itemBuilder: (context, i) => ListTile(
                     leading: Icon(
@@ -1869,6 +2022,7 @@ class _PlayerShellState extends State<PlayerShell>
       );
     }
     return ListView.builder(
+      padding: EdgeInsets.only(bottom: _dockPadding),
       itemCount: visible.length,
       itemBuilder: (context, i) => _trackTile(
         visible[i],
@@ -2068,6 +2222,7 @@ class _PlayerShellState extends State<PlayerShell>
                     ),
                   ),
                 ),
+              SliverToBoxAdapter(child: SizedBox(height: _dockPadding)),
             ],
           ),
         ),
@@ -2076,6 +2231,7 @@ class _PlayerShellState extends State<PlayerShell>
   }
 
   Widget _signIn() => SingleChildScrollView(
+    padding: EdgeInsets.only(bottom: _dockPadding),
     child: Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
@@ -2179,7 +2335,7 @@ class _PlayerShellState extends State<PlayerShell>
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(22),
                     child: Artwork(
-                      key: const ValueKey('now-playing-artwork'),
+                      key: const ValueKey('mini-now-playing-artwork'),
                       seed: track?.title ?? 'Auralis',
                       telegram: telegram,
                       track: track,
@@ -2193,7 +2349,7 @@ class _PlayerShellState extends State<PlayerShell>
         const SizedBox(height: 16),
         Text(
           track?.title ?? 'Find your next favorite',
-          key: const ValueKey('now-playing-title'),
+          key: const ValueKey('mini-now-playing-title'),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
@@ -2207,7 +2363,7 @@ class _PlayerShellState extends State<PlayerShell>
         ),
         const SizedBox(height: 14),
         Row(
-          key: const ValueKey('now-playing-actions'),
+          key: const ValueKey('mini-now-playing-actions'),
           children: [
             Expanded(
               child: FilledButton.tonalIcon(
@@ -2238,7 +2394,9 @@ class _PlayerShellState extends State<PlayerShell>
     return Material(
       color: Colors.transparent,
       child: LayoutBuilder(
-        key: const ValueKey('now-playing-layout'),
+        key: ValueKey(
+          compact ? 'mini-now-playing-layout' : 'now-playing-layout',
+        ),
         builder: (context, box) {
           if (compact) return _miniNowPlaying(box, track);
           final scale = MediaQuery.textScalerOf(context)
@@ -2277,10 +2435,12 @@ class _PlayerShellState extends State<PlayerShell>
             required VoidCallback? onPressed,
             Color background = Colors.transparent,
             Color? foreground,
+            bool selected = false,
             Key? key,
           }) => IconButton(
             key: key,
             tooltip: tooltip,
+            isSelected: selected,
             onPressed: onPressed,
             style: IconButton.styleFrom(
               minimumSize: const Size(48, 48),
@@ -2529,14 +2689,25 @@ class _PlayerShellState extends State<PlayerShell>
               children: [
                 pill(
                   key: const ValueKey('now-playing-shuffle'),
-                  tooltip: 'Shuffle upcoming tracks',
+                  tooltip: player.shuffleEnabled
+                      ? 'Shuffle: on'
+                      : 'Shuffle: off',
                   icon: Icons.shuffle_rounded,
-                  onPressed: hasNext ? player.shuffle : null,
-                  background: Colors.transparent,
+                  selected: player.shuffleEnabled,
+                  onPressed: player.queue.length > 1 || player.shuffleEnabled
+                      ? player.shuffle
+                      : null,
+                  background: player.shuffleEnabled
+                      ? _colors.primaryContainer
+                      : Colors.transparent,
+                  foreground: player.shuffleEnabled
+                      ? _colors.onPrimaryContainer
+                      : _colors.onSurfaceVariant,
                 ),
                 const SizedBox(width: 20),
                 pill(
                   key: const ValueKey('now-playing-repeat'),
+                  selected: player.repeat,
                   tooltip: switch (player.repeatMode) {
                     PlaybackRepeat.off => 'Repeat: off',
                     PlaybackRepeat.all => 'Repeat: queue',
@@ -2556,6 +2727,7 @@ class _PlayerShellState extends State<PlayerShell>
                 const SizedBox(width: 20),
                 pill(
                   key: const ValueKey('now-playing-favorite'),
+                  selected: favorite,
                   tooltip: favorite
                       ? 'Remove from favorites'
                       : 'Add to favorites',
@@ -2623,8 +2795,6 @@ class _PlayerShellState extends State<PlayerShell>
                     icon: const Icon(Icons.playlist_add_rounded),
                   ),
                   _sleepControl(key: const ValueKey('sleep-timer-control')),
-                  const Spacer(),
-                  _volumeControl(true, tight: true),
                 ],
               );
             },
@@ -2833,73 +3003,11 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _volumeControl(bool narrow, {bool tight = false}) => Listener(
-    key: const ValueKey('volume-control'),
-    onPointerSignal: (event) {
-      if (event is PointerScrollEvent && event.scrollDelta.dy != 0) {
-        GestureBinding.instance.pointerSignalResolver.register(event, (_) {
-          unawaited(
-            player.setVolume(
-              player.settings.volume + (event.scrollDelta.dy < 0 ? 5 : -5),
-            ),
-          );
-        });
-      }
-    },
-    child: Tooltip(
-      message: 'Volume: ${player.settings.volume.round()}% (scroll to adjust)',
-      child: SizedBox(
-        height: tight ? 36 : 40,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.volume_up_rounded,
-              size: 16,
-              color: _colors.onSurfaceVariant,
-            ),
-            const SizedBox(width: 4),
-            SizedBox(
-              width: narrow ? 84 : 100,
-              child: Semantics(
-                label: 'Volume',
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 3,
-                    activeTrackColor: _colors.primary,
-                    inactiveTrackColor: _colors.primary.withValues(alpha: .18),
-                    thumbColor: _colors.primary,
-                    overlayColor: _colors.primary.withValues(alpha: .12),
-                    trackShape: const RoundedRectSliderTrackShape(),
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 5,
-                      disabledThumbRadius: 4,
-                    ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 12,
-                    ),
-                    trackGap: 0,
-                  ),
-                  child: Slider(
-                    key: const ValueKey('volume-slider'),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    value: player.settings.volume,
-                    max: 100,
-                    label: '${player.settings.volume.round()}%',
-                    onChanged: (v) =>
-                        unawaited(player.setVolume(v, persist: false)),
-                    onChangeEnd: player.setVolume,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  Widget _transport(bool narrow, {bool short = false}) {
+  Widget _transport(
+    bool narrow, {
+    bool short = false,
+    bool transitionCopy = false,
+  }) {
     final audio = player.audio, duration = player.audio.duration.inMilliseconds;
     final progress = duration <= 0
         ? 0.0
@@ -2982,7 +3090,7 @@ class _PlayerShellState extends State<PlayerShell>
     final compactPreview = Material(
       color: Colors.transparent,
       child: InkWell(
-        key: const ValueKey('open-current-track'),
+        key: transitionCopy ? null : const ValueKey('open-current-track'),
         borderRadius: BorderRadius.circular(14),
         onTap: player.current == null
             ? null
@@ -3038,7 +3146,7 @@ class _PlayerShellState extends State<PlayerShell>
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: PlayerDockMotion(
-        key: _dockKey,
+        key: transitionCopy ? null : _dockKey,
         reducedMotion: reduced,
         enabled: !player.restoringData,
         onExpandStart: (_) => _navigate(_Page.nowPlaying, draggingDock: true),
@@ -3050,8 +3158,10 @@ class _PlayerShellState extends State<PlayerShell>
           }
         },
         child: Material(
-          key: const ValueKey('player-bar'),
+          key: transitionCopy ? null : const ValueKey('player-bar'),
           color: _colors.surfaceContainerLow,
+          elevation: 4,
+          shadowColor: Colors.black38,
           borderRadius: BorderRadius.circular(28),
           clipBehavior: Clip.antiAlias,
           child: Padding(
@@ -3105,18 +3215,15 @@ class _PlayerShellState extends State<PlayerShell>
                       }
                       return Row(
                         children: [
-                          IconButton(
-                            key: const ValueKey('open-current-track'),
-                            tooltip: 'Open Now playing',
-                            onPressed: () => _navigate(_Page.nowPlaying),
-                            icon: const Icon(Icons.open_in_full_rounded),
-                          ),
-                          const SizedBox(width: 24),
+                          SizedBox(width: 220, child: compactPreview),
+                          const SizedBox(width: 12),
+                          transportButtons,
+                          const SizedBox(width: 12),
                           Expanded(
                             flex: 5,
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
-                              children: [transportButtons, progressBar],
+                              children: [progressBar],
                             ),
                           ),
                         ],
@@ -3129,94 +3236,317 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
+  Future<void> _savePreferences(VoidCallback update) async {
+    setState(update);
+    player.refreshSettings();
+    try {
+      await player.settings.save();
+    } catch (_) {
+      if (mounted) _notice('Preferences are active, but could not be saved.');
+    }
+  }
+
+  Widget _preferenceChoice<T>(
+    String title,
+    T? value,
+    List<T> values,
+    String Function(T) label,
+    ValueChanged<T?> onChanged, {
+    bool allowNone = false,
+  }) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 48),
+    child: Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: Text(title, style: const TextStyle(fontSize: 12)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 3,
+          child: DropdownButtonHideUnderline(
+            child: SizedBox(
+              height: 48,
+              child: DropdownButton<T>(
+                value: value,
+                isExpanded: true,
+                isDense: true,
+                items: [
+                  if (allowNone)
+                    DropdownMenuItem<T>(
+                      value: null,
+                      child: const Text('None', style: TextStyle(fontSize: 12)),
+                    ),
+                  for (final item in values)
+                    DropdownMenuItem<T>(
+                      value: item,
+                      child: Text(
+                        label(item),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                ],
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _lyricPreferences() {
+    final prefs = player.settings;
+    return ExpansionTile(
+      key: const ValueKey('lyrics-preferences'),
+      tilePadding: EdgeInsets.zero,
+      title: const Text('Lyrics & translation'),
+      subtitle: Text(
+        '${prefs.automaticLyrics ? 'Automatic' : 'Manual'} · ${prefs.lyricsFirst.label}',
+      ),
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Find lyrics automatically'),
+          value: prefs.automaticLyrics,
+          onChanged: (v) => _savePreferences(() => prefs.automaticLyrics = v),
+        ),
+        _preferenceChoice(
+          'Lyrics first',
+          prefs.lyricsFirst,
+          LyricsSource.values,
+          (v) => v.label,
+          (v) {
+            if (v == null) return;
+            unawaited(
+              _savePreferences(() {
+                final old = prefs.lyricsFirst;
+                prefs.lyricsFirst = v;
+                if (prefs.lyricsFallback == v) prefs.lyricsFallback = old;
+              }),
+            );
+          },
+        ),
+        _preferenceChoice(
+          'Lyrics fallback',
+          prefs.lyricsFallback,
+          LyricsSource.values.where((v) => v != prefs.lyricsFirst).toList(),
+          (v) => v.label,
+          (v) => _savePreferences(() => prefs.lyricsFallback = v),
+          allowNone: true,
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Translate automatically'),
+          subtitle: const Text('Sends lyric text to the selected translator'),
+          value: prefs.automaticTranslation,
+          onChanged: (v) =>
+              _savePreferences(() => prefs.automaticTranslation = v),
+        ),
+        _preferenceChoice(
+          'Direction',
+          prefs.translationDirection,
+          TranslationDirection.values,
+          (v) => v.label,
+          (v) {
+            if (v != null) {
+              unawaited(_savePreferences(() => prefs.translationDirection = v));
+            }
+          },
+        ),
+        _preferenceChoice(
+          'Translate first',
+          prefs.translationFirst,
+          TranslationSource.values,
+          (v) => v.label,
+          (v) {
+            if (v == null) return;
+            unawaited(
+              _savePreferences(() {
+                final old = prefs.translationFirst;
+                prefs.translationFirst = v;
+                if (prefs.translationFallback == v) {
+                  prefs.translationFallback = old;
+                }
+              }),
+            );
+          },
+        ),
+        _preferenceChoice(
+          'Translate fallback',
+          prefs.translationFallback,
+          TranslationSource.values
+              .where((v) => v != prefs.translationFirst)
+              .toList(),
+          (v) => v.label,
+          (v) => _savePreferences(() => prefs.translationFallback = v),
+          allowNone: true,
+        ),
+      ],
+    );
+  }
+
+  Widget _artworkPreferences() {
+    final prefs = player.settings;
+    final counts = {0, 5, 10, 20, 50, prefs.artworkPreload}.toList()..sort();
+    return ExpansionTile(
+      key: const ValueKey('artwork-preferences'),
+      tilePadding: EdgeInsets.zero,
+      title: const Text('Artwork'),
+      subtitle: Text(
+        '${prefs.artworkPreload} upcoming · ${prefs.keepArtwork ? 'Kept on device' : 'Temporary'}',
+      ),
+      children: [
+        _preferenceChoice(
+          'Preload artwork',
+          prefs.artworkPreload,
+          counts,
+          (v) => v == 0 ? 'Current song only' : '$v upcoming songs',
+          (v) {
+            if (v != null) {
+              unawaited(_savePreferences(() => prefs.artworkPreload = v));
+            }
+          },
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Keep saved artwork'),
+          subtitle: const Text(
+            'On: keep covers. Off: remove saved covers and use temporary artwork.',
+          ),
+          value: prefs.keepArtwork,
+          onChanged: (v) async {
+            await _savePreferences(() => prefs.keepArtwork = v);
+            if (!v && !prefs.keepArtwork) {
+              final disk = telegram.mediaCache;
+              if (disk.directory != null) {
+                await MediaCache.drain(disk.directory!);
+              }
+              if (!prefs.keepArtwork) await disk.clearArtwork();
+            }
+          },
+        ),
+      ],
+    );
+  }
+
   Widget _settingsPage() => Align(
     alignment: Alignment.topCenter,
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 760),
-      child: ListView(
-        key: const ValueKey('settings-page'),
-        padding: const EdgeInsets.only(bottom: 24),
-        children: [
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.bar_chart_rounded),
-            title: const Text('Listening stats'),
-            subtitle: const Text('Listening time, rankings and data export'),
-            onTap: () => _stats(),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.backup_outlined),
-            title: const Text('Backup & Restore'),
-            subtitle: const Text('Stats, collections and preferences'),
-            onTap: () => _stats(backup: true),
-          ),
-          if (widget.sync != null) SyncSettings(controller: widget.sync!),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.new_releases_outlined),
-            title: const Text('What’s new'),
-            onTap: () => showInstalledChanges(
-              context,
-              widget.installedVersion ??
-                  widget.updater?.currentVersion ??
-                  currentReleaseVersion,
+      child: ListTileTheme(
+        data: ListTileThemeData(
+          dense: true,
+          minVerticalPadding: 6,
+          minLeadingWidth: 24,
+          horizontalTitleGap: 10,
+          titleTextStyle: Theme.of(context).textTheme.titleSmall!
+              .copyWith(fontSize: 14, color: _colors.onSurface),
+          subtitleTextStyle: Theme.of(context).textTheme.bodySmall!
+              .copyWith(fontSize: 11, color: _colors.onSurfaceVariant),
+          contentPadding: EdgeInsets.zero,
+        ),
+        child: ListView(
+          key: const ValueKey('settings-page'),
+          padding: EdgeInsets.only(bottom: _dockPadding),
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.bar_chart_rounded),
+              title: const Text('Listening stats'),
+              subtitle: const Text('Listening time & export'),
+              onTap: () => _stats(),
             ),
-          ),
-          const Divider(),
-          if (widget.updater != null) ...[
-            UpdateSettings(updater: widget.updater!),
-            const Divider(),
-          ],
-          const SizedBox(height: 12),
-          Text(
-            'Auralis ${widget.updater?.currentVersion ?? currentReleaseVersion} · AGPL-3.0-or-later\nIndependent Flutter interface. Playback by libmpv. Telegram connectivity by TDLib.',
-            style: TextStyle(
-              color: _colors.onSurfaceVariant,
-              fontSize: 12,
-              height: 1.6,
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.backup_outlined),
+              title: const Text('Backup & Restore'),
+              subtitle: const Text('Stats, collections and preferences'),
+              onTap: () => _stats(backup: true),
             ),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () => showLicensePage(
-                context: context,
-                applicationName: 'Auralis',
-                applicationVersion:
-                    widget.updater?.currentVersion ?? currentReleaseVersion,
+            if (widget.sync != null) SyncSettings(controller: widget.sync!),
+            _lyricPreferences(),
+            _artworkPreferences(),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.new_releases_outlined),
+              title: const Text('What’s new'),
+              onTap: () => showInstalledChanges(
+                context,
+                widget.installedVersion ??
+                    widget.updater?.currentVersion ??
+                    currentReleaseVersion,
               ),
-              child: const Text('Licenses'),
             ),
-          ),
-          if (telegram.ready)
+            const Divider(),
+            if (widget.updater != null) ...[
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('App updates'),
+                children: [
+                  UpdateSettings(updater: widget.updater!, showHeading: false),
+                ],
+              ),
+              const Divider(),
+            ],
+            const SizedBox(height: 6),
+            Text(
+              'Auralis ${widget.updater?.currentVersion ?? currentReleaseVersion} · AGPL-3.0-or-later\nlibmpv · TDLib',
+              style: TextStyle(
+                color: _colors.onSurfaceVariant,
+                fontSize: 11,
+                height: 1.4,
+              ),
+            ),
+            Text(
+              Theme.of(context).platform == TargetPlatform.android
+                  ? 'Use your phone’s volume buttons.'
+                  : '↑ / ↓ changes volume.',
+              style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
+            ),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
-                onPressed: telegram.busy
-                    ? null
-                    : () async {
-                        await player.clear();
-                        await telegram.logout();
-                        if (telegram.ready && telegram.error != null) {
-                          _notice(telegram.error!);
-                        }
-                        if (!telegram.ready) {
-                          player.settings.selectedChannels = [];
-                          try {
-                            await player.settings.save();
-                          } catch (_) {
-                            _notice(
-                              'Signed out, but the old channel selection could not be removed from settings.',
-                            );
-                          }
-                          if (mounted) _openTelegram();
-                        }
-                      },
-                child: const Text('Sign out of Telegram'),
+                onPressed: () => showLicensePage(
+                  context: context,
+                  applicationName: 'Auralis',
+                  applicationVersion:
+                      widget.updater?.currentVersion ?? currentReleaseVersion,
+                ),
+                child: const Text('Licenses'),
               ),
             ),
-        ],
+            if (telegram.ready)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: telegram.busy
+                      ? null
+                      : () async {
+                          await player.clear();
+                          await telegram.logout();
+                          if (telegram.ready && telegram.error != null) {
+                            _notice(telegram.error!);
+                          }
+                          if (!telegram.ready) {
+                            player.settings.selectedChannels = [];
+                            try {
+                              await player.settings.save();
+                            } catch (_) {
+                              _notice(
+                                'Signed out, but the old channel selection could not be removed from settings.',
+                              );
+                            }
+                            if (mounted) _openTelegram();
+                          }
+                        },
+                  child: const Text('Sign out of Telegram'),
+                ),
+              ),
+          ],
+        ),
       ),
     ),
   );
@@ -3558,9 +3888,8 @@ class Artwork extends StatelessWidget {
       child = FutureBuilder<Uint8List?>(
         key: ValueKey((track!.fileId, track!.coverFileId)),
         future: telegram!.cover(track!),
-        builder: (context, snapshot) =>
-            snapshot.connectionState == ConnectionState.done &&
-                snapshot.data != null
+        initialData: telegram!.cachedCover(track!),
+        builder: (context, snapshot) => snapshot.data != null
             ? image(MemoryImage(snapshot.data!), fallback)
             : fallback,
       );
