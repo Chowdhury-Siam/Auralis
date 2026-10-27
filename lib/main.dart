@@ -162,6 +162,7 @@ Future<void> main() async {
             : const DataFiles(),
         sync: sync,
         installedVersion: package.version,
+        showSetup: !settings.setupComplete && warning == null,
       ),
     );
     updater?.start();
