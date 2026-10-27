@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'models.dart';
 import 'storage.dart';
+import 'preference_widgets.dart';
 
 class AppNavigation extends StatelessWidget {
   const AppNavigation({
@@ -186,28 +187,26 @@ class AppearancePreferences extends StatelessWidget {
           onChanged();
         },
       ),
-      DropdownButtonFormField<AppNavigationStyle>(
-        initialValue: settings.navigationStyle,
-        key: ValueKey(settings.navigationStyle),
-        isExpanded: true,
-        decoration: const InputDecoration(labelText: 'App navigation'),
-        items: [
-          for (final style in AppNavigationStyle.values)
-            DropdownMenuItem(value: style, child: Text(style.label)),
-        ],
-        onChanged: (v) {
-          if (v != null) {
-            settings.navigationStyle = v;
-            onChanged();
-          }
+      PreferenceChoice<AppNavigationStyle>(
+        title: 'App navigation',
+        value: settings.navigationStyle,
+        values: AppNavigationStyle.values,
+        label: (style) => style.label,
+        onSelected: (style) {
+          settings.navigationStyle = style;
+          onChanged();
         },
       ),
       if (settings.navigationStyle != AppNavigationStyle.fullWidth) ...[
         const SizedBox(height: 8),
         Row(
           children: [
-            const Text('Corner radius'),
+            const Expanded(
+              flex: 2,
+              child: Text('Corner radius', style: TextStyle(fontSize: 13)),
+            ),
             Expanded(
+              flex: 3,
               child: Slider(
                 value: settings.navigationRadius,
                 min: 0,
