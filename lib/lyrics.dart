@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+
 import 'models.dart';
+import 'storage.dart';
 import 'lyrics_translation.dart';
 import 'media_cache.dart';
 
@@ -161,11 +164,29 @@ class Lyrics {
 }
 
 /// Bounded memory and optional device cache, with sequential online fallbacks.
-class LyricsRepository {
-  LyricsRepository({HttpClient Function()? createClient, this.cache})
-    : _createClient = createClient ?? HttpClient.new;
+class LyricsRepository extends ChangeNotifier {
+  LyricsRepository({
+    HttpClient Function()? createClient,
+    this.cache,
+    this.preferences,
+  }) : _createClient = createClient ?? HttpClient.new;
   final HttpClient Function() _createClient;
   final MediaCache Function()? cache;
+  final AppSettings? preferences;
+  final _translations = <Object, Lyrics>{};
+  final _translationJobs = <Object, Future<Lyrics>>{};
+  final _translationReaders = <Object, Set<bool Function()>>{};
+  Object _translationKey(Track track, Lyrics source) => (
+    _key(track),
+    source,
+    preferences?.translationFirst ?? TranslationSource.google,
+    preferences == null
+        ? TranslationSource.myMemory
+        : preferences!.translationFallback,
+    preferences?.translationDirection ?? TranslationDirection.japaneseEnglish,
+  );
+  Lyrics? translated(Track track, Lyrics source) =>
+      _translations[_translationKey(track, source)];
   late final _translator = LyricsTranslator(
     createClient: _createClient,
     cache: cache,
@@ -174,7 +195,90 @@ class LyricsRepository {
     Track track,
     Lyrics source, {
     required bool Function() active,
-  }) => _translator.translate(track, source, active: active);
+  }) {
+    final key = _translationKey(track, source);
+    if (_translations[key] case final saved?) return Future.value(saved);
+    final readers = _translationReaders.putIfAbsent(key, () => {});
+    readers.add(active);
+    bool stillNeeded() =>
+        !_closed &&
+        readers.any((reader) => reader()) &&
+        (cached(track) == null || identical(cached(track), source));
+    if (_translationJobs[key] case final pending?) return pending;
+    late final Future<Lyrics> job;
+    job = _translator
+        .translate(
+          track,
+          source,
+          active: stillNeeded,
+          first: preferences?.translationFirst ?? TranslationSource.google,
+          fallback: preferences == null
+              ? TranslationSource.myMemory
+              : preferences!.translationFallback,
+          direction:
+              preferences?.translationDirection ??
+              TranslationDirection.japaneseEnglish,
+        )
+        .then((result) {
+          if (stillNeeded() && identical(cached(track), source)) {
+            _translations[key] = result;
+            if (_translations.length > 32) {
+              _translations.remove(_translations.keys.first);
+            }
+            notifyListeners();
+          }
+          return result;
+        })
+        .whenComplete(() {
+          if (identical(_translationJobs[key], job)) {
+            _translationJobs.remove(key);
+            _translationReaders.remove(key);
+          }
+        });
+    return _translationJobs[key] = job;
+  }
+
+  Future<Lyrics?> prepare(
+    Track track, {
+    required bool Function() active,
+    Future<Lyrics?> Function(Track)? loadEmbedded,
+  }) async {
+    Lyrics? result = await loadCached(track);
+    if (!active() || _closed) return null;
+    if (result == null && loadEmbedded != null) {
+      try {
+        result = await loadEmbedded(track);
+      } catch (_) {
+        /* Continue online. */
+      }
+      if (!active() || _closed) return null;
+      result = cached(track) ?? result;
+      if (result != null &&
+          !result.instrumental &&
+          result.plain.trim().isEmpty &&
+          !result.lines.any((line) => line.text.trim().isNotEmpty)) {
+        result = null;
+      }
+      if (result != null) save(track, result);
+    }
+    result ??= await find(track);
+    if (!active() || _closed || result == null) return null;
+    if (preferences?.automaticTranslation != false &&
+        LyricsTranslator.supports(
+          result,
+          direction:
+              preferences?.translationDirection ??
+              TranslationDirection.japaneseEnglish,
+        )) {
+      try {
+        await translateJapanese(track, result, active: active);
+      } catch (_) {
+        /* Originals remain available. */
+      }
+    }
+    return result;
+  }
+
   Future<Lyrics?> loadCached(Track track) async {
     if (contains(track)) return cached(track);
     final disk = cache?.call();
@@ -237,6 +341,7 @@ class LyricsRepository {
 
   final _cache = <String, Lyrics?>{};
   final _pending = <String, Object>{};
+  final _lookups = <Object, Future<Lyrics?>>{};
   final _clients = <HttpClient>{};
   bool _closed = false;
   String _key(Track track) => jsonEncode([
@@ -255,9 +360,24 @@ class LyricsRepository {
     _cache[_key(track)] = lyrics;
     if (_cache.length > 32) _cache.remove(_cache.keys.first);
     if (lyrics != null) unawaited(persist(track, lyrics));
+    notifyListeners();
   }
 
-  Future<Lyrics?> find(Track track, {bool refresh = false}) async {
+  Future<Lyrics?> find(Track track, {bool refresh = false}) {
+    final key = (
+      _key(track),
+      preferences?.lyricsFirst,
+      preferences?.lyricsFallback,
+    );
+    if (!refresh && _lookups[key] != null) return _lookups[key]!;
+    late final Future<Lyrics?> job;
+    job = _find(track, refresh: refresh).whenComplete(() {
+      if (identical(_lookups[key], job)) _lookups.remove(key);
+    });
+    return _lookups[key] = job;
+  }
+
+  Future<Lyrics?> _find(Track track, {bool refresh = false}) async {
     if (_closed) throw StateError('Lyrics lookup is closed.');
     final saved = refresh || cache == null ? null : await loadCached(track);
     if (saved != null) return saved;
@@ -322,7 +442,20 @@ class LyricsRepository {
     ];
     var failed = false;
     try {
-      for (final lookup in providers) {
+      final order = preferences == null
+          ? [LyricsSource.lrclib, LyricsSource.lyricsOvh]
+          : [
+              preferences!.lyricsFirst,
+              if (preferences!.lyricsFallback != null)
+                preferences!.lyricsFallback!,
+            ];
+      for (final lookup in [
+        for (final source in order)
+          if (source == LyricsSource.lrclib)
+            ...providers.take(2)
+          else
+            providers[2],
+      ]) {
         if (!current()) return superseded();
         Lyrics? result;
         try {
@@ -449,6 +582,10 @@ class LyricsRepository {
   }
 
   void close() {
+    if (_closed) return;
+    _translations.clear();
+    _translationJobs.clear();
+    _translationReaders.clear();
     _translator.close();
     _closed = true;
     for (final client in _clients) {
@@ -456,6 +593,8 @@ class LyricsRepository {
     }
     _clients.clear();
     _pending.clear();
+    _lookups.clear();
     _cache.clear();
+    dispose();
   }
 }
