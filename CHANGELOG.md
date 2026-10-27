@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.97
+
+- Fixed the refresh-cache widget test’s Windows CI shutdown hang by running refresh filesystem work outside the fake clock and pumping until cleanup actually completes.
+- The regression still verifies partial caches, repeated refreshes, disk reuse after restart and unchanged existing files. Incremental app caching behavior is unchanged.
+
 ## 0.1.96
 
 - Library Refresh now checks the saved cache first and queues only tracks missing artwork or lyrics. The progress total counts those tracks, and a fully cached library has no caching pass.
