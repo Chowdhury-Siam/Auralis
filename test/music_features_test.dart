@@ -73,6 +73,29 @@ void main() {
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
 
+  test('shuffle toggles visibly active mode and restores the upcoming order without dropping additions', () async {
+    final player = makePlayer()
+      ..queue.addAll([a, b, a, b])
+      ..index = 0;
+    addTearDown(player.shutdown);
+    player.shuffle();
+    expect(player.shuffleEnabled, isTrue);
+    expect(player.current, a);
+    expect(player.queue.skip(1), unorderedEquals([b, a, b]));
+    const added = Track(
+      id: 'added',
+      title: 'Added',
+      artist: 'Artist',
+      source: 'Music',
+    );
+    player.enqueue(added);
+    player.shuffle();
+    expect(player.shuffleEnabled, isFalse);
+    expect(player.queue, [a, b, a, b, added]);
+    await player.clear();
+    expect(player.shuffleEnabled, isFalse);
+  });
+
   test('favorites, ordered playlists, recent history and repeat mode survive real settings writes', () async {
     final dir = await Directory.systemTemp.createTemp('auralis-collections-');
     addTearDown(() => dir.delete(recursive: true));
