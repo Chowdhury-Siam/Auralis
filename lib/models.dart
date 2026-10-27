@@ -121,6 +121,15 @@ enum TranslationDirection {
 
 enum PlaybackRepeat { off, all, one }
 
+enum AppNavigationStyle {
+  expressive('Expressive pill'),
+  classic('Classic pill'),
+  fullWidth('Full width bar');
+
+  const AppNavigationStyle(this.label);
+  final String label;
+}
+
 enum LibrarySort {
   newest('Newest first'),
   oldest('Oldest first'),
