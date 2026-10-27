@@ -318,8 +318,8 @@ void main() {
         await tester.tap(find.text('Copy lyrics & open DeepL'));
         await tester.pumpAndSettle();
         expect(opened.last, 'https://www.deepl.com/en/translator/l/ja/en');
-        expect(copied, '今日は晴れです。\n明日も歩きます。');
-        expect(repository.cached(song)!.plain, copied);
+        expect(copied, '[00:00.000]今日は晴れです。\n[00:02.000]明日も歩きます。');
+        expect(repository.cached(song)!.plain, '今日は晴れです。\n明日も歩きます。');
         expect(find.text('今日は晴れです。'), findsOneWidget);
         await chooseTranslation(tester, 'Translate with DeepL');
         await tester.tap(find.byType(DropdownButtonFormField<String>));
