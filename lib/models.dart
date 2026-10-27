@@ -95,6 +95,30 @@ class Track {
   }
 }
 
+enum LyricsSource {
+  lrclib('LRCLIB'),
+  lyricsOvh('lyrics.ovh');
+
+  const LyricsSource(this.label);
+  final String label;
+}
+
+enum TranslationSource {
+  google('Google Translate'),
+  myMemory('MyMemory');
+
+  const TranslationSource(this.label);
+  final String label;
+}
+
+enum TranslationDirection {
+  japaneseEnglish('Japanese → English', 'ja', 'en'),
+  englishJapanese('English → Japanese', 'en', 'ja');
+
+  const TranslationDirection(this.label, this.source, this.target);
+  final String label, source, target;
+}
+
 enum PlaybackRepeat { off, all, one }
 
 enum LibrarySort {
