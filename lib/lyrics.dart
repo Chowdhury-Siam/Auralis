@@ -31,6 +31,19 @@ class Lyrics {
   final List<LyricLine> lines;
   final bool instrumental, online, embedded, imported;
 
+  String get timestampedText => lines.isEmpty
+      ? plain
+      : lines
+            .expand((line) {
+              final ms = line.time.inMilliseconds;
+              final stamp =
+                  '[${(ms ~/ 60000).toString().padLeft(2, '0')}:'
+                  '${(ms ~/ 1000 % 60).toString().padLeft(2, '0')}.'
+                  '${(ms % 1000).toString().padLeft(3, '0')}]';
+              return line.text.split('\n').map((text) => '$stamp$text');
+            })
+            .join('\n');
+
   static const maxFileBytes = 256 * 1024;
 
   static Lyrics fromFileBytes(Uint8List bytes) {
