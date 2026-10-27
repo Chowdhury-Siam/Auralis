@@ -27,6 +27,7 @@ import 'media_cache.dart';
 import 'app_navigation.dart';
 import 'setup_view.dart';
 import 'settings_view.dart';
+import 'preference_widgets.dart';
 
 const accent = Color(0xFFC7B5FF),
     surface = Color(0xFF19171E),
@@ -446,8 +447,14 @@ class _PlayerShellState extends State<PlayerShell>
   }
 
   double get _dockPadding {
-    if (player.current == null) return 16;
     final size = MediaQuery.sizeOf(context);
+    final navigation =
+        !widget.setupMode &&
+            size.width < 900 &&
+            player.settings.navigationStyle != AppNavigationStyle.fullWidth
+        ? 80 + MediaQuery.paddingOf(context).bottom
+        : 0;
+    if (player.current == null) return navigation + 16;
     final width =
         size.width -
         (size.width >= 1180
@@ -455,7 +462,8 @@ class _PlayerShellState extends State<PlayerShell>
             : size.width >= 900
             ? 72
             : 0);
-    return (size.height < 560 || width >= 1020 ? 96 : 128) +
+    return navigation +
+        (size.height < 560 || width >= 1020 ? 96 : 128) +
         math.max(0, MediaQuery.textScalerOf(context).scale(1) - 1) * 48;
   }
 
@@ -663,6 +671,9 @@ class _PlayerShellState extends State<PlayerShell>
           ? _playerOrigin
           : destination;
       final compact = viewport.width < 900;
+      final floatingNavigation =
+          compact &&
+          player.settings.navigationStyle != AppNavigationStyle.fullWidth;
       final narrow = viewport.width < 1180;
       final short = viewport.height < 560;
       final wide = viewport.width >= 1220 && viewport.height >= 620;
@@ -693,10 +704,20 @@ class _PlayerShellState extends State<PlayerShell>
                   ],
                 ),
               ),
-              if (compact)
+              if (compact && !floatingNavigation)
                 _bottomNavigation(page: page, transitionCopy: transitionCopy),
             ],
           ),
+          if (floatingNavigation)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _bottomNavigation(
+                page: page,
+                transitionCopy: transitionCopy,
+              ),
+            ),
           if (player.current != null)
             Positioned(
               left: 0,
@@ -843,7 +864,6 @@ class _PlayerShellState extends State<PlayerShell>
                       ),
                     ),
                     SafeArea(
-                      top: false,
                       child: _pageContent(
                         _Page.nowPlaying,
                         narrow: viewport.width < 1180,
@@ -871,7 +891,10 @@ class _PlayerShellState extends State<PlayerShell>
                         child: Material(
                           key: const ValueKey('player-collapse-background'),
                           color: Theme.of(context).scaffoldBackgroundColor,
-                          child: _originContent(transitionCopy: true),
+                          child: SafeArea(
+                            bottom: false,
+                            child: _originContent(transitionCopy: true),
+                          ),
                         ),
                       ),
                     ),
@@ -1171,7 +1194,9 @@ class _PlayerShellState extends State<PlayerShell>
               autofocus: true,
               child: Scaffold(
                 backgroundColor: immersiveLyrics ? _colors.surface : null,
+                // Paint the player through the top inset; content stays safe inside.
                 body: SafeArea(
+                  top: false,
                   bottom: !compact,
                   child: Stack(
                     fit: StackFit.expand,
@@ -1179,15 +1204,23 @@ class _PlayerShellState extends State<PlayerShell>
                       Row(
                         children: [
                           if (!compact && !immersiveLyrics)
-                            _navigation(narrow, short: short),
+                            SafeArea(
+                              bottom: false,
+                              child: _navigation(narrow, short: short),
+                            ),
                           Expanded(
-                            child: _playerSurface(child: _originContent()),
+                            child: _playerSurface(
+                              child: SafeArea(
+                                bottom: false,
+                                child: _originContent(),
+                              ),
+                            ),
                           ),
                         ],
                       ),
                       if (_showVolume)
                         Positioned(
-                          top: 12,
+                          top: MediaQuery.paddingOf(context).top + 12,
                           right: 12,
                           child: IgnorePointer(
                             child: Semantics(
@@ -1466,13 +1499,6 @@ class _PlayerShellState extends State<PlayerShell>
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                   ),
                 ),
-                // Full-screen phones need these routes while navigation is hidden.
-                if (MediaQuery.sizeOf(context).width < 900)
-                  IconButton(
-                    onPressed: () => _navigate(_Page.settings),
-                    tooltip: 'Settings',
-                    icon: const Icon(Icons.tune_rounded),
-                  ),
               ],
             )
           : Row(
@@ -2011,45 +2037,25 @@ class _PlayerShellState extends State<PlayerShell>
             if (player.settings.compactLibrary)
               Align(
                 alignment: Alignment.centerLeft,
-                child: IntrinsicWidth(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: _colors.primaryContainer,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        key: const ValueKey('library-collection-menu'),
-                        isExpanded: true,
-                        value: collection,
-                        items: [
-                          for (final label in [
-                            'All songs',
-                            'Favorites',
-                            'Playlists',
-                            'Recently played',
-                          ])
-                            DropdownMenuItem(
-                              value: label,
-                              child: Text(
-                                label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              collection = value;
-                              selectedPlaylist = null;
-                              search.clear();
-                            });
-                          }
-                        },
-                      ),
-                    ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 280),
+                  child: ChoiceMenu<String>(
+                    key: const ValueKey('library-collection-menu'),
+                    title: 'Library collection',
+                    tonal: true,
+                    value: collection,
+                    values: const [
+                      'All songs',
+                      'Favorites',
+                      'Playlists',
+                      'Recently played',
+                    ],
+                    label: (value) => value,
+                    onSelected: (value) => setState(() {
+                      collection = value;
+                      selectedPlaylist = null;
+                      search.clear();
+                    }),
                   ),
                 ),
               )
@@ -2603,7 +2609,7 @@ class _PlayerShellState extends State<PlayerShell>
           final comfortable = horizontal && heroHeight >= 420 * scale;
           final spacious = heroHeight >= 580 * scale;
           final gap = veryShort
-              ? 4.0
+              ? 3.0
               : spacious
               ? 10.0
               : 6.0;
@@ -2623,8 +2629,6 @@ class _PlayerShellState extends State<PlayerShell>
             required String tooltip,
             required IconData icon,
             required VoidCallback? onPressed,
-            Color background = Colors.transparent,
-            Color? foreground,
             bool selected = false,
             Key? key,
           }) => IconButton(
@@ -2634,8 +2638,12 @@ class _PlayerShellState extends State<PlayerShell>
             onPressed: onPressed,
             style: IconButton.styleFrom(
               minimumSize: const Size(48, 48),
-              backgroundColor: background,
-              foregroundColor: foreground ?? _colors.primary,
+              backgroundColor: selected
+                  ? _colors.primary.withValues(alpha: .12)
+                  : Colors.transparent,
+              foregroundColor: selected
+                  ? _colors.primary
+                  : _colors.onSurfaceVariant,
               disabledBackgroundColor: Colors.transparent,
               shape: const CircleBorder(),
             ),
@@ -2887,12 +2895,6 @@ class _PlayerShellState extends State<PlayerShell>
                   onPressed: player.queue.length > 1 || player.shuffleEnabled
                       ? player.shuffle
                       : null,
-                  background: player.shuffleEnabled
-                      ? _colors.primaryContainer
-                      : Colors.transparent,
-                  foreground: player.shuffleEnabled
-                      ? _colors.onPrimaryContainer
-                      : _colors.onSurfaceVariant,
                 ),
                 const SizedBox(width: 20),
                 pill(
@@ -2907,12 +2909,6 @@ class _PlayerShellState extends State<PlayerShell>
                       ? Icons.repeat_one_rounded
                       : Icons.repeat_rounded,
                   onPressed: player.toggleRepeat,
-                  background: player.repeat
-                      ? _colors.primary.withValues(alpha: .16)
-                      : Colors.transparent,
-                  foreground: player.repeat
-                      ? _colors.primary
-                      : _colors.onSurfaceVariant,
                 ),
                 const SizedBox(width: 20),
                 pill(
@@ -2924,12 +2920,6 @@ class _PlayerShellState extends State<PlayerShell>
                   icon: favorite
                       ? Icons.favorite_rounded
                       : Icons.favorite_border_rounded,
-                  background: favorite
-                      ? _colors.primary.withValues(alpha: .12)
-                      : Colors.transparent,
-                  foreground: favorite
-                      ? _colors.primary
-                      : _colors.onSurfaceVariant,
                   onPressed: track == null
                       ? null
                       : () async {
@@ -3443,54 +3433,21 @@ class _PlayerShellState extends State<PlayerShell>
     String Function(T) label,
     ValueChanged<T?> onChanged, {
     bool allowNone = false,
-  }) => ConstrainedBox(
-    constraints: const BoxConstraints(minHeight: 48),
-    child: Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Text(title, style: const TextStyle(fontSize: 12)),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 3,
-          child: DropdownButtonHideUnderline(
-            child: SizedBox(
-              height: 48,
-              child: DropdownButton<T>(
-                value: value,
-                isExpanded: true,
-                isDense: true,
-                items: [
-                  if (allowNone)
-                    DropdownMenuItem<T>(
-                      value: null,
-                      child: const Text('None', style: TextStyle(fontSize: 12)),
-                    ),
-                  for (final item in values)
-                    DropdownMenuItem<T>(
-                      value: item,
-                      child: Text(
-                        label(item),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                ],
-                onChanged: onChanged,
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
+  }) => PreferenceChoice<T?>(
+    title: title,
+    value: value,
+    values: [if (allowNone) null, ...values],
+    label: (value) => value == null ? 'None' : label(value),
+    onSelected: onChanged,
   );
 
   Widget _lyricPreferences() {
     final prefs = player.settings;
     return ExpansionTile(
       key: const ValueKey('lyrics-preferences'),
+      leading: const PreferenceIcon(Icons.lyrics_rounded),
+      shape: const Border(),
+      collapsedShape: const Border(),
       tilePadding: EdgeInsets.zero,
       title: const Text('Lyrics & translation'),
       subtitle: Text(
@@ -3583,6 +3540,9 @@ class _PlayerShellState extends State<PlayerShell>
     final counts = {0, 5, 10, 20, 50, prefs.artworkPreload}.toList()..sort();
     return ExpansionTile(
       key: const ValueKey('artwork-preferences'),
+      leading: const PreferenceIcon(Icons.image_rounded),
+      shape: const Border(),
+      collapsedShape: const Border(),
       tilePadding: EdgeInsets.zero,
       title: const Text('Artwork'),
       subtitle: Text(
@@ -3604,7 +3564,7 @@ class _PlayerShellState extends State<PlayerShell>
           contentPadding: EdgeInsets.zero,
           title: const Text('Keep saved artwork'),
           subtitle: const Text(
-            'On: keep covers. Off: remove saved covers and use temporary artwork.',
+            'Keep covers on this device. Turning off removes saved covers.',
           ),
           value: prefs.keepArtwork,
           onChanged: (v) async {
@@ -3625,13 +3585,14 @@ class _PlayerShellState extends State<PlayerShell>
   List<Widget> _settingsContent(SettingsSection section) => switch (section) {
     SettingsSection.general => [
       ListTile(
-        leading: const Icon(Icons.auto_awesome_rounded),
+        leading: const PreferenceIcon(Icons.auto_awesome_rounded),
         title: const Text('Set up Auralis'),
         subtitle: const Text('Connection, appearance and playback preferences'),
+        trailing: const Icon(Icons.chevron_right_rounded, size: 18),
         onTap: _openSetup,
       ),
       ListTile(
-        leading: const Icon(Icons.volume_up_outlined),
+        leading: const PreferenceIcon(Icons.volume_up_outlined),
         title: const Text('Volume controls'),
         subtitle: Text(
           Theme.of(context).platform == TargetPlatform.android
@@ -3640,7 +3601,7 @@ class _PlayerShellState extends State<PlayerShell>
         ),
       ),
       const ListTile(
-        leading: Icon(Icons.bedtime_outlined),
+        leading: PreferenceIcon(Icons.bedtime_outlined),
         title: Text('Sleep timer'),
         subtitle: Text(
           'Use the clock control in Now Playing to stop after a duration or at the end of a song.',
@@ -3663,59 +3624,61 @@ class _PlayerShellState extends State<PlayerShell>
     SettingsSection.media => [_lyricPreferences(), _artworkPreferences()],
     SettingsSection.data => [
       ListTile(
-        leading: const Icon(Icons.bar_chart_rounded),
+        leading: const PreferenceIcon(Icons.bar_chart_rounded),
         title: const Text('Listening stats'),
         subtitle: const Text('Listening time & export'),
+        trailing: const Icon(Icons.chevron_right_rounded, size: 18),
         onTap: () => _stats(),
       ),
       ListTile(
-        leading: const Icon(Icons.backup_outlined),
+        leading: const PreferenceIcon(Icons.backup_outlined),
         title: const Text('Backup & Restore'),
         subtitle: const Text('Stats, collections and preferences'),
+        trailing: const Icon(Icons.chevron_right_rounded, size: 18),
         onTap: () => _stats(backup: true),
       ),
       if (widget.sync != null) SyncSettings(controller: widget.sync!),
     ],
     SettingsSection.privacy => [
       const ListTile(
-        leading: Icon(Icons.shield_outlined),
+        leading: PreferenceIcon(Icons.shield_outlined),
         title: Text('Protected on this device'),
         subtitle: Text(
           'Telegram credentials are encrypted with Android Keystore or Windows DPAPI. Login codes and two-step verification passwords are never saved.',
         ),
       ),
       ListTile(
-        leading: const Icon(Icons.send_rounded),
+        leading: const PreferenceIcon(Icons.send_rounded),
         title: Text(telegram.ready ? 'Telegram connected' : 'Connect Telegram'),
         subtitle: const Text('Manage your sign-in and selected channels'),
+        trailing: const Icon(Icons.chevron_right_rounded, size: 18),
         onTap: _openTelegram,
       ),
       if (telegram.ready)
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: telegram.busy
-                ? null
-                : () async {
-                    await player.clear();
-                    await telegram.logout();
-                    if (telegram.ready && telegram.error != null) {
-                      _notice(telegram.error!);
+        ListTile(
+          leading: const PreferenceIcon(Icons.logout_rounded),
+          title: const Text('Sign out of Telegram'),
+          textColor: _colors.error,
+          onTap: telegram.busy
+              ? null
+              : () async {
+                  await player.clear();
+                  await telegram.logout();
+                  if (telegram.ready && telegram.error != null) {
+                    _notice(telegram.error!);
+                  }
+                  if (!telegram.ready) {
+                    player.settings.selectedChannels = [];
+                    try {
+                      await player.settings.save();
+                    } catch (_) {
+                      _notice(
+                        'Signed out, but the old channel selection could not be removed from settings.',
+                      );
                     }
-                    if (!telegram.ready) {
-                      player.settings.selectedChannels = [];
-                      try {
-                        await player.settings.save();
-                      } catch (_) {
-                        _notice(
-                          'Signed out, but the old channel selection could not be removed from settings.',
-                        );
-                      }
-                      if (mounted) _openTelegram();
-                    }
-                  },
-            child: const Text('Sign out of Telegram'),
-          ),
+                    if (mounted) _openTelegram();
+                  }
+                },
         ),
     ],
     SettingsSection.updates => [
@@ -3724,15 +3687,16 @@ class _PlayerShellState extends State<PlayerShell>
     ],
     SettingsSection.about => [
       ListTile(
-        leading: const Icon(Icons.graphic_eq_rounded),
+        leading: const PreferenceIcon(Icons.graphic_eq_rounded),
         title: const Text('Auralis'),
         subtitle: Text(
           '${widget.updater?.currentVersion ?? currentReleaseVersion} · AGPL-3.0-or-later\nlibmpv · TDLib',
         ),
       ),
       ListTile(
-        leading: const Icon(Icons.new_releases_outlined),
+        leading: const PreferenceIcon(Icons.new_releases_outlined),
         title: const Text('What’s new'),
+        trailing: const Icon(Icons.chevron_right_rounded, size: 18),
         onTap: () => showInstalledChanges(
           context,
           widget.installedVersion ??
@@ -3741,8 +3705,9 @@ class _PlayerShellState extends State<PlayerShell>
         ),
       ),
       ListTile(
-        leading: const Icon(Icons.description_outlined),
+        leading: const PreferenceIcon(Icons.description_outlined),
         title: const Text('Licenses'),
+        trailing: const Icon(Icons.chevron_right_rounded, size: 18),
         onTap: () => showLicensePage(
           context: context,
           applicationName: 'Auralis',
@@ -3777,9 +3742,14 @@ class _PlayerShellState extends State<PlayerShell>
                   iconColor: _colors.primary,
                   dense: true,
                   minVerticalPadding: 8,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  contentPadding: EdgeInsets.zero,
+                  horizontalTitleGap: 12,
+                  minTileHeight: 56,
                   titleTextStyle: Theme.of(context).textTheme.titleSmall!
-                      .copyWith(color: _colors.onSurface),
+                      .copyWith(
+                        color: _colors.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
                   subtitleTextStyle: Theme.of(context).textTheme.bodySmall!
                       .copyWith(color: _colors.onSurfaceVariant),
                 ),
@@ -3788,7 +3758,13 @@ class _PlayerShellState extends State<PlayerShell>
                     'settings-${_settingsSection!.name}-content',
                   ),
                   padding: EdgeInsets.only(bottom: _dockPadding),
-                  children: _settingsContent(_settingsSection!),
+                  children: [
+                    for (final child in _settingsContent(_settingsSection!))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: PreferenceCard(child: child),
+                      ),
+                  ],
                 ),
               ),
       ),
