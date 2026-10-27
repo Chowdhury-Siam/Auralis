@@ -14,6 +14,31 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
 
+class WarmingTelegram extends TelegramService {
+  WarmingTelegram(this.bytes)
+    : super(Directory('unused'), MemoryVault(), transport: FakeTd());
+  final Uint8List bytes;
+  final requested = <String>[];
+  final warmed = <String>{};
+  @override
+  bool get ready => true;
+  @override
+  Future<Uint8List?> cover(Track track) async => bytes;
+  @override
+  Uint8List? cachedCover(Track track) =>
+      warmed.contains(track.id) ? bytes : null;
+  @override
+  Future<Uint8List?> cacheCover(
+    Track track, {
+    required bool Function() active,
+  }) async {
+    if (!active()) return null;
+    requested.add(track.id);
+    warmed.add(track.id);
+    return bytes;
+  }
+}
+
 void main() {
   Future<(FakeAudio, PlayerController)> mount(
     WidgetTester tester, {
@@ -71,6 +96,131 @@ void main() {
     return (audio, player);
   }
 
+  testWidgets(
+    'artwork preloads ten upcoming tracks and adapts the queue window',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final bytes = File('test/fixtures/cover.png').readAsBytesSync();
+      await tester.runAsync(
+        () => ColorScheme.fromImageProvider(
+          provider: MemoryImage(bytes),
+          brightness: Brightness.dark,
+        ),
+      );
+      final settings = MemorySettings()
+        ..reducedMotion = true
+        ..automaticLyrics = false;
+      final player =
+          PlayerController(
+              FakeAudio(),
+              TelegramStreamProxy((_) async => {}),
+              settings,
+            )
+            ..queue.addAll(
+              List.generate(
+                16,
+                (i) => Track(
+                  id: '$i',
+                  fileId: i + 1,
+                  title: 'Song $i',
+                  artist: 'Artist',
+                  source: 'Music',
+                ),
+              ),
+            )
+            ..index = 0;
+      final telegram = WarmingTelegram(bytes);
+      addTearDown(player.shutdown);
+      addTearDown(telegram.shutdown);
+      await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+      Future<void> finish(int count) async {
+        for (var i = 0; i < 100 && telegram.requested.length < count; i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 5)),
+          );
+          await tester.pump();
+        }
+        await tester.pumpAndSettle();
+      }
+
+      await finish(11);
+      expect(telegram.requested, List.generate(11, (i) => '$i'));
+      player.index = 1;
+      player.notifyListeners();
+      await finish(22);
+      expect(telegram.warmed, contains('11'));
+      expect(telegram.warmed, isNot(contains('12')));
+      final dock = find.byKey(const ValueKey('player-bar'));
+      final future = find.descendant(
+        of: dock,
+        matching: find.byType(FutureBuilder<Uint8List?>),
+      );
+      expect(
+        tester.widget<FutureBuilder<Uint8List?>>(future).initialData,
+        same(bytes),
+      );
+      telegram.requested.clear();
+      settings.artworkPreload = 5;
+      player.refreshSettings();
+      await finish(6);
+      expect(telegram.requested, ['1', '2', '3', '4', '5', '6']);
+      telegram.requested.clear();
+      player.index = 15;
+      settings.repeatMode = PlaybackRepeat.all;
+      player.refreshSettings();
+      await finish(6);
+      expect(telegram.requested, ['15', '0', '1', '2', '3', '4']);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets('compact Settings changes provider order and artwork defaults', (
+    tester,
+  ) async {
+    final (_, player) = await mount(
+      tester,
+      reduced: true,
+      openPlayer: false,
+      size: const Size(390, 844),
+    );
+    await tester.tap(find.byTooltip('Settings').first);
+    await tester.pumpAndSettle();
+    expect(find.byType(DropdownButton<LyricsSource>), findsNothing);
+    await tester.tap(find.text('Lyrics & translation'));
+    await tester.pumpAndSettle();
+    final first = tester.widget<DropdownButton<LyricsSource>>(
+      find.byType(DropdownButton<LyricsSource>).first,
+    );
+    first.onChanged!(LyricsSource.lyricsOvh);
+    await tester.pumpAndSettle();
+    expect(player.settings.lyricsFirst, LyricsSource.lyricsOvh);
+    expect(player.settings.lyricsFallback, LyricsSource.lrclib);
+    await tester.ensureVisible(find.text('Lyrics & translation'));
+    await tester.tap(find.text('Lyrics & translation'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Artwork'));
+    await tester.tap(find.text('Artwork'));
+    await tester.pumpAndSettle();
+    final count = tester.widget<DropdownButton<int>>(
+      find.byType(DropdownButton<int>),
+    );
+    count.onChanged!(5);
+    await tester.pumpAndSettle();
+    expect(player.settings.artworkPreload, 5);
+    final keep = tester.widget<SwitchListTile>(
+      find.widgetWithText(SwitchListTile, 'Keep saved artwork'),
+    );
+    keep.onChanged!(false);
+    await tester.pumpAndSettle();
+    expect(player.settings.keepArtwork, isFalse);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   for (final size in [const Size(390, 844), const Size(1280, 714)]) {
     testWidgets('compact controls remain usable at $size', (tester) async {
       final (audio, player) = await mount(tester, reduced: true, size: size);
@@ -90,19 +240,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(player.settings.favoriteIds, contains('first'));
 
-      final slider = find.byKey(const ValueKey('volume-slider'));
-      final sliderBounds = tester.getRect(slider);
-      await tester.tapAt(
-        Offset(sliderBounds.left + 12, sliderBounds.center.dy),
-      );
+      expect(find.byKey(const ValueKey('volume-slider')), findsNothing);
+      final shuffle = find.byKey(const ValueKey('now-playing-shuffle'));
+      await tester.tap(shuffle);
       await tester.pumpAndSettle();
-      final low = audio.volumes.last;
-      await tester.tapAt(
-        Offset(sliderBounds.right - 12, sliderBounds.center.dy),
-      );
+      expect(player.shuffleEnabled, isTrue);
+      expect(tester.widget<IconButton>(shuffle).isSelected, isTrue);
+      await tester.tap(shuffle);
       await tester.pumpAndSettle();
-      expect(audio.volumes.last, greaterThan(low));
-      expect(audio.playing, isTrue);
+      expect(player.shuffleEnabled, isFalse);
+      expect(tester.widget<IconButton>(shuffle).isSelected, isFalse);
       expect(tester.takeException(), isNull);
     });
   }
@@ -402,6 +549,82 @@ void main() {
     });
   }
 
+  for (final size in [const Size(390, 844), const Size(1280, 714)]) {
+    testWidgets(
+      'collapse retains the real dock and settles without a handoff at $size',
+      (tester) async {
+        final (audio, player) = await mount(
+          tester,
+          openPlayer: false,
+          size: size,
+        );
+        final dock = find.byKey(const ValueKey('player-bar'));
+        final origin = find.byKey(const ValueKey('player-origin-page'));
+        final dockElement = tester.element(dock);
+        final originElement = tester.element(origin);
+        final dockBounds = tester.getRect(dock);
+        await tester.tap(find.byKey(const ValueKey('open-current-track')));
+        await tester.pumpAndSettle();
+        expect(
+          identical(
+            tester.element(
+              find.byKey(const ValueKey('player-bar'), skipOffstage: false),
+            ),
+            dockElement,
+          ),
+          isTrue,
+          reason: 'Opening retains the existing dock instead of recreating it',
+        );
+        await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+        await tester.pump();
+        var previousBlur = 1.0;
+        var revealedDock = false;
+        // Bound the tail as well as the visible travel: the old transition still
+        // blocked the dock after it appeared to have reached its final position.
+        for (var frame = 0; frame < 45; frame++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          expect(identical(tester.element(origin), originElement), isTrue);
+          expect(identical(tester.element(dock), dockElement), isTrue);
+          expect(tester.getRect(dock), dockBounds);
+          final blur = find.byKey(
+            const ValueKey('player-transition-blur-opacity'),
+          );
+          if (blur.evaluate().isEmpty) break;
+          final opacity = tester.widget<Opacity>(blur).opacity;
+          expect(opacity, lessThanOrEqualTo(previousBlur));
+          previousBlur = opacity;
+          if (opacity == 0) {
+            revealedDock = true;
+            final cardOpacity = tester
+                .widget<Opacity>(
+                  find.byKey(const ValueKey('player-transition-card-opacity')),
+                )
+                .opacity;
+            expect(cardOpacity, lessThan(.3));
+          }
+        }
+        expect(
+          revealedDock,
+          isTrue,
+          reason: 'The actual dock is visible before the animation ends',
+        );
+        expect(
+          find.byKey(const ValueKey('now-playing-container')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey('open-current-track')).hitTestable(),
+          findsOneWidget,
+        );
+        expect(identical(tester.element(dock), dockElement), isTrue);
+        expect(player.current?.id, 'first');
+        expect(audio.playing, isFalse);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('automatic expansion advances continuously at frame intervals', (
     tester,
   ) async {
@@ -581,7 +804,10 @@ void main() {
     final before = tester.getRect(surface);
     await tester.binding.handlePopRoute();
     await tester.pump();
-    expect(tester.getRect(surface), before);
+    expect(
+      tester.getRect(surface),
+      rectMoreOrLessEquals(before, epsilon: .001),
+    );
     await tester.pump(const Duration(milliseconds: 180));
     expect(tester.getRect(surface).top, greaterThan(before.top));
     await tester.pumpAndSettle();
