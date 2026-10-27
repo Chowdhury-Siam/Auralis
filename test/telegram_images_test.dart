@@ -66,6 +66,40 @@ void main() {
     await dir.delete(recursive: true);
   });
 
+  test('saved cover checks and warming reuse valid files without rewrites or requests', () async {
+    final track = song(1);
+    final disk = service.mediaCache;
+    await disk.write(track, 'art', png);
+    final file = File('${disk.directory!.path}/${disk.key(track)}.art');
+    await file.setLastModified(DateTime(2000));
+    final savedTime = await file.lastModified();
+    final requests = td.requests.length;
+    expect(await service.hasCachedCover(track), isTrue);
+    expect(await service.cacheCover(track, active: () => true), png);
+    expect(td.requests, hasLength(requests));
+    expect(await file.lastModified(), savedTime);
+    final alias = Track(
+      id: 'alias',
+      title: track.title,
+      artist: track.artist,
+      source: track.source,
+      fileId: track.fileId,
+      size: track.size,
+    );
+    expect(await service.hasCachedCover(alias), isFalse);
+    expect(await service.cacheCover(alias, active: () => true), png);
+    expect(await service.hasCachedCover(alias), isTrue);
+    expect(td.requests, hasLength(requests));
+    await file.writeAsBytes([0, 1, 2]);
+    service.clearImageCache();
+    expect(await service.hasCachedCover(track), isFalse);
+    cachedAudio();
+    expect(await service.cacheCover(track, active: () => true), png);
+    expect(await service.hasCachedCover(track), isTrue);
+    service.state = 'disconnected';
+    expect(await service.hasCachedCover(track), isFalse);
+  });
+
   test(
     'visible artwork downloads are shared and lower priority than playback',
     () async {
