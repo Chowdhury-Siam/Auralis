@@ -1,7 +1,7 @@
 # GitHub Releases and application updates
 
 Repository: **[Chowdhury-Siam/Auralis](https://github.com/Chowdhury-Siam/Auralis)**.
-Current source target: **v0.1.81** (`0.1.81+82`).
+Current source target: **v0.1.93** (`0.1.93+94`).
 
 Version 0.1.81 refines that motion with direct finger tracking, a velocity-preserving spring, a cached fixed blur and one coordinated content transition.
 
@@ -33,6 +33,12 @@ GitHub controls cache scope, quotas and eviction, so a missing cache or changed 
 The currently running job cannot adopt a new workflow midway through; let it finish before committing the update if you want to preserve its work. This task cannot upload the fix through the READ-only connection. The complete project ZIP includes it; replacing only `.github/workflows/windows.yml` also applies this configuration fix. Actual GitHub migration/hit behavior still needs a new run.
 
 Implementation follows the official [restore](https://github.com/actions/cache/blob/0057852bfaa89a56745cba8c7296529d2fc39830/restore/README.md) and [save](https://github.com/actions/cache/blob/0057852bfaa89a56745cba8c7296529d2fc39830/save/README.md) actions, pinned to that commit.
+
+## Android install action — v0.1.91
+
+After an APK download is ready, **Install update** in either the banner or Settings immediately verifies and installs the APK. Auralis no longer adds a second confirmation dialog. Android 12+ uses PackageInstaller with USER_ACTION_NOT_REQUIRED and the UPDATE_PACKAGES_WITHOUT_USER_ACTION permission for this same-package, same-signature self-update. Android may still request install-source permission or return STATUS_PENDING_USER_ACTION, in which case its confirmation is opened; after permission is granted, Auralis continues the pending install automatically. Existing downloads and automatic checks never initiate installation without the user pressing Install update. An older installed Auralis still uses its original flow for the update that replaces it.
+
+Official session requirements: https://developer.android.com/reference/android/content/pm/PackageInstaller.SessionParams#setRequireUserAction(int)
 
 ## Application update flow
 
