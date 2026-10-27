@@ -1,5 +1,20 @@
 # Auralis changes
 
+## 0.1.93
+
+- Redesigned Settings as a searchable directory with compact grouped rows and rounded outer corners, followed by focused General, Appearance, Lyrics & artwork, Data & sync, Privacy & security, App updates and About pages.
+- Search recognizes settings/features and provider names. Category Back returns to the filtered directory; another Back returns to Library. Existing media controls, setup, backups, stats, sync, update installation and sign-out remain available, with the floating player retained.
+
+## 0.1.92
+
+- Added a first-run setup with a welcome screen, Telegram connection/channel selection, optional Android notification and battery settings, backup restore, lyrics/translation and artwork preferences, library layout and navigation choices, and a completion screen. Existing installs keep their library; setup can be reopened from Settings.
+- Added compact collection navigation and expressive/classic floating navigation styles, with a configurable corner radius. Appearance choices persist and are included in backups; desktop retains its sidebar.
+- Copy lyrics & open DeepL now includes available LRC timestamps, preserving milliseconds, offsets and multiline originals. Plain lyrics still copy as plain text. Both translation menus share a compact rounded surface.
+
+## 0.1.91
+
+- Android Install update now starts installation directly from the update banner and Settings, without a second Auralis confirmation dialog. Android 12+ uses a self-update install session that requests no further confirmation when the device permits it. Download and pre-install SHA-256 checks, APK validation, install permission handling and retry remain in place. A system confirmation remains available when Android requires it.
+
 ## 0.1.90
 
 - Made Listening Stats compact with tighter totals, a seven-day chart, tabbed rankings and expandable backup controls. Settings groups lyrics, artwork and updates into compact sections.
