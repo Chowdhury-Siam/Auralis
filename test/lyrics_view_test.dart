@@ -99,7 +99,9 @@ PlayerController controller() =>
     PlayerController(
         FakeAudio()..duration = const Duration(minutes: 5),
         TelegramStreamProxy((_) async => {}),
-        MemorySettings()..reducedMotion = true,
+        MemorySettings()
+          ..reducedMotion = true
+          ..automaticTranslation = false,
       )
       ..queue.add(song)
       ..index = 0;
@@ -146,6 +148,61 @@ void main() {
       'MaterialIcons',
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
+
+  testWidgets(
+    'automatic translation starts without confirmation and keeps original lyrics',
+    (tester) async {
+      final player = controller()..settings.automaticTranslation = true;
+      final repository = TranslationLyrics()
+        ..save(song, Lyrics.parse('[00:00]今日は晴れです。'));
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      await tester.pumpWidget(view(player, repository));
+      await tester.pump();
+      expect(repository.translations, 1);
+      expect(find.byType(AlertDialog), findsNothing);
+      repository.result.complete(
+        Lyrics.parse('[00:00]今日は晴れです。\n[00:00]It is sunny today.'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('今日は晴れです。\nIt is sunny today.'), findsOneWidget);
+      expect(repository.cached(song)!.plain, '今日は晴れです。');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'failed automatic translation ignores unrelated updates but translates new lyrics',
+    (tester) async {
+      final player = controller()..settings.automaticTranslation = true;
+      final repository = TranslationLyrics()
+        ..save(song, Lyrics.parse('[00:00]今日は晴れです。'));
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      await tester.pumpWidget(view(player, repository));
+      await tester.pump();
+      expect(repository.translations, 1);
+      repository.result.completeError(StateError('Provider unavailable'));
+      await tester.pumpAndSettle();
+
+      repository.save(second, Lyrics.parse('[00:00]Unrelated song'));
+      await tester.pumpAndSettle();
+      expect(repository.translations, 1);
+      expect(find.byType(SnackBar), findsNothing);
+
+      repository.result = Completer<Lyrics>()
+        ..complete(Lyrics.parse('[00:00]新しい歌\n[00:00]A new song'));
+      repository.save(song, Lyrics.parse('[00:00]新しい歌', imported: true));
+      await tester.pumpAndSettle();
+      expect(repository.translations, 2);
+      expect(find.text('新しい歌\nA new song'), findsOneWidget);
+      expect(repository.cached(song)!.plain, '新しい歌');
+      expect(repository.cached(song)!.imported, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets(
     'Japanese translation confirms sharing, toggles original, and fits phone and desktop',
