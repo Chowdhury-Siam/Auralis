@@ -458,16 +458,32 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Reduce motion'), findsNothing);
         expect(find.text('Use instant page transitions'), findsNothing);
-        expect(find.text('Listening stats'), findsOneWidget);
-        expect(find.text('Backup & Restore'), findsOneWidget);
+        expect(find.text('Data & sync'), findsOneWidget);
+        expect(find.text('Lyrics & artwork'), findsOneWidget);
         expect(find.text('Check automatically'), findsNothing);
-        await tester.ensureVisible(find.text('App updates'));
+        await tester.scrollUntilVisible(
+          find.text('App updates'),
+          200,
+          scrollable: find
+              .descendant(
+                of: find.byKey(const ValueKey('settings-page')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await Scrollable.ensureVisible(
+          tester.element(find.text('App updates')),
+          alignment: .1,
+        );
+        await tester.pumpAndSettle();
         await tester.tap(find.text('App updates'));
         await tester.pumpAndSettle();
         expect(find.text('Check automatically'), findsOneWidget);
         expect(tester.takeException(), isNull);
         expect(find.byType(AlertDialog), findsNothing);
         expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+        await tester.tap(find.byTooltip('Back to Settings'));
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Back to Library'));
         await tester.pumpAndSettle();
       }
