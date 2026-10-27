@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../external_links.dart';
+import '../preference_widgets.dart';
 import 'controller.dart';
 import 'deployment_view.dart';
 
@@ -11,23 +12,20 @@ class SyncSettings extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: controller,
-    builder: (context, _) => Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        leading: const Icon(Icons.cloud_sync_rounded),
-        title: const Text('Account & sync'),
-        subtitle: Text(
-          controller.signedIn
-              ? '${controller.account!.username} · ${controller.status}'
-              : 'Sign in to sync your library across devices',
-        ),
-        trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute<void>(
-            builder: (_) => SyncAccountPage(sync: controller),
-          ),
+    builder: (context, _) => ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const PreferenceIcon(Icons.cloud_sync_rounded),
+      title: const Text('Account & sync'),
+      subtitle: Text(
+        controller.signedIn
+            ? '${controller.account!.username} · ${controller.status}'
+            : 'Sign in to sync your library across devices',
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => SyncAccountPage(sync: controller),
         ),
       ),
     ),
