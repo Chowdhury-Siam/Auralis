@@ -39,7 +39,11 @@ class Permissions extends SetupPermissions {
 
 void main() {
   setUpAll(() async {
-    final font = File('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
+    final font = File(
+      Platform.isWindows
+          ? 'C:/Windows/Fonts/segoeui.ttf'
+          : '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    );
     if (font.existsSync()) {
       await (FontLoader('Segoe UI')
             ..addFont(font.readAsBytes().then((b) => ByteData.sublistView(b))))
