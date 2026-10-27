@@ -118,6 +118,7 @@ class AppSettings {
   final File file;
   Map<String, dynamic> syncState = {};
   String? lastSeenRelease;
+  bool setupComplete = false;
   void Function(Map<String, dynamic>)? captureSync;
   void Function()? onSaved;
   bool reducedMotion = false;
@@ -125,6 +126,9 @@ class AppSettings {
   double volume = 70;
   bool automaticLyrics = true, automaticTranslation = true, keepArtwork = true;
   int artworkPreload = 10;
+  bool compactLibrary = false;
+  AppNavigationStyle navigationStyle = AppNavigationStyle.fullWidth;
+  double navigationRadius = 28;
   LyricsSource lyricsFirst = LyricsSource.lrclib;
   LyricsSource? lyricsFallback = LyricsSource.lyricsOvh;
   TranslationSource translationFirst = TranslationSource.google;
@@ -158,12 +162,15 @@ class AppSettings {
         ? json['_sync'] as Map<String, dynamic>
         : {};
     lastSeenRelease = json['_lastSeenRelease'] as String?;
+    // Existing installations keep their library; only a fresh install starts setup.
+    setupComplete = json['_setupComplete'] != false;
   }
 
   Map<String, dynamic> _diskJson(Map<String, dynamic> snapshot) => {
     ...snapshot,
     '_sync': syncState,
     '_lastSeenRelease': lastSeenRelease,
+    '_setupComplete': setupComplete,
   };
 
   void applyJson(Map<String, dynamic> json) {
@@ -176,6 +183,15 @@ class AppSettings {
     automaticLyrics = json['automaticLyrics'] != false;
     automaticTranslation = json['automaticTranslation'] != false;
     keepArtwork = json['keepArtwork'] != false;
+    compactLibrary = json['compactLibrary'] == true;
+    navigationStyle = AppNavigationStyle.values.firstWhere(
+      (v) => v.name == json['navigationStyle'],
+      orElse: () => AppNavigationStyle.fullWidth,
+    );
+    final radius = json['navigationRadius'];
+    navigationRadius = radius is num && radius.isFinite
+        ? radius.toDouble().clamp(0, 40)
+        : 28;
     artworkPreload = json['artworkPreload'] is int
         ? (json['artworkPreload'] as int).clamp(0, 50)
         : 10;
@@ -253,6 +269,9 @@ class AppSettings {
     'translationDirection': translationDirection.name,
     'artworkPreload': artworkPreload,
     'keepArtwork': keepArtwork,
+    'compactLibrary': compactLibrary,
+    'navigationStyle': navigationStyle.name,
+    'navigationRadius': navigationRadius,
     'librarySort': librarySort.name,
     'favoriteIds': favoriteIds.toList(),
     'playlists': playlists,
