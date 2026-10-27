@@ -123,6 +123,14 @@ class AppSettings {
   bool reducedMotion = false;
   bool automaticUpdates = true;
   double volume = 70;
+  bool automaticLyrics = true, automaticTranslation = true, keepArtwork = true;
+  int artworkPreload = 10;
+  LyricsSource lyricsFirst = LyricsSource.lrclib;
+  LyricsSource? lyricsFallback = LyricsSource.lyricsOvh;
+  TranslationSource translationFirst = TranslationSource.google;
+  TranslationSource? translationFallback = TranslationSource.myMemory;
+  TranslationDirection translationDirection =
+      TranslationDirection.japaneseEnglish;
   LibrarySort librarySort = LibrarySort.newest;
   List<MusicChat> selectedChannels = [];
   Set<String> favoriteIds = {};
@@ -147,12 +155,15 @@ class AppSettings {
     final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     applyJson(json);
     syncState = json['_sync'] is Map<String, dynamic>
-        ? json['_sync'] as Map<String, dynamic> : {};
+        ? json['_sync'] as Map<String, dynamic>
+        : {};
     lastSeenRelease = json['_lastSeenRelease'] as String?;
   }
 
   Map<String, dynamic> _diskJson(Map<String, dynamic> snapshot) => {
-    ...snapshot, '_sync': syncState, '_lastSeenRelease': lastSeenRelease,
+    ...snapshot,
+    '_sync': syncState,
+    '_lastSeenRelease': lastSeenRelease,
   };
 
   void applyJson(Map<String, dynamic> json) {
@@ -162,6 +173,41 @@ class AppSettings {
     reducedMotion = false;
     automaticUpdates = json['automaticUpdates'] != false;
     volume = (json['volume'] as num? ?? 70).toDouble().clamp(0, 100);
+    automaticLyrics = json['automaticLyrics'] != false;
+    automaticTranslation = json['automaticTranslation'] != false;
+    keepArtwork = json['keepArtwork'] != false;
+    artworkPreload = json['artworkPreload'] is int
+        ? (json['artworkPreload'] as int).clamp(0, 50)
+        : 10;
+    lyricsFirst = LyricsSource.values.firstWhere(
+      (v) => v.name == json['lyricsFirst'],
+      orElse: () => LyricsSource.lrclib,
+    );
+    lyricsFallback =
+        json.containsKey('lyricsFallback') && json['lyricsFallback'] == null
+        ? null
+        : LyricsSource.values.firstWhere(
+            (v) => v.name == json['lyricsFallback'],
+            orElse: () => LyricsSource.lyricsOvh,
+          );
+    if (lyricsFallback == lyricsFirst) lyricsFallback = null;
+    translationFirst = TranslationSource.values.firstWhere(
+      (v) => v.name == json['translationFirst'],
+      orElse: () => TranslationSource.google,
+    );
+    translationFallback =
+        json.containsKey('translationFallback') &&
+            json['translationFallback'] == null
+        ? null
+        : TranslationSource.values.firstWhere(
+            (v) => v.name == json['translationFallback'],
+            orElse: () => TranslationSource.myMemory,
+          );
+    if (translationFallback == translationFirst) translationFallback = null;
+    translationDirection = TranslationDirection.values.firstWhere(
+      (v) => v.name == json['translationDirection'],
+      orElse: () => TranslationDirection.japaneseEnglish,
+    );
     librarySort = LibrarySort.values.firstWhere(
       (value) => value.name == json['librarySort'],
       orElse: () => LibrarySort.newest,
@@ -198,6 +244,15 @@ class AppSettings {
     'reducedMotion': false,
     'automaticUpdates': automaticUpdates,
     'volume': volume,
+    'automaticLyrics': automaticLyrics,
+    'automaticTranslation': automaticTranslation,
+    'lyricsFirst': lyricsFirst.name,
+    'lyricsFallback': lyricsFallback?.name,
+    'translationFirst': translationFirst.name,
+    'translationFallback': translationFallback?.name,
+    'translationDirection': translationDirection.name,
+    'artworkPreload': artworkPreload,
+    'keepArtwork': keepArtwork,
     'librarySort': librarySort.name,
     'favoriteIds': favoriteIds.toList(),
     'playlists': playlists,
