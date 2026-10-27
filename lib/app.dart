@@ -988,10 +988,6 @@ class _PlayerShellState extends State<PlayerShell>
     final channels = player.settings.selectedChannels
         .map((c) => c.id)
         .join(',');
-    setState(() {
-      _cachingLibrary = true;
-      _cacheTotal = tracks.length;
-    });
     bool active() =>
         mounted &&
         generation == _cacheGeneration &&
@@ -1000,28 +996,49 @@ class _PlayerShellState extends State<PlayerShell>
         player.settings.selectedChannels.map((c) => c.id).join(',') ==
             channels &&
         !player.restoringData;
+    final pending = <({Track track, bool artwork, bool lyrics})>[];
     for (final track in tracks) {
+      if (!active()) return;
+      final artwork = !await telegram.hasCachedCover(track);
+      if (!active()) return;
+      final missingLyrics = await lyrics.loadCached(track) == null;
+      if (!active()) return;
+      if (artwork || missingLyrics) {
+        pending.add((track: track, artwork: artwork, lyrics: missingLyrics));
+      }
+    }
+    setState(() {
+      _cachingLibrary = pending.isNotEmpty;
+      _cacheTotal = pending.length;
+    });
+    for (final work in pending) {
+      final track = work.track;
       if (!active()) break;
       try {
-        await telegram.cacheCover(track, active: active);
+        if (work.artwork && !await telegram.hasCachedCover(track) && active()) {
+          await telegram.cacheCover(track, active: active);
+        }
       } catch (_) {
         /* Continue other tracks. */
       }
       if (!active()) break;
       try {
-        var value = await lyrics.loadCached(track);
-        if (value == null) {
+        if (work.lyrics && await lyrics.loadCached(track) == null && active()) {
+          Lyrics? value;
           try {
             value = await telegram.embeddedLyrics(track);
           } catch (_) {
             // An unreadable embedded tag must not block online fallbacks.
           }
-        }
-        if (!active()) break;
-        value ??= await lyrics.find(track);
-        if (active() && value != null) {
-          lyrics.save(track, value);
-          await lyrics.persist(track, value);
+          if (!active()) break;
+          // An import or playback lookup completed while reading the tag.
+          value = lyrics.cached(track) ?? value;
+          value ??= await lyrics.find(track);
+          if (active() &&
+              value != null &&
+              !identical(lyrics.cached(track), value)) {
+            lyrics.save(track, value);
+          }
         }
       } catch (_) {
         /* Unavailable lyrics do not stop the remaining library. */
@@ -1380,30 +1397,51 @@ class _PlayerShellState extends State<PlayerShell>
           box.maxWidth >= 560 &&
           MediaQuery.textScalerOf(context).scale(12) <= 16;
       if (destination == _Page.settings) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        return Row(
           children: [
             IconButton.filledTonal(
               tooltip: _settingsSection == null
                   ? 'Back to Library'
                   : 'Back to Settings',
               style: IconButton.styleFrom(
-                backgroundColor: _colors.surfaceContainerHigh,
-                foregroundColor: _colors.onSurfaceVariant,
+                backgroundColor: _colors.primaryContainer,
+                foregroundColor: _colors.onPrimaryContainer,
               ),
               onPressed: _back,
-              icon: const Icon(Icons.arrow_back_rounded),
+              icon: const Icon(Icons.arrow_back_rounded, size: 20),
             ),
-            SizedBox(height: short ? 8 : 18),
-            Text(
-              _settingsSection?.title ?? 'Settings',
-              key: const ValueKey('page-title'),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: narrow ? 28 : 32,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -.7,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!short) ...[
+                    Text(
+                      _settingsSection == null ? 'MAKE IT YOURS' : 'SETTINGS',
+                      style: TextStyle(
+                        fontSize: 9,
+                        letterSpacing: 1.7,
+                        color: _colors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                  ],
+                  Text(
+                    _settingsSection?.title ?? 'Settings',
+                    key: const ValueKey('page-title'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: short
+                          ? 24
+                          : narrow
+                          ? 28
+                          : 36,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -1.4,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -3736,6 +3774,7 @@ class _PlayerShellState extends State<PlayerShell>
               )
             : ListTileTheme(
                 data: ListTileThemeData(
+                  iconColor: _colors.primary,
                   dense: true,
                   minVerticalPadding: 8,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 4),
