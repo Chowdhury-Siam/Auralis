@@ -71,19 +71,19 @@ Keep favorites, create ordered playlists, and return to recently played music. C
 
 ### 🎧 A Queue That Follows You
 
-Add and reorder tracks, use Play next, shuffle upcoming songs, and repeat the queue or a single track. Seek, adjust volume, or set a sleep timer for a duration or the end of the song.
+Add and reorder tracks, use Play next, shuffle upcoming songs, and repeat the queue or a single track. Seek or set a sleep timer. Android uses device volume buttons; desktop Up/Down keys adjust volume with an on-screen percentage. Shuffle toggles a visible selected state and restores upcoming order when switched off.
 
 ### 📝 Lyrics with the Music
 
-Follow line-synced lyrics with the highlighted line sharp and all other lines softly blurred. Line advances retain a brief motion-blur transition; reduced motion skips that animation. Click a line to seek, or switch to Static for clear selectable lyrics. Embedded tags are read first; missing lyrics automatically fall back to LRCLIB when opening lyrics. You can also import an `.lrc` file or paste lyrics.
+Follow line-synced lyrics with the highlighted line sharp and all other lines softly blurred. Line advances retain a brief motion-blur transition; reduced motion skips that animation. Click a line to seek, or switch to Static for clear selectable lyrics. Lyrics load automatically when playback starts, preferring saved or embedded words before the configured online sources. In-app translation follows the selected Japanese–English direction; provider order is configurable in Settings. You can also import an `.lrc` file or paste lyrics.
 
 ### 🖼️ Artwork Where It Belongs
 
-See Telegram covers, channel avatars, and supported embedded MP3, FLAC, and M4A artwork. Covers load on demand; tracks without an available image use original procedural artwork.
+See Telegram covers, channel avatars, and supported embedded MP3, FLAC, and M4A artwork. The current cover and the next ten queued covers preload and decode before use, including repeat wraparound. Saved artwork is kept by default; adjust preloading and retention in Settings. Tracks without an available image use original procedural artwork.
 
 ### 📊 Listening Stats
 
-View listening time, qualified plays, top tracks and artists, and seven-day activity. Export your stats as CSV or JSON.
+View compact totals, a seven-day chart, and Tracks/Artists ranking tabs. Long-press an activity bar for its exact date and listening time. Export CSV or JSON; Backup & Restore expands when needed.
 
 ### 💾 Backup & Restore
 
@@ -94,7 +94,7 @@ Back up stats, collections, selected channels, and preferences. Preview a restor
 - Responsive layouts for phones and desktop windows, with a reduced-motion preference.
 - Android background playback with notification, lock-screen, and headset controls.
 - Android audio interruption handling and pause on headphone removal.
-- Windows focused media-key controls and volume adjustment with the mouse wheel.
+- Desktop Up/Down volume keys, temporary volume feedback, and focused media-key controls.
 - Windows update checks, checksum-verified downloads, and confirmed install/restart.
 - Encrypted credential storage using Windows DPAPI or Android Keystore.
 
@@ -183,7 +183,7 @@ See the [collection guide](docs/GUIDE.md#favorites-playlists-and-recent-music) f
 
 ## 🎧 Playback and Lyrics
 
-Open **Now Playing** from navigation or the bottom track artwork/title. Use **Queue** for the full list; the player also shows an Up Next preview where space allows.
+Open **Now Playing** from navigation or the floating player’s artwork/title. The player shows an Up Next preview where space allows.
 
 | Control | Behavior |
 | --- | --- |
@@ -193,11 +193,11 @@ Open **Now Playing** from navigation or the bottom track artwork/title. Use **Qu
 | **Wave seek bar** | Seeks through the song; its wave is decorative, not an audio waveform |
 | **Lyrics** | Opens synced or static text while keeping playback controls available |
 
-The bottom player is a rounded card with seeking and previous/play/next. Swipe it left or right to fully stop playback and clear the playback queue. Repeat, sleep timer and volume are on Now Playing.
+The bottom player floats above the page, showing content through its margins and behind sideways movement. Releasing a drag springs it back while music continues. Desktop layouts include the song artwork. Repeat and sleep controls are on Now Playing; Android volume uses hardware buttons and desktop volume uses Up/Down keys.
 
-Embedded lyrics load when supported tags are available. Use **Lyrics options** to retry reading the music file, import `.lrc`, or paste text. If embedded lyrics are missing or unreadable, LRCLIB is searched automatically using the displayed title, artist, and duration. **Find lyrics** retries the lookup. Back and the single options menu are at the top; the source footer is removed. **Follow song** returns to automatic scrolling after you browse elsewhere.
+Embedded lyrics load when supported tags are available. Use **Lyrics options** to retry reading the music file, import `.lrc`, or paste text. If saved or embedded lyrics are missing, automatic lookup uses the source order in **Settings → Lyrics & translation**. Defaults are LRCLIB exact/search then lyrics.ovh; either source can be first and the fallback can be disabled. **Find lyrics** retries the lookup. Back and the single options menu are at the top; the source footer is removed. **Follow song** returns to automatic scrolling after you browse elsewhere.
 
-Favorites, playlists, listening statistics, recent music, channels and shared preferences can sync across Android and Windows through your own Cloudflare Worker and Turso database. Open Settings → Account & sync to deploy, sign in with a username, switch accounts or recover access. Owner credentials enable automatic updates when an app bundles a newer Worker. See [multi-device sync setup](docs/SYNC.md). Lyrics use a bounded session cache and are not included in backups. Word-level karaoke, automatic translation, and permanent lyrics storage are not included.
+Favorites, playlists, listening statistics, recent music, channels and shared preferences can sync across Android and Windows through your own Cloudflare Worker and Turso database. Open Settings → Account & sync to deploy, sign in with a username, switch accounts or recover access. Owner credentials enable automatic updates when an app bundles a newer Worker. See [multi-device sync setup](docs/SYNC.md). Artwork, original lyrics and translations have an account-scoped device cache and are excluded from backups. In-app translation runs automatically by default; choose Japanese → English or English → Japanese and Google Translate/MyMemory provider order in Settings. DeepL’s website option remains available from Lyrics. Word-level karaoke is not included.
 
 See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality notes](docs/GUIDE.md#streaming-audio-quality).
 
@@ -228,17 +228,18 @@ See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for val
 
 | Setting or action | Purpose |
 | --- | --- |
-| **Reduce motion** | Use instant transitions and a straight seek line |
+| **Lyrics & translation** | Automatic lookup/translation, direction, and primary/fallback providers |
+| **Artwork** | Upcoming cover preload count and permanent or temporary artwork |
 | **Listening stats** | Review listening activity and export data |
 | **Backup & Restore** | Save and recover your Telegram account, collections, stats, and preferences |
-| **Windows update controls** | Check stable releases and choose whether to install |
+| **App updates** | Check stable releases and choose whether to install |
 | **Sign out of Telegram** | Stop playback, clear queue/channel selections, and forget saved API credentials after successful logout |
 
 API credentials and the TDLib database key are encrypted with **Windows DPAPI** or **Android Keystore**. Login codes and two-step verification passwords are not saved by Auralis. Android's Windows installer/update controls are disabled; upgrade by installing an APK signed with the same key.
 
-Downloaded audio and images remain plaintext in TDLib's app-data cache. There is no automatic cache eviction setting yet. Logout does not promise secure erasure of cached media or backups.
+Current audio uses temporary playback buffering. Extracted artwork and lyrics remain in the device cache; artwork is kept by default and can be made temporary in Settings. Logout does not promise secure erasure of cached media or backups.
 
-Artwork uses Telegram or embedded metadata. Opening lyrics automatically contacts LRCLIB if embedded lyrics are unavailable; only the song title, artist and duration are sent, with no Telegram credentials, channel names, or message IDs. Android media controls receive the current cover and use the monochrome Auralis logo. Optional multi-device sync shares collection/listening metadata and can include your linked Telegram account. Its application connection values are encrypted in your private Worker; new devices require Telegram device approval. Telegram auth keys, session databases and music stay on their own devices. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
+Artwork uses Telegram or embedded metadata. Automatic lookup contacts the selected lyric sources during playback if saved/embedded lyrics are unavailable; only the displayed song title, artist and duration are sent, with no Telegram credentials or message/file IDs. Automatic in-app translation sends original lyric text to the selected translators. Android media controls receive the current cover and use the monochrome Auralis logo. Optional multi-device sync shares collection/listening metadata and can include your linked Telegram account. Its application connection values are encrypted in your private Worker; new devices require Telegram device approval. Telegram auth keys, session databases and music stay on their own devices. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
 
 ---
 
@@ -306,7 +307,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.88+89**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.90+91**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
