@@ -939,3 +939,27 @@ The regression now dispatches Refresh in runAsync so its real filesystem operati
 The corrected test passes locally in about four seconds, including the forced pending write. Release-note and Android source consistency checks pass; package dependencies and pubspec.lock are unchanged. Windows CI itself cannot be run in this Linux workspace and must be rerun using the corrected source.
 
 Final local Flutter 3.47.1 / Dart 3.13.1 suite: 278 passed, 23 existing platform-specific skips; fatal-info analysis reports no issues. The complete suite finished in about 39 seconds.
+
+## 0.1.98 Now Playing top inset — 27 October 2026
+
+The top-level SafeArea previously inset the entire player surface, including its artwork backdrop. That left the scaffold’s solid surface in the status-bar region and made the reported dark strip. The player surface now spans that top inset, and the SafeArea moves to the interactive player/lyrics content, retained origin page, transition copy and sidebar. Original content/dock screen positions are preserved, and the volume overlay accounts for the top inset explicitly. A one-pixel reduction in the very-short landscape gaps prevents a two-pixel control-column overflow exposed by the new inset case, retaining the 48-pixel button targets.
+
+The focused adaptive/player suites pass all 43 tests. The new regression simulates a 32-pixel status inset and 24-pixel gesture inset on a 390×844 phone: the backdrop reaches y=0, the header/playback controls remain inside safe bounds, lyrics retain the same full background and safe back control, and the original mini-player element/bounds survive every collapse frame. It then rotates to 844×390 with a 24-pixel top inset, 32-pixel side inset and 16-pixel gesture inset, and checks safe controls and return to Library without layout exceptions. An internal render confirmed that the artwork gradient continues through the former strip. The temporary image capture/diagnostic instrumentation was removed from the delivered test. Dependencies and pubspec.lock are unchanged; release-note and Android source checks pass. No native build or physical-device status-bar/split-screen run was performed.
+
+Final Flutter 3.47.1 / Dart 3.13.1 Linux suite: 279 passed, 23 existing platform-specific skips; fatal-info analysis reports no issues.
+
+
+## 0.1.99 themed settings and choice menus — 27 October 2026
+
+Every Settings category now uses compact rounded surfaceContainerLow cards, consistent accent icon tiles and clear action chevrons. Appearance and lyrics/artwork choices share the same bounded, rounded native popup as the compact Library collection selector, including a soft selected row and checkmark. All colors follow the current app ColorScheme. The updater groups its installed version/status and has a compact refresh action; Account & sync avoids a redundant nested card. No dependencies were added; pubspec.lock is unchanged.
+
+Shuffle, repeat and favorite use one selected button style (primary icon and primary at 12% opacity behind it). Now Playing no longer contains a Settings shortcut; normal navigation remains available after collapsing the player. Adaptive navigation tests use that actual route.
+
+The full Flutter 3.47.1 / Dart 3.13.1 Linux suite passes: 280 tests and 23 existing platform-specific skips. Fatal-info analysis reports no issues. The new interaction test visits all seven categories, checks actual card theme colors, selects a Library collection and navigation style, and verifies that selecting None disables a lyric fallback while dismissing its menu preserves the choice. Existing tests cover phone/desktop layouts, 320×568 with 2× text, the narrow collection selector, active button color equality, and the missing Now Playing shortcut. Phone renders of the compact cards and rounded menus were visually inspected. Release-note consistency and Android source checks pass. No native build, Windows runner or physical-device run was performed for this Dart UI revision.
+
+
+## 0.1.100 floating bottom navigation — 27 October 2026
+
+Expressive and Classic pills now overlay the retained origin page in the same Stack as the mini-player. Previously their parent Column reserved the entire bottom navigation rectangle, leaving only the scaffold behind its gaps. The page now extends to the bottom, and only the capsule/Search surfaces paint over it. Shared bottom padding includes the pill height and gesture inset, so lists still scroll their final item above navigation and any mini-player. Setup connection pages do not receive navigation padding; the Full width bar and desktop sidebar retain their layouts. The original player dock element, transition origin and safe insets are preserved.
+
+The new integration test checks all three navigation styles with top/gesture insets, populated music rows and active/empty playback. It verifies the extended viewport, real scrolling from the Expressive Search gap and the Classic upper margin, final-song reachability above both overlays, stable navigation bounds, navigation actions and Search filtering. A phone render confirms music continues beneath and around the capsules. Full Flutter 3.47.1 / Dart 3.13.1 Linux suite: 283 passed, 23 existing platform-specific skips. Fatal-info analysis is clean; release notes and Android source checks pass. No dependencies changed and pubspec.lock is unchanged. No native build or physical-device run was performed for this Dart layout revision.
