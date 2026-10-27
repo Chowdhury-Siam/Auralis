@@ -81,6 +81,10 @@ class TelegramService extends ChangeNotifier {
   final Map<int, Future<String?>> _images = {};
   int _imageGeneration = 0;
   final Map<int, Future<Uint8List?>> _covers = {};
+  final Map<int, Uint8List> _coverBytes = {};
+  bool keepArtwork = true;
+  Uint8List? cachedCover(Track track) =>
+      ready ? _coverBytes[track.fileId] : null;
   final Set<int> _coverSuccess = {}, _coverDirty = {};
   final Map<int, int> _coverPending = {};
   int _coverJobs = 0;
@@ -175,6 +179,7 @@ class TelegramService extends ChangeNotifier {
     ++_imageGeneration;
     _images.clear();
     _covers.clear();
+    _coverBytes.clear();
     _coverSuccess.clear();
     _coverDirty.clear();
   }
@@ -190,7 +195,7 @@ class TelegramService extends ChangeNotifier {
     final disk = mediaCache;
     final bytes = await cover(track);
     // The same Telegram file can appear in more than one channel/track entry.
-    if (ready && active() && bytes != null) {
+    if (keepArtwork && ready && active() && bytes != null) {
       await disk.write(track, 'art', bytes);
     }
     return bytes;
@@ -204,6 +209,7 @@ class TelegramService extends ChangeNotifier {
     if (_covers.length >= 64) {
       final first = _covers.keys.first;
       _covers.remove(first);
+      _coverBytes.remove(first);
       _coverSuccess.remove(first);
       _coverDirty.remove(first);
     }
@@ -219,7 +225,9 @@ class TelegramService extends ChangeNotifier {
     bool active() => ready && generation == _imageGeneration;
     final disk = mediaCache;
     try {
-      final saved = await disk.read(track, 'art', maxCoverBytes);
+      final saved = keepArtwork
+          ? await disk.read(track, 'art', maxCoverBytes)
+          : null;
       if (saved != null && isCoverImage(saved) && active()) {
         result = saved;
         return result;
@@ -250,7 +258,9 @@ class TelegramService extends ChangeNotifier {
           isCoverImage(track.coverPreview!)) {
         result = track.coverPreview;
       }
-      if (active() && result != null) await disk.write(track, 'art', result);
+      if (keepArtwork && active() && result != null) {
+        await disk.write(track, 'art', result);
+      }
       return active() ? result : null;
     } catch (_) {
       return null;
@@ -259,6 +269,7 @@ class TelegramService extends ChangeNotifier {
       if (_coverPending[id] == generation) _coverPending.remove(id);
       if (active()) {
         if (result != null) {
+          _coverBytes[id] = result;
           _coverSuccess.add(id);
           _coverDirty.remove(id);
         } else if (_coverDirty.remove(id) && isStreaming(id)) {
@@ -607,7 +618,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.88',
+          'application_version': '0.1.90',
         }));
       } on TdException catch (e) {
         throw FormatException(
