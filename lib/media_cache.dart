@@ -71,6 +71,20 @@ class MediaCache {
     }
   }
 
+  Future<void> clearArtwork() => _track(() async {
+    if (directory == null || !await directory!.exists()) return;
+    await for (final entry in directory!.list(followLinks: false)) {
+      if (entry is File &&
+          RegExp(r'^[a-f0-9]{64}\.art$').hasMatch(p.basename(entry.path))) {
+        try {
+          await entry.delete();
+        } on FileSystemException {
+          /* Retry on the next explicit clear. */
+        }
+      }
+    }
+  });
+
   Future<void> write(Track track, String kind, List<int> bytes) =>
       _track(() => _write(track, kind, bytes));
   Future<void> _write(Track track, String kind, List<int> bytes) async {
