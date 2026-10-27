@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:auralis/app.dart';
 import 'package:auralis/lyrics_view.dart';
+import 'package:auralis/lyrics.dart';
+import 'package:auralis/preference_widgets.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/now_playing_effects.dart';
 import 'package:auralis/player.dart';
@@ -189,15 +191,15 @@ void main() {
     );
     await tester.tap(find.byTooltip('Settings').first);
     await tester.pumpAndSettle();
-    expect(find.byType(DropdownButton<LyricsSource>), findsNothing);
+    expect(find.byType(PreferenceChoice<LyricsSource?>), findsNothing);
     await tester.tap(find.text('Lyrics & artwork'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lyrics & translation'));
     await tester.pumpAndSettle();
-    final first = tester.widget<DropdownButton<LyricsSource>>(
-      find.byType(DropdownButton<LyricsSource>).first,
+    final first = tester.widget<PreferenceChoice<LyricsSource?>>(
+      find.byType(PreferenceChoice<LyricsSource?>).first,
     );
-    first.onChanged!(LyricsSource.lyricsOvh);
+    first.onSelected(LyricsSource.lyricsOvh);
     await tester.pumpAndSettle();
     expect(player.settings.lyricsFirst, LyricsSource.lyricsOvh);
     expect(player.settings.lyricsFallback, LyricsSource.lrclib);
@@ -207,10 +209,10 @@ void main() {
     await tester.ensureVisible(find.text('Artwork'));
     await tester.tap(find.text('Artwork'));
     await tester.pumpAndSettle();
-    final count = tester.widget<DropdownButton<int>>(
-      find.byType(DropdownButton<int>),
+    final count = tester.widget<PreferenceChoice<int?>>(
+      find.byType(PreferenceChoice<int?>),
     );
-    count.onChanged!(5);
+    count.onSelected(5);
     await tester.pumpAndSettle();
     expect(player.settings.artworkPreload, 5);
     final keep = tester.widget<SwitchListTile>(
@@ -248,6 +250,25 @@ void main() {
       await tester.pumpAndSettle();
       expect(player.shuffleEnabled, isTrue);
       expect(tester.widget<IconButton>(shuffle).isSelected, isTrue);
+      final favoriteButton = tester.widget<IconButton>(
+        find.byKey(const ValueKey('now-playing-favorite')),
+      );
+      final shuffleButton = tester.widget<IconButton>(shuffle);
+      expect(
+        shuffleButton.style!.backgroundColor!.resolve({}),
+        favoriteButton.style!.backgroundColor!.resolve({}),
+      );
+      expect(
+        shuffleButton.style!.foregroundColor!.resolve({}),
+        favoriteButton.style!.foregroundColor!.resolve({}),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('now-playing-container')),
+          matching: find.byTooltip('Settings'),
+        ),
+        findsNothing,
+      );
       await tester.tap(shuffle);
       await tester.pumpAndSettle();
       expect(player.shuffleEnabled, isFalse);
@@ -963,7 +984,7 @@ void main() {
   testWidgets('settings keep app features without the retired motion toggle', (
     tester,
   ) async {
-    await mount(tester, reduced: true);
+    await mount(tester, reduced: true, openPlayer: false);
     await tester.tap(find.byTooltip('Settings').first);
     await tester.pumpAndSettle();
     expect(find.text('Reduce motion'), findsNothing);
@@ -1055,6 +1076,91 @@ void main() {
         'Library',
       );
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'player background covers the top inset while controls and retained dock stay safe',
+    (tester) async {
+      tester.view.padding = const FakeViewPadding(top: 32, bottom: 24);
+      tester.view.viewPadding = const FakeViewPadding(top: 32, bottom: 24);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      final (_, player) = await mount(tester, openPlayer: false);
+      // Use a phone viewport, including its status and gesture insets.
+      tester.view.physicalSize = const Size(390, 844);
+      await tester.pumpAndSettle();
+      final dock = find.byKey(const ValueKey('player-bar'));
+      final originalDock = tester.element(dock);
+      final dockBounds = tester.getRect(dock);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('page-title'))).top,
+        greaterThanOrEqualTo(32),
+      );
+      await tester.tap(find.byKey(const ValueKey('open-current-track')));
+      await tester.pumpAndSettle();
+      final backdrop = find.byKey(const ValueKey('now-playing-backdrop'));
+      expect(tester.getRect(backdrop).top, 0);
+      expect(tester.getRect(backdrop).bottom, 844);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('close-now-playing'))).top,
+        greaterThanOrEqualTo(32),
+      );
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('now-playing-play-pause')))
+            .bottom,
+        lessThanOrEqualTo(844 - 24),
+      );
+      final shell = tester.state(find.byType(PlayerShell)) as dynamic;
+      (shell.lyrics as LyricsRepository).save(
+        player.current!,
+        Lyrics.parse('[00:01]First line\n[00:03]Second line'),
+      );
+      await tester.tap(find.byTooltip('Lyrics').first);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(backdrop).top, 0);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('lyrics-back'))).top,
+        greaterThanOrEqualTo(32),
+      );
+      await tester.tap(find.byKey(const ValueKey('lyrics-back')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+      await tester.pump();
+      for (var frame = 0; frame < 45; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(tester.getRect(dock), dockBounds);
+        expect(identical(tester.element(dock), originalDock), isTrue);
+      }
+      expect(find.byKey(const ValueKey('now-playing-container')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('open-current-track')));
+      await tester.pumpAndSettle();
+      tester.view.physicalSize = const Size(844, 390);
+      tester.view.padding = const FakeViewPadding(
+        top: 24,
+        left: 32,
+        bottom: 16,
+      );
+      tester.view.viewPadding = const FakeViewPadding(
+        top: 24,
+        left: 32,
+        bottom: 16,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getRect(backdrop).top, 0);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('close-now-playing'))).top,
+        greaterThanOrEqualTo(24),
+      );
+      await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(find.byKey(const ValueKey('page-title'))).top,
+        greaterThanOrEqualTo(24),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
     },
   );
 
