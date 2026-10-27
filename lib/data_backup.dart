@@ -74,6 +74,7 @@ class DataBackup {
       'automaticLyrics',
       'automaticTranslation',
       'keepArtwork',
+      'compactLibrary',
     ]) {
       if (data.containsKey(name) && data[name] is! bool) {
         throw const FormatException('Invalid media preference.');
@@ -84,6 +85,17 @@ class DataBackup {
             (data['artworkPreload'] as int) < 0 ||
             (data['artworkPreload'] as int) > 50)) {
       throw const FormatException('Invalid artwork preload count.');
+    }
+    if ((data.containsKey('navigationStyle') &&
+            !AppNavigationStyle.values.any(
+              (v) => v.name == data['navigationStyle'],
+            )) ||
+        (data.containsKey('navigationRadius') &&
+            (data['navigationRadius'] is! num ||
+                !(data['navigationRadius'] as num).isFinite ||
+                (data['navigationRadius'] as num) < 0 ||
+                (data['navigationRadius'] as num) > 40))) {
+      throw const FormatException('Invalid navigation preferences.');
     }
     for (final (first, fallback, values) in [
       (
@@ -154,6 +166,9 @@ class DataBackup {
     ListeningStats.fromJson(data['listening']);
     // Keep the restore scope explicit: never restore arbitrary settings/paths/secrets.
     const allowed = {
+      'compactLibrary',
+      'navigationStyle',
+      'navigationRadius',
       'reducedMotion',
       'automaticUpdates',
       'volume',
