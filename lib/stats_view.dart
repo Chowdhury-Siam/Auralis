@@ -34,6 +34,7 @@ class StatsDataDialog extends StatefulWidget {
 class _StatsDataDialogState extends State<StatsDataDialog> {
   late ListeningStats _stats;
   bool _busy = false, _error = false, _confirming = false;
+  bool _showArtists = false;
   String? _status;
   bool? _includeAccount;
   bool get _withAccount => _includeAccount ?? widget.telegram?.ready == true;
@@ -83,7 +84,8 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
       if (mounted) {
         setState(() {
           _error = true;
-          _status = '$operation failed (${e.code}). '
+          _status =
+              '$operation failed (${e.code}). '
               '${e.message ?? 'Choose the file again and retry.'}';
         });
       }
@@ -91,7 +93,8 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
       if (mounted) {
         setState(() {
           _error = true;
-          _status = '$operation failed. Restart Auralis after installing the '
+          _status =
+              '$operation failed. Restart Auralis after installing the '
               'latest update so Android file access is available.';
         });
       }
@@ -99,7 +102,8 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
       if (mounted) {
         setState(() {
           _error = true;
-          _status = '$operation failed while accessing local storage '
+          _status =
+              '$operation failed while accessing local storage '
               '(OS error ${e.osError?.errorCode ?? 'unknown'}). '
               'Check available storage and choose the file again.';
         });
@@ -371,8 +375,265 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     }
   }, operation: 'Restore');
 
+  Widget _totals(int artists) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      key: const ValueKey('stats-summary'),
+      color: colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final scale = MediaQuery.textScalerOf(context).scale(12) / 12;
+            final columns = scale > 1.3 || box.maxWidth < 250
+                ? 1
+                : box.maxWidth < 560
+                ? 2
+                : 4;
+            return Wrap(
+              spacing: 8,
+              runSpacing: 2,
+              children: [
+                for (final (label, value) in [
+                  ('Listened', listeningTime(_stats.milliseconds)),
+                  ('Plays', '${_stats.plays}'),
+                  ('Tracks', '${_stats.tracks.length}'),
+                  ('Artists', '$artists'),
+                ])
+                  SizedBox(
+                    width: (box.maxWidth - 8 * (columns - 1)) / columns,
+                    child: Tooltip(
+                      message: label == 'Plays'
+                          ? 'A play counts after 30 seconds, or half of a shorter track. Pauses, buffering, seeks and long inactive gaps do not add listening time.'
+                          : '$label: $value',
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 7,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      label,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: colors.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                  if (label == 'Plays') ...[
+                                    const SizedBox(width: 3),
+                                    Icon(
+                                      Icons.info_outline_rounded,
+                                      size: 12,
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                value,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _activity(List<String> dates, int maximum) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      key: const ValueKey('stats-daily-activity'),
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (final date in dates)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Semantics(
+                label:
+                    '$date: ${listeningTime(_stats.days[date]?.milliseconds ?? 0)}',
+                excludeSemantics: true,
+                child: Tooltip(
+                  message:
+                      '$date · ${listeningTime(_stats.days[date]?.milliseconds ?? 0)}',
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        height: 48,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: ColoredBox(
+                            color: colors.surfaceContainerHighest,
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: FractionallySizedBox(
+                                widthFactor: 1,
+                                heightFactor:
+                                    (_stats.days[date]?.milliseconds ?? 0) /
+                                    maximum,
+                                child: ColoredBox(color: colors.primary),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        date.substring(
+                          MediaQuery.textScalerOf(context).scale(10) > 14
+                              ? 8
+                              : 5,
+                        ),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _rankingRow(
+    int rank,
+    String title,
+    int milliseconds, {
+    String? subtitle,
+  }) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 40),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 24 * MediaQuery.textScalerOf(context).scale(11) / 11,
+            child: Text(
+              '$rank',
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: Text(
+              listeningTime(milliseconds),
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _backupControls() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const SizedBox(height: 8),
+      const Text(
+        'Includes stats, favorites, playlists, recent music, channels and preferences. Add your Telegram sign-in with a password-protected account backup. Music files and the queue are excluded.',
+        style: TextStyle(fontSize: 12),
+      ),
+      if (widget.telegram != null)
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Include Telegram account'),
+          subtitle: Text(
+            widget.telegram!.ready
+                ? 'Password protected · briefly pauses playback and reconnects Telegram'
+                : 'Connect Telegram to include your sign-in',
+          ),
+          value: _withAccount,
+          onChanged: _busy || !widget.telegram!.ready
+              ? null
+              : (value) => setState(() => _includeAccount = value),
+        ),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          FilledButton.icon(
+            onPressed: _busy ? null : _backup,
+            icon: const Icon(Icons.backup_outlined),
+            label: const Text('Create backup'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : () => _restore(),
+            icon: const Icon(Icons.restore_rounded),
+            label: const Text('Restore backup'),
+          ),
+          if (File(_recovery).existsSync())
+            TextButton(
+              onPressed: _busy ? null : () => _restore(recovery: true),
+              child: const Text('Restore recovery copy'),
+            ),
+        ],
+      ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final artists = _stats.topArtists, tracks = _stats.topTracks;
     final today = DateTime.now();
     final dates = [
@@ -383,14 +644,24 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
       1,
       (value, date) => math.max(value, _stats.days[date]?.milliseconds ?? 0),
     );
+    final exportStyle = OutlinedButton.styleFrom(
+      textStyle: Theme.of(context).textTheme.labelLarge!.copyWith(fontSize: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      minimumSize: const Size(0, 36),
+    );
     return Dialog(
-      child: SizedBox(
-        width: 860,
-        height: math.min(700, MediaQuery.sizeOf(context).height * .9),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 720,
+          maxHeight: math.min(620, MediaQuery.sizeOf(context).height * .9),
+        ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
+              padding: const EdgeInsets.fromLTRB(14, 4, 4, 0),
               child: Row(
                 children: [
                   Expanded(
@@ -399,284 +670,173 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
                           ? 'Backup & Restore'
                           : 'Listening stats',
                       style: const TextStyle(
-                        fontSize: 22,
+                        fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Refresh listening stats',
-                    onPressed: _busy
-                        ? null
-                        : () => _run(() async {
-                            await player.flushListeningStats(failOnError: true);
-                          }),
-                    icon: const Icon(Icons.refresh_rounded),
-                  ),
+                  if (!widget.openBackupSection)
+                    IconButton(
+                      tooltip: 'Refresh listening stats',
+                      onPressed: _busy
+                          ? null
+                          : () => _run(() async {
+                              await player.flushListeningStats(
+                                failOnError: true,
+                              );
+                            }),
+                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                    ),
                   IconButton(
                     tooltip: 'Close',
                     onPressed: _busy ? null : () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded),
+                    icon: const Icon(Icons.close_rounded, size: 20),
                   ),
                 ],
               ),
             ),
             if (_busy && !_confirming)
               const LinearProgressIndicator(minHeight: 2),
-            Expanded(
+            Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (!widget.openBackupSection) ...[
-                      const Text(
-                        'All-time snapshot · Refresh to update.',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                      const SizedBox(height: 12),
-                      LayoutBuilder(
-                        builder: (context, box) => Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final (label, value) in [
-                              ('Listened', listeningTime(_stats.milliseconds)),
-                              ('Qualified plays', '${_stats.plays}'),
-                              ('Tracks heard', '${_stats.tracks.length}'),
-                              ('Artists heard', '${artists.length}'),
-                            ])
-                              SizedBox(
-                                width:
-                                    (box.maxWidth -
-                                        (box.maxWidth < 560 ? 8 : 24)) /
-                                    (box.maxWidth < 560 ? 2 : 4),
-                                child: Card(
-                                  margin: EdgeInsets.zero,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          label,
-                                          style: const TextStyle(fontSize: 11),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          value,
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
+                      Text(
+                        'All time',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colors.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'A play counts after 30 seconds, or half of a shorter track. Pauses, buffering, seeks and long inactive gaps do not add listening time.',
-                        style: TextStyle(fontSize: 11),
-                      ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 6),
+                      _totals(artists.length),
+                      const SizedBox(height: 12),
                       const Text(
                         'Daily activity · last 7 days',
                         style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      for (final date in dates)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 5),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 48,
-                                child: Text(
-                                  date.substring(5),
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                              ),
-                              Expanded(
-                                child: Semantics(
-                                  label:
-                                      '$date: ${listeningTime(_stats.days[date]?.milliseconds ?? 0)}',
-                                  child: LinearProgressIndicator(
-                                    value:
-                                        (_stats.days[date]?.milliseconds ?? 0) /
-                                        maximum,
-                                    minHeight: 8,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                width: 72,
-                                child: Text(
-                                  listeningTime(
-                                    _stats.days[date]?.milliseconds ?? 0,
-                                  ),
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (tracks.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Text(
-                            'Play some music to build your listening stats. Earlier recent history is not estimated.',
-                          ),
-                        ),
-                      if (tracks.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Top tracks · all time',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        for (final entry in tracks.take(10))
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            title: Text(
-                              entry.value.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              '${entry.value.artist} · ${entry.value.plays} plays',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: Text(
-                              listeningTime(entry.value.milliseconds),
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Top artists · all time',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        for (final artist in artists.take(10))
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            title: Text(
-                              artist.key,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: Text(
-                              listeningTime(artist.value),
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                      ],
-                      const Divider(height: 28),
-                      const Text(
-                        'Export listening data',
-                        style: TextStyle(
-                          fontSize: 17,
+                          fontSize: 14,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 8),
+                      _activity(dates, maximum),
+                      const SizedBox(height: 12),
+                      if (tracks.isEmpty)
+                        Text(
+                          'Play some music to build your listening stats. Earlier recent history is not estimated.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      if (tracks.isNotEmpty) ...[
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          children: [
+                            const Text(
+                              'All-time ranking',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SegmentedButton<bool>(
+                              key: const ValueKey('stats-ranking-tabs'),
+                              showSelectedIcon: false,
+                              style: SegmentedButton.styleFrom(
+                                textStyle: Theme.of(context)
+                                    .textTheme
+                                    .labelLarge!
+                                    .copyWith(fontSize: 12),
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                minimumSize: const Size(0, 36),
+                              ),
+                              segments: const [
+                                ButtonSegment(
+                                  value: false,
+                                  label: Text('Tracks'),
+                                ),
+                                ButtonSegment(
+                                  value: true,
+                                  label: Text('Artists'),
+                                ),
+                              ],
+                              selected: {_showArtists},
+                              onSelectionChanged: (value) =>
+                                  setState(() => _showArtists = value.single),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        if (_showArtists)
+                          for (var i = 0; i < math.min(10, artists.length); i++)
+                            _rankingRow(i + 1, artists[i].key, artists[i].value)
+                        else
+                          for (var i = 0; i < math.min(10, tracks.length); i++)
+                            _rankingRow(
+                              i + 1,
+                              tracks[i].value.title,
+                              tracks[i].value.milliseconds,
+                              subtitle:
+                                  '${tracks[i].value.artist} · ${tracks[i].value.plays} plays',
+                            ),
+                      ],
+                      const Divider(height: 16),
                       Wrap(
                         spacing: 8,
-                        runSpacing: 8,
+                        runSpacing: 4,
                         children: [
                           FilledButton.tonalIcon(
+                            style: exportStyle,
                             onPressed: _busy ? null : () => _export('csv'),
-                            icon: const Icon(Icons.table_chart_outlined),
+                            icon: const Icon(
+                              Icons.table_chart_outlined,
+                              size: 16,
+                            ),
                             label: const Text('Export CSV'),
                           ),
                           OutlinedButton.icon(
+                            style: exportStyle,
                             onPressed: _busy ? null : () => _export('json'),
-                            icon: const Icon(Icons.file_download_outlined),
+                            icon: const Icon(
+                              Icons.file_download_outlined,
+                              size: 16,
+                            ),
                             label: const Text('Export JSON'),
                           ),
                         ],
                       ),
-                      const Divider(height: 28),
-                    ],
-                    if (!widget.openBackupSection)
-                      const Text(
-                        'Backup & Restore',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Includes stats, favorites, playlists, recent music, channels and preferences. Add your Telegram sign-in with a password-protected account backup. Music files and the queue are excluded.',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    if (widget.telegram != null)
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Include Telegram account'),
-                        subtitle: Text(
-                          widget.telegram!.ready
-                              ? 'Password protected · briefly pauses playback and reconnects Telegram'
-                              : 'Connect Telegram to include your sign-in',
-                        ),
-                        value: _withAccount,
-                        onChanged: _busy || !widget.telegram!.ready
-                            ? null
-                            : (value) =>
-                                  setState(() => _includeAccount = value),
-                      ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: _busy ? null : _backup,
-                          icon: const Icon(Icons.backup_outlined),
-                          label: const Text('Create backup'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _busy ? null : () => _restore(),
-                          icon: const Icon(Icons.restore_rounded),
-                          label: const Text('Restore backup'),
-                        ),
-                        if (File(_recovery).existsSync())
-                          TextButton(
-                            onPressed: _busy
-                                ? null
-                                : () => _restore(recovery: true),
-                            child: const Text('Restore recovery copy'),
+                      ExpansionTile(
+                        key: const ValueKey('stats-backup-section'),
+                        tilePadding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        title: const Text(
+                          'Backup & Restore',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                           ),
-                      ],
-                    ),
+                        ),
+                        children: [_backupControls()],
+                      ),
+                    ] else
+                      _backupControls(),
                     if (_status != null)
                       Padding(
-                        padding: const EdgeInsets.only(top: 12),
+                        padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           _status!,
                           style: TextStyle(
-                            color: _error
-                                ? Theme.of(context).colorScheme.error
-                                : Theme.of(context).colorScheme.primary,
+                            fontSize: 12,
+                            color: _error ? colors.error : colors.primary,
                           ),
                         ),
                       ),
