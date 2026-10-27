@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'preference_widgets.dart';
+
 enum SettingsSection {
   general(
     'General',
@@ -157,19 +159,7 @@ class SettingsDirectory extends StatelessWidget {
                       vertical: 2,
                     ),
                     horizontalTitleGap: 12,
-                    leading: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: colors.primaryContainer.withValues(alpha: .55),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        results[i].icon,
-                        size: 20,
-                        color: colors.primary,
-                      ),
-                    ),
+                    leading: PreferenceIcon(results[i].icon),
                     trailing: Icon(
                       Icons.chevron_right_rounded,
                       size: 18,
