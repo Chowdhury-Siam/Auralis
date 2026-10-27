@@ -717,6 +717,13 @@ void main() {
       expect(find.byTooltip('Listening stats'), findsNothing);
       await tester.tap(find.byTooltip('Settings').first);
       await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('settings-search')),
+        'backup',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Data & sync'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Listening stats'));
       await tester.pumpAndSettle();
       expect(find.byType(StatsDataDialog), findsOneWidget);
