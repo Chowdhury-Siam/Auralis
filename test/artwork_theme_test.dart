@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:auralis/app.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
+import 'package:auralis/settings_view.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
 import 'package:flutter/material.dart';
@@ -115,9 +116,46 @@ void main() {
         Theme.of(tester.element(find.text('Data & sync'))).colorScheme,
         expected,
       );
+      void expectSettingsPalette(ColorScheme colors) {
+        final tile = find.byKey(const ValueKey('settings-data'));
+        final surface = tester.widget<Material>(
+          find.ancestor(of: tile, matching: find.byType(Material)).first,
+        );
+        expect(surface.color, colors.surfaceContainerLow);
+        final icon = tester.widget<Icon>(
+          find.descendant(
+            of: tile,
+            matching: find.byIcon(SettingsSection.data.icon),
+          ),
+        );
+        expect(icon.color, colors.primary);
+        final search = tester.widget<TextField>(
+          find.byKey(const ValueKey('settings-search')),
+        );
+        expect(search.decoration!.fillColor, colors.surfaceContainerHigh);
+        expect(
+          search.decoration!.focusedBorder!.borderSide.color,
+          colors.primary,
+        );
+        final back = tester.widget<IconButton>(
+          find
+              .ancestor(
+                of: find.byIcon(Icons.arrow_back_rounded),
+                matching: find.byType(IconButton),
+              )
+              .first,
+        );
+        expect(
+          back.style!.backgroundColor!.resolve({}),
+          colors.primaryContainer,
+        );
+      }
+
+      expectSettingsPalette(expected);
       player.index = 2;
       player.notifyListeners();
       await waitForPrimary(tester, accent);
+      expectSettingsPalette(scheme(tester));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
