@@ -1,5 +1,20 @@
 # Auralis changes
 
+## 0.1.100
+
+- Expressive and Classic navigation pills now float over the page. Music and other scrolling content remain visible through the surrounding margins and the gap beside Search, with no reserved solid strip behind the pills.
+- Bottom scroll padding keeps the last item reachable above navigation and the mini-player, including the gesture inset.
+
+## 0.1.99
+
+- Restyled every Settings category with compact rounded cards, themed icon tiles, clearer actions and grouped update status. Library and preference choices use bounded rounded menus with a checkmark for the selected item.
+- Matched active shuffle and repeat colors to the favorite button, and removed the redundant Settings shortcut from Now Playing. Settings remains available through the normal app navigation.
+
+## 0.1.98
+
+- Fixed the dark strip above Now Playing by extending its artwork background into the top system inset while keeping player and lyric controls inside the safe area.
+- Library, navigation and the mini-player retain their safe positions during opening, collapse and rotation; the volume overlay also stays below the top inset.
+
 ## 0.1.97
 
 - Fixed the refresh-cache widget test’s Windows CI shutdown hang by running refresh filesystem work outside the fake clock and pumping until cleanup actually completes.
