@@ -139,8 +139,6 @@ void main() {
       ..translationFirst = TranslationSource.myMemory
       ..translationFallback = TranslationSource.google
       ..translationDirection = TranslationDirection.englishJapanese
-      ..artworkPreload = 20
-      ..keepArtwork = false
       ..reducedMotion = true
       ..librarySort = LibrarySort.artist
       ..selectedChannels = [
@@ -159,11 +157,14 @@ void main() {
     expect(restored.translationFirst, TranslationSource.myMemory);
     expect(restored.translationFallback, TranslationSource.google);
     expect(restored.translationDirection, TranslationDirection.englishJapanese);
-    expect(restored.artworkPreload, 20);
-    expect(restored.keepArtwork, isFalse);
+    restored.applyJson({
+      ...restored.toJson(),
+      'artworkPreload': 50,
+      'keepArtwork': false,
+    });
+    expect(restored.toJson().containsKey('artworkPreload'), isFalse);
+    expect(restored.toJson().containsKey('keepArtwork'), isFalse);
     final defaults = AppSettings(File('unused-defaults'));
-    expect(defaults.artworkPreload, 10);
-    expect(defaults.keepArtwork, isTrue);
     expect(defaults.automaticLyrics && defaults.automaticTranslation, isTrue);
     expect(restored.reducedMotion, isFalse);
     expect(restored.toJson()['reducedMotion'], isFalse);
