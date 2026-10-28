@@ -262,6 +262,11 @@ class _PlayerShellState extends State<PlayerShell>
   late final AnimationController _dismissPlayer;
   final _dockKey = GlobalKey();
   final _surfaceKey = GlobalKey();
+  final _dockArtworkKey = GlobalKey();
+  final _playerArtworkKey = GlobalKey();
+  final _playerContentKey = GlobalKey();
+  Rect? _dockArtworkBounds;
+  double _playerArtworkRadius = 26;
   Rect? _dockBounds;
   Size? _dockViewport;
   double _playerDragStart = 0;
@@ -501,6 +506,11 @@ class _PlayerShellState extends State<PlayerShell>
         } else {
           _dockBounds = null;
         }
+        final artwork = _dockArtworkKey.currentContext?.findRenderObject();
+        _dockArtworkBounds = artwork is RenderBox && surface is RenderBox
+            ? surface.globalToLocal(artwork.localToGlobal(Offset.zero)) &
+                  artwork.size
+            : null;
         // A second pointer event can arrive before the first expanded frame.
         _playerTravel = math.max(
           1,
@@ -669,7 +679,6 @@ class _PlayerShellState extends State<PlayerShell>
           player.settings.navigationStyle != AppNavigationStyle.fullWidth;
       final narrow = viewport.width < 1180;
       final short = viewport.height < 560;
-      final wide = viewport.width >= 1220 && viewport.height >= 620;
       return Stack(
         key: const ValueKey('floating-player-layer'),
         fit: StackFit.expand,
@@ -677,25 +686,7 @@ class _PlayerShellState extends State<PlayerShell>
           Column(
             children: [
               Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _pageContent(page, narrow: narrow, short: short),
-                    ),
-                    if (wide &&
-                        (page == _Page.library || page == _Page.telegram))
-                      Container(
-                        width: (viewport.width * .23).clamp(280, 360),
-                        margin: EdgeInsets.fromLTRB(0, 20, 20, _dockPadding),
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: _colors.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(28),
-                        ),
-                        child: _nowPlaying(compact: true),
-                      ),
-                  ],
-                ),
+                child: _pageContent(page, narrow: narrow, short: short),
               ),
               if (compact && !floatingNavigation)
                 _bottomNavigation(page: page, transitionCopy: transitionCopy),
@@ -912,6 +903,22 @@ class _PlayerShellState extends State<PlayerShell>
           final cardOpacity = const Interval(0, .3).transform(progress);
           final transitioning =
               expanded && (_dismissPlayer.value > 0 || _closingPlayer);
+          Rect? artworkBounds;
+          final artwork = _playerArtworkKey.currentContext?.findRenderObject();
+          final contentBox = _playerContentKey.currentContext
+              ?.findRenderObject();
+          if (transitioning &&
+              _dockArtworkBounds != null &&
+              artwork is RenderBox &&
+              artwork.hasSize &&
+              contentBox is RenderBox &&
+              contentBox.hasSize) {
+            final target = MatrixUtils.transformRect(
+              artwork.getTransformTo(contentBox),
+              Offset.zero & artwork.size,
+            );
+            artworkBounds = Rect.lerp(_dockArtworkBounds, target, progress);
+          }
           return ClipRect(
             child: Stack(
               fit: StackFit.expand,
@@ -969,6 +976,7 @@ class _PlayerShellState extends State<PlayerShell>
                                     child: TickerMode(
                                       enabled: !transitioning,
                                       child: SizedBox.fromSize(
+                                        key: _playerContentKey,
                                         size: full.size,
                                         child: content,
                                       ),
@@ -978,6 +986,24 @@ class _PlayerShellState extends State<PlayerShell>
                               ),
                             ],
                           ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (artworkBounds != null)
+                  Positioned.fromRect(
+                    rect: artworkBounds,
+                    child: IgnorePointer(
+                      child: ExcludeSemantics(
+                        child: _playerCover(
+                          player.current,
+                          key: const ValueKey('player-artwork-flight'),
+                          radius: ui.lerpDouble(
+                            10,
+                            _playerArtworkRadius,
+                            progress,
+                          )!,
+                          inset: 5 * progress,
                         ),
                       ),
                     ),
@@ -1639,18 +1665,29 @@ class _PlayerShellState extends State<PlayerShell>
       style: TextStyle(color: _colors.onErrorContainer, fontSize: 12),
     ),
   );
-  Widget _search(String hint) => TextField(
+  Widget _search(String hint, {Widget? trailing}) => TextField(
     controller: search,
     decoration: InputDecoration(
       hintText: hint,
       prefixIcon: const Icon(Icons.search_rounded, size: 20),
       contentPadding: const EdgeInsets.symmetric(vertical: 12),
-      suffixIcon: search.text.isEmpty
+      suffixIcon: search.text.isEmpty && trailing == null
           ? null
-          : IconButton(
-              onPressed: search.clear,
-              tooltip: 'Clear search',
-              icon: const Icon(Icons.close_rounded, size: 18),
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (search.text.isNotEmpty)
+                  IconButton(
+                    onPressed: search.clear,
+                    tooltip: 'Clear search',
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                  ),
+                if (trailing != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: trailing,
+                  ),
+              ],
             ),
     ),
   );
@@ -2017,7 +2054,7 @@ class _PlayerShellState extends State<PlayerShell>
           ? 'Caching artwork and lyrics: $_cachedTracks / $_cacheTotal'
           : _cacheSummary == null
           ? label
-          : '$label\n$_cacheSummary. Missing items may be unavailable from their source; Refresh retries them.',
+          : '$label\nLast refresh: $_cacheSummary. These are saved-cache totals. Refresh retries uncached items.',
       child: Text(
         _cachingLibrary
             ? 'Caching $_cachedTracks / $_cacheTotal'
@@ -2041,66 +2078,67 @@ class _PlayerShellState extends State<PlayerShell>
             collection == 'Playlists' && selectedPlaylist == null
                 ? 'Search playlists'
                 : 'Search your music',
+            trailing: player.settings.compactLibrary
+                ? ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: math.min(220, box.maxWidth * .45),
+                    ),
+                    child: ChoiceMenu<String>(
+                      key: const ValueKey('library-collection-menu'),
+                      title: 'Library collection',
+                      tonal: true,
+                      value: collection,
+                      values: const [
+                        'All songs',
+                        'Favorites',
+                        'Playlists',
+                        'Recently played',
+                      ],
+                      label: (value) => value,
+                      onSelected: (value) => setState(() {
+                        collection = value;
+                        selectedPlaylist = null;
+                        search.clear();
+                      }),
+                    ),
+                  )
+                : null,
           ),
-          const SizedBox(height: 8),
-          if (!compact || selectedPlaylist == null)
-            if (player.settings.compactLibrary)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 280),
-                  child: ChoiceMenu<String>(
-                    key: const ValueKey('library-collection-menu'),
-                    title: 'Library collection',
-                    tonal: true,
-                    value: collection,
-                    values: const [
-                      'All songs',
-                      'Favorites',
-                      'Playlists',
-                      'Recently played',
-                    ],
-                    label: (value) => value,
-                    onSelected: (value) => setState(() {
-                      collection = value;
-                      selectedPlaylist = null;
-                      search.clear();
-                    }),
-                  ),
-                ),
-              )
-            else
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final label in [
-                      'All songs',
-                      'Favorites',
-                      'Playlists',
-                      'Recently played',
-                    ])
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(label),
-                          selected: collection == label,
-                          onSelected: (_) => setState(() {
-                            collection = label;
-                            selectedPlaylist = null;
-                            search.clear();
-                          }),
-                        ),
+          if (!player.settings.compactLibrary &&
+              (!compact || selectedPlaylist == null)) ...[
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final label in [
+                    'All songs',
+                    'Favorites',
+                    'Playlists',
+                    'Recently played',
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(label),
+                        selected: collection == label,
+                        onSelected: (_) => setState(() {
+                          collection = label;
+                          selectedPlaylist = null;
+                          search.clear();
+                        }),
                       ),
-                    if (collection == 'Recently played' &&
-                        player.settings.recentIds.isNotEmpty)
-                      TextButton(
-                        onPressed: player.clearRecent,
-                        child: const Text('Clear history'),
-                      ),
-                  ],
-                ),
+                    ),
+                  if (collection == 'Recently played' &&
+                      player.settings.recentIds.isNotEmpty)
+                    TextButton(
+                      onPressed: player.clearRecent,
+                      child: const Text('Clear history'),
+                    ),
+                ],
               ),
+            ),
+          ],
           if (player.settings.compactLibrary &&
               collection == 'Recently played' &&
               player.settings.recentIds.isNotEmpty)
@@ -2511,82 +2549,36 @@ class _PlayerShellState extends State<PlayerShell>
         child: child,
       );
 
-  Widget _miniNowPlaying(BoxConstraints box, Track? track) {
-    final coverSize = math.min(
-      200.0,
-      math.min(box.maxWidth - 18, box.maxHeight * .36),
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'NOW PLAYING',
-          style: TextStyle(
-            color: _colors.onSurfaceVariant,
-            fontSize: 10,
-            letterSpacing: 1.5,
+  Widget _playerCover(
+    Track? track, {
+    Key? key,
+    Key? artworkKey,
+    required double radius,
+    double inset = 5,
+  }) => RepaintBoundary(
+    key: key,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: _colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: _colors.primary.withValues(alpha: .14)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(inset),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(math.max(0, radius - inset)),
+          child: Artwork(
+            key: artworkKey,
+            seed: track?.title ?? 'Auralis',
+            telegram: telegram,
+            track: track,
           ),
         ),
-        const SizedBox(height: 14),
-        Expanded(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: coverSize,
-                maxHeight: coverSize,
-              ),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: _artworkSwitcher(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: Artwork(
-                      key: const ValueKey('mini-now-playing-artwork'),
-                      seed: track?.title ?? 'Auralis',
-                      telegram: telegram,
-                      track: track,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          track?.title ?? 'Find your next favorite',
-          key: const ValueKey('mini-now-playing-title'),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          track?.artist ?? 'A space for the music you love',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 12),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          key: const ValueKey('mini-now-playing-actions'),
-          children: [
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: track == null
-                    ? null
-                    : () => _navigate(_Page.nowPlaying, openLyrics: true),
-                icon: const Icon(Icons.lyrics_rounded, size: 17),
-                label: const Text('Lyrics'),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+      ),
+    ),
+  );
 
-  Widget _nowPlaying({bool compact = false}) {
+  Widget _nowPlaying() {
     final track = player.current;
     final audio = player.audio;
     final duration = audio.duration.inMilliseconds;
@@ -2600,11 +2592,8 @@ class _PlayerShellState extends State<PlayerShell>
     return Material(
       color: Colors.transparent,
       child: LayoutBuilder(
-        key: ValueKey(
-          compact ? 'mini-now-playing-layout' : 'now-playing-layout',
-        ),
+        key: const ValueKey('now-playing-layout'),
         builder: (context, box) {
-          if (compact) return _miniNowPlaying(box, track);
           final scale = MediaQuery.textScalerOf(context)
               .scale(1)
               .clamp(1.0, 2.0);
@@ -2669,63 +2658,59 @@ class _PlayerShellState extends State<PlayerShell>
                   math.min(artBox.maxHeight, artBox.maxWidth),
                 ),
               );
-              Widget cover(Track? item, {Key? key}) => RepaintBoundary(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: _colors.surfaceContainer,
-                    borderRadius: BorderRadius.circular(tight ? 26 : 34),
-                    border: Border.all(
-                      color: _colors.primary.withValues(alpha: .14),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(5),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(tight ? 21 : 29),
-                      child: Artwork(
-                        key: key,
-                        seed: item?.title ?? 'Auralis',
-                        telegram: telegram,
-                        track: item,
-                      ),
-                    ),
-                  ),
-                ),
+              _playerArtworkRadius = tight ? 26 : 34;
+              Widget cover(Track? item, {Key? key}) => _playerCover(
+                item,
+                artworkKey: key,
+                radius: _playerArtworkRadius,
               );
               return Center(
                 child: SizedBox.square(
+                  key: _playerArtworkKey,
                   dimension: size,
-                  child: ArtworkMotion(
-                    reducedMotion: player.settings.reducedMotion,
-                    child: track == null
-                        ? cover(
-                            null,
-                            key: const ValueKey('now-playing-artwork'),
-                          )
-                        : _artworkSwitcher(
-                            paged: true,
-                            child: ArtworkPager(
-                              index: player.index,
-                              itemCount:
-                                  player.queue.length +
-                                  (player.repeat && player.queue.length > 1
-                                      ? 1
-                                      : 0),
-                              onSelected: player.restoringData
-                                  ? null
-                                  : (index) => unawaited(
-                                      player.playAt(
-                                        index % player.queue.length,
+                  child: AnimatedBuilder(
+                    key: const ValueKey('now-playing-artwork-frame'),
+                    animation: _dismissPlayer,
+                    builder: (context, child) => Opacity(
+                      opacity:
+                          _dockArtworkBounds == null ||
+                              _dismissPlayer.value == 0
+                          ? 1
+                          : 0,
+                      child: child,
+                    ),
+                    child: ArtworkMotion(
+                      reducedMotion: player.settings.reducedMotion,
+                      child: track == null
+                          ? cover(
+                              null,
+                              key: const ValueKey('now-playing-artwork'),
+                            )
+                          : _artworkSwitcher(
+                              paged: true,
+                              child: ArtworkPager(
+                                index: player.index,
+                                itemCount:
+                                    player.queue.length +
+                                    (player.repeat && player.queue.length > 1
+                                        ? 1
+                                        : 0),
+                                onSelected: player.restoringData
+                                    ? null
+                                    : (index) => unawaited(
+                                        player.playAt(
+                                          index % player.queue.length,
+                                        ),
                                       ),
-                                    ),
-                              itemBuilder: (context, index) => cover(
-                                player.queue[index % player.queue.length],
-                                key: index == player.index
-                                    ? const ValueKey('now-playing-artwork')
-                                    : ValueKey(('artwork-page', index)),
+                                itemBuilder: (context, index) => cover(
+                                  player.queue[index % player.queue.length],
+                                  key: index == player.index
+                                      ? const ValueKey('now-playing-artwork')
+                                      : ValueKey(('artwork-page', index)),
+                                ),
                               ),
                             ),
-                          ),
+                    ),
                   ),
                 ),
               );
@@ -3297,6 +3282,7 @@ class _PlayerShellState extends State<PlayerShell>
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: SizedBox.square(
+                key: transitionCopy ? null : _dockArtworkKey,
                 dimension: 36,
                 child: Artwork(
                   seed: player.current?.title ?? 'Auralis',
@@ -4051,7 +4037,7 @@ class Artwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final placeholder = Tooltip(
-      message: track == null ? 'Artwork unavailable' : 'No cover available yet',
+      message: 'Artwork not loaded yet',
       child: CustomPaint(
         painter: _RecordPainter(seed),
         child: const SizedBox.expand(),
