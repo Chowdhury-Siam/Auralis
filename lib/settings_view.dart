@@ -16,7 +16,7 @@ enum SettingsSection {
   media(
     'Lyrics & artwork',
     Icons.lyrics_rounded,
-    'automatic translate translation japanese english google mymemory deepl fallback source provider covers preload cache retain',
+    'automatic translate translation japanese english google mymemory deepl fallback source provider covers cache',
   ),
   data(
     'Data & sync',
