@@ -1,5 +1,15 @@
 # Auralis changes
 
+## 0.1.104
+
+- Accepted regional Turso database hostnames in the app and bundled Worker while retaining strict endpoint checks. The bundled Worker version advances so automatic updates can install the matching fix.
+
+- Matched setup direction, lyric-source and translator dropdowns to the app’s rounded, themed choice menus. Menus are anchored below their fields, bounded in width and mark the current choice; field labels stay visible and setup busy states disable selection.
+
+## 0.1.103
+
+- Restored the original artwork hover zoom, lift and pointer-following tilt. The animation now wraps the carousel viewport so the rounded cover and its clipping area move together, preserving the full artwork. Reduced motion and artwork navigation remain supported.
+
 ## 0.1.102
 
 - Removed the decorative artwork zoom, lift and tilt on mouse hover. Now Playing keeps the full rounded cover inside its carousel at every pointer position; artwork swipe and wheel navigation are unchanged.
