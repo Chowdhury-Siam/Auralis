@@ -247,12 +247,18 @@ class TelegramService extends ChangeNotifier {
     final saved = await _savedCover(track, disk);
     if (saved != null && current()) {
       if (track.fileId case final id?) {
+        final changed = !_coverSuccess.contains(id);
         _covers.remove(id);
         _trimCovers();
         _covers[id] = Future.value(saved);
         _coverBytes[id] = saved;
         _coverSuccess.add(id);
         _coverDirty.remove(id);
+        if (changed) {
+          scheduleMicrotask(() {
+            if (current()) notifyListeners();
+          });
+        }
       }
       return saved;
     }
@@ -276,6 +282,14 @@ class TelegramService extends ChangeNotifier {
     if (track.fileId case final id?) {
       if (!_coverSuccess.contains(id) && !_coverPending.containsKey(id)) {
         _covers.remove(id);
+        // A visible row may have cached a transient thumbnail failure before
+        // the explicit refresh reached this track.
+        if (track.coverFileId case final thumbnail?) {
+          final request = _images[thumbnail];
+          if (request != null && await request == null && current()) {
+            _images.remove(thumbnail);
+          }
+        }
       }
     }
     final bytes = await cover(track);
@@ -715,7 +729,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.105',
+          'application_version': '0.1.108',
         }));
       } on TdException catch (e) {
         throw FormatException(
