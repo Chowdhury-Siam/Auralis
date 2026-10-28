@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.105
+
+- Account & sync now fills the Worker URL as soon as deployment or a saved connection updates it, including when returning from Deploy Database. Unrelated updates preserve a Worker URL being edited.
+- Owner sign-in, account recovery, account switching and restored owner sessions recover all saved deployment fields and the automatic-update preference from the encrypted recovery vault. If that recovery copy is missing, a signed-in owner can replenish it from complete saved local credentials. Other accounts cannot recover those credentials.
+
 ## 0.1.104
 
 - Separated Windows updater test fixture compilation from the 30-second executable handoff check. Cold PowerShell/.NET startup now has a bounded setup allowance, and compilation, launch and missing-output failures report their own diagnostics. Fixture arguments are published only after the complete file is written.
