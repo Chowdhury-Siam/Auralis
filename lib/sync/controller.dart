@@ -101,6 +101,14 @@ class SyncController extends ChangeNotifier {
     try {
       final saved = await vault.read();
       if (await _loadAccounts(saved)) {
+        accountBusy = true;
+        _changed();
+        try {
+          await _recoverOwnerDeployment();
+        } finally {
+          accountBusy = false;
+          _changed();
+        }
         unawaited(checkWorkerUpdates());
         unawaited(syncTelegramAccount());
         return;
