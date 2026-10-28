@@ -7,9 +7,9 @@ export const schema = [
 ];
 export function databaseUrl(value) {
   const normalized=value.replace(/^(libsql|turso):\/\//,'https://');
-  if(!/^https:\/\/[a-z0-9-]+\.turso\.io\/?$/.test(normalized)) throw new Error('Use your Turso database URL.');
+  if(!/^https:\/\/(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+turso\.io\/?$/.test(normalized)) throw new Error('Use your Turso database URL.');
   const url=new URL(normalized);
-  if(url.protocol!=='https:' || !/^[a-z0-9-]+\.turso\.io$/.test(url.hostname) || url.username || url.password || url.port || !['','/'].includes(url.pathname) || url.search || url.hash) throw new Error('Use your Turso database URL.');
+  if(url.protocol!=='https:' || !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+turso\.io$/.test(url.hostname) || url.username || url.password || url.port || !['','/'].includes(url.pathname) || url.search || url.hash) throw new Error('Use your Turso database URL.');
   return url.origin;
 }
 export const statement=(sql,...args)=>({sql,args:args.map(value=>typeof value==='number'?{type:'integer',value:String(value)}:{type:'text',value})});
