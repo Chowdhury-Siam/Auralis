@@ -51,6 +51,13 @@ void main() {
       'https://a.turso.io@evil.example', 'https://user@a.turso.io',
       'libsql://a.turso.io/path', 'https://a.turso.io?token=x',
       'https://a.turso.io#fragment', 'https://a.turso.io:8443',
+      'https://db.region.turso.io.evil.example', 'https://db.region.turso.io@evil.example',
+      'https://user@db.region.turso.io', 'libsql://db.region.turso.io/path',
+      'https://db.region.turso.io?token=x', 'https://db.region.turso.io#fragment',
+      'https://db..region.turso.io', 'https://-db.region.turso.io',
+      'https://db-.region.turso.io', 'https://db_bad.region.turso.io',
+      'https://turso.io', 'https://${'a'*64}.turso.io',
+      for(final scheme in ['https', 'libsql', 'turso']) '$scheme://db.region.turso.io:443',
       for(final scheme in ['https', 'libsql', 'turso']) '$scheme://a.turso.io:443',
     ]) {
       await expectLater(service.deploy(config(database:url),(_){}),throwsFormatException);
@@ -59,18 +66,22 @@ void main() {
   });
   test('deployment accepts Turso URL schemes and optional trailing slash',() {
     for(final scheme in ['https', 'libsql', 'turso']) {
-      for(final suffix in ['', '/']) {
-        expect(config(database:'$scheme://auralis-test.turso.io$suffix').databaseHttp(),
-          'https://auralis-test.turso.io');
+      for(final host in ['auralis-test.turso.io','music-example.aws-ap-south-1.turso.io','music-example.eu-west-1.aws.turso.io']) {
+        for(final suffix in ['', '/']) {
+          expect(config(database:'$scheme://$host$suffix').databaseHttp(), 'https://$host');
+        }
       }
     }
   });
-  for(final existing in [false,true]) {
-    test('deployment ${existing?'updates':'creates'} Cloudflare with bundled modules and Turso bindings',() async {
+  for(final (existing,host) in [
+    (false,'auralis-test.turso.io'),(true,'auralis-test.turso.io'),
+    (false,'music-example.aws-ap-south-1.turso.io'),(true,'music-example.aws-ap-south-1.turso.io'),
+  ]) {
+    test('deployment ${existing?'updates':'creates'} Cloudflare with bundled modules and Turso bindings for $host',() async {
       var uploads=0;
       final client=DeployClient((r) {
         expect(r.followRedirects,isFalse);
-        if(r.uri.host=='auralis-test.turso.io') {
+        if(r.uri.host==host) {
           expect(r.headers.value('authorization'),'Bearer database-token');
           return response({'results':List.generate(5,(_)=>{'type':'ok'})});
         }
@@ -79,7 +90,7 @@ void main() {
           if(r.uri.path.endsWith('/workers/subdomain')) return response({'success':true,'result':{'subdomain':'test-account'}});
           if(r.uri.path.endsWith('/settings')) {
             return response(existing?{'success':true,'result':{'bindings':[
-              {'name':'ROOM','class_name':'AuralisRoom'}, {'name':'TURSO_DATABASE_URL','text':'https://auralis-test.turso.io'},
+              {'name':'ROOM','class_name':'AuralisRoom'}, {'name':'TURSO_DATABASE_URL','text':'https://$host'},
             ]}}:{'success':false},status:existing?200:404);
           }
           if(r.method=='PUT') {
@@ -87,6 +98,7 @@ void main() {
             final body=utf8.decode(r.bytes);
             expect(body,contains('filename="worker.mjs"'));
             expect(body,contains('filename="turso.mjs"'));
+            expect(body,contains('"name":"TURSO_DATABASE_URL","text":"https://$host"'));
             expect(body,contains('"name":"TURSO_AUTH_TOKEN","text":"database-token"'));
             expect(body,contains('"type":"secret_text"'));
             expect(body.contains('"migrations"'),!existing);
@@ -100,7 +112,7 @@ void main() {
         return response({'cursor':0,'more':false,'records':<String,dynamic>{}});
       });
       final service=SyncDeployment(client:client);addTearDown(service.close);
-      expect(await service.deploy(config(),(_){}),'https://auralis-sync.test-account.workers.dev');
+      expect(await service.deploy(config(database:'libsql://$host'),(_){}),'https://auralis-sync.test-account.workers.dev');
       expect(uploads,1);
     });
   }
