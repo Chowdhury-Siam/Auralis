@@ -124,8 +124,7 @@ class AppSettings {
   bool reducedMotion = false;
   bool automaticUpdates = true;
   double volume = 70;
-  bool automaticLyrics = true, automaticTranslation = true, keepArtwork = true;
-  int artworkPreload = 10;
+  bool automaticLyrics = true, automaticTranslation = true;
   bool compactLibrary = false;
   AppNavigationStyle navigationStyle = AppNavigationStyle.fullWidth;
   double navigationRadius = 28;
@@ -182,7 +181,6 @@ class AppSettings {
     volume = (json['volume'] as num? ?? 70).toDouble().clamp(0, 100);
     automaticLyrics = json['automaticLyrics'] != false;
     automaticTranslation = json['automaticTranslation'] != false;
-    keepArtwork = json['keepArtwork'] != false;
     compactLibrary = json['compactLibrary'] == true;
     navigationStyle = AppNavigationStyle.values.firstWhere(
       (v) => v.name == json['navigationStyle'],
@@ -192,9 +190,6 @@ class AppSettings {
     navigationRadius = radius is num && radius.isFinite
         ? radius.toDouble().clamp(0, 40)
         : 28;
-    artworkPreload = json['artworkPreload'] is int
-        ? (json['artworkPreload'] as int).clamp(0, 50)
-        : 10;
     lyricsFirst = LyricsSource.values.firstWhere(
       (v) => v.name == json['lyricsFirst'],
       orElse: () => LyricsSource.lrclib,
@@ -267,8 +262,6 @@ class AppSettings {
     'translationFirst': translationFirst.name,
     'translationFallback': translationFallback?.name,
     'translationDirection': translationDirection.name,
-    'artworkPreload': artworkPreload,
-    'keepArtwork': keepArtwork,
     'compactLibrary': compactLibrary,
     'navigationStyle': navigationStyle.name,
     'navigationRadius': navigationRadius,
