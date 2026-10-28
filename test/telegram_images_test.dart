@@ -101,6 +101,75 @@ void main() {
   });
 
   test(
+    'saved covers bypass busy metadata and corrupt images remain missing',
+    () async {
+      service.isStreaming = (_) => true;
+      final pending = <Completer<Json>>[];
+      final started = Completer<void>();
+      td.onRequest = (request) async {
+        if (request['@type'] == 'getFileDownloadedPrefixSize') {
+          final job = Completer<Json>();
+          pending.add(job);
+          if (pending.length == 2) started.complete();
+          return job.future;
+        }
+        return null;
+      };
+      final disk = service.mediaCache;
+      await disk.write(song(3), 'art', png);
+      final first = service.cover(song(1));
+      final second = service.cover(song(2));
+      await started.future;
+      expect(await service.hasCachedCover(song(3)), isTrue);
+      expect(
+        await service.cover(song(3)),
+        png,
+        reason: 'Disk reads cannot be refused by the metadata job limit',
+      );
+      expect(pending, hasLength(2));
+      for (final job in pending) {
+        job.complete({'size': 0});
+      }
+      await Future.wait([first, second]);
+      final damaged = song(4, thumbnail: 94);
+      await disk.write(damaged, 'art', png.sublist(0, 16));
+      expect(
+        await service.hasCachedCover(damaged),
+        isFalse,
+        reason: 'An image signature alone does not prove a cover can display',
+      );
+      td.onRequest = (request) async => request['@type'] == 'downloadFile'
+          ? {
+              'local': {'path': photo.path, 'is_downloading_completed': true},
+            }
+          : null;
+      expect(
+        await service.cacheCover(damaged, active: () => true),
+        await photo.readAsBytes(),
+      );
+      expect(await service.hasCachedCover(damaged), isTrue);
+    },
+  );
+
+  test(
+    'explicit warming sees a saved cover after an earlier clean miss',
+    () async {
+      const track = Track(
+        id: 'late',
+        title: 'Late cover',
+        artist: 'Artist',
+        source: 'Music',
+        fileId: 10,
+      );
+      expect(await service.cover(track), isNull);
+      await service.mediaCache.write(track, 'art', png);
+      expect(await service.cacheCover(track, active: () => true), png);
+      expect(service.cachedCover(track), png);
+      expect(await service.cover(track), png);
+    },
+  );
+
+  test(
     'visible artwork downloads are shared and lower priority than playback',
     () async {
       final first = service.image(90);
@@ -425,7 +494,7 @@ void main() {
     expect(td.requests.where((r) => r['@type'] == 'readFilePart'), isEmpty);
   });
 
-  test('at most two metadata jobs run and a busy cover can retry', () async {
+  test('at most two metadata jobs run and waiting covers finish', () async {
     service.isStreaming = (_) => true;
     final pending = <int, Completer<Json>>{};
     final twoStarted = Completer<void>(), retryStarted = Completer<void>();
@@ -440,17 +509,21 @@ void main() {
     };
     final first = service.cover(song(1));
     final second = service.cover(song(2));
-    expect(await service.cover(song(3)), isNull);
     await twoStarted.future;
+    var thirdCompleted = false;
+    final third = service.cover(song(3)).then((bytes) {
+      thirdCompleted = true;
+      return bytes;
+    });
+    expect(thirdCompleted, isFalse);
     expect(pending.keys, [1, 2]);
     pending[1]!.complete({'size': 0});
     pending[2]!.complete({'size': 0});
     await Future.wait([first, second]);
-    final retry = service.cover(song(3));
     await retryStarted.future;
     expect(pending.keys, [1, 2, 3]);
     pending[3]!.complete({'size': 0});
-    expect(await retry, isNull);
+    expect(await third, isNull);
   });
 
   test('supplied thumbnail still works when audio size is unknown', () async {
