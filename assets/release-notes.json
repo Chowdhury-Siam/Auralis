@@ -1,6 +1,13 @@
 {
-  "current": "0.1.104",
+  "current": "0.1.105",
   "releases": [
+    {
+      "version": "0.1.105",
+      "changes": [
+        "Account & sync now fills the Worker URL as soon as deployment or a saved connection updates it, including when returning from Deploy Database. Unrelated updates preserve a Worker URL being edited.",
+        "Owner sign-in, account recovery, account switching and restored owner sessions recover all saved deployment fields and the automatic-update preference from the encrypted recovery vault. If that recovery copy is missing, a signed-in owner can replenish it from complete saved local credentials. Other accounts cannot recover those credentials."
+      ]
+    },
     {
       "version": "0.1.104",
       "changes": [
