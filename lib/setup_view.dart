@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import 'app_navigation.dart';
 import 'data_files.dart';
-import 'media_cache.dart';
 import 'models.dart';
 import 'player.dart';
 import 'setup_permissions.dart';
@@ -259,8 +258,8 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
       Icons.lyrics_rounded,
     ),
     _Step.artwork => (
-      'Ready for the next song',
-      'Preload upcoming covers and keep them ready for another listen.',
+      'Covers stay with you',
+      'Library Refresh saves available artwork and lyrics on this device.',
       Icons.album_rounded,
     ),
     _Step.library => (
@@ -400,36 +399,9 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
         ),
       ],
     ),
-    _Step.artwork => Column(
-      children: [
-        _select<int>(
-          'Songs to preload',
-          prefs.artworkPreload,
-          ({0, 5, 10, 20, 50, prefs.artworkPreload}.toList()..sort()),
-          (v) => v == 0 ? 'Current song only' : 'Next $v songs',
-          (v) => _change(() => prefs.artworkPreload = v),
-        ),
-        _switch(
-          'Keep artwork',
-          'Saved covers stay on this device. Music files remain temporary.',
-          prefs.keepArtwork,
-          (v) => unawaited(
-            _run(() async {
-              prefs.keepArtwork = v;
-              await prefs.save();
-              widget.telegram.keepArtwork = v;
-              if (!v) {
-                final cache = widget.telegram.mediaCache;
-                if (cache.directory != null) {
-                  await MediaCache.drain(cache.directory!);
-                }
-                await cache.clearArtwork();
-              }
-              widget.player.refreshSettings();
-            }),
-          ),
-        ),
-      ],
+    _Step.artwork => const Text(
+      'Covers are saved automatically on this device. Use Library Refresh to save available artwork and lyrics. Music files remain temporary.',
+      textAlign: TextAlign.center,
     ),
     _Step.library => Column(
       children: [
