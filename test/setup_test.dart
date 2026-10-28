@@ -351,4 +351,156 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+  for (final (size, textScale, platform) in [
+    (const Size(640, 990), 1.0, TargetPlatform.windows),
+    (const Size(390, 844), 1.0, TargetPlatform.android),
+    (const Size(320, 568), 2.0, TargetPlatform.windows),
+  ]) {
+    testWidgets(
+      'setup choice menus match the theme and retain choices at $size with text $textScale',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = size;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final settings = MemorySettings();
+        final player = PlayerController(
+          FakeAudio(),
+          TelegramStreamProxy((_) async => {}),
+          settings,
+        );
+        final telegram = TelegramService(
+          Directory('unused'),
+          MemoryVault(),
+          transport: FakeTd(),
+        );
+        addTearDown(player.shutdown);
+        addTearDown(telegram.shutdown);
+        final colors = ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.dark,
+        );
+        final boundary = GlobalKey();
+        await tester.pumpWidget(
+          RepaintBoundary(
+            key: boundary,
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: ThemeData(
+                colorScheme: colors,
+                platform: platform,
+                fontFamily: 'Segoe UI',
+              ),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(textScale)),
+                child: child!,
+              ),
+              home: SetupView(
+                player: player,
+                telegram: telegram,
+                version: '0.1.104',
+                connectBuilder: (_) => const SizedBox(),
+                onFinished: () {},
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        for (var i = 0; i < (platform == TargetPlatform.android ? 4 : 3); i++) {
+          await tester.tap(find.byKey(const ValueKey('setup-next')));
+          await tester.pumpAndSettle();
+        }
+        Future<Rect> open(String title) async {
+          final trigger = find.byKey(ValueKey('setup-choice-$title'));
+          await tester.ensureVisible(trigger);
+          await tester.pumpAndSettle();
+          final triggerBounds = tester.getRect(trigger);
+          await tester.tap(trigger);
+          await tester.pumpAndSettle();
+          final items = find.byType(PopupMenuItem<int>);
+          expect(items, findsNWidgets(2));
+          final material = find
+              .ancestor(of: items.first, matching: find.byType(Material))
+              .first;
+          final menu = tester.widget<Material>(material);
+          expect(menu.color, colors.surfaceContainerHigh);
+          expect(
+            (menu.shape! as RoundedRectangleBorder).borderRadius,
+            BorderRadius.circular(20),
+          );
+          expect(menu.clipBehavior, Clip.antiAlias);
+          expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+          final bounds = tester.getRect(material);
+          expect(bounds.width, lessThanOrEqualTo(280));
+          expect(bounds.left, greaterThanOrEqualTo(0));
+          expect(bounds.right, lessThanOrEqualTo(size.width));
+          expect(bounds.top, greaterThanOrEqualTo(0));
+          expect(bounds.bottom, lessThanOrEqualTo(size.height));
+          if (size.width == 640) {
+            expect(bounds.top, greaterThanOrEqualTo(triggerBounds.bottom));
+          }
+          expect(tester.takeException(), isNull);
+          return bounds;
+        }
+
+        await open('Direction');
+        if (size.width == 640) {
+          await tester.runAsync(() async {
+            final render =
+                boundary.currentContext!.findRenderObject()!
+                    as RenderRepaintBoundary;
+            final image = await render.toImage();
+            final bytes = await image.toByteData(
+              format: ui.ImageByteFormat.png,
+            );
+            await File('docs/screenshots/setup-direction-menu-640.png')
+                .writeAsBytes(bytes!.buffer.asUint8List());
+            image.dispose();
+          });
+        }
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(find.byType(PopupMenuItem<int>), findsNothing);
+        expect(
+          settings.translationDirection,
+          TranslationDirection.japaneseEnglish,
+        );
+        await open('Direction');
+        await tester.tap(
+          find.text(TranslationDirection.englishJapanese.label).last,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          settings.translationDirection,
+          TranslationDirection.englishJapanese,
+        );
+        await open('First lyric source');
+        await tester.tap(find.text(LyricsSource.lyricsOvh.label).last);
+        await tester.pumpAndSettle();
+        expect(settings.lyricsFirst, LyricsSource.lyricsOvh);
+        expect(settings.lyricsFallback, LyricsSource.lrclib);
+        final translator = TranslationSource.values.firstWhere(
+          (v) => v != settings.translationFirst,
+        );
+        await open('First translator');
+        await tester.tap(find.text(translator.label).last);
+        await tester.pumpAndSettle();
+        expect(settings.translationFirst, translator);
+        expect(settings.translationFallback, isNot(translator));
+        await tester.tap(find.byKey(const ValueKey('setup-next')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Previous setup step'));
+        await tester.pumpAndSettle();
+        expect(
+          settings.translationDirection,
+          TranslationDirection.englishJapanese,
+        );
+        expect(settings.lyricsFirst, LyricsSource.lyricsOvh);
+        expect(settings.translationFirst, translator);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
 }
