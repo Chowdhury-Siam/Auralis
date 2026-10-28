@@ -1,6 +1,19 @@
 {
-  "current": "0.1.102",
+  "current": "0.1.104",
   "releases": [
+    {
+      "version": "0.1.104",
+      "changes": [
+        "Accepted regional Turso database hostnames in the app and bundled Worker while retaining strict endpoint checks. The bundled Worker version advances so automatic updates can install the matching fix.",
+        "Matched setup direction, lyric-source and translator dropdowns to the app’s rounded, themed choice menus. Menus are anchored below their fields, bounded in width and mark the current choice; field labels stay visible and setup busy states disable selection."
+      ]
+    },
+    {
+      "version": "0.1.103",
+      "changes": [
+        "Restored the original artwork hover zoom, lift and pointer-following tilt. The animation now wraps the carousel viewport so the rounded cover and its clipping area move together, preserving the full artwork. Reduced motion and artwork navigation remain supported."
+      ]
+    },
     {
       "version": "0.1.102",
       "changes": [
