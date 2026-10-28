@@ -97,15 +97,20 @@ void main() {
       ..lyricsFirst = LyricsSource.lyricsOvh
       ..lyricsFallback = LyricsSource.lrclib
       ..translationFirst = TranslationSource.myMemory
-      ..translationFallback = TranslationSource.google
-      ..artworkPreload = 20;
+      ..translationFallback = TranslationSource.google;
     final saved = DataBackup.parse(
       DataBackup.create(settings, DateTime.now()).encode(),
     );
     final restored = MemorySettings()..applyJson(saved.snapshot);
     expect(restored.lyricsFirst, LyricsSource.lyricsOvh);
     expect(restored.translationFirst, TranslationSource.myMemory);
-    expect(restored.artworkPreload, 20);
+    restored.applyJson({
+      ...saved.snapshot,
+      'artworkPreload': 50,
+      'keepArtwork': false,
+    });
+    expect(restored.toJson().containsKey('artworkPreload'), isFalse);
+    expect(restored.toJson().containsKey('keepArtwork'), isFalse);
     final legacy = {...saved.snapshot}
       ..removeWhere(
         (key, _) => const {
@@ -122,13 +127,7 @@ void main() {
       );
     DataBackup.validateSnapshot(legacy);
     restored.applyJson(legacy);
-    expect(
-      restored.automaticLyrics &&
-          restored.automaticTranslation &&
-          restored.keepArtwork,
-      isTrue,
-    );
-    expect(restored.artworkPreload, 10);
+    expect(restored.automaticLyrics && restored.automaticTranslation, isTrue);
     expect(
       () => DataBackup.validateSnapshot({
         ...saved.snapshot,
