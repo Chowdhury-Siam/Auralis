@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
+import 'package:auralis/app.dart' show Artwork;
 import 'package:auralis/models.dart';
 import 'package:auralis/telegram/td_transport.dart';
 import 'package:auralis/telegram/telegram_service.dart';
@@ -189,6 +191,92 @@ void main() {
         'limit': 0,
         'synchronous': true,
       });
+    },
+  );
+
+  test(
+    'refresh retries a thumbnail that failed during an earlier visible lookup',
+    () async {
+      final track = song(1, thumbnail: 90);
+      service.isStreaming = (_) => true;
+      td.onRequest = (request) async {
+        if (request['@type'] == 'downloadFile') {
+          return {
+            'local': {'is_downloading_completed': false},
+          };
+        }
+        if (request['@type'] == 'getFileDownloadedPrefixSize') {
+          return {'size': 0};
+        }
+        return null;
+      };
+      expect(await service.cover(track), isNull);
+      td.onRequest = (request) async => request['@type'] == 'downloadFile'
+          ? {
+              'local': {'path': photo.path, 'is_downloading_completed': true},
+            }
+          : null;
+      expect(
+        await service.cacheCover(track, active: () => true),
+        await photo.readAsBytes(),
+      );
+      expect(await service.hasCachedCover(track), isTrue);
+      expect(
+        td.requests.where((r) => r['@type'] == 'downloadFile'),
+        hasLength(2),
+      );
+    },
+  );
+
+  testWidgets(
+    'warming saved artwork replaces the playing cover placeholder without an audio update',
+    (tester) async {
+      const track = Track(
+        id: 'late-player',
+        title: 'Late player cover',
+        artist: 'Artist',
+        source: 'Music',
+        fileId: 10,
+      );
+      await tester.runAsync(() => service.cover(track));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: SizedBox.square(
+              dimension: 96,
+              child: ListenableBuilder(
+                listenable: service,
+                builder: (_, _) =>
+                    Artwork(seed: track.title, telegram: service, track: track),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(Image), findsNothing);
+      var updates = 0;
+      void changed() => updates++;
+      service.addListener(changed);
+      addTearDown(() => service.removeListener(changed));
+      await tester.runAsync(() async {
+        await service.mediaCache.write(track, 'art', png);
+        expect(await service.savedCover(track, active: () => true), png);
+      });
+      expect(service.cachedCover(track), png);
+      expect(updates, greaterThan(0));
+      // Disk/codec futures complete on the real clock, not the widget clock.
+      for (var i = 0; i < 50 && find.byType(Image).evaluate().isEmpty; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(find.byType(Image), findsOneWidget);
+      expect(service.cachedCover(track), png);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
     },
   );
 
