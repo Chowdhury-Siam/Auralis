@@ -284,10 +284,10 @@ void main() {
       expect(player.settings.librarySort, LibrarySort.artist);
       expect(player.current?.title, 'Song -1');
       expect(player.queue, hasLength(1));
-      // Artwork can now arrive from persistent disk cache after refresh.
+      // Two library covers and the bottom player; artwork may arrive from disk.
       for (
         var attempt = 0;
-        attempt < 100 && find.byType(Image).evaluate().length < 4;
+        attempt < 100 && find.byType(Image).evaluate().length < 3;
         attempt++
       ) {
         await tester.runAsync(
@@ -295,7 +295,7 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 30));
       }
-      expect(find.byType(Image), findsNWidgets(4));
+      expect(find.byType(Image), findsNWidgets(3));
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('player-bar')),
