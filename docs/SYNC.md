@@ -20,6 +20,8 @@ Worker URL, username and password.
    device, enter the same setup secret. Knowing the public URL cannot claim ownership.
 6. Save the recovery code shown after registration somewhere private.
 
+Database URLs may use the short `libsql://database-organization.turso.io` form or include regional labels, such as `libsql://music-example.aws-ap-south-1.turso.io`. Both the app and bundled Worker accept these hostnames and normalize supported schemes to HTTPS. Endpoint checks reject unrelated hosts, user information, explicit ports, query strings and non-root paths. The bundled Worker version is 0.1.104 so automatic Worker updates can install this validation fix. See [Turso’s regional URL example](https://turso.tech/blog/we-rewrote-large-parts-of-our-api-in-go).
+
 The first account is the administrator. Later registrations get separate libraries.
 The same ROOM Durable Object binding handles account records and private rooms;
 no new Durable Object class or namespace migration is introduced.
