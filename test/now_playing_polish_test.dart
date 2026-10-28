@@ -1236,45 +1236,127 @@ void main() {
 
   for (final size in [const Size(1000, 680), const Size(1280, 714)]) {
     testWidgets(
-      'desktop artwork stays inside its rounded frame on hover at $size',
+      'desktop artwork hover keeps its rounded cover inside the moving viewport at $size',
       (tester) async {
         final (_, player) = await mount(tester, size: size);
         final artwork = find.byKey(const ValueKey('now-playing-artwork'));
         final pager = find.byKey(const ValueKey('artwork-pages'));
+        final scale = find.byKey(const ValueKey('artwork-hover-scale'));
+        final tilt = find.byKey(const ValueKey('artwork-hover-tilt'));
         final frame = find
             .ancestor(of: artwork, matching: find.byType(DecoratedBox))
             .first;
-        final originalArtwork = tester.getRect(artwork);
         final originalFrame = tester.getRect(frame);
+        final originalTilt = tester.widget<Transform>(tilt).transform.clone();
         final decoration = tester.widget<DecoratedBox>(frame).decoration;
+        final viewport = tester.renderObject<RenderBox>(pager);
+        final frameBox = tester.renderObject<RenderBox>(frame);
         final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
         await mouse.addPointer(location: const Offset(1, 1));
         for (final position in [
-          originalArtwork.center,
-          originalArtwork.topLeft + const Offset(10, 10),
-          originalArtwork.topRight + const Offset(-10, 10),
-          originalArtwork.bottomRight - const Offset(10, 10),
-          originalArtwork.bottomLeft + const Offset(10, -10),
-          const Offset(1, 1),
+          originalFrame.center,
+          originalFrame.topLeft + const Offset(20, 20),
+          originalFrame.topRight + const Offset(-20, 20),
+          originalFrame.bottomRight - const Offset(20, 20),
+          originalFrame.bottomLeft + const Offset(20, -20),
         ]) {
           await mouse.moveTo(position);
           await tester.pumpAndSettle();
-          expect(tester.getRect(artwork), originalArtwork);
-          expect(tester.getRect(frame), originalFrame);
-          expect(tester.getRect(pager).contains(originalFrame.topLeft), isTrue);
+          expect(tester.widget<AnimatedScale>(scale).scale, 1.025);
+          expect(tester.getRect(frame), isNot(originalFrame));
+          // Check in viewport coordinates, before the shared hover transform.
+          // A transform inside the pager would enlarge this rect and clip it.
           expect(
-            tester
-                .getRect(pager)
-                .contains(originalFrame.bottomRight - const Offset(.01, .01)),
-            isTrue,
+            MatrixUtils.transformRect(
+              frameBox.getTransformTo(viewport),
+              Offset.zero & frameBox.size,
+            ),
+            Offset.zero & viewport.size,
           );
           expect(tester.widget<DecoratedBox>(frame).decoration, decoration);
           expect(player.current?.id, 'first');
           expect(tester.takeException(), isNull);
         }
+        expect(tester.widget<Transform>(tilt).transform, isNot(originalTilt));
+        await mouse.moveTo(const Offset(1, 1));
+        await tester.pumpAndSettle();
+        expect(tester.widget<AnimatedScale>(scale).scale, 1);
+        expect(tester.widget<Transform>(tilt).transform, originalTilt);
+        expect(tester.getRect(pager), originalFrame);
+        // Paging and wheel navigation still work while hovered.
+        await mouse.moveTo(originalFrame.center);
+        await tester.pumpAndSettle();
+        await tester.drag(artwork, const Offset(-280, 0));
+        await tester.pumpAndSettle();
+        expect(player.current?.id, 'second');
+        await mouse.moveTo(tester.getCenter(artwork));
+        await tester.pumpAndSettle();
+        tester.binding.handlePointerEvent(
+          PointerScrollEvent(
+            position: tester.getCenter(artwork),
+            scrollDelta: const Offset(0, -60),
+            timeStamp: const Duration(seconds: 1),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(player.current?.id, 'first');
+        await mouse.moveTo(const Offset(1, 1));
+        await tester.pumpAndSettle();
+        expect(tester.widget<AnimatedScale>(scale).scale, 1);
+        expect(tester.widget<Transform>(tilt).transform, originalTilt);
         await mouse.removePointer();
         await tester.pumpWidget(const SizedBox());
+        expect(tester.takeException(), isNull);
       },
     );
+  }
+  for (final reduced in [false, true]) {
+    for (final systemReduced in [false, true]) {
+      testWidgets(
+        'artwork hover and reset: user=$reduced system=$systemReduced',
+        (tester) async {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: MediaQuery(
+                data: MediaQueryData(disableAnimations: systemReduced),
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 240,
+                    child: ArtworkMotion(
+                      reducedMotion: reduced,
+                      child: const ColoredBox(color: Colors.pink),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final tilt = find.byKey(const ValueKey('artwork-hover-tilt'));
+          final scale = find.byKey(const ValueKey('artwork-hover-scale'));
+          final rest = tester.widget<Transform>(tilt).transform.clone();
+          final mouse = await tester.createGesture(
+            kind: PointerDeviceKind.mouse,
+          );
+          await mouse.addPointer(location: const Offset(1, 1));
+          await mouse.moveTo(tester.getTopRight(tilt) + const Offset(-24, 24));
+          await tester.pumpAndSettle();
+          if (reduced || systemReduced) {
+            expect(tester.widget<Transform>(tilt).transform, rest);
+            expect(tester.widget<AnimatedScale>(scale).scale, 1);
+          } else {
+            expect(tester.widget<Transform>(tilt).transform, isNot(rest));
+            expect(tester.widget<AnimatedScale>(scale).scale, greaterThan(1));
+          }
+          await mouse.moveTo(const Offset(1, 1));
+          await tester.pumpAndSettle();
+          expect(tester.widget<Transform>(tilt).transform, rest);
+          expect(tester.widget<AnimatedScale>(scale).scale, 1);
+          await mouse.removePointer();
+          expect(tester.binding.hasScheduledFrame, isFalse);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
   }
 }
