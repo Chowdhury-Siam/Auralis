@@ -11,6 +11,11 @@ async function setup(){const backend=fakeTurso(),store=new TursoStore(env,backen
 test('bundled SQL matches the runtime schema and URL validation blocks credential redirects',async()=>{
   assert.deepEqual((await readFile(new URL('schema.sql',import.meta.url),'utf8')).split(';').map(s=>s.trim()).filter(Boolean),schema);
   assert.equal(databaseUrl(env.TURSO_DATABASE_URL),'https://auralis-test.turso.io');
+  for(const host of ['music-example.aws-ap-south-1.turso.io','music-example.eu-west-1.aws.turso.io']) {
+    for(const scheme of ['https','libsql','turso']) for(const suffix of ['','/']) assert.equal(databaseUrl(`${scheme}://${host}${suffix}`),`https://${host}`);
+  }
+  for(const value of ['https://db.region.turso.io.evil.example','https://db.region.turso.io@evil.example','https://user@db.region.turso.io','libsql://db.region.turso.io/path','https://db.region.turso.io?token=x','https://db.region.turso.io#fragment','https://db..region.turso.io','https://-db.region.turso.io','https://db-.region.turso.io','https://db_bad.region.turso.io','https://turso.io',`https://${'a'.repeat(64)}.turso.io`,...['https','libsql','turso'].map(s=>`${s}://db.region.turso.io:443`)]) assert.throws(()=>databaseUrl(value));
+
   for(const value of ['http://auralis-test.turso.io','https://other.example','https://a.turso.io@evil.example','libsql://a.turso.io:443','libsql://a.turso.io/path']) assert.throws(()=>databaseUrl(value));
 });
 test('Turso persists changes across room/store restart, tombstones and retries converge',async()=>{
