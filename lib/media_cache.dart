@@ -43,7 +43,23 @@ class MediaCache {
     return result;
   }
 
+  // TDLib's local file/thumbnail IDs can change without changing the song.
   String key(Track track) => sha256
+      .convert(
+        utf8.encode(
+          jsonEncode([
+            track.id,
+            track.size,
+            track.title,
+            track.artist,
+            track.duration.inSeconds,
+          ]),
+        ),
+      )
+      .toString();
+
+  // Read pre-0.1.107 entries without discarding already downloaded media.
+  String _legacyKey(Track track) => sha256
       .convert(
         utf8.encode(
           jsonEncode([
@@ -63,9 +79,14 @@ class MediaCache {
   Future<Uint8List?> _read(Track track, String kind, int limit) async {
     if (directory == null) return null;
     try {
-      final file = File('${directory!.path}/${key(track)}.$kind');
-      if (await file.length() > limit) return null;
-      return await file.readAsBytes();
+      for (final candidate in [key(track), _legacyKey(track)]) {
+        final file = File('${directory!.path}/$candidate.$kind');
+        if (!await file.exists() || await file.length() > limit) continue;
+        final bytes = await file.readAsBytes();
+        if (candidate != key(track)) await _write(track, kind, bytes);
+        return bytes;
+      }
+      return null;
     } on FileSystemException {
       return null;
     }
