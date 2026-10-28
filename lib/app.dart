@@ -2695,30 +2695,38 @@ class _PlayerShellState extends State<PlayerShell>
               return Center(
                 child: SizedBox.square(
                   dimension: size,
-                  child: track == null
-                      ? cover(null, key: const ValueKey('now-playing-artwork'))
-                      : _artworkSwitcher(
-                          paged: true,
-                          child: ArtworkPager(
-                            index: player.index,
-                            itemCount:
-                                player.queue.length +
-                                (player.repeat && player.queue.length > 1
-                                    ? 1
-                                    : 0),
-                            onSelected: player.restoringData
-                                ? null
-                                : (index) => unawaited(
-                                    player.playAt(index % player.queue.length),
-                                  ),
-                            itemBuilder: (context, index) => cover(
-                              player.queue[index % player.queue.length],
-                              key: index == player.index
-                                  ? const ValueKey('now-playing-artwork')
-                                  : ValueKey(('artwork-page', index)),
+                  child: ArtworkMotion(
+                    reducedMotion: player.settings.reducedMotion,
+                    child: track == null
+                        ? cover(
+                            null,
+                            key: const ValueKey('now-playing-artwork'),
+                          )
+                        : _artworkSwitcher(
+                            paged: true,
+                            child: ArtworkPager(
+                              index: player.index,
+                              itemCount:
+                                  player.queue.length +
+                                  (player.repeat && player.queue.length > 1
+                                      ? 1
+                                      : 0),
+                              onSelected: player.restoringData
+                                  ? null
+                                  : (index) => unawaited(
+                                      player.playAt(
+                                        index % player.queue.length,
+                                      ),
+                                    ),
+                              itemBuilder: (context, index) => cover(
+                                player.queue[index % player.queue.length],
+                                key: index == player.index
+                                    ? const ValueKey('now-playing-artwork')
+                                    : ValueKey(('artwork-page', index)),
+                              ),
                             ),
                           ),
-                        ),
+                  ),
                 ),
               );
             },
