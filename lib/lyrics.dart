@@ -293,7 +293,7 @@ class LyricsRepository extends ChangeNotifier {
   }
 
   Future<Lyrics?> loadCached(Track track) async {
-    if (contains(track)) return cached(track);
+    if (cached(track) case final value?) return value;
     final disk = cache?.call();
     final bytes = await disk?.read(track, 'lyrics', 2 * 1024 * 1024);
     if (bytes == null ||
@@ -321,7 +321,8 @@ class LyricsRepository extends ChangeNotifier {
         embedded: data['embedded'] == true,
         imported: data['imported'] == true,
       );
-      if (!contains(track)) {
+      if (cached(track) == null) {
+        _cache.remove(_key(track));
         _cache[_key(track)] = result;
         if (_cache.length > 32) _cache.remove(_cache.keys.first);
       }
