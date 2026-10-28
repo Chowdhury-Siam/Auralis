@@ -56,8 +56,7 @@ void main() {
       final settings = MemorySettings()
         ..navigationStyle = style
         ..selectedChannels = [const MusicChat(1, 'Music')]
-        ..automaticLyrics = false
-        ..artworkPreload = 0;
+        ..automaticLyrics = false;
       final player = PlayerController(
         FakeAudio(),
         TelegramStreamProxy((_) async => {}),
