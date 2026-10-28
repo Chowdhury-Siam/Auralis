@@ -39,7 +39,7 @@ class PreferenceCard extends StatelessWidget {
   }
 }
 
-/// An anchored, bounded choice menu shared by Library and preferences.
+/// An anchored, bounded choice menu shared by Library, Settings and setup.
 class ChoiceMenu<T> extends StatelessWidget {
   const ChoiceMenu({
     super.key,
@@ -49,18 +49,20 @@ class ChoiceMenu<T> extends StatelessWidget {
     required this.label,
     required this.onSelected,
     this.tonal = false,
+    this.enabled = true,
   });
   final String title;
   final T value;
   final List<T> values;
   final String Function(T) label;
   final ValueChanged<T> onSelected;
-  final bool tonal;
+  final bool tonal, enabled;
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     // Integer menu results keep nullable choices distinct from dismissal.
     return PopupMenuButton<int>(
+      enabled: enabled,
       tooltip: '$title: ${label(value)}',
       position: PopupMenuPosition.under,
       offset: const Offset(0, 6),
@@ -130,6 +132,7 @@ class ChoiceMenu<T> extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Flexible(
               child: Text(
