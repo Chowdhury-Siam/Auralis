@@ -4,6 +4,7 @@
     {
       "version": "0.1.104",
       "changes": [
+        "Separated Windows updater test fixture compilation from the 30-second executable handoff check. Cold PowerShell/.NET startup now has a bounded setup allowance, and compilation, launch and missing-output failures report their own diagnostics. Fixture arguments are published only after the complete file is written.",
         "Accepted regional Turso database hostnames in the app and bundled Worker while retaining strict endpoint checks. The bundled Worker version advances so automatic updates can install the matching fix.",
         "Matched setup direction, lyric-source and translator dropdowns to the app’s rounded, themed choice menus. Menus are anchored below their fields, bounded in width and mark the current choice; field labels stay visible and setup busy states disable selection."
       ]
