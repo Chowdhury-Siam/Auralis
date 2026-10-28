@@ -1,5 +1,15 @@
 # Auralis changes
 
+## 0.1.102
+
+- Removed the decorative artwork zoom, lift and tilt on mouse hover. Now Playing keeps the full rounded cover inside its carousel at every pointer position; artwork swipe and wheel navigation are unchanged.
+
+## 0.1.101
+
+- Replaced the expandable lyrics settings panel with a regular scrolling card. Removed artwork preload and retention controls from Settings and setup; saved artwork is kept automatically and old switches are ignored on restore.
+- Saved covers now load independently of the two-job metadata limit. Uncached visible requests wait for a slot instead of completing with no cover; upcoming queue artwork is decoded from saved files without starting another library caching pass.
+- Cache checks decode images to reject damaged files. Refresh retries missing artwork and reports actual saved artwork/lyric totals, preserving existing valid files.
+
 ## 0.1.100
 
 - Expressive and Classic navigation pills now float over the page. Music and other scrolling content remain visible through the surrounding margins and the gap beside Search, with no reserved solid strip behind the pills.
