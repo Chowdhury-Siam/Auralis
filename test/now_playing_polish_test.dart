@@ -30,7 +30,7 @@ class WarmingTelegram extends TelegramService {
   Uint8List? cachedCover(Track track) =>
       warmed.contains(track.id) ? bytes : null;
   @override
-  Future<Uint8List?> cacheCover(
+  Future<Uint8List?> savedCover(
     Track track, {
     required bool Function() active,
   }) async {
@@ -165,65 +165,46 @@ void main() {
         same(bytes),
       );
       telegram.requested.clear();
-      settings.artworkPreload = 5;
-      player.refreshSettings();
-      await finish(6);
-      expect(telegram.requested, ['1', '2', '3', '4', '5', '6']);
-      telegram.requested.clear();
       player.index = 15;
       settings.repeatMode = PlaybackRepeat.all;
       player.refreshSettings();
-      await finish(6);
-      expect(telegram.requested, ['15', '0', '1', '2', '3', '4']);
+      await finish(11);
+      expect(telegram.requested, ['15', ...List.generate(10, (i) => '$i')]);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
   );
 
-  testWidgets('compact Settings changes provider order and artwork defaults', (
-    tester,
-  ) async {
-    final (_, player) = await mount(
-      tester,
-      reduced: true,
-      openPlayer: false,
-      size: const Size(390, 844),
-    );
-    await tester.tap(find.byTooltip('Settings').first);
-    await tester.pumpAndSettle();
-    expect(find.byType(PreferenceChoice<LyricsSource?>), findsNothing);
-    await tester.tap(find.text('Lyrics & artwork'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Lyrics & translation'));
-    await tester.pumpAndSettle();
-    final first = tester.widget<PreferenceChoice<LyricsSource?>>(
-      find.byType(PreferenceChoice<LyricsSource?>).first,
-    );
-    first.onSelected(LyricsSource.lyricsOvh);
-    await tester.pumpAndSettle();
-    expect(player.settings.lyricsFirst, LyricsSource.lyricsOvh);
-    expect(player.settings.lyricsFallback, LyricsSource.lrclib);
-    await tester.ensureVisible(find.text('Lyrics & translation'));
-    await tester.tap(find.text('Lyrics & translation'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Artwork'));
-    await tester.tap(find.text('Artwork'));
-    await tester.pumpAndSettle();
-    final count = tester.widget<PreferenceChoice<int?>>(
-      find.byType(PreferenceChoice<int?>),
-    );
-    count.onSelected(5);
-    await tester.pumpAndSettle();
-    expect(player.settings.artworkPreload, 5);
-    final keep = tester.widget<SwitchListTile>(
-      find.widgetWithText(SwitchListTile, 'Keep saved artwork'),
-    );
-    keep.onChanged!(false);
-    await tester.pumpAndSettle();
-    expect(player.settings.keepArtwork, isFalse);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
+  testWidgets(
+    'compact Settings changes providers without retired artwork controls',
+    (tester) async {
+      final (_, player) = await mount(
+        tester,
+        reduced: true,
+        openPlayer: false,
+        size: const Size(390, 844),
+      );
+      await tester.tap(find.byTooltip('Settings').first);
+      await tester.pumpAndSettle();
+      expect(find.byType(PreferenceChoice<LyricsSource?>), findsNothing);
+      await tester.tap(find.text('Lyrics & artwork'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lyrics & translation'));
+      await tester.pumpAndSettle();
+      final first = tester.widget<PreferenceChoice<LyricsSource?>>(
+        find.byType(PreferenceChoice<LyricsSource?>).first,
+      );
+      first.onSelected(LyricsSource.lyricsOvh);
+      await tester.pumpAndSettle();
+      expect(player.settings.lyricsFirst, LyricsSource.lyricsOvh);
+      expect(player.settings.lyricsFallback, LyricsSource.lrclib);
+      expect(find.text('Artwork'), findsNothing);
+      expect(find.text('Preload artwork'), findsNothing);
+      expect(find.text('Keep saved artwork'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   for (final size in [const Size(390, 844), const Size(1280, 714)]) {
     testWidgets('compact controls remain usable at $size', (tester) async {
@@ -1253,53 +1234,47 @@ void main() {
     },
   );
 
-  for (final reduced in [false, true]) {
-    for (final systemReduced in [false, true]) {
-      testWidgets(
-        'artwork hover and reset: user=$reduced system=$systemReduced',
-        (tester) async {
-          await tester.pumpWidget(
-            MaterialApp(
-              home: MediaQuery(
-                data: MediaQueryData(disableAnimations: systemReduced),
-                child: Center(
-                  child: SizedBox.square(
-                    dimension: 240,
-                    child: ArtworkMotion(
-                      reducedMotion: reduced,
-                      child: const ColoredBox(color: Colors.pink),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+  for (final size in [const Size(1000, 680), const Size(1280, 714)]) {
+    testWidgets(
+      'desktop artwork stays inside its rounded frame on hover at $size',
+      (tester) async {
+        final (_, player) = await mount(tester, size: size);
+        final artwork = find.byKey(const ValueKey('now-playing-artwork'));
+        final pager = find.byKey(const ValueKey('artwork-pages'));
+        final frame = find
+            .ancestor(of: artwork, matching: find.byType(DecoratedBox))
+            .first;
+        final originalArtwork = tester.getRect(artwork);
+        final originalFrame = tester.getRect(frame);
+        final decoration = tester.widget<DecoratedBox>(frame).decoration;
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        await mouse.addPointer(location: const Offset(1, 1));
+        for (final position in [
+          originalArtwork.center,
+          originalArtwork.topLeft + const Offset(10, 10),
+          originalArtwork.topRight + const Offset(-10, 10),
+          originalArtwork.bottomRight - const Offset(10, 10),
+          originalArtwork.bottomLeft + const Offset(10, -10),
+          const Offset(1, 1),
+        ]) {
+          await mouse.moveTo(position);
+          await tester.pumpAndSettle();
+          expect(tester.getRect(artwork), originalArtwork);
+          expect(tester.getRect(frame), originalFrame);
+          expect(tester.getRect(pager).contains(originalFrame.topLeft), isTrue);
+          expect(
+            tester
+                .getRect(pager)
+                .contains(originalFrame.bottomRight - const Offset(.01, .01)),
+            isTrue,
           );
-          await tester.pumpAndSettle();
-          final tilt = find.byKey(const ValueKey('artwork-hover-tilt'));
-          final scale = find.byKey(const ValueKey('artwork-hover-scale'));
-          final rest = tester.widget<Transform>(tilt).transform.clone();
-          final mouse = await tester.createGesture(
-            kind: PointerDeviceKind.mouse,
-          );
-          await mouse.addPointer(location: const Offset(1, 1));
-          await mouse.moveTo(tester.getTopRight(tilt) + const Offset(-24, 24));
-          await tester.pumpAndSettle();
-          if (reduced || systemReduced) {
-            expect(tester.widget<Transform>(tilt).transform, rest);
-            expect(tester.widget<AnimatedScale>(scale).scale, 1);
-          } else {
-            expect(tester.widget<Transform>(tilt).transform, isNot(rest));
-            expect(tester.widget<AnimatedScale>(scale).scale, greaterThan(1));
-          }
-          await mouse.moveTo(const Offset(1, 1));
-          await tester.pumpAndSettle();
-          expect(tester.widget<Transform>(tilt).transform, rest);
-          expect(tester.widget<AnimatedScale>(scale).scale, 1);
-          await mouse.removePointer();
-          expect(tester.binding.hasScheduledFrame, isFalse);
+          expect(tester.widget<DecoratedBox>(frame).decoration, decoration);
+          expect(player.current?.id, 'first');
           expect(tester.takeException(), isNull);
-        },
-      );
-    }
+        }
+        await mouse.removePointer();
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
   }
 }
