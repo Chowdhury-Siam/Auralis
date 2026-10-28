@@ -329,6 +329,16 @@ extension AccountSync on SyncController {
       if (oldUrl != null && oldKey != null) _activate(oldUrl, oldKey);
       rethrow;
     }
+    await _recoverOwnerDeployment();
+  }
+
+  Future<void> _recoverOwnerDeployment() async {
+    if (_account?.admin != true) return;
+    try {
+      await recoverDeploymentCredentials();
+    } catch (_) {
+      deploymentError = 'Sign-in succeeded. Retry deployment credential recovery in Deploy Database.';
+    }
   }
 
   void _afterAccount() {
@@ -393,13 +403,6 @@ extension AccountSync on SyncController {
         }
         rethrow;
       }
-      if (_account!.admin) {
-        try {
-          await recoverDeploymentCredentials();
-        } catch (_) {
-          deploymentError = 'Sign-in succeeded. Retry deployment credential recovery in Deploy Database.';
-        }
-      }
       return result['recoveryCode'] as String?;
     } finally {
       _afterAccount();
@@ -426,11 +429,6 @@ extension AccountSync on SyncController {
         throw const FormatException('Sign in again to this saved account.');
       }
       await _useAccount(Map<String, dynamic>.from(target.data));
-      if (_account!.admin) {
-        try {
-          await recoverDeploymentCredentials();
-        } catch (_) {}
-      }
     } finally {
       _afterAccount();
     }
@@ -623,13 +621,6 @@ extension AccountSync on SyncController {
       );
       final incoming = _validatedSession(result, endpoint, username);
       await _useAccount(incoming);
-      if (_account!.admin) {
-        try {
-          await recoverDeploymentCredentials();
-        } catch (_) {
-          deploymentError = 'Retry credential recovery in Deploy Database.';
-        }
-      }
       return result['recoveryCode'] as String;
     } finally {
       _afterAccount();
@@ -685,7 +676,26 @@ extension AccountSync on SyncController {
       await saveDeploymentProfile(savedLocal);
     }
     final r = await accountRequest('/v1/account/deployment', method: 'GET');
-    if (r['deployment'] is! Map) return;
+    if (r['deployment'] is! Map) {
+      if (savedLocal['url'] == url &&
+          [
+            'worker',
+            'account',
+            'cloudflareToken',
+            'database',
+            'databaseToken',
+            'key',
+          ].every(
+            (key) =>
+                savedLocal[key] is String &&
+                (savedLocal[key] as String).isNotEmpty,
+          )) {
+        SyncDeploymentConfig.fromJson(savedLocal).validate();
+        await saveRecoveryDeployment(savedLocal);
+      }
+      deploymentError = null;
+      return;
+    }
     final p = Map<String, dynamic>.from(r['deployment'] as Map);
     SyncDeploymentConfig.fromJson(p).validate();
     final local = await deploymentProfile(url);
