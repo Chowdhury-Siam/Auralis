@@ -90,6 +90,14 @@ void main() {
     addTearDown(player.shutdown);
     addTearDown(telegram.shutdown);
     await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+    await tester.runAsync(() async {
+      for (final width in [96, 640]) {
+        await precacheImage(
+          ResizeImage(MemoryImage(cover), width: width),
+          tester.element(find.byType(AuralisApp)),
+        );
+      }
+    });
     await tester.pumpAndSettle();
     if (openPlayer) {
       await tester.tap(find.byKey(const ValueKey('open-current-track')));
@@ -515,15 +523,49 @@ void main() {
         openPlayer: false,
         size: size,
       );
+      if (size.width < 900) {
+        tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
+        addTearDown(tester.view.resetPadding);
+        await tester.pumpAndSettle();
+      }
       final surface = find.byKey(const ValueKey('now-playing-container'));
       for (var attempt = 0; attempt < 2; attempt++) {
+        final dockBounds = tester.getRect(
+          find.byKey(const ValueKey('player-bar')),
+        );
+        final miniArtwork = tester.getRect(
+          find.descendant(
+            of: find.byKey(const ValueKey('open-current-track')),
+            matching: find.byType(Artwork),
+          ),
+        );
         await tester.tap(find.byKey(const ValueKey('open-current-track')));
         await tester.pump();
         final start = tester.getRect(surface);
+        expect(start, rectMoreOrLessEquals(dockBounds, epsilon: .01));
+        await tester.pump(const Duration(milliseconds: 1));
+        final flight = find.byKey(const ValueKey('player-artwork-flight'));
+        expect(
+          tester.getRect(flight),
+          rectMoreOrLessEquals(miniArtwork, epsilon: .5),
+        );
+        expect(
+          tester
+              .widget<RawImage>(
+                find.descendant(of: flight, matching: find.byType(RawImage)),
+              )
+              .image,
+          isNotNull,
+          reason: 'The cached cover stays visible as it leaves the mini-player',
+        );
         expect(start.height, lessThan(150));
         expect(start.top, greaterThan(size.height * .5));
         await tester.pump(const Duration(milliseconds: 150));
         final middle = tester.getRect(surface);
+        final middleArtwork = tester.getRect(flight);
+        final progress = 1 - middle.top / start.top;
+        expect(middleArtwork.top, lessThan(miniArtwork.top));
+        expect(middleArtwork.width, greaterThan(miniArtwork.width));
         expect(middle.height, greaterThan(start.height));
         expect(middle.top, lessThan(start.top));
         expect(
@@ -535,6 +577,17 @@ void main() {
           findsNothing,
         );
         await tester.pumpAndSettle();
+        final fullArtwork = tester.getRect(
+          find.byKey(const ValueKey('now-playing-artwork-frame')),
+        );
+        expect(
+          middleArtwork,
+          rectMoreOrLessEquals(
+            Rect.lerp(miniArtwork, fullArtwork, progress)!,
+            epsilon: .01,
+          ),
+        );
+        expect(flight, findsNothing);
         expect(
           tester.widget<ClipRRect>(surface).borderRadius,
           BorderRadius.zero,
@@ -544,7 +597,18 @@ void main() {
           findsOneWidget,
         );
         await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 150));
+        final closingProgress = 1 - tester.getRect(surface).top / start.top;
+        expect(
+          tester.getRect(flight),
+          rectMoreOrLessEquals(
+            Rect.lerp(miniArtwork, fullArtwork, closingProgress)!,
+            epsilon: .01,
+          ),
+        );
         await tester.pumpAndSettle();
+        expect(flight, findsNothing);
         expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
       }
       expect(player.current?.id, 'first');
