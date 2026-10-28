@@ -7,6 +7,7 @@ import 'app_navigation.dart';
 import 'data_files.dart';
 import 'models.dart';
 import 'player.dart';
+import 'preference_widgets.dart';
 import 'setup_permissions.dart';
 import 'stats_view.dart';
 import 'storage.dart';
@@ -205,20 +206,26 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
     ValueChanged<T> change,
   ) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: DropdownButtonFormField<T>(
-      key: ValueKey('$label:$value'),
-      initialValue: value,
-      isExpanded: true,
-      decoration: InputDecoration(labelText: label),
-      items: [
-        for (final item in values)
-          DropdownMenuItem(value: item, child: Text(name(item))),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+          ),
+        ),
+        ChoiceMenu<T>(
+          key: ValueKey('setup-choice-$label'),
+          title: label,
+          value: value,
+          values: values,
+          label: name,
+          enabled: !_busy,
+          onSelected: change,
+        ),
       ],
-      onChanged: _busy
-          ? null
-          : (v) {
-              if (v != null) change(v);
-            },
     ),
   );
   Widget _button(String label, IconData icon, Future<void> Function() action) =>
