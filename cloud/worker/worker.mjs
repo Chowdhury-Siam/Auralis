@@ -129,10 +129,10 @@ export default {
  const turso=Boolean(env.TURSO_DATABASE_URL&&env.TURSO_AUTH_TOKEN),partial=Boolean(env.TURSO_DATABASE_URL||env.TURSO_AUTH_TOKEN)&&!turso;
  const registry=()=>env.ROOM.get(env.ROOM.idFromName('account-registry'));
  const forward=(path,method=request.method,body)=>{const headers=new Headers(request.headers);headers.delete('Content-Length');return registry().fetch(new Request('https://internal'+path,{method,headers,...(body?{body}:{}),...(!body&& !['GET','HEAD'].includes(method)?{body:request.body,duplex:'half'}:{})}));};
- if(path==='/health'&&request.method==='GET'){const state=accounts?await (await forward('/_auth/status','GET')).json():{};return json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.78',configured:configured&&!partial,backend:turso?'turso':'durable-object',accounts,ownerCreated:state.ownerCreated===true});}
+ if(path==='/health'&&request.method==='GET'){const state=accounts?await (await forward('/_auth/status','GET')).json():{};return json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.104',configured:configured&&!partial,backend:turso?'turso':'durable-object',accounts,ownerCreated:state.ownerCreated===true});}
  if(!configured)return json({error:'Sync service is not configured'},503);
  const key=await equal(request.headers.get('Authorization')??'',`Bearer ${env.AURALIS_SYNC_KEY}`);
- if(path==='/v1/info'&&request.method==='GET')return key?json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.78',backend:turso?'turso':'durable-object'}):json({error:'Invalid setup secret'},401);
+ if(path==='/v1/info'&&request.method==='GET')return key?json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.104',backend:turso?'turso':'durable-object'}):json({error:'Invalid setup secret'},401);
  if(partial)return json({error:'Turso configuration is incomplete'},503);
  if(accounts){
  if(path==='/profile'&&request.method==='GET')return profilePage();
