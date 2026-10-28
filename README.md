@@ -79,7 +79,7 @@ Follow line-synced lyrics with the highlighted line sharp and all other lines so
 
 ### 🖼️ Artwork Where It Belongs
 
-See Telegram covers, channel avatars, and supported embedded MP3, FLAC, and M4A artwork. The current cover and the next ten queued covers preload and decode before use, including repeat wraparound. Saved artwork is kept by default; adjust preloading and retention in Settings. Tracks without an available image use original procedural artwork.
+See Telegram covers, channel avatars, and supported embedded MP3, FLAC, and M4A artwork. Library Refresh saves available artwork and lyrics and reports their separate totals. Saved covers are kept automatically; damaged images are treated as missing and retried. The current cover and the next ten saved queue covers decode before use, including repeat wraparound. Tracks without an available image use original procedural artwork.
 
 ### 📊 Listening Stats
 
@@ -237,7 +237,6 @@ See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for val
 | --- | --- |
 | **General / Appearance** | Reopen setup, choose compact library navigation, phone navigation style and corner radius |
 | **Lyrics & artwork → Lyrics & translation** | Automatic lookup/translation, direction, and primary/fallback providers |
-| **Lyrics & artwork → Artwork** | Upcoming cover preload count and permanent or temporary artwork |
 | **Data & sync → Listening stats** | Review listening activity and export data |
 | **Data & sync → Backup & Restore** | Save and recover your Telegram account, collections, stats, and preferences |
 | **App updates** | Check stable releases and choose whether to install |
@@ -245,7 +244,7 @@ See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for val
 
 API credentials and the TDLib database key are encrypted with **Windows DPAPI** or **Android Keystore**. Login codes and two-step verification passwords are not saved by Auralis. Android's Windows installer/update controls are disabled; upgrade by installing an APK signed with the same key.
 
-Current audio uses temporary playback buffering. Extracted artwork and lyrics remain in the device cache; artwork is kept by default and can be made temporary in Settings. Logout does not promise secure erasure of cached media or backups.
+Current audio uses temporary playback buffering. Extracted artwork and lyrics remain in the device cache; artwork is kept automatically. Logout does not promise secure erasure of cached media or backups.
 
 Artwork uses Telegram or embedded metadata. Automatic lookup contacts the selected lyric sources during playback if saved/embedded lyrics are unavailable; only the displayed song title, artist and duration are sent, with no Telegram credentials or message/file IDs. Automatic in-app translation sends original lyric text to the selected translators. Android media controls receive the current cover and use the monochrome Auralis logo. Optional multi-device sync shares collection/listening metadata and can include your linked Telegram account. Its application connection values are encrypted in your private Worker; new devices require Telegram device approval. Telegram auth keys, session databases and music stay on their own devices. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
 
@@ -315,7 +314,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.100+101**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.102+103**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
