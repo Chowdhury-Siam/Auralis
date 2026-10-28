@@ -110,7 +110,6 @@ void main() {
         }
       });
       final settings = MemorySettings()
-        ..artworkPreload = 0
         ..automaticLyrics = false
         ..selectedChannels = [const MusicChat(1, 'Music')];
       final player = PlayerController(
@@ -210,6 +209,7 @@ void main() {
       }
 
       await fullyCachedRefresh();
+      expect(find.text('Artwork 43/43 · Lyrics 43/43'), findsOneWidget);
       // Recreate the repository, then verify all 43 disk entries (beyond its 32-item memory limit).
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
