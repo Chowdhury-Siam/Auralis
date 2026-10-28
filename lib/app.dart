@@ -23,7 +23,6 @@ import 'stats_view.dart';
 import 'sync/controller.dart';
 import 'sync/settings_view.dart';
 import 'release_notes.dart';
-import 'media_cache.dart';
 import 'app_navigation.dart';
 import 'setup_view.dart';
 import 'settings_view.dart';
@@ -94,7 +93,6 @@ class _AuralisAppState extends State<AuralisApp> {
   }
 
   void _artworkChanged() {
-    widget.telegram.keepArtwork = widget.player.settings.keepArtwork;
     final track = widget.player.current;
     final cover = track != null && track.fileId != null && widget.telegram.ready
         ? widget.telegram.cover(track)
@@ -255,6 +253,7 @@ class _PlayerShellState extends State<PlayerShell>
   late final LyricsRepository lyrics;
   int _cacheGeneration = 0, _cachedTracks = 0, _cacheTotal = 0;
   bool _cachingLibrary = false;
+  String? _cacheSummary;
   final search = TextEditingController();
   final settingsSearch = TextEditingController();
   SettingsSection? _settingsSection;
@@ -352,7 +351,6 @@ class _PlayerShellState extends State<PlayerShell>
   void _prepareMedia() {
     if (!mounted) return;
     final settings = player.settings;
-    telegram.keepArtwork = settings.keepArtwork;
     final scope = telegram.mediaCache.directory?.path;
     final track = player.current;
     if (!identical(track, _metadataTrack)) {
@@ -361,12 +359,9 @@ class _PlayerShellState extends State<PlayerShell>
     }
     _metadataPlaybackStarted =
         _metadataPlaybackStarted || player.loading || player.audio.playing;
-    final source = player.queue.isNotEmpty ? player.queue : library.tracks;
-    final start = player.queue.isNotEmpty ? math.max(0, player.index) : 0;
-    final count = math.min(
-      source.length,
-      settings.artworkPreload + (track == null ? 0 : 1),
-    );
+    final source = player.queue;
+    final start = math.max(0, player.index);
+    final count = track == null ? 0 : math.min(source.length, 11);
     final window = <Track>[
       for (var offset = 0; offset < count; offset++)
         if (start + offset < source.length || player.repeat)
@@ -375,8 +370,6 @@ class _PlayerShellState extends State<PlayerShell>
     final artworkKey = (
       telegram.ready,
       scope,
-      settings.keepArtwork,
-      settings.artworkPreload,
       window.map((t) => (t.id, t.fileId, t.coverFileId, t.size)).join('|'),
     );
     if (artworkKey != _artworkWindow) {
@@ -431,7 +424,7 @@ class _PlayerShellState extends State<PlayerShell>
   Future<void> _warmArtwork(List<Track> tracks, bool Function() active) async {
     for (final track in tracks) {
       if (!active()) return;
-      final bytes = await telegram.cacheCover(track, active: active);
+      final bytes = await telegram.savedCover(track, active: active);
       if (!mounted || !active()) return;
       if (bytes == null) continue;
       for (final width in [96, 640]) {
@@ -1002,6 +995,7 @@ class _PlayerShellState extends State<PlayerShell>
     setState(() {
       _cachingLibrary = false;
       _cachedTracks = 0;
+      _cacheSummary = null;
     });
     telegram.clearImageCache();
     await library.refresh();
@@ -1019,6 +1013,7 @@ class _PlayerShellState extends State<PlayerShell>
         player.settings.selectedChannels.map((c) => c.id).join(',') ==
             channels &&
         !player.restoringData;
+    var savedArtwork = 0, savedLyrics = 0;
     final pending = <({Track track, bool artwork, bool lyrics})>[];
     for (final track in tracks) {
       if (!active()) return;
@@ -1026,6 +1021,8 @@ class _PlayerShellState extends State<PlayerShell>
       if (!active()) return;
       final missingLyrics = await lyrics.loadCached(track) == null;
       if (!active()) return;
+      if (!artwork) savedArtwork++;
+      if (!missingLyrics) savedLyrics++;
       if (artwork || missingLyrics) {
         pending.add((track: track, artwork: artwork, lyrics: missingLyrics));
       }
@@ -1067,11 +1064,20 @@ class _PlayerShellState extends State<PlayerShell>
         /* Unavailable lyrics do not stop the remaining library. */
       }
       if (!active()) break;
+      if (work.artwork && await telegram.hasCachedCover(track)) savedArtwork++;
+      if (work.lyrics && await lyrics.loadCached(track) != null) savedLyrics++;
+      if (!active()) break;
       setState(() => _cachedTracks++);
       await Future<void>.delayed(const Duration(milliseconds: 30));
     }
     if (mounted && generation == _cacheGeneration) {
-      setState(() => _cachingLibrary = false);
+      setState(() {
+        _cachingLibrary = false;
+        if (active()) {
+          _cacheSummary =
+              'Artwork $savedArtwork/${tracks.length} · Lyrics $savedLyrics/${tracks.length}';
+        }
+      });
     }
   }
 
@@ -2009,9 +2015,13 @@ class _PlayerShellState extends State<PlayerShell>
     return Tooltip(
       message: _cachingLibrary
           ? 'Caching artwork and lyrics: $_cachedTracks / $_cacheTotal'
-          : label,
+          : _cacheSummary == null
+          ? label
+          : '$label\n$_cacheSummary. Missing items may be unavailable from their source; Refresh retries them.',
       child: Text(
-        _cachingLibrary ? 'Caching $_cachedTracks / $_cacheTotal' : label,
+        _cachingLibrary
+            ? 'Caching $_cachedTracks / $_cacheTotal'
+            : _cacheSummary ?? label,
         key: const ValueKey('library-counts'),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -2659,8 +2669,7 @@ class _PlayerShellState extends State<PlayerShell>
                   math.min(artBox.maxHeight, artBox.maxWidth),
                 ),
               );
-              Widget cover(Track? item, {Key? key}) => ArtworkMotion(
-                reducedMotion: player.settings.reducedMotion,
+              Widget cover(Track? item, {Key? key}) => RepaintBoundary(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: _colors.surfaceContainer,
@@ -3443,17 +3452,14 @@ class _PlayerShellState extends State<PlayerShell>
 
   Widget _lyricPreferences() {
     final prefs = player.settings;
-    return ExpansionTile(
+    return Column(
       key: const ValueKey('lyrics-preferences'),
-      leading: const PreferenceIcon(Icons.lyrics_rounded),
-      shape: const Border(),
-      collapsedShape: const Border(),
-      tilePadding: EdgeInsets.zero,
-      title: const Text('Lyrics & translation'),
-      subtitle: Text(
-        '${prefs.automaticLyrics ? 'Automatic' : 'Manual'} · ${prefs.lyricsFirst.label}',
-      ),
+      mainAxisSize: MainAxisSize.min,
       children: [
+        const ListTile(
+          leading: PreferenceIcon(Icons.lyrics_rounded),
+          title: Text('Lyrics & translation'),
+        ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Find lyrics automatically'),
@@ -3535,53 +3541,6 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Widget _artworkPreferences() {
-    final prefs = player.settings;
-    final counts = {0, 5, 10, 20, 50, prefs.artworkPreload}.toList()..sort();
-    return ExpansionTile(
-      key: const ValueKey('artwork-preferences'),
-      leading: const PreferenceIcon(Icons.image_rounded),
-      shape: const Border(),
-      collapsedShape: const Border(),
-      tilePadding: EdgeInsets.zero,
-      title: const Text('Artwork'),
-      subtitle: Text(
-        '${prefs.artworkPreload} upcoming · ${prefs.keepArtwork ? 'Kept on device' : 'Temporary'}',
-      ),
-      children: [
-        _preferenceChoice(
-          'Preload artwork',
-          prefs.artworkPreload,
-          counts,
-          (v) => v == 0 ? 'Current song only' : '$v upcoming songs',
-          (v) {
-            if (v != null) {
-              unawaited(_savePreferences(() => prefs.artworkPreload = v));
-            }
-          },
-        ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Keep saved artwork'),
-          subtitle: const Text(
-            'Keep covers on this device. Turning off removes saved covers.',
-          ),
-          value: prefs.keepArtwork,
-          onChanged: (v) async {
-            await _savePreferences(() => prefs.keepArtwork = v);
-            if (!v && !prefs.keepArtwork) {
-              final disk = telegram.mediaCache;
-              if (disk.directory != null) {
-                await MediaCache.drain(disk.directory!);
-              }
-              if (!prefs.keepArtwork) await disk.clearArtwork();
-            }
-          },
-        ),
-      ],
-    );
-  }
-
   List<Widget> _settingsContent(SettingsSection section) => switch (section) {
     SettingsSection.general => [
       ListTile(
@@ -3621,7 +3580,7 @@ class _PlayerShellState extends State<PlayerShell>
         },
       ),
     ],
-    SettingsSection.media => [_lyricPreferences(), _artworkPreferences()],
+    SettingsSection.media => [_lyricPreferences()],
     SettingsSection.data => [
       ListTile(
         leading: const PreferenceIcon(Icons.bar_chart_rounded),
