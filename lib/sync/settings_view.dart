@@ -49,6 +49,26 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   bool _working = false, _register = false, _obscure = true, _adding = false;
   bool? _ownerCreated;
   String? _error;
+  late String _knownServiceUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _knownServiceUrl = sync.serviceUrl;
+    sync.addListener(_serviceChanged);
+  }
+
+  void _serviceChanged() {
+    final endpoint = sync.serviceUrl;
+    if (endpoint == _knownServiceUrl) return;
+    _knownServiceUrl = endpoint;
+    _url.text = endpoint;
+    setState(() {
+      _ownerCreated = null;
+      _error = null;
+    });
+  }
+
   Future<void> _run(Future<void> Function() action) async {
     setState(() {
       _working = true;
@@ -525,6 +545,7 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   ]);
   @override
   void dispose() {
+    sync.removeListener(_serviceChanged);
     _telegramPassword.dispose();
     _url.dispose();
     _username.dispose();
