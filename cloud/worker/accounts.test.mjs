@@ -23,9 +23,12 @@ test('deployment recovery is encrypted, owner-only and forgettable',async()=>{
  const a=(await register(s)).data,b=(await register(s,'bob','')).data;
  assert.equal((await s.call('/v1/account/deployment',{token:b.token})).status,403);
  assert.equal((await s.call('/v1/account/deployment',{token:a.token})).data.deployment.cloudflareToken,'cf-secret');
+ await s.call('/v1/auth/logout',{token:a.token,data:{}});
+ const signedIn=(await s.call('/v1/auth/login',{data:{username:'alice',password:'test-password'}})).data;
+ assert.deepEqual((await s.call('/v1/account/deployment',{token:signedIn.token})).data.deployment,p);
  assert.equal(s.stores.get('account-registry').db.prepare("SELECT value FROM account_meta WHERE key='deployment'").get().value.includes('cf-secret'),false);
- assert.equal((await s.call('/v1/account/deployment',{method:'DELETE',token:a.token})).status,200);
- assert.equal((await s.call('/v1/account/deployment',{token:a.token})).data.deployment,null);
+ assert.equal((await s.call('/v1/account/deployment',{method:'DELETE',token:signedIn.token})).status,200);
+ assert.equal((await s.call('/v1/account/deployment',{token:signedIn.token})).data.deployment,null);
  }finally{s.close();}
 });
 test('one-use recovery rotates password and revokes old sessions',async()=>{
