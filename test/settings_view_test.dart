@@ -251,6 +251,32 @@ void main() {
         await tester.tap(find.text('Lyrics & artwork'));
         await tester.pumpAndSettle();
         expect(find.text('Lyrics & translation'), findsOneWidget);
+        expect(find.text('Find lyrics automatically'), findsOneWidget);
+        expect(find.text('Preload artwork'), findsNothing);
+        expect(find.byType(ErrorWidget), findsNothing);
+        if (size.width == 320) {
+          final fallback = find.byTooltip('Translate fallback: MyMemory');
+          await Scrollable.ensureVisible(
+            tester.element(fallback),
+            alignment: .1,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(fallback);
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('None').last);
+          await tester.pumpAndSettle();
+          expect(settings.translationFallback, isNull);
+          expect(tester.takeException(), isNull);
+          // Revisit after saving the scroll offset. Expansion state used to
+          // share this PageStorage entry and read a double as a bool.
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Lyrics & artwork'));
+          await tester.pumpAndSettle();
+          expect(find.byType(ErrorWidget), findsNothing);
+          expect(find.byTooltip('Translate fallback: None'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        }
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         expect(
