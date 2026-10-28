@@ -1,5 +1,20 @@
 # Auralis changes
 
+## 0.1.108
+
+- Now Playing carries the visible cover from the mini-player into the full artwork position, and back when collapsed. The expanding panel keeps its existing spring motion, while the cover follows the same progress instead of entering from beneath the screen.
+
+## 0.1.107
+
+- Kept artwork and lyric cache keys stable when Telegram file or thumbnail IDs change. Existing cache entries are read and migrated without deleting saved files.
+- Saved artwork warming now notifies the player when a prior cover lookup missed. Explicit refresh can retry a thumbnail that failed earlier, and a cached lyric miss no longer hides words subsequently saved to disk.
+- Changed the Library tooltip to describe saved cache totals and retrying uncached media, without claiming that the original artwork or lyrics are unavailable.
+
+## 0.1.106
+
+- Removed the desktop Now Playing side panel so Library and Telegram use the available width. The bottom player and full Now Playing page remain available.
+- Moved the compact Library collection dropdown into the right end of the search bar, with room for search clearing and bounded labels on narrow windows.
+
 ## 0.1.105
 
 - Account & sync now fills the Worker URL as soon as deployment or a saved connection updates it, including when returning from Deploy Database. Unrelated updates preserve a Worker URL being edited.
