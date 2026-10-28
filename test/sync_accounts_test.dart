@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:auralis/sync/controller.dart';
 import 'package:auralis/sync/document.dart';
 import 'package:auralis/sync/deployment.dart';
+import 'package:auralis/sync/deployment_view.dart';
 import 'package:auralis/sync/settings_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,6 +60,7 @@ class AccountRequest extends Fake implements HttpClientRequest {
 
 class AccountClient extends Fake implements HttpClient {
   bool owner = false;
+  Map<String, dynamic>? deployment;
   @override
   Duration? connectionTimeout;
   final requests = <AccountRequest>[];
@@ -121,7 +123,16 @@ class AccountClient extends Fake implements HttpClient {
       });
     }
     if (r.uri.path == '/v1/account/deployment') {
-      return response({'deployment': null});
+      if (!(r.headers.value('authorization') ?? '').startsWith(
+        'Bearer alice-',
+      )) {
+        return response({'error': 'Owner required'}, 403);
+      }
+      if (r.method == 'PUT') deployment = detached(data);
+      return response({
+        'deployment': deployment,
+        'version': currentSyncWorkerVersion,
+      });
     }
     if (r.uri.path == '/v1/auth/logout') return response({'ok': true});
     if (r.uri.path == '/v1/sync') {
@@ -139,6 +150,226 @@ class AccountClient extends Fake implements HttpClient {
 }
 
 void main() {
+  final deploymentValues = SyncDeploymentConfig(
+    worker: 'auralis-sync',
+    account: 'a' * 32,
+    cloudflareToken: 'cloudflare-token',
+    database: 'libsql://music.aws-ap-south-1.turso.io',
+    databaseToken: 'database-token',
+    key: 'd' * 64,
+    automatic: false,
+  ).toJson();
+
+  test('owner login, registration and recovery restore every deployment value on a fresh device', () async {
+    for (final action in ['login', 'register', 'recover']) {
+      final client = AccountClient()
+        ..owner = true
+        ..deployment = detached(deploymentValues);
+      await HttpOverrides.runZoned(() async {
+        final sync = SyncController(
+          AccountSettings(),
+          AccountVault(),
+          onApplied: () {},
+          paused: () => true,
+          deploymentVault: AccountVault(),
+        );
+        try {
+          if (action == 'recover') {
+            await sync.recoverAccount(
+              'https://sync.example',
+              'alice',
+              'c' * 64,
+              'test-password',
+            );
+          } else {
+            await sync.signIn(
+              'https://sync.example',
+              'alice',
+              'test-password',
+              register: action == 'register',
+            );
+          }
+          final restored = await sync.deploymentProfile();
+          for (final entry in deploymentValues.entries) {
+            expect(
+              restored[entry.key],
+              entry.value,
+              reason: '$action: ${entry.key}',
+            );
+          }
+          expect(restored['url'], 'https://sync.example');
+          expect(restored['version'], currentSyncWorkerVersion);
+          expect(restored['ownerId'], 'a' * 32);
+          expect(sync.deploymentError, isNull);
+          while (sync.busy) {
+            await Future<void>.delayed(Duration.zero);
+          }
+          await sync.signOut();
+          final reads = client.requests
+              .where((r) => r.uri.path == '/v1/account/deployment')
+              .length;
+          await sync.signIn('https://sync.example', 'bob', 'test-password');
+          expect((await sync.deploymentProfile())['locked'], true);
+          expect(
+            (await sync.deploymentProfile()).containsKey('cloudflareToken'),
+            false,
+          );
+          expect(
+            client.requests.where(
+              (r) => r.uri.path == '/v1/account/deployment',
+            ),
+            hasLength(reads),
+          );
+        } finally {
+          await sync.close();
+        }
+      }, createHttpClient: (_) => client);
+    }
+  });
+
+  test(
+    'saved owner session restores missing deployment values on app startup',
+    () async {
+      final client = AccountClient()
+        ..owner = true
+        ..deployment = detached(deploymentValues);
+      await HttpOverrides.runZoned(() async {
+        final accounts = AccountVault(), deployment = AccountVault();
+        SyncController controller() => SyncController(
+          AccountSettings(),
+          accounts,
+          onApplied: () {},
+          paused: () => true,
+          deploymentVault: deployment,
+        );
+        final first = controller();
+        await first.signIn('https://sync.example', 'alice', 'test-password');
+        await first.close();
+        deployment.data = {};
+        final restarted = controller();
+        try {
+          await restarted.start();
+          expect(restarted.account!.admin, true);
+          final restored = await restarted.deploymentProfile();
+          for (final entry in deploymentValues.entries) {
+            expect(restored[entry.key], entry.value, reason: entry.key);
+          }
+          expect(restored['url'], 'https://sync.example');
+        } finally {
+          await restarted.close();
+        }
+      }, createHttpClient: (_) => client);
+    },
+  );
+
+  test('owner login repairs a missing recovery copy from complete local credentials', () async {
+    final client = AccountClient()..owner = true;
+    await HttpOverrides.runZoned(() async {
+      final sync = SyncController(
+        AccountSettings(),
+        AccountVault(),
+        onApplied: () {},
+        paused: () => true,
+        deploymentVault: AccountVault()
+          ..data = {...deploymentValues, 'url': 'https://sync.example'},
+      );
+      try {
+        await sync.signIn('https://sync.example', 'alice', 'test-password');
+        expect(client.deployment, deploymentValues);
+        expect(
+          client.requests.where(
+            (r) => r.uri.path == '/v1/account/deployment' && r.method == 'PUT',
+          ),
+          hasLength(1),
+        );
+      } finally {
+        await sync.close();
+      }
+    }, createHttpClient: (_) => client);
+  });
+
+  testWidgets(
+    'deployed Worker URL fills Account & sync after returning without overwriting a draft on other updates',
+    (tester) async {
+      final sync = SyncController(
+        AccountSettings(),
+        AccountVault(),
+        onApplied: () {},
+        paused: () => true,
+        deploymentVault: AccountVault(),
+      );
+      addTearDown(sync.close);
+      await tester.pumpWidget(MaterialApp(home: SyncAccountPage(sync: sync)));
+      final field = find.byKey(const ValueKey('sync-worker-url'));
+      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+      await tester.tap(find.text('Deploy Database'));
+      await tester.pumpAndSettle();
+      await sync.rememberService(
+        'https://auralis-sync.test-account.workers.dev',
+      );
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field).controller!.text, sync.serviceUrl);
+      await tester.enterText(field, 'https://another-worker.example');
+      await sync.saveDeploymentProfile({
+        ...deploymentValues,
+        'url': sync.serviceUrl,
+      });
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(field).controller!.text,
+        'https://another-worker.example',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'owner sign-in fills all Deploy Database fields from its recovery vault',
+    (tester) async {
+      final client = AccountClient()
+        ..owner = true
+        ..deployment = detached(deploymentValues);
+      final sync = await tester.runAsync(
+        () => HttpOverrides.runZoned(() async {
+          final sync = SyncController(
+            AccountSettings(),
+            AccountVault(),
+            onApplied: () {},
+            paused: () => true,
+            deploymentVault: AccountVault(),
+          );
+          await sync.signIn('https://sync.example', 'alice', 'test-password');
+          while (sync.busy) {
+            await Future<void>.delayed(Duration.zero);
+          }
+          return sync;
+        }, createHttpClient: (_) => client),
+      );
+      addTearDown(sync!.close);
+      await tester.pumpWidget(
+        MaterialApp(home: SyncDeploymentPage(sync: sync)),
+      );
+      await tester.pumpAndSettle();
+      for (final entry in deploymentValues.entries.where(
+        (entry) => entry.key != 'automatic',
+      )) {
+        final field = find.byKey(ValueKey('deploy-${entry.key}'));
+        expect(
+          tester.widget<TextField>(field).controller!.text,
+          entry.value,
+          reason: entry.key,
+        );
+      }
+      expect(
+        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+        false,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test('live connections use each account controller HTTP transport', () async {
     for (final client in [AccountClient(), AccountClient()]) {
       await HttpOverrides.runZoned(() async {
