@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
-const currentSyncWorkerVersion = '0.1.78';
+const currentSyncWorkerVersion = '0.1.104';
 
 class SyncDeploymentConfig {
   SyncDeploymentConfig({
@@ -37,8 +37,10 @@ class SyncDeploymentConfig {
       RegExp(r'^(libsql|turso)://'),
       'https://',
     );
-    // Check the entered form before Uri normalizes away explicit HTTPS port 443.
-    if (!RegExp(r'^https://[a-z0-9-]+\.turso\.io/?$').hasMatch(normalized)) {
+    // Include regional Turso labels; check before Uri removes explicit port 443.
+    if (!RegExp(
+      r'^https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+turso\.io/?$',
+    ).hasMatch(normalized)) {
       throw const FormatException(
         'Enter your Turso database URL, such as libsql://auralis-yourname.turso.io.',
       );
@@ -59,7 +61,10 @@ class SyncDeploymentConfig {
     }
     if (cloudflareToken.isEmpty ||
         databaseToken.isEmpty ||
-        [cloudflareToken, databaseToken].any((v) => v.contains(RegExp(r'\s')))) {
+        [
+          cloudflareToken,
+          databaseToken,
+        ].any((v) => v.contains(RegExp(r'\s')))) {
       throw const FormatException(
         'Enter your Cloudflare API token and Turso database token.',
       );
@@ -172,7 +177,9 @@ class SyncDeployment {
       token: key,
       bytes: utf8.encode('{"cursor":0,"ops":{}}'),
     );
-    if (syncStatus != 200 || data['records'] is! Map || data['cursor'] is! int) {
+    if (syncStatus != 200 ||
+        data['records'] is! Map ||
+        data['cursor'] is! int) {
       throw const FormatException(
         'Could not verify the sync key and database.',
       );
