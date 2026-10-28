@@ -1094,7 +1094,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Lyrics').first);
+      await tester.tap(find.byKey(const ValueKey('open-current-track')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Lyrics'));
       await tester.pumpAndSettle();
       expect(find.byType(LyricsView), findsOneWidget);
       final backdrop = find.byKey(const ValueKey('now-playing-backdrop'));
