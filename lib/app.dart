@@ -1383,7 +1383,6 @@ class _PlayerShellState extends State<PlayerShell>
         for (final (i, icon, label) in [
           (_Page.library, Icons.library_music_rounded, 'Library'),
           (_Page.telegram, Icons.send_rounded, 'Telegram'),
-          (_Page.nowPlaying, Icons.album_rounded, 'Now playing'),
         ])
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
