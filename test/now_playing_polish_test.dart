@@ -743,11 +743,9 @@ void main() {
             find.byKey(const ValueKey('player-transition-blur')),
           )
           .imageFilter;
-      final cachedPage = tester
-          .widget<RepaintBoundary>(
-            find.byKey(const ValueKey('player-cached-blur')),
-          )
-          .child;
+      final cachedBlur = find.byKey(const ValueKey('player-cached-blur'));
+      final snapshot = tester.widget<SnapshotWidget>(cachedBlur);
+      expect(snapshot.controller.allowSnapshotting, isTrue);
       await gesture.moveBy(const Offset(0, -210));
       await tester.pump();
       expect(tester.getRect(surface).height, greaterThan(start.height));
@@ -769,12 +767,8 @@ void main() {
       );
       expect(
         identical(
-          tester
-              .widget<RepaintBoundary>(
-                find.byKey(const ValueKey('player-cached-blur')),
-              )
-              .child,
-          cachedPage,
+          tester.widget<SnapshotWidget>(cachedBlur),
+          snapshot,
         ),
         isTrue,
       );
