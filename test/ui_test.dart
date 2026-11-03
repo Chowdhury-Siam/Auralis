@@ -450,12 +450,17 @@ void main() {
         expect(find.text('MUSIC IN YOUR CHANNELS'), findsOneWidget);
         expect(tester.takeException(), isNull);
         telegram.state = 'disconnected';
-        await tester.tap(find.byTooltip('Now playing').first);
-        await tester.pumpAndSettle();
-        expect(find.text('Find your next favorite'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-        await tester.tap(find.byKey(const ValueKey('close-now-playing')));
-        await tester.pumpAndSettle();
+        final nowPlaying = find.byTooltip('Now playing');
+        if (size.width >= 900) {
+          expect(nowPlaying, findsNothing);
+        } else {
+          await tester.tap(nowPlaying.first);
+          await tester.pumpAndSettle();
+          expect(find.text('Find your next favorite'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+          await tester.pumpAndSettle();
+        }
         await tester.tap(find.byTooltip('Settings'));
         await tester.pumpAndSettle();
         expect(find.text('Reduce motion'), findsNothing);
