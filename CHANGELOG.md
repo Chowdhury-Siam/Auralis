@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.109
+
+- Removed the Now Playing shortcut from the desktop sidebar. Open the full player from the mini-player.
+- Reduced rendering work when opening and closing Now Playing by reusing the blurred background and cover artwork across animation frames.
+
 ## 0.1.108
 
 - Now Playing carries the visible cover from the mini-player into the full artwork position, and back when collapsed. The expanding panel keeps its existing spring motion, while the cover follows the same progress instead of entering from beneath the screen.
