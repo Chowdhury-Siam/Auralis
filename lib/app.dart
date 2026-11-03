@@ -260,6 +260,7 @@ class _PlayerShellState extends State<PlayerShell>
   late final ChannelLibrary library;
   late final Listenable _shellUpdates;
   late final AnimationController _dismissPlayer;
+  final _transitionBlur = SnapshotController(allowSnapshotting: true);
   final _dockKey = GlobalKey();
   final _surfaceKey = GlobalKey();
   final _dockArtworkKey = GlobalKey();
@@ -568,6 +569,7 @@ class _PlayerShellState extends State<PlayerShell>
     telegram.removeListener(_prepareMedia);
     library.removeListener(_prepareMedia);
     _dismissPlayer.dispose();
+    _transitionBlur.dispose();
     lyrics.close();
     library.dispose();
     widget.sync?.removeListener(_syncChanged);
@@ -859,11 +861,14 @@ class _PlayerShellState extends State<PlayerShell>
               ),
             )
           : null;
-      // Fade a fixed, cached blur over the retained page. The real dock stays
-      // underneath the card, so landing never swaps in a different mini-player.
+      // Fade a snapshot so each frame can reuse the already blurred page.
+      // The live dock stays underneath for the landing.
       final background = expanded
-          ? RepaintBoundary(
+          ? SnapshotWidget(
               key: const ValueKey('player-cached-blur'),
+              controller: _transitionBlur,
+              mode: SnapshotMode.permissive,
+              autoresize: true,
               child: ImageFiltered(
                 key: const ValueKey('player-transition-blur'),
                 imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
@@ -885,6 +890,13 @@ class _PlayerShellState extends State<PlayerShell>
                   ),
                 ),
               ),
+            )
+          : null;
+      final flightArtwork = expanded && _dockArtworkBounds != null
+          ? Artwork(
+              seed: player.current?.title ?? 'Auralis',
+              telegram: telegram,
+              track: player.current,
             )
           : null;
       return AnimatedBuilder(
@@ -1004,6 +1016,7 @@ class _PlayerShellState extends State<PlayerShell>
                             progress,
                           )!,
                           inset: 5 * progress,
+                          artwork: flightArtwork,
                         ),
                       ),
                     ),
@@ -2555,6 +2568,7 @@ class _PlayerShellState extends State<PlayerShell>
     Key? artworkKey,
     required double radius,
     double inset = 5,
+    Widget? artwork,
   }) => RepaintBoundary(
     key: key,
     child: DecoratedBox(
@@ -2567,12 +2581,14 @@ class _PlayerShellState extends State<PlayerShell>
         padding: EdgeInsets.all(inset),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(math.max(0, radius - inset)),
-          child: Artwork(
-            key: artworkKey,
-            seed: track?.title ?? 'Auralis',
-            telegram: telegram,
-            track: track,
-          ),
+          child:
+              artwork ??
+              Artwork(
+                key: artworkKey,
+                seed: track?.title ?? 'Auralis',
+                telegram: telegram,
+                track: track,
+              ),
         ),
       ),
     ),
