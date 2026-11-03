@@ -1,6 +1,13 @@
 {
-  "current": "0.1.108",
+  "current": "0.1.109",
   "releases": [
+    {
+      "version": "0.1.109",
+      "changes": [
+        "Removed the Now Playing shortcut from the desktop sidebar. Open the full player from the mini-player.",
+        "Reduced rendering work when opening and closing Now Playing by reusing the blurred background and cover artwork across animation frames."
+      ]
+    },
     {
       "version": "0.1.108",
       "changes": [
