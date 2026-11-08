@@ -176,6 +176,16 @@ class Lyrics {
   }
 }
 
+enum LyricsSearchBy { title, artist }
+
+typedef LyricsSearchMatch = ({
+  String title,
+  String artist,
+  String album,
+  Duration? duration,
+  Lyrics lyrics,
+});
+
 /// Bounded memory and optional device cache, with sequential online fallbacks.
 class LyricsRepository extends ChangeNotifier {
   LyricsRepository({
@@ -389,6 +399,56 @@ class LyricsRepository extends ChangeNotifier {
       if (identical(_lookups[key], job)) _lookups.remove(key);
     });
     return _lookups[key] = job;
+  }
+
+  Future<List<LyricsSearchMatch>> search(Track track, LyricsSearchBy by) async {
+    if (_closed) throw StateError('Lyrics lookup is closed.');
+    final query = (by == LyricsSearchBy.title ? track.title : track.artist)
+        .trim();
+    if (query.isEmpty || query.length > 1000) {
+      throw const FormatException(
+        'A song name or artist is needed for search.',
+      );
+    }
+    final filters = by == LyricsSearchBy.title
+        ? {'track_name': query}
+        // LRCLIB requires q or track_name, even with an artist filter.
+        : {'q': query, 'artist_name': query};
+    final data = await _fetch(Uri.https('lrclib.net', '/api/search', filters));
+    if (data == null) return [];
+    if (data is! List) {
+      throw const FormatException('Invalid LRCLIB search response.');
+    }
+    final matches = <LyricsSearchMatch>[];
+    for (final row in data.take(20)) {
+      if (row is! Map ||
+          row['trackName'] is! String ||
+          row['artistName'] is! String) {
+        continue;
+      }
+      final title = (row['trackName'] as String).trim();
+      final artist = (row['artistName'] as String).trim();
+      if (title.isEmpty || artist.isEmpty) continue;
+      Lyrics? lyrics;
+      try {
+        lyrics = _lrclib(row);
+      } on FormatException {
+        continue;
+      }
+      if (lyrics == null) continue;
+      final album = row['albumName'];
+      final seconds = row['duration'];
+      matches.add((
+        title: title,
+        artist: artist,
+        album: album is String ? album.trim() : '',
+        duration: seconds is num && seconds > 0 && seconds <= 86400
+            ? Duration(seconds: seconds.round())
+            : null,
+        lyrics: lyrics,
+      ));
+    }
+    return matches;
   }
 
   Future<Lyrics?> _find(Track track, {bool refresh = false}) async {
