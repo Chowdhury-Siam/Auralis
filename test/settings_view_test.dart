@@ -129,8 +129,6 @@ void main() {
         expect(settings.saves, greaterThan(0));
       }
       if (section == SettingsSection.media) {
-        await tester.tap(find.byKey(const ValueKey('lyrics-preferences')));
-        await tester.pumpAndSettle();
         final trigger = find.byTooltip('Lyrics fallback: lyrics.ovh');
         await Scrollable.ensureVisible(tester.element(trigger));
         await tester.pumpAndSettle();
