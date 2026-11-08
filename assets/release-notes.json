@@ -1,6 +1,13 @@
 {
-  "current": "0.1.109",
+  "current": "0.1.110",
   "releases": [
+    {
+      "version": "0.1.110",
+      "changes": [
+        "Removed the Now Playing shortcut from phone and narrow-window navigation. Tap the mini-player to open the full player.",
+        "Worker validation opens owner account setup when no owner exists. Worker update warnings clear when checks succeed, and the Worker base URL shows public health status after updating."
+      ]
+    },
     {
       "version": "0.1.109",
       "changes": [
