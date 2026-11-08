@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.111
+
+- Connect to your Worker Sync account on the first screen, create an account, or skip setup and connect later in Settings.
+- Redesigned optional setup with clearer progress, interactive previews for library and navigation styles, and a shortcut to skip the remaining steps.
+- Fixed the navigation test to match the three phone tabs and removed a missed tap from the lyrics settings test.
+
 ## 0.1.110
 
 - Removed the Now Playing shortcut from phone and narrow-window navigation. Tap the mini-player to open the full player.
