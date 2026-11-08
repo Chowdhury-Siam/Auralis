@@ -381,7 +381,7 @@ void main() {
     },
   );
   testWidgets(
-    'responsive library, queue, Telegram, now playing and settings have no layout errors',
+    'responsive library, Telegram and settings have no layout errors',
     (tester) async {
       final audio = FakeAudio();
       final player = PlayerController(
@@ -450,17 +450,8 @@ void main() {
         expect(find.text('MUSIC IN YOUR CHANNELS'), findsOneWidget);
         expect(tester.takeException(), isNull);
         telegram.state = 'disconnected';
-        final nowPlaying = find.byTooltip('Now playing');
-        if (size.width >= 900) {
-          expect(nowPlaying, findsNothing);
-        } else {
-          await tester.tap(nowPlaying.first);
-          await tester.pumpAndSettle();
-          expect(find.text('Find your next favorite'), findsOneWidget);
-          expect(tester.takeException(), isNull);
-          await tester.tap(find.byKey(const ValueKey('close-now-playing')));
-          await tester.pumpAndSettle();
-        }
+        expect(find.byTooltip('Now playing'), findsNothing);
+        expect(find.byKey(const ValueKey('player-bar')), findsNothing);
         await tester.tap(find.byTooltip('Settings'));
         await tester.pumpAndSettle();
         expect(find.text('Reduce motion'), findsNothing);
