@@ -336,6 +336,126 @@ class _LyricsViewState extends State<LyricsView> {
     _translateAutomatically();
   }
 
+  Future<void> _searchOnline() async {
+    final track = _track;
+    if (track == null || _loading) return;
+    final repository = widget.repository;
+    final queries = {
+      LyricsSearchBy.title: track.title.trim(),
+      LyricsSearchBy.artist: track.artist.trim(),
+    };
+    Future<List<LyricsSearchMatch>>? request;
+    LyricsSearchBy? selected;
+    final lyrics = await showDialog<Lyrics>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => FutureBuilder(
+          future: request,
+          builder: (context, snapshot) {
+            final waiting = snapshot.connectionState == ConnectionState.waiting;
+            final matches = snapshot.data ?? const <LyricsSearchMatch>[];
+            return AlertDialog(
+              title: const Text('Search lyrics by'),
+              scrollable: true,
+              content: SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final MapEntry(key: by, value: query)
+                        in queries.entries)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          by == LyricsSearchBy.title
+                              ? Icons.music_note_rounded
+                              : Icons.person_rounded,
+                        ),
+                        title: Text(
+                          by == LyricsSearchBy.title ? 'Song name' : 'Artist',
+                        ),
+                        subtitle: Text(
+                          query.isEmpty ? 'Unavailable for this track' : query,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        enabled:
+                            !waiting &&
+                            query.isNotEmpty &&
+                            query.length <= 1000,
+                        selected: selected == by,
+                        onTap: () => update(() {
+                          selected = by;
+                          request = repository.search(track, by);
+                        }),
+                      ),
+                    if (selected != null) ...[
+                      const Divider(),
+                      if (waiting)
+                        const LinearProgressIndicator(
+                          semanticsLabel: 'Searching for lyrics',
+                        )
+                      else if (snapshot.hasError)
+                        const Text(
+                          'Could not search LRCLIB. Choose a search option to retry.',
+                        )
+                      else if (matches.isEmpty)
+                        const Text('No matches. Try the other search option.')
+                      else ...[
+                        const Text('Choose a match to use its lyrics.'),
+                        for (final match in matches)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              match.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              [
+                                match.artist,
+                                if (match.album.isNotEmpty) match.album,
+                                if (match.duration case final duration?)
+                                  '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                                if (match.lyrics.instrumental)
+                                  'Instrumental'
+                                else
+                                  match.lyrics.lines.isEmpty
+                                      ? 'Plain lyrics'
+                                      : 'Synced lyrics',
+                              ].join(' · '),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => Navigator.pop(context, match.lyrics),
+                          ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+    if (!mounted ||
+        lyrics == null ||
+        !identical(repository, widget.repository) ||
+        !identical(track, _track) ||
+        !identical(track, widget.player.current)) {
+      return;
+    }
+    _useLyrics(track, lyrics);
+  }
+
   Future<void> _translateInApp({bool automatic = false}) async {
     final source = _lyrics, track = _track;
     if (source == null || track == null || _loading || _translating) return;
@@ -512,16 +632,38 @@ class _LyricsViewState extends State<LyricsView> {
     required IconData icon,
     required String title,
     required String subtitle,
+    String? alternateValue,
   }) => PopupMenuItem<String>(
     value: value,
     enabled: enabled,
     height: 64,
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-    child: _LyricsMenuEntry(
-      icon: icon,
-      title: title,
-      subtitle: subtitle,
-      enabled: enabled,
+    child: Builder(
+      builder: (context) {
+        void openAlternate() => Navigator.pop(context, alternateValue);
+        final alternate = enabled && alternateValue != null;
+        final entry = _LyricsMenuEntry(
+          icon: icon,
+          title: title,
+          subtitle: subtitle,
+          enabled: enabled,
+          trailing: alternate
+              ? IconButton(
+                  tooltip: 'Search by song name or artist',
+                  onPressed: openAlternate,
+                  icon: const Icon(Icons.tune_rounded, size: 20),
+                )
+              : null,
+        );
+        return alternate
+            ? GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onLongPress: openAlternate,
+                onSecondaryTap: openAlternate,
+                child: entry,
+              )
+            : entry;
+      },
     ),
   );
 
@@ -593,6 +735,8 @@ class _LyricsViewState extends State<LyricsView> {
           unawaited(_openDeepL());
         } else if (value == 'embedded') {
           unawaited(_load(embedded: true, online: false));
+        } else if (value == 'find-by') {
+          unawaited(_searchOnline());
         } else {
           unawaited(value == 'paste' ? _paste() : _load());
         }
@@ -616,12 +760,13 @@ class _LyricsViewState extends State<LyricsView> {
           ),
         _menuAction(
           value: 'find',
+          alternateValue: 'find-by',
           enabled: _track != null && !_loading,
           icon: Icons.search_rounded,
           title: 'Find lyrics online',
-          subtitle: _lyrics?.provider != null
-              ? 'Current: ${_lyrics!.provider}. Retry all sources.'
-              : 'Uses the source order in Settings.',
+          subtitle: _lyrics?.provider == null
+              ? 'Hold for search options.'
+              : 'Current: ${_lyrics!.provider}\nHold for search options.',
         ),
         _menuAction(
           value: 'paste',
@@ -1071,12 +1216,14 @@ class _LyricsMenuEntry extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.enabled,
+    this.trailing,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final bool enabled;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -1133,6 +1280,7 @@ class _LyricsMenuEntry extends StatelessWidget {
               ],
             ),
           ),
+          ?trailing,
         ],
       ),
     );
