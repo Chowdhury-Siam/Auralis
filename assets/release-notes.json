@@ -1,6 +1,18 @@
 {
-  "current": "0.1.111",
+  "current": "0.1.113",
   "releases": [
+    {
+      "version": "0.1.113",
+      "changes": [
+        "Replaced the full-width update banner with a compact floating card on Android and Windows. It shows download progress and release notes. Dismiss it to hide the notice for the current session."
+      ]
+    },
+    {
+      "version": "0.1.112",
+      "changes": [
+        "Hold or right-click **Find lyrics online** to search LRCLIB by song name or artist, then choose the matching track."
+      ]
+    },
     {
       "version": "0.1.111",
       "changes": [
