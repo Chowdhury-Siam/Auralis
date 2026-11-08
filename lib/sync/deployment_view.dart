@@ -126,6 +126,7 @@ class _SyncDeploymentPageState extends State<SyncDeploymentPage> {
       await widget.sync.saveDeploymentProfile(profile);
       await widget.sync.rememberService(url);
       await widget.sync.saveRecoveryDeployment(profile);
+      widget.sync.workerUpdateError = null;
       if (mounted) {
         setState(() {
           _savedVersion = currentSyncWorkerVersion;
