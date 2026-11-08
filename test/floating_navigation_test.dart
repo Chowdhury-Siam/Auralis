@@ -77,6 +77,13 @@ void main() {
       );
       final position = tester.state<ScrollableState>(scrollable).position;
       final navigation = find.byKey(const ValueKey('app-navigation'));
+      expect(
+        find.descendant(
+          of: navigation,
+          matching: find.byTooltip('Now playing'),
+        ),
+        findsNothing,
+      );
       final navBounds = tester.getRect(navigation);
       final floating = style != AppNavigationStyle.fullWidth;
       expect(tester.getRect(list).bottom, floating ? 844 : navBounds.top);
