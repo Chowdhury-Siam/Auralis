@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.113
+
+- Replaced the full-width update banner with a compact floating card on Android and Windows. It shows download progress and release notes. Dismiss it to hide the notice for the current session.
+
+## 0.1.112
+
+- Hold or right-click **Find lyrics online** to search LRCLIB by song name or artist, then choose the matching track.
+
 ## 0.1.111
 
 - Connect to your Worker Sync account on the first screen, create an account, or skip setup and connect later in Settings.
