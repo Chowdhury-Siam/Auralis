@@ -364,7 +364,12 @@ extension AccountSync on SyncController {
     try {
       endpoint = SyncController.normalize(endpoint);
       final h = await validateWorker(endpoint);
-      var proof = claimKey ?? '';
+      if (!register && h['ownerCreated'] == false) {
+        throw const FormatException(
+          'This Worker is ready for its first account. Choose Create an account and use the existing owner setup secret.',
+        );
+      }
+      var proof = claimKey?.trim() ?? '';
       if (register && h['ownerCreated'] != true && proof.isEmpty) {
         if (_legacy?['url'] == endpoint) {
           proof = _legacy!['key'] as String? ?? '';
@@ -754,6 +759,7 @@ extension AccountSync on SyncController {
     }
     final endpoint = _account?.url ?? serviceUrl;
     workerUpdating = true;
+    workerUpdateError = null;
     _changed();
     final deployment = SyncDeployment();
     try {
@@ -763,8 +769,6 @@ extension AccountSync on SyncController {
           profile['url'] != endpoint) {
         return;
       }
-      final config = SyncDeploymentConfig.fromJson(profile);
-      config.validate();
       final h = await accountRequest(
         '/health',
         endpoint: endpoint,
@@ -778,6 +782,7 @@ extension AccountSync on SyncController {
           )) {
         return;
       }
+      final config = SyncDeploymentConfig.fromJson(profile);
       status = 'Updating your sync Worker…';
       _changed();
       final deployed = await deployment.deploy(config, (_) {}),
@@ -788,10 +793,12 @@ extension AccountSync on SyncController {
           };
       await saveDeploymentProfile(saved);
       await saveRecoveryDeployment(saved);
-      deploymentError = null;
       status = 'Sync Worker updated.';
     } catch (_) {
-      deploymentError = 'Automatic Worker update is pending. Retry from Deploy Database. Your library is kept.';
+      workerUpdateError = 'Could not check or update the Worker. You can validate the connection here or retry the update in Deploy Database.';
+      if (status == 'Updating your sync Worker…') {
+        status = 'Worker update could not finish.';
+      }
     } finally {
       deployment.close();
       endWorkerOperation();
