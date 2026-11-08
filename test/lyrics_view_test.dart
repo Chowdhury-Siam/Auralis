@@ -12,6 +12,7 @@ import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -546,6 +547,86 @@ void main() {
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     expect(find.text('Read lyrics from music file'), findsNothing);
+  });
+
+  testWidgets('hold or right-click to choose a song or artist lyrics search', (
+    tester,
+  ) async {
+    final player = controller();
+    Response response(Object data) => Response(utf8.encode(jsonEncode(data)));
+    final client = Client([
+      response([
+        {'trackName': 'Incomplete entry'},
+        {
+          'trackName': 'Alternate song match',
+          'artistName': 'Another artist',
+          'plainLyrics': 'Unselected words',
+        },
+      ]),
+      response([
+        {
+          'trackName': 'Correct song match',
+          'artistName': song.artist,
+          'albumName': 'Studio album',
+          'duration': 245,
+          'syncedLyrics': '[00:01]Chosen words',
+        },
+      ]),
+      response({'plainLyrics': 'Standard lookup words'}),
+    ]);
+    final saved = Lyrics.parse('Saved words');
+    final repository = LyricsRepository(createClient: () => client)
+      ..save(song, saved);
+    addTearDown(player.shutdown);
+    addTearDown(repository.close);
+    await tester.pumpWidget(view(player, repository));
+    await tester.pumpAndSettle();
+
+    Future<Finder> openMenu() async {
+      await tester.tap(find.byTooltip('Lyrics options'));
+      await tester.pumpAndSettle();
+      return find.text('Find lyrics online');
+    }
+
+    await tester.longPress(await openMenu());
+    await tester.pumpAndSettle();
+    expect(find.text('Search lyrics by'), findsOneWidget);
+    expect(client.requests, isEmpty);
+    await tester.tap(find.text('Song name'));
+    await tester.pumpAndSettle();
+    expect(client.requests.single.path, '/api/search');
+    expect(client.requests.single.queryParameters, {'track_name': song.title});
+    expect(find.text('Alternate song match'), findsOneWidget);
+    expect(find.text('Incomplete entry'), findsNothing);
+    expect(repository.cached(song), same(saved));
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(repository.cached(song), same(saved));
+
+    await tester.tap(
+      await openMenu(),
+      buttons: kSecondaryMouseButton,
+      kind: ui.PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Search lyrics by'), findsOneWidget);
+    await tester.tap(find.text('Artist'));
+    await tester.pumpAndSettle();
+    expect(client.requests[1].queryParameters, {
+      'q': song.artist,
+      'artist_name': song.artist,
+    });
+    expect(find.textContaining('Studio album · 4:05'), findsOneWidget);
+    await tester.tap(find.text('Correct song match'));
+    await tester.pumpAndSettle();
+    expect(repository.cached(song)!.lines.single.text, 'Chosen words');
+
+    await tester.tap(await openMenu());
+    await tester.pumpAndSettle();
+    expect(client.requests[2].path, '/api/get');
+    expect(client.requests[2].queryParameters['artist_name'], song.artist);
+    expect(repository.cached(song)!.plain, 'Standard lookup words');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('cached pasted lyrics take precedence over embedded tags', (
