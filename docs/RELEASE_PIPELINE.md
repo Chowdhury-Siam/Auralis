@@ -50,8 +50,10 @@ This generates `assets/release-notes.json`. Both builds check that it exactly
 matches the changelog and current version. The publisher extracts the same current
 changes into the GitHub release body. In the app, **Settings → What’s new** shows
 the installed version's changes; the first launch after an upgrade shows them
-once. An available-update banner and **What changed** show the verified GitHub
-release's notes, bounded to 12,000 characters.
+once. The floating update card includes **What changed**, which shows the
+verified GitHub release's notes, bounded to 12,000 characters. Dismiss the card
+to hide that version for the current session. The update remains available in
+Settings.
 
 Automatic checks are on by default: startup, at most every five minutes on resume,
 and every thirty minutes while running. Android retains automatic verified
