@@ -409,7 +409,10 @@ void main() {
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
       expect(settings.playlists, isEmpty);
-      await tester.tap(find.byTooltip('Now playing').first);
+      player.index = 0;
+      player.refreshSettings();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-current-track')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('sleep-timer-control')));
       await tester.pumpAndSettle();
