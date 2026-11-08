@@ -18,11 +18,10 @@ class AppNavigation extends StatelessWidget {
   final int selected;
   final ValueChanged<int> onSelected;
   final VoidCallback onSearch;
-  static const labels = ['Library', 'Telegram', 'Now playing', 'Settings'];
+  static const labels = ['Library', 'Telegram', 'Settings'];
   static const icons = [
     Icons.library_music_rounded,
     Icons.send_rounded,
-    Icons.album_rounded,
     Icons.tune_rounded,
   ];
 
