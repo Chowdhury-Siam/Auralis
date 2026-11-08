@@ -1,6 +1,14 @@
 {
-  "current": "0.1.110",
+  "current": "0.1.111",
   "releases": [
+    {
+      "version": "0.1.111",
+      "changes": [
+        "Connect to your Worker Sync account on the first screen, create an account, or skip setup and connect later in Settings.",
+        "Redesigned optional setup with clearer progress, interactive previews for library and navigation styles, and a shortcut to skip the remaining steps.",
+        "Fixed the navigation test to match the three phone tabs and removed a missed tap from the lyrics settings test."
+      ]
+    },
     {
       "version": "0.1.110",
       "changes": [
