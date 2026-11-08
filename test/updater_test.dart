@@ -2,13 +2,21 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:auralis/app.dart';
+import 'package:auralis/lyrics.dart';
+import 'package:auralis/models.dart';
+import 'package:auralis/player.dart';
 import 'package:auralis/storage.dart';
+import 'package:auralis/telegram/stream_proxy.dart';
+import 'package:auralis/telegram/telegram_service.dart';
 import 'package:auralis/updater.dart';
 import 'package:auralis/update_widgets.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
+
+import 'fakes.dart';
 
 class Headers implements HttpHeaders {
   final values = <String, String>{};
@@ -319,6 +327,115 @@ void main() {
     },
   );
 
+  testWidgets('the floating update card fits phone and desktop over lyrics', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 680);
+    tester.view.padding = const FakeViewPadding(top: 24);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final prefs = MemorySettings()
+      ..automaticLyrics = false
+      ..automaticTranslation = false
+      ..reducedMotion = true;
+    const song = Track(
+      id: 'update-song',
+      title: 'Evening Waves',
+      artist: 'Test Artist',
+      source: 'Library',
+    );
+    final player =
+        PlayerController(
+            FakeAudio()..duration = const Duration(minutes: 5),
+            TelegramStreamProxy((_) async => {}),
+            prefs,
+          )
+          ..queue.add(song)
+          ..index = 0;
+    final telegram = TelegramService(
+      Directory('unused'),
+      MemoryVault(),
+      transport: FakeTd(),
+    );
+    final updates = AppUpdater(
+      currentVersion: '0.1.0',
+      directory: dir,
+      settings: prefs,
+      client: Client([
+        metadata(),
+        metadata(),
+        metadata(release(version: '0.3.0')),
+      ]),
+    );
+    addTearDown(updates.dispose);
+    addTearDown(player.shutdown);
+    addTearDown(telegram.shutdown);
+    await tester.pumpWidget(
+      AuralisApp(player: player, telegram: telegram, updater: updates),
+    );
+    final shell = tester.state(find.byType(PlayerShell)) as dynamic;
+    (shell.lyrics as LyricsRepository).save(
+      song,
+      Lyrics.parse('[00:00]Evening light\n[00:10]Waves across the shore'),
+    );
+    await tester.tap(find.byKey(const ValueKey('open-current-track')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Lyrics').last);
+    await tester.pumpAndSettle();
+    final header = find.byKey(const ValueKey('lyrics-song-pill'));
+    final originalHeader = tester.getRect(header);
+    final card = find.byKey(const ValueKey('update-card'));
+    expect(card, findsNothing);
+
+    Future<void> check() async {
+      await tester.runAsync(updates.check);
+      await tester.pumpAndSettle();
+    }
+
+    await check();
+    expect(tester.getRect(header), originalHeader);
+    expect(tester.getSize(card).width, 336);
+    expect(tester.getTopLeft(card).dx, 12);
+    expect(tester.getTopLeft(card).dy, greaterThan(originalHeader.bottom));
+    expect(find.byTooltip('Lyrics options').hitTestable(), findsOneWidget);
+    expect(
+      find.widgetWithText(FilledButton, 'Download').hitTestable(),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('What changed'));
+    await tester.pumpAndSettle();
+    expect(find.text('What’s new in 0.2.0'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    tester.view.physicalSize = const Size(1280, 720);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(card).width, 560);
+    expect(tester.getCenter(card).dx, 640);
+    tester.view.physicalSize = const Size(320, 680);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    await tester.pumpAndSettle();
+    expect(tester.getSize(card).width, 296);
+    expect(
+      tester.getTopLeft(card).dy,
+      greaterThan(tester.getRect(header).bottom),
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byTooltip('Dismiss update notice'));
+    await tester.pumpAndSettle();
+    expect(card, findsNothing);
+    await check();
+    expect(card, findsNothing);
+    await check();
+    expect(find.text('Auralis 0.3.0'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'Android install buttons open the installer without an app dialog',
     (tester) async {
@@ -347,7 +464,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: Column(
+            body: ListView(
               children: [
                 UpdateBanner(updater: updates),
                 UpdateSettings(updater: updates),
@@ -357,28 +474,28 @@ void main() {
         ),
       );
       expect(calls, 0);
-      for (final buttonType in [TextButton, FilledButton]) {
+      final bannerButton = find.descendant(
+        of: find.byType(UpdateBanner),
+        matching: find.widgetWithText(FilledButton, 'Install update'),
+      );
+      final settingsButton = find.descendant(
+        of: find.byType(UpdateSettings),
+        matching: find.widgetWithText(FilledButton, 'Install update'),
+      );
+      for (final button in [bannerButton, settingsButton]) {
+        await tester.ensureVisible(button);
+        await tester.pumpAndSettle();
+        expect(button.hitTestable(), findsOneWidget);
         await tester.runAsync(() async {
           started = Completer<void>();
           finish = Completer<void>();
-          await tester.tap(find.widgetWithText(buttonType, 'Install update'));
-          await started.future;
+          await tester.tap(button);
+          await started.future.timeout(const Duration(seconds: 5));
         });
         await tester.pump();
         expect(find.byType(AlertDialog), findsNothing);
         expect(updates.installing, isTrue);
-        expect(
-          find
-              .widgetWithText(TextButton, 'Install update')
-              .evaluate()
-              .single
-              .widget,
-          isA<TextButton>().having(
-            (button) => button.onPressed,
-            'disabled while installing',
-            isNull,
-          ),
-        );
+        expect(tester.widget<FilledButton>(bannerButton).onPressed, isNull);
         await tester.runAsync(() async => finish.complete());
         await tester.pumpAndSettle();
         expect(updates.installing, isFalse);
