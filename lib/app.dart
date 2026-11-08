@@ -196,6 +196,7 @@ class _AuralisAppState extends State<AuralisApp> {
             player: widget.player,
             telegram: widget.telegram,
             version: widget.installedVersion ?? currentReleaseVersion,
+            sync: widget.sync,
             files: widget.dataFiles,
             connectBuilder: (_) => PlayerShell(
               player: widget.player,
@@ -1147,6 +1148,7 @@ class _PlayerShellState extends State<PlayerShell>
         player: player,
         telegram: telegram,
         version: widget.installedVersion ?? currentReleaseVersion,
+        sync: widget.sync,
         files: widget.dataFiles,
         connectBuilder: (_) =>
             PlayerShell(player: player, telegram: telegram, setupMode: true),
