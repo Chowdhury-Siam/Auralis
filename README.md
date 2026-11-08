@@ -147,7 +147,7 @@ Android APKs now always use optimized release mode. Run **Set up Android signing
 
 ### First launch
 
-A fresh install opens an illustrated setup flow for Telegram, optional Android device settings, backup restore, lyrics, artwork, library layout and navigation. You can skip optional steps and reopen **Settings → General → Set up Auralis** later. Existing installations keep their current library and go straight to the app. Appearance choices remain available under **Settings → Appearance**.
+A fresh install opens with **Worker Sync**. Sign in or create an account with your Worker URL, or connect later in **Settings → Account & sync**. Choose **Customize setup** for Telegram, backup restore, Android permissions, lyrics and interactive appearance previews, or **Skip setup** to go straight to the Library. You can reopen setup under **Settings → General → Set up Auralis**.
 
 | Welcome | Navigation | Translation menu |
 | --- | --- | --- |
@@ -314,7 +314,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.110+111**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.111+112**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
