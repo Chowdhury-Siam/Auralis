@@ -47,7 +47,7 @@ class SyncController extends ChangeNotifier {
   String? _localOwner;
   Map<String, dynamic>? _legacy;
   bool accountBusy = false, workerUpdating = false;
-  String? deploymentError;
+  String? deploymentError, workerUpdateError;
   String? _telegramOwner,
       _telegramCode,
       _telegramRequestId,
