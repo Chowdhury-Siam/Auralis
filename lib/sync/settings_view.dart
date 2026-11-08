@@ -32,9 +32,16 @@ class SyncSettings extends StatelessWidget {
   );
 }
 
+enum SyncAccountEntry { settings, signIn, register }
+
 class SyncAccountPage extends StatefulWidget {
-  const SyncAccountPage({super.key, required this.sync});
+  const SyncAccountPage({
+    super.key,
+    required this.sync,
+    this.entry = SyncAccountEntry.settings,
+  });
   final SyncController sync;
+  final SyncAccountEntry entry;
   @override
   State<SyncAccountPage> createState() => _SyncAccountPageState();
 }
@@ -46,7 +53,9 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   final _username = TextEditingController(),
       _password = TextEditingController(),
       _claim = TextEditingController();
-  bool _working = false, _register = false, _obscure = true, _adding = false;
+  bool _working = false, _obscure = true, _adding = false;
+  late bool _register = widget.entry == SyncAccountEntry.register;
+  bool get _fromSetup => widget.entry != SyncAccountEntry.settings;
   bool? _ownerCreated;
   String? _error;
   late String _knownServiceUrl;
@@ -70,6 +79,7 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   }
 
   Future<void> _run(Future<void> Function() action) async {
+    if (_working) return;
     setState(() {
       _working = true;
       _error = null;
@@ -133,6 +143,7 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   }
 
   Future<void> _login() => _run(() async {
+    FocusScope.of(context).unfocus();
     final code = await sync.signIn(
       _url.text,
       _username.text,
@@ -140,12 +151,18 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
       register: _register,
       claimKey: _claim.text,
     );
+    await _finishSignIn(code);
+  });
+
+  Future<void> _finishSignIn(String? code) async {
     if (!mounted) return;
     _password.clear();
     _claim.clear();
     setState(() => _adding = false);
     if (code != null) await _showCode(code);
-  });
+    if (mounted && _fromSetup) Navigator.of(context).pop();
+  }
+
   Future<bool> _confirm(String title, String text) async =>
       await showDialog<bool>(
         context: context,
@@ -309,7 +326,14 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
       return;
     }
     await _run(() => sync.switchAccount(user));
-    if (mounted) _url.text = sync.serviceUrl;
+    if (mounted) {
+      _url.text = sync.serviceUrl;
+      if (_fromSetup &&
+          sync.account?.identity == user.identity &&
+          sync.signedIn) {
+        Navigator.of(context).pop();
+      }
+    }
   }
 
   Future<void> _recover() async {
@@ -368,7 +392,7 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
     username.dispose();
     code.dispose();
     password.dispose();
-    if (values != null) {
+    if (mounted && values != null) {
       await _run(() async {
         final result = await sync.recoverAccount(
           _url.text,
@@ -376,10 +400,7 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
           values[1],
           values[2],
         );
-        if (mounted) {
-          setState(() => _adding = false);
-          await _showCode(result);
-        }
+        await _finishSignIn(result);
       });
     }
   }
@@ -571,7 +592,7 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Account & sync'),
+                Text(_fromSetup ? 'Connect Worker Sync' : 'Account & sync'),
                 if (sync.signedIn)
                   Text(
                     sync.account!.username,
@@ -588,13 +609,21 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
                   padding: const EdgeInsets.all(16),
                   children: [
                     _card([
-                      const Text(
-                        'Self-hosted Sync Worker',
-                        style: TextStyle(
+                      Text(
+                        _fromSetup
+                            ? 'Your Sync Worker'
+                            : 'Self-hosted Sync Worker',
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (_fromSetup) ...[
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Use the Worker URL for your Auralis account.',
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       TextField(
                         key: const ValueKey('sync-worker-url'),
@@ -736,11 +765,11 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
                           controller: _username,
                           enabled: !disabled,
                           autocorrect: false,
+                          textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
                             labelText: 'Username',
                             prefixIcon: Icon(Icons.person_rounded),
                           ),
-                          onSubmitted: (_) => disabled ? null : _login(),
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -787,6 +816,19 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
                           ),
                         ],
                         const SizedBox(height: 16),
+                        if (_fromSetup && _error != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Semantics(
+                              liveRegion: true,
+                              child: Text(
+                                _error!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ),
+                          ),
                         FilledButton(
                           onPressed: disabled ? null : _login,
                           child: Text(_register ? 'Create account' : 'Sign in'),
@@ -825,7 +867,9 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
                         padding: EdgeInsets.symmetric(vertical: 12),
                         child: LinearProgressIndicator(),
                       ),
-                    if (_error ??
+                    if ((_fromSetup && (!sync.signedIn || _adding)
+                                ? null
+                                : _error) ??
                             sync.error ??
                             sync.deploymentError ??
                             sync.workerUpdateError
