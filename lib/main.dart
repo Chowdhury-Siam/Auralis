@@ -41,6 +41,7 @@ Future<void> main() async {
     } catch (_) {
       warning = 'Settings could not be read. Defaults are active; select your Telegram channels again.';
     }
+    final showSetup = !settings.setupComplete && warning == null;
     final vault = Platform.isAndroid
         ? AndroidSecretVault(File(p.join(root.path, 'credentials.aesgcm')))
         : SecretVault(File(p.join(root.path, 'credentials.dpapi')));
@@ -162,7 +163,7 @@ Future<void> main() async {
             : const DataFiles(),
         sync: sync,
         installedVersion: package.version,
-        showSetup: !settings.setupComplete && warning == null,
+        showSetup: showSetup,
       ),
     );
     updater?.start();
