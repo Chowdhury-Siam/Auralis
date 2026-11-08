@@ -859,7 +859,7 @@ void main() {
     tester,
   ) async {
     await mount(tester, openPlayer: false, size: const Size(390, 844));
-    await tester.tap(find.byTooltip('Now playing'));
+    await tester.tap(find.byKey(const ValueKey('open-current-track')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     final surface = find.byKey(const ValueKey('now-playing-container'));
@@ -1204,7 +1204,7 @@ void main() {
   );
 
   testWidgets(
-    'bottom navigation keeps four labels and icons clear of the gesture area',
+    'bottom navigation keeps three labels and icons clear of the gesture area',
     (tester) async {
       tester.view.padding = const FakeViewPadding(bottom: 24);
       tester.view.viewPadding = const FakeViewPadding(bottom: 24);
@@ -1222,8 +1222,8 @@ void main() {
         of: navigation,
         matching: find.byType(NavigationDestination),
       );
-      expect(destinations, findsNWidgets(4));
-      for (final label in ['Library', 'Telegram', 'Now playing', 'Settings']) {
+      expect(destinations, findsNWidgets(3));
+      for (final label in ['Library', 'Telegram', 'Settings']) {
         final destination = find.widgetWithText(NavigationDestination, label);
         final icon = find.descendant(
           of: destination,
