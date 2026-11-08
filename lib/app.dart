@@ -1316,15 +1316,20 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _bottomNavigation({_Page? page, bool transitionCopy = false}) =>
-      AppNavigation(
-        key: transitionCopy ? null : const ValueKey('app-navigation'),
-        style: player.settings.navigationStyle,
-        radius: player.settings.navigationRadius,
-        selected: (page ?? destination).index,
-        onSelected: (i) => _navigate(_Page.values[i]),
-        onSearch: _searchLibrary,
-      );
+  Widget _bottomNavigation({
+    required _Page page,
+    bool transitionCopy = false,
+  }) {
+    const pages = [_Page.library, _Page.telegram, _Page.settings];
+    return AppNavigation(
+      key: transitionCopy ? null : const ValueKey('app-navigation'),
+      style: player.settings.navigationStyle,
+      radius: player.settings.navigationRadius,
+      selected: pages.indexOf(page),
+      onSelected: (i) => _navigate(pages[i]),
+      onSearch: _searchLibrary,
+    );
+  }
 
   Widget _navigation(bool narrow, {bool short = false}) => Container(
     width: narrow ? 72 : 202,
