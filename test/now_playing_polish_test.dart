@@ -1103,10 +1103,17 @@ void main() {
       );
       expect(find.byType(AlertDialog), findsNothing);
       expect(find.byType(Dialog), findsNothing);
-      expect(
-        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
-        3,
+      final navigation = tester.widget<NavigationBar>(
+        find.byType(NavigationBar),
       );
+      final destinations = navigation.destinations
+          .cast<NavigationDestination>();
+      expect(destinations.map((destination) => destination.label), [
+        'Library',
+        'Telegram',
+        'Settings',
+      ]);
+      expect(destinations[navigation.selectedIndex].label, 'Settings');
       expect(find.byTooltip('Play queue'), findsNothing);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
