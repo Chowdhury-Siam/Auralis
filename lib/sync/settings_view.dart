@@ -92,7 +92,12 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   Future<void> _validate() => _run(() async {
     final h = await sync.validateWorker(_url.text);
     await sync.rememberService(_url.text);
-    if (mounted) setState(() => _ownerCreated = h['ownerCreated'] == true);
+    if (mounted) {
+      setState(() {
+        _ownerCreated = h['ownerCreated'] as bool?;
+        if (_ownerCreated == false && !sync.signedIn) _register = true;
+      });
+    }
   });
   Future<void> _showCode(String code) async {
     if (!mounted) return;
@@ -596,6 +601,11 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
                         controller: _url,
                         enabled: !disabled && (!sync.signedIn || _adding),
                         keyboardType: TextInputType.url,
+                        onChanged: (_) {
+                          if (_ownerCreated != null) {
+                            setState(() => _ownerCreated = null);
+                          }
+                        },
                         autocorrect: false,
                         decoration: const InputDecoration(
                           labelText: 'Cloudflare Worker URL',
@@ -713,7 +723,11 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
                     ] else
                       _card([
                         Text(
-                          _register ? 'Create account' : 'Sign in',
+                          _register
+                              ? (_ownerCreated == false
+                                    ? 'Create owner account'
+                                    : 'Create account')
+                              : 'Sign in',
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 12),
@@ -811,7 +825,10 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
                         padding: EdgeInsets.symmetric(vertical: 12),
                         child: LinearProgressIndicator(),
                       ),
-                    if (_error ?? sync.error ?? sync.deploymentError
+                    if (_error ??
+                            sync.error ??
+                            sync.deploymentError ??
+                            sync.workerUpdateError
                         case final String error)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
