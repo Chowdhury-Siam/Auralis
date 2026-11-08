@@ -59,7 +59,7 @@ class AccountRequest extends Fake implements HttpClientRequest {
 }
 
 class AccountClient extends Fake implements HttpClient {
-  bool owner = false;
+  bool owner = false, ownerCreated = true;
   Map<String, dynamic>? deployment;
   @override
   Duration? connectionTimeout;
@@ -87,7 +87,7 @@ class AccountClient extends Fake implements HttpClient {
         'service': 'auralis-sync',
         'configured': true,
         'accounts': true,
-        'ownerCreated': true,
+        'ownerCreated': ownerCreated,
         'version': currentSyncWorkerVersion,
       });
     }
@@ -159,6 +159,47 @@ void main() {
     key: 'd' * 64,
     automatic: false,
   ).toJson();
+
+  test('an unclaimed Worker guides the user to owner registration', () async {
+    final client = AccountClient()
+      ..owner = true
+      ..ownerCreated = false;
+    await HttpOverrides.runZoned(() async {
+      final sync = SyncController(
+        AccountSettings(),
+        AccountVault(),
+        onApplied: () {},
+        paused: () => true,
+      );
+      addTearDown(sync.close);
+      const endpoint = 'https://sync.example';
+      await expectLater(
+        sync.signIn(endpoint, 'alice', 'test-password'),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('Create an account'),
+          ),
+        ),
+      );
+      expect(client.requests.single.uri.path, '/health');
+
+      final code = await sync.signIn(
+        endpoint,
+        'alice',
+        'test-password',
+        register: true,
+        claimKey: ' ${'d' * 64} ',
+      );
+      final registration = client.requests.singleWhere(
+        (r) => r.uri.path == '/v1/auth/register',
+      );
+      expect(jsonDecode(utf8.decode(registration.bytes))['claimKey'], 'd' * 64);
+      expect(sync.account?.admin, isTrue);
+      expect(code, 'c' * 64);
+    }, createHttpClient: (_) => client);
+  });
 
   test('owner login, registration and recovery restore every deployment value on a fresh device', () async {
     for (final action in ['login', 'register', 'recover']) {
