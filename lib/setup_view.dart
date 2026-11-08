@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -11,6 +10,8 @@ import 'preference_widgets.dart';
 import 'setup_permissions.dart';
 import 'stats_view.dart';
 import 'storage.dart';
+import 'sync/controller.dart';
+import 'sync/settings_view.dart';
 import 'telegram/telegram_service.dart';
 
 enum _Step {
@@ -35,6 +36,7 @@ class SetupView extends StatefulWidget {
     required this.version,
     required this.connectBuilder,
     required this.onFinished,
+    this.sync,
     this.files = const DataFiles(),
     this.permissions = const SetupPermissions(),
   });
@@ -43,6 +45,7 @@ class SetupView extends StatefulWidget {
   final String version;
   final WidgetBuilder connectBuilder;
   final VoidCallback onFinished;
+  final SyncController? sync;
   final DataFiles files;
   final SetupPermissions permissions;
   @override
@@ -51,6 +54,9 @@ class SetupView extends StatefulWidget {
 
 class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
   int _index = 0;
+  int _previewDestination = 0;
+  String _previewCollection = 'All songs';
+  bool _previewSearch = false;
   bool _busy = false, _checked = false, _restored = false;
   bool? _notifications, _battery;
   String? _error, _permissionError;
@@ -176,6 +182,90 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
       ),
     );
   });
+
+  Future<void> _openSync(SyncController sync, SyncAccountEntry entry) =>
+      _run(() async {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => SyncAccountPage(sync: sync, entry: entry),
+          ),
+        );
+      });
+
+  Widget _syncCard(SyncController sync) => ListenableBuilder(
+    listenable: sync,
+    builder: (context, _) {
+      final account = sync.signedIn ? sync.account : null;
+      final disabled = _busy || sync.busy;
+      return Card.filled(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: PreferenceIcon(
+                  account == null
+                      ? Icons.cloud_sync_rounded
+                      : Icons.cloud_done_rounded,
+                ),
+                title: Text(
+                  account == null ? 'Worker Sync' : 'Worker connected',
+                ),
+                subtitle: Text(
+                  account == null
+                      ? 'Sync favorites, playlists and listening history across devices.'
+                      : '${account.username} · ${sync.status}',
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (account == null) ...[
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    FilledButton.icon(
+                      key: const ValueKey('setup-sync-sign-in'),
+                      onPressed: disabled
+                          ? null
+                          : () => _openSync(sync, SyncAccountEntry.signIn),
+                      icon: const Icon(Icons.login_rounded),
+                      label: const Text('Sign in'),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('setup-sync-register'),
+                      onPressed: disabled
+                          ? null
+                          : () => _openSync(sync, SyncAccountEntry.register),
+                      icon: const Icon(Icons.person_add_alt_1_rounded),
+                      label: const Text('Create account'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Optional. Connect anytime in Settings → Account & sync.',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: colors.onSurfaceVariant),
+                ),
+              ] else
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(
+                    onPressed: disabled
+                        ? null
+                        : () => _openSync(sync, SyncAccountEntry.settings),
+                    child: const Text('Manage account'),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -242,7 +332,7 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
     _Step.welcome => (
       'Welcome to\nAuralis',
       'Your channels. Your soundtrack.',
-      Icons.headphones_rounded,
+      Icons.graphic_eq_rounded,
     ),
     _Step.telegram => (
       'Your music library',
@@ -266,7 +356,7 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
     ),
     _Step.artwork => (
       'Covers stay with you',
-      'Library Refresh saves available artwork and lyrics on this device.',
+      'Auralis caches covers automatically. Use Library Refresh to save available artwork and lyrics ahead of time.',
       Icons.album_rounded,
     ),
     _Step.library => (
@@ -276,7 +366,7 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
     ),
     _Step.navigation => (
       'Make it feel yours',
-      'Choose your phone’s navigation style. Desktop keeps its sidebar.',
+      'Try a compact navigation style. Wider windows use a sidebar.',
       Icons.space_dashboard_rounded,
     ),
     _Step.playback => (
@@ -291,13 +381,16 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
     ),
     _Step.finish => (
       'All set!',
-      'You’re ready to enjoy your music. Everything here can be changed later in Settings.',
+      'Open your library whenever you’re ready. You can revisit setup in Settings.',
       Icons.check_circle_rounded,
     ),
   };
 
   Widget _controls() => switch (_step) {
-    _Step.welcome => Center(child: Chip(label: Text('v${widget.version}'))),
+    _Step.welcome => switch (widget.sync) {
+      final SyncController sync => _syncCard(sync),
+      null => const SizedBox.shrink(),
+    },
     _Step.telegram => Column(
       children: [
         Text(
@@ -407,7 +500,7 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
       ],
     ),
     _Step.artwork => const Text(
-      'Covers are saved automatically on this device. Use Library Refresh to save available artwork and lyrics. Music files remain temporary.',
+      'Streamed music stays in temporary storage.',
       textAlign: TextAlign.center,
     ),
     _Step.library => Column(
@@ -425,16 +518,32 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 16),
                 prefs.compactLibrary
-                    ? const Chip(
-                        avatar: Icon(Icons.music_note_rounded),
-                        label: Text('All songs  ▾'),
+                    ? ChoiceMenu<String>(
+                        title: 'Preview collection',
+                        value: _previewCollection,
+                        values: const ['All songs', 'Favorites', 'Playlists'],
+                        label: (value) => value,
+                        enabled: !_busy,
+                        onSelected: (value) =>
+                            setState(() => _previewCollection = value),
                       )
-                    : const Wrap(
+                    : Wrap(
                         spacing: 8,
                         children: [
-                          Chip(label: Text('All songs')),
-                          Chip(label: Text('Favorites')),
-                          Chip(label: Text('Playlists')),
+                          for (final label in [
+                            'All songs',
+                            'Favorites',
+                            'Playlists',
+                          ])
+                            ChoiceChip(
+                              label: Text(label),
+                              selected: _previewCollection == label,
+                              onSelected: _busy
+                                  ? null
+                                  : (_) => setState(
+                                      () => _previewCollection = label,
+                                    ),
+                            ),
                         ],
                       ),
               ],
@@ -451,15 +560,31 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
     ),
     _Step.navigation => Column(
       children: [
-        ExcludeSemantics(
-          child: IgnorePointer(
-            child: AppNavigation(
-              style: prefs.navigationStyle,
-              radius: prefs.navigationRadius,
-              selected: 0,
-              onSelected: (_) {},
-              onSearch: () {},
-            ),
+        Card.filled(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: Text(
+                  _previewSearch
+                      ? 'Preview · Search'
+                      : 'Preview · ${AppNavigation.labels[_previewDestination]}',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ),
+              AppNavigation(
+                style: prefs.navigationStyle,
+                radius: prefs.navigationRadius,
+                selected: _previewDestination,
+                onSelected: (value) => setState(() {
+                  _previewDestination = value;
+                  _previewSearch = false;
+                }),
+                onSearch: () =>
+                    setState(() => _previewSearch = !_previewSearch),
+              ),
+            ],
           ),
         ),
         for (final style in AppNavigationStyle.values)
@@ -558,11 +683,108 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
     _Step.finish => const SizedBox.shrink(),
   };
 
+  Widget _hero() {
+    final (title, description, icon) = _heading;
+    final welcome = _step == _Step.welcome;
+    final text = Theme.of(context).textTheme;
+    final foreground = welcome ? colors.onPrimaryContainer : colors.onSurface;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: welcome ? colors.primaryContainer : colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          children: [
+            if (welcome)
+              PositionedDirectional(
+                end: -28,
+                bottom: -44,
+                child: ExcludeSemantics(
+                  child: Icon(
+                    Icons.album_outlined,
+                    size: 184,
+                    color: foreground.withValues(alpha: .12),
+                  ),
+                ),
+              ),
+            Padding(
+              padding: EdgeInsets.all(welcome ? 24 : 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: welcome
+                            ? colors.primary
+                            : colors.primaryContainer,
+                        borderRadius: BorderRadius.circular(welcome ? 18 : 14),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(welcome ? 12 : 8),
+                        child: Icon(
+                          icon,
+                          size: welcome ? 28 : 22,
+                          color: welcome
+                              ? colors.onPrimary
+                              : colors.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: welcome ? 14 : 10),
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      title,
+                      style: (welcome ? text.displaySmall : text.headlineSmall)
+                          ?.copyWith(
+                            color: foreground,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    description,
+                    style: text.bodyMedium?.copyWith(
+                      color: welcome ? foreground : colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final (title, description, icon) = _heading;
     final isWelcome = _step == _Step.welcome;
     final isLast = _step == _Step.finish;
+    final canSkipStep = switch (_step) {
+      _Step.telegram => !widget.telegram.ready,
+      _Step.notifications => _notifications != true,
+      _Step.backup => !_restored,
+      _Step.battery => _battery != true,
+      _ => false,
+    };
+    final nextLabel = isWelcome
+        ? 'Customize setup'
+        : isLast
+        ? 'Finish setup'
+        : canSkipStep
+        ? 'Skip step'
+        : 'Continue';
+    final reduceMotion =
+        prefs.reducedMotion || MediaQuery.disableAnimationsOf(context);
+    final stepCount = _steps.length - 1;
+
     return PopScope<Object?>(
       canPop: _index == 0 && !_busy,
       onPopInvokedWithResult: (didPop, _) {
@@ -571,272 +793,161 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
       child: Scaffold(
         key: const ValueKey('setup-page'),
         body: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                child: Row(
-                  children: [
-                    if (_index > 0)
-                      IconButton(
-                        tooltip: 'Previous setup step',
-                        onPressed: _busy ? null : () => _move(_index - 1),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                      )
-                    else
-                      const SizedBox(height: 48),
-                    const Spacer(),
-                    Text(
-                      'AURALIS',
-                      style: TextStyle(
-                        letterSpacing: 3,
-                        fontSize: 11,
-                        color: colors.onSurfaceVariant,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: Row(
+                      children: [
+                        if (!isWelcome)
+                          IconButton(
+                            tooltip: 'Previous setup step',
+                            onPressed: _busy ? null : () => _move(_index - 1),
+                            icon: const Icon(Icons.arrow_back_rounded),
+                          )
+                        else
+                          const SizedBox(height: 48),
+                        Expanded(
+                          child: Text(
+                            isWelcome
+                                ? 'AURALIS'
+                                : 'Step $_index of $stepCount',
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: colors.onSurfaceVariant,
+                                  letterSpacing: isWelcome ? 3 : 0,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            isWelcome ? 'v${widget.version}' : 'Optional setup',
+                            textAlign: TextAlign.end,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: colors.onSurfaceVariant),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!isWelcome)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: LinearProgressIndicator(
+                        value: _index / stepCount,
+                        minHeight: 4,
+                        borderRadius: BorderRadius.circular(4),
+                        semanticsLabel: 'Setup progress',
                       ),
                     ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, box) => SingleChildScrollView(
-                    controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 580),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              title,
-                              textAlign: isWelcome
-                                  ? TextAlign.left
-                                  : TextAlign.center,
-                              style: TextStyle(
-                                fontSize: isWelcome ? 44 : 30,
-                                height: 1.12,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -1,
-                                color: isWelcome
-                                    ? colors.primary
-                                    : colors.onSurface,
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, box) => SingleChildScrollView(
+                        controller: _scroll,
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: (box.maxHeight - 28)
+                                .clamp(0, 1200)
+                                .toDouble(),
+                          ),
+                          child: Center(
+                            child: AnimatedSwitcher(
+                              duration: reduceMotion
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 180),
+                              switchInCurve: Curves.easeOutCubic,
+                              layoutBuilder: (current, _) =>
+                                  current ?? const SizedBox.shrink(),
+                              child: Column(
+                                key: ValueKey(_step),
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _hero(),
+                                  if (!isLast) ...[
+                                    const SizedBox(height: 14),
+                                    _controls(),
+                                  ],
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 14),
-                            Text(
-                              description,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 15,
-                                height: 1.5,
-                                color: colors.onSurfaceVariant,
-                              ),
-                            ),
-                            if (![
-                              _Step.navigation,
-                              _Step.library,
-                              _Step.lyrics,
-                            ].contains(_step))
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 20,
-                                ),
-                                child: SetupIllustration(
-                                  icon: icon,
-                                  height: box.maxHeight > 580
-                                      ? 240
-                                      : box.maxHeight > 500
-                                      ? 150
-                                      : 96,
-                                ),
-                              ),
-                            const SizedBox(height: 16),
-                            _controls(),
-                            if (_error != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 12),
-                                child: Text(
-                                  _error!,
-                                  style: TextStyle(color: colors.error),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            if ([
-                              _Step.telegram,
-                              _Step.notifications,
-                              _Step.backup,
-                              _Step.battery,
-                            ].contains(_step))
-                              TextButton(
-                                onPressed: _busy
-                                    ? null
-                                    : () => _move(_index + 1),
-                                child: const Text('Skip for now'),
-                              ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: Material(
-                    color: colors.surfaceContainerHigh,
+                  Material(
+                    color: colors.surfaceContainerLow,
                     borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(32),
+                      top: Radius.circular(24),
                     ),
-                    child: SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                isWelcome
-                                    ? 'Let’s go!'
-                                    : 'Step $_index of ${_steps.length - 1}',
-                                style: TextStyle(
-                                  fontSize: isWelcome ? 22 : 15,
-                                  fontWeight: isWelcome
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: isWelcome
-                                      ? colors.primary
-                                      : colors.onSurfaceVariant,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_error case final String error)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Semantics(
+                                liveRegion: true,
+                                child: Text(
+                                  error,
+                                  style: TextStyle(color: colors.error),
                                 ),
                               ),
                             ),
-                            FilledButton(
-                              key: const ValueKey('setup-next'),
-                              onPressed: _busy
-                                  ? null
-                                  : isLast
-                                  ? _finish
-                                  : () => _move(_index + 1),
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size(64, 64),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
+                          Wrap(
+                            alignment: WrapAlignment.end,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              if (!isLast)
+                                TextButton(
+                                  key: const ValueKey('setup-skip'),
+                                  onPressed: _busy ? null : _finish,
+                                  child: Text(
+                                    isWelcome
+                                        ? 'Skip setup'
+                                        : 'Skip remaining steps',
+                                  ),
                                 ),
-                              ),
-                              child: _busy
-                                  ? const SizedBox.square(
-                                      dimension: 22,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : Semantics(
-                                      label: isLast
-                                          ? 'Finish setup'
-                                          : 'Next setup step',
-                                      child: Icon(
+                              FilledButton.icon(
+                                key: const ValueKey('setup-next'),
+                                onPressed: _busy
+                                    ? null
+                                    : isLast
+                                    ? _finish
+                                    : () => _move(_index + 1),
+                                icon: _busy
+                                    ? const SizedBox.square(
+                                        dimension: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Icon(
                                         isLast
                                             ? Icons.check_rounded
                                             : Icons.arrow_forward_rounded,
                                       ),
-                                    ),
-                            ),
-                          ],
-                        ),
+                                label: Text(nextLabel),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class SetupIllustration extends StatelessWidget {
-  const SetupIllustration({
-    super.key,
-    required this.icon,
-    required this.height,
-  });
-  final IconData icon;
-  final double height;
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).colorScheme;
-    return ExcludeSemantics(
-      child: SizedBox(
-        height: height,
-        child: Center(
-          child: SizedBox(
-            width: math.min(300, MediaQuery.sizeOf(context).width - 72),
-            height: height,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned(
-                  right: 12,
-                  top: height * .18,
-                  child: Transform.rotate(
-                    angle: -.35,
-                    child: Container(
-                      width: height * .54,
-                      height: height * .54,
-                      decoration: BoxDecoration(
-                        color: c.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(26),
-                      ),
-                      child: Icon(
-                        Icons.music_note_rounded,
-                        size: height * .28,
-                        color: c.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
-                Transform.rotate(
-                  angle: -.2,
-                  child: Container(
-                    width: height * .72,
-                    height: height * .72,
-                    decoration: BoxDecoration(
-                      color: c.primaryContainer,
-                      borderRadius: BorderRadius.circular(32),
-                    ),
-                    child: Icon(
-                      icon,
-                      size: height * .42,
-                      color: c.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 4,
-                  top: 4,
-                  child: CircleAvatar(
-                    radius: height * .15,
-                    backgroundColor: c.surfaceContainerHighest,
-                    child: Icon(Icons.favorite_rounded, color: c.primary),
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  bottom: 2,
-                  child: CircleAvatar(
-                    radius: height * .16,
-                    backgroundColor: c.secondaryContainer,
-                    child: Icon(
-                      Icons.graphic_eq_rounded,
-                      color: c.onSecondaryContainer,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
         ),
