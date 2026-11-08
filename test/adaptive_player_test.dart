@@ -732,7 +732,7 @@ void main() {
             .byKey(const ValueKey('now-playing-play-pause'))
             .evaluate()
             .isEmpty) {
-          await tester.tap(find.byTooltip('Now playing').first);
+          await tester.tap(find.byKey(const ValueKey('open-current-track')));
           await tester.pumpAndSettle();
         }
         expect(tester.takeException(), isNull, reason: '$size at $scale text');
