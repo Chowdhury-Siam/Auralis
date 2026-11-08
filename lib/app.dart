@@ -623,11 +623,6 @@ class _PlayerShellState extends State<PlayerShell>
             _header(narrow, short: short, page: page),
             SizedBox(height: short ? 10 : 22),
           ],
-          if (widget.updater != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: UpdateBanner(updater: widget.updater!),
-            ),
           if (widget.startupWarning != null) _banner(widget.startupWarning!),
           if (player.error ?? player.audio.error case final String error)
             _banner(error),
@@ -1218,6 +1213,11 @@ class _PlayerShellState extends State<PlayerShell>
         final compact = box.maxWidth < 900;
         final narrow = box.maxWidth < 1180;
         final short = box.maxHeight < 560;
+        // Leave room for the two-line player header at larger text sizes.
+        final updateTop = MediaQuery.paddingOf(context).top +
+            (destination == _Page.nowPlaying
+                ? 32 + math.max(48, MediaQuery.textScalerOf(context).scale(16) * 3)
+                : 12);
         return PopScope<Object?>(
           canPop: destination == _Page.library,
           onPopInvokedWithResult: (didPop, _) {
@@ -1265,6 +1265,16 @@ class _PlayerShellState extends State<PlayerShell>
                           ),
                         ],
                       ),
+                      if (widget.updater case final updater?)
+                        Positioned(
+                          top: updateTop,
+                          left: 12,
+                          right: 12,
+                          child: UpdateBanner(
+                            key: ObjectKey(updater),
+                            updater: updater,
+                          ),
+                        ),
                       if (_showVolume)
                         Positioned(
                           top: MediaQuery.paddingOf(context).top + 12,
