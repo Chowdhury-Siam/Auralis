@@ -202,7 +202,7 @@ Open **Now Playing** from navigation or the floating player’s artwork/title. T
 
 The bottom player floats above the page, showing content through its margins and behind sideways movement. Releasing a drag springs it back while music continues. Desktop layouts include the song artwork. Repeat and sleep controls are on Now Playing; Android volume uses hardware buttons and desktop volume uses Up/Down keys.
 
-Embedded lyrics load when supported tags are available. Use **Lyrics options** to retry reading the music file, import `.lrc`, or paste text. If saved or embedded lyrics are missing, automatic lookup uses the source order in **Settings → Lyrics & artwork → Lyrics & translation**. Defaults are LRCLIB exact/search then lyrics.ovh; either source can be first and the fallback can be disabled. **Find lyrics** retries the lookup. Back and the single options menu are at the top; the source footer is removed. **Follow song** returns to automatic scrolling after you browse elsewhere.
+Embedded lyrics load when supported tags are available. Use **Lyrics options** to retry reading the music file, import `.lrc`, or paste text. If saved or embedded lyrics are missing, automatic lookup uses the source order in **Settings → Lyrics & artwork → Lyrics & translation**. Defaults are LRCLIB exact/search then lyrics.ovh; either source can be first and the fallback can be disabled. **Find lyrics** retries the lookup. Hold or right-click **Find lyrics online** in **Lyrics options** to search LRCLIB by song name or artist and choose a match. Back and the single options menu are at the top; the source footer is removed. **Follow song** returns to automatic scrolling after you browse elsewhere.
 
 Favorites, playlists, listening statistics, recent music, channels and shared preferences can sync across Android and Windows through your own Cloudflare Worker and Turso database. Open Settings → Data & sync → Account & sync to deploy, sign in with a username, switch accounts or recover access. Owner credentials enable automatic updates when an app bundles a newer Worker. See [multi-device sync setup](docs/SYNC.md). Artwork, original lyrics and translations have an account-scoped device cache and are excluded from backups. In-app translation runs automatically by default; choose Japanese → English or English → Japanese and Google Translate/MyMemory provider order in Settings. DeepL’s website option remains available from Lyrics. Word-level karaoke is not included.
 
@@ -314,7 +314,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.111+112**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.113+114**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
