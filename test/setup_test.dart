@@ -8,9 +8,12 @@ import 'package:auralis/data_backup.dart';
 import 'package:auralis/lyrics.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
+import 'package:auralis/release_notes.dart';
 import 'package:auralis/setup_permissions.dart';
 import 'package:auralis/setup_view.dart';
 import 'package:auralis/storage.dart';
+import 'package:auralis/sync/controller.dart';
+import 'package:auralis/sync/settings_view.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +22,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
+import 'sync_accounts_test.dart' show AccountClient;
 
 class Permissions extends SetupPermissions {
   bool enabled = false;
@@ -72,8 +76,18 @@ void main() {
         MemoryVault(),
         transport: FakeTd(),
       );
+      final sync = HttpOverrides.runZoned(
+        () => SyncController(
+          settings,
+          MemoryVault(),
+          onApplied: player.refreshSettings,
+          paused: () => true,
+        ),
+        createHttpClient: (_) => AccountClient(),
+      );
       addTearDown(player.shutdown);
       addTearDown(telegram.shutdown);
+      addTearDown(sync.close);
       final boundary = GlobalKey();
       await tester.pumpWidget(
         RepaintBoundary(
@@ -81,8 +95,8 @@ void main() {
           child: AuralisApp(
             player: player,
             telegram: telegram,
+            sync: sync,
             showSetup: true,
-            installedVersion: '0.1.92',
           ),
         ),
       );
@@ -107,6 +121,9 @@ void main() {
       }
       await tester.tap(find.widgetWithText(ListTile, 'Expressive pill'));
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Telegram'));
+      await tester.pumpAndSettle();
+      expect(find.text('Preview · Telegram'), findsOneWidget);
       await capture('setup-navigation');
       for (var i = 0; i < 3; i++) {
         await tester.tap(find.byKey(const ValueKey('setup-next')));
@@ -116,7 +133,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('setup-next')));
       await tester.pumpAndSettle();
       expect(settings.setupComplete, isTrue);
-      expect(settings.lastSeenRelease, '0.1.92');
+      expect(settings.lastSeenRelease, currentReleaseVersion);
       expect(find.byType(SetupView), findsNothing);
       expect(find.byTooltip('Search library'), findsOneWidget);
       expect(find.byType(AlertDialog), findsNothing);
@@ -125,6 +142,114 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+
+  for (final entry in [
+    null,
+    SyncAccountEntry.signIn,
+    SyncAccountEntry.register,
+  ]) {
+    final client = AccountClient();
+    testWidgets(
+      'welcome can ${entry?.name ?? 'skip sync and setup'}',
+      (tester) => HttpOverrides.runZoned(() async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(360, 640);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final settings = MemorySettings();
+        final player = PlayerController(
+          FakeAudio(),
+          TelegramStreamProxy((_) async => {}),
+          settings,
+        );
+        final telegram = TelegramService(
+          Directory('unused'),
+          MemoryVault(),
+          transport: FakeTd(),
+        );
+        final vault = MemoryVault();
+        final sync = SyncController(
+          settings,
+          vault,
+          onApplied: player.refreshSettings,
+          paused: () => true,
+        );
+        addTearDown(player.shutdown);
+        addTearDown(telegram.shutdown);
+        addTearDown(sync.close);
+        await tester.pumpWidget(
+          AuralisApp(
+            player: player,
+            telegram: telegram,
+            sync: sync,
+            showSetup: true,
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (entry != null) {
+          final register = entry == SyncAccountEntry.register;
+          final action = find.byKey(
+            ValueKey(register ? 'setup-sync-register' : 'setup-sync-sign-in'),
+          );
+          await tester.ensureVisible(action);
+          await tester.tap(action);
+          await tester.pumpAndSettle();
+          expect(find.text('Connect Worker Sync'), findsOneWidget);
+          final submit = find.widgetWithText(
+            FilledButton,
+            register ? 'Create account' : 'Sign in',
+          );
+          expect(submit, findsOneWidget);
+          await tester.enterText(
+            find.byKey(const ValueKey('sync-worker-url')),
+            'https://sync.example',
+          );
+          await tester.enterText(
+            find.byKey(const ValueKey('sync-username')),
+            'alice',
+          );
+          await tester.enterText(
+            find.byKey(const ValueKey('sync-password')),
+            'test-password',
+          );
+          await tester.pumpAndSettle();
+          await tester.ensureVisible(submit);
+          await tester.pumpAndSettle();
+          await tester.tap(submit);
+          // Drain the fake Worker's HTTP stream and the widget's frame queue.
+          for (var frame = 0; frame < 12 && !sync.signedIn; frame++) {
+            await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+            await tester.pump(const Duration(milliseconds: 20));
+          }
+          expect(
+            sync.signedIn,
+            isTrue,
+            reason:
+                'Worker requests: ${client.requests.map((r) => r.uri.path)}',
+          );
+          if (register) {
+            await tester.pump(const Duration(milliseconds: 350));
+            expect(find.text('Save your recovery code'), findsOneWidget);
+            await tester.tap(find.text('Done'));
+          }
+          await tester.pumpAndSettle();
+          expect(find.byType(SyncAccountPage), findsNothing);
+          expect(find.text('Worker connected'), findsOneWidget);
+          expect(sync.account?.username, 'alice');
+          expect(vault.data, isNotEmpty);
+        }
+        await tester.tap(find.byKey(const ValueKey('setup-skip')));
+        await tester.pumpAndSettle();
+        expect(settings.setupComplete, isTrue);
+        expect(find.byType(SetupView), findsNothing);
+        expect(sync.signedIn, entry != null);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await sync.close();
+      }, createHttpClient: (_) => client),
+    );
+  }
+
   test('setup migration, unfinished setup, appearance backup and timestamp round trip', () async {
     final dir = await Directory.systemTemp.createTemp('auralis-setup-');
     addTearDown(() => dir.delete(recursive: true));
@@ -320,7 +445,7 @@ void main() {
       for (var step = 0; step < 8; step++) {
         await tester.tap(find.byKey(const ValueKey('setup-next')));
         await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
+        expect(tester.takeException(), isNull, reason: 'Step ${step + 1}');
       }
       expect(find.text('All set!'), findsOneWidget);
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
