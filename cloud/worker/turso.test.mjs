@@ -8,6 +8,32 @@ const env={TURSO_DATABASE_URL:'libsql://auralis-test.turso.io',TURSO_AUTH_TOKEN:
 const record=(value,clock=1,device='a'.repeat(32))=>({clock,device,value});
 const key=JSON.stringify;
 async function setup(){const backend=fakeTurso(),store=new TursoStore(env,backend.send);await store.initialize();return {...backend,store,backend};}
+test('Turso calls fetch with the receiver supported by Cloudflare Workers', async t => {
+  const backend=fakeTurso();
+  t.after(()=>backend.db.close());
+  t.mock.method(globalThis,'fetch',function(url,options) {
+    assert.equal(this,undefined);
+    assert.equal(options.redirect,'manual');
+    return backend.send(url,options);
+  });
+  for(const store of [new TursoStore(env),new TursoStore(env,fetch,'a'.repeat(32))]) {
+    await store.initialize();
+    const favorite=key(['favorite','song']);
+    await store.sync({cursor:0,ops:{[favorite]:record(true)}},merge);
+    const result=await store.sync({cursor:0,ops:{}},merge);
+    assert.equal(result.output.records[favorite].value,true);
+  }
+});
+test('Turso rejects a redirect without sending the token to another URL', async () => {
+  const urls=[];
+  const store=new TursoStore(env,async (url,options)=>{
+    urls.push(url);
+    assert.equal(options.redirect,'manual');
+    return new Response(null,{status:302,headers:{Location:'https://example.com/'}});
+  });
+  await assert.rejects(()=>store.initialize(),{status:302});
+  assert.deepEqual(urls,['https://auralis-test.turso.io/v2/pipeline']);
+});
 test('bundled SQL matches the runtime schema and URL validation blocks credential redirects',async()=>{
   assert.deepEqual((await readFile(new URL('schema.sql',import.meta.url),'utf8')).split(';').map(s=>s.trim()).filter(Boolean),schema);
   assert.equal(databaseUrl(env.TURSO_DATABASE_URL),'https://auralis-test.turso.io');
