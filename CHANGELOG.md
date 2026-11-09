@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.114
+
+- Fixed a sync stall where separately received listening counters could block favorites, playlists, and other library changes from reaching another device.
+- Account & sync now offers **Sync now** for a two-way sync and shows clearer messages when a Worker rejects the request or its database is unavailable.
+
 ## 0.1.113
 
 - Replaced the full-width update banner with a compact floating card on Android and Windows. It shows download progress and release notes. Dismiss it to hide the notice for the current session.
