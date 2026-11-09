@@ -58,8 +58,8 @@ remain available after signing in again. Offline sign-out removes the local toke
 a server session that could not be revoked expires normally.
 
 Restore cloud copy explicitly replaces shared local fields, retaining the prior
-snapshot in the protected account journal. Upload local changes flushes the normal
-merge outbox. Account deletion requires a password and removes only that user's
+snapshot in the protected account journal. **Sync now** sends queued changes and
+fetches updates from the same account. Account deletion requires a password and removes only that user's
 records and sessions. Deleting the owner also removes its recovery vault, without
 promoting a new administrator or deleting other users.
 
