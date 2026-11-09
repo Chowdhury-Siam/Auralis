@@ -13,6 +13,21 @@ import 'deployment.dart';
 part 'accounts.dart';
 part 'telegram_account.dart';
 
+class _SyncRequestFailure extends FormatException {
+  _SyncRequestFailure(int status)
+    : super(switch (status) {
+        HttpStatus.unauthorized || HttpStatus.forbidden =>
+          'The Worker rejected this sign-in (HTTP $status). Sign in again to the same Worker and account.',
+        HttpStatus.notFound =>
+          'The sync endpoint was not found (HTTP $status). Check your Worker URL.',
+        HttpStatus.tooManyRequests =>
+          'The Worker is rate limiting sync (HTTP $status).',
+        >= 500 =>
+          'The sync Worker or its database is unavailable (HTTP $status).',
+        _ => 'The Worker rejected the sync request (HTTP $status).',
+      });
+}
+
 class SyncController extends ChangeNotifier {
   SyncController(
     this.settings,
@@ -212,13 +227,12 @@ class SyncController extends ChangeNotifier {
       }
       bytes.addAll(chunk);
     }
-    final result = jsonDecode(utf8.decode(bytes));
-    if (response.statusCode != 200 || result is! Map<String, dynamic>) {
-      throw const HttpException(
-        'Sync request failed. Check the service URL and key.',
-      );
+    if (response.statusCode != HttpStatus.ok) {
+      throw _SyncRequestFailure(response.statusCode);
     }
-    if (result['cursor'] is! int ||
+    final result = jsonDecode(utf8.decode(bytes));
+    if (result is! Map<String, dynamic> ||
+        result['cursor'] is! int ||
         (result['cursor'] as int) < 0 ||
         result['more'] is! bool ||
         result['records'] is! Map<String, dynamic>) {
@@ -363,11 +377,18 @@ class SyncController extends ChangeNotifier {
             remaining.any((key) => eligible(key) && !sentKeys.contains(key));
       }
       status = 'Up to date across your devices.';
-    } catch (_) {
+    } catch (failure) {
       if (!_closed && generation == _generation) {
         _client.close(force: true);
         _client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
-        error = 'Sync is pending. Check your connection, service URL and key. Local changes are kept and will retry.';
+        final message = switch (failure) {
+          _SyncRequestFailure() => failure.message,
+          FormatException() => 'Auralis could not apply the sync data.',
+          FileSystemException() =>
+            'Auralis could not save sync changes. Check your device storage.',
+          _ => 'Sync is pending. Check your connection and Worker URL.',
+        };
+        error = '$message Auralis will retry.';
         status = 'Offline changes are saved on this device.';
       }
     } finally {
