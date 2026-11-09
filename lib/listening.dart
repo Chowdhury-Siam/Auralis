@@ -176,12 +176,12 @@ class ListeningStats {
     }
     dataInteger(result.milliseconds);
     dataInteger(result.plays);
-    if (result.days.values.fold<int>(0, (sum, day) => sum + day.milliseconds) !=
-            result.milliseconds ||
-        result.days.values.fold<int>(0, (sum, day) => sum + day.plays) !=
-            result.plays) {
-      throw const FormatException('Listening totals are inconsistent.');
-    }
+    // Track and calendar-day counters sync independently. Pages and overlapping
+    // pre-sync histories can produce different totals for the two views.
+    dataInteger(
+      result.days.values.fold<int>(0, (sum, day) => sum + day.milliseconds),
+    );
+    dataInteger(result.days.values.fold<int>(0, (sum, day) => sum + day.plays));
     return result;
   }
 
