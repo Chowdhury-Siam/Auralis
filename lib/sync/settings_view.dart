@@ -697,16 +697,16 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
                         builder: (context, box) {
                           final buttons = [
                             FilledButton.tonalIcon(
-                              onPressed: disabled ? null : _restore,
-                              icon: const Icon(Icons.cloud_download_rounded),
-                              label: const Text('Restore cloud copy'),
-                            ),
-                            OutlinedButton.icon(
                               onPressed: disabled
                                   ? null
                                   : () => _run(sync.uploadLocalChanges),
-                              icon: const Icon(Icons.cloud_upload_rounded),
-                              label: const Text('Upload local changes'),
+                              icon: const Icon(Icons.sync_rounded),
+                              label: const Text('Sync now'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: disabled ? null : _restore,
+                              icon: const Icon(Icons.cloud_download_rounded),
+                              label: const Text('Restore cloud copy'),
                             ),
                           ];
                           return box.maxWidth < 340
