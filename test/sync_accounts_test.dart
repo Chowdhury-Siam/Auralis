@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:auralis/data_backup.dart';
+import 'package:auralis/models.dart';
 import 'package:auralis/sync/controller.dart';
 import 'package:auralis/sync/document.dart';
 import 'package:auralis/sync/deployment.dart';
@@ -61,6 +63,7 @@ class AccountRequest extends Fake implements HttpClientRequest {
 class AccountClient extends Fake implements HttpClient {
   bool owner = false, ownerCreated = true;
   Map<String, dynamic>? deployment;
+  Response Function(AccountRequest, Map<String, dynamic>)? syncReply;
   @override
   Duration? connectionTimeout;
   final requests = <AccountRequest>[];
@@ -136,6 +139,7 @@ class AccountClient extends Fake implements HttpClient {
     }
     if (r.uri.path == '/v1/auth/logout') return response({'ok': true});
     if (r.uri.path == '/v1/sync') {
+      if (syncReply case final reply?) return reply(r, data);
       return response({
         'cursor': 0,
         'more': false,
@@ -150,6 +154,124 @@ class AccountClient extends Fake implements HttpClient {
 }
 
 void main() {
+  test(
+    'two devices exchange edits across paginated listening history',
+    () async {
+      final cloud = SyncDocument({});
+      final revisions = <String, int>{};
+      var revision = 0;
+      var paginated = false, unavailable = false;
+      final client = AccountClient()
+        ..syncReply = (request, data) {
+          expect(
+            request.headers.value('authorization'),
+            'Bearer alice-session',
+          );
+          if (unavailable) {
+            return Response(
+              utf8.encode('<html>Unavailable</html>'),
+              statusCode: 503,
+            );
+          }
+          final ops = data['ops'] as Map<String, dynamic>;
+          expect(ops.length, lessThanOrEqualTo(100));
+          for (final entry in ops.entries) {
+            final before = jsonEncode(cloud.records[entry.key]);
+            cloud.merge({entry.key: entry.value});
+            if (jsonEncode(cloud.records[entry.key]) != before) {
+              revisions[entry.key] = ++revision;
+            }
+          }
+          final changed =
+              revisions.entries
+                  .where((entry) => entry.value > (data['cursor'] as int))
+                  .toList()
+                ..sort((a, b) => a.value.compareTo(b.value));
+          final page = changed.take(200).toList();
+          final cursor = page.isEmpty ? revision : page.last.value;
+          paginated |= cursor < revision;
+          return Response(
+            utf8.encode(
+              jsonEncode({
+                'cursor': cursor,
+                'more': cursor < revision,
+                'records': {
+                  for (final entry in page) entry.key: cloud.records[entry.key],
+                },
+              }),
+            ),
+          );
+        };
+      await HttpOverrides.runZoned(() async {
+        final desktop = AccountSettings()..favoriteIds = {'desktop-favorite'};
+        final phone = AccountSettings()
+          ..playlists = {
+            'Phone mix': ['song-0'],
+          };
+        Track song(int i) => Track(
+          id: 'song-$i',
+          title: 'Song $i',
+          artist: 'Artist',
+          source: 'Channel',
+        );
+        final desktopDay = DateTime(2026, 10, 20, 12);
+        final phoneDay = DateTime(2026, 10, 21, 12);
+        for (var i = 0; i < 205; i++) {
+          desktop.listening.record(song(i), 1000, 1, desktopDay);
+        }
+        // Independent histories can overlap by song without overlapping by day.
+        phone.listening.record(song(0), 2500, 1, phoneDay);
+        var paused = true;
+        SyncController device(AccountSettings settings) => SyncController(
+          settings,
+          AccountVault(),
+          onApplied: () {},
+          paused: () => paused,
+        );
+        final a = device(desktop), b = device(phone);
+        try {
+          for (final sync in [a, b]) {
+            await sync.signIn('https://sync.example', 'alice', 'test-password');
+          }
+          paused = false;
+          await a.flush();
+          await b.flush();
+          expect(paginated, isTrue);
+          expect(b.error, isNull);
+          expect(phone.favoriteIds, {'desktop-favorite'});
+          expect(phone.listening.tracks, hasLength(205));
+          expect(phone.listening.days['2026-10-20']!.milliseconds, 205000);
+          expect(phone.listening.days['2026-10-21']!.milliseconds, 2500);
+
+          phone.favoriteIds.remove('desktop-favorite');
+          phone.favoriteIds.add('phone-favorite');
+          await phone.save();
+          unavailable = true;
+          await b.flush();
+          expect(b.error, contains('database is unavailable (HTTP 503)'));
+          expect(phone.favoriteIds, {'phone-favorite'});
+          expect(b.document.dirty, isNotEmpty);
+          unavailable = false;
+          await b.flush();
+          expect(b.error, isNull);
+          await a.flush();
+          expect(a.error, isNull);
+          expect(desktop.favoriteIds, {'phone-favorite'});
+          expect(desktop.playlists, phone.playlists);
+          expect(desktop.listening.toJson(), phone.listening.toJson());
+          expect(a.document.dirty, isEmpty);
+          expect(b.document.dirty, isEmpty);
+          final backup = DataBackup.create(desktop, phoneDay);
+          expect(DataBackup.parse(backup.encode()).snapshot, desktop.toJson());
+        } finally {
+          paused = true;
+          await a.close();
+          await b.close();
+        }
+      }, createHttpClient: (_) => client);
+    },
+  );
+
   final deploymentValues = SyncDeploymentConfig(
     worker: 'auralis-sync',
     account: 'a' * 32,
