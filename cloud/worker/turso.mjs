@@ -13,6 +13,13 @@ export function databaseUrl(value) {
   return url.origin;
 }
 export const statement=(sql,...args)=>({sql,args:args.map(value=>typeof value==='number'?{type:'integer',value:String(value)}:{type:'text',value})});
+export class TursoHttpError extends Error {
+  constructor(status) {
+    super('Turso request failed');
+    this.status=status;
+  }
+}
+
 export class TursoStore {
   constructor(env,send=fetch,scope='') {if(scope && !/^[a-f0-9]{32}$/.test(scope)) throw new Error('Invalid account scope');this.scope=scope;this.url=databaseUrl(env.TURSO_DATABASE_URL);this.token=env.TURSO_AUTH_TOKEN;this.send=send;}
   async clear() {await this.initialize();await this.batch([statement('DELETE FROM auralis_records'),statement('UPDATE auralis_meta SET revision=0 WHERE id=1')]);}
@@ -22,8 +29,10 @@ export class TursoStore {
     for(const stmt of statements) steps.push({condition:{type:'ok',step:steps.length-1},stmt});
     const commit=steps.length;steps.push({condition:{type:'ok',step:commit-1},stmt:statement('COMMIT')});
     steps.push({condition:{type:'not',cond:{type:'ok',step:commit}},stmt:statement('ROLLBACK')});
-    const response=await this.send(`${this.url}/v2/pipeline`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(12000),headers:{Authorization:`Bearer ${this.token}`,'Content-Type':'application/json'},body:JSON.stringify({requests:[{type:'batch',batch:{steps}},{type:'close'}]})});
-    if(!response.ok) throw new Error('Turso request failed');
+    // Workers' global fetch rejects calls with a TursoStore receiver.
+    const send=this.send;
+    const response=await send(`${this.url}/v2/pipeline`,{method:'POST',redirect:'manual',signal:AbortSignal.timeout(12000),headers:{Authorization:`Bearer ${this.token}`,'Content-Type':'application/json'},body:JSON.stringify({requests:[{type:'batch',batch:{steps}},{type:'close'}]})});
+    if(!response.ok) throw new TursoHttpError(response.status);
     const data=await response.json(),result=data.results?.[0]?.response?.result;
     if(!result || data.results.some(r=>r.type==='error')) throw new Error('Turso response is invalid');
     if(result.step_errors?.some(Boolean)) {
