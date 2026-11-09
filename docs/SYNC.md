@@ -26,6 +26,15 @@ The first account is the administrator. Later registrations get separate librari
 The same ROOM Durable Object binding handles account records and private rooms;
 no new Durable Object class or namespace migration is introduced.
 
+## Updating a Worker that returns HTTP 503
+
+In Auralis 0.1.115 or later, open **Account & sync → Deploy Database → Deploy Worker**
+as the administrator. Reuse the saved Worker name, Turso database and JWT secret.
+Then select **Sync now** on each device. The Worker’s public `/health` endpoint
+shows its deployed version. If a sync still returns HTTP 503, look for
+`Auralis Turso sync failed` in the Cloudflare logs to see the operation stage and,
+when available, Turso’s HTTP status.
+
 ## Existing private-key Workers
 
 Redeploy the **same Worker name and Turso database**, using the **existing sync key
