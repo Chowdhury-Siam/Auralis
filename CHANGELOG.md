@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.115
+
+- Fixed HTTP 503 on Turso-backed sync by using a Workers-compatible fetch call and rejecting Turso redirects explicitly. Deploy the updated Worker to apply the repair.
+- Worker logs now show the database operation stage and the upstream HTTP status when available.
+
 ## 0.1.114
 
 - Fixed a sync stall where separately received listening counters could block favorites, playlists, and other library changes from reaching another device.
