@@ -1,6 +1,13 @@
 {
-  "current": "0.1.114",
+  "current": "0.1.115",
   "releases": [
+    {
+      "version": "0.1.115",
+      "changes": [
+        "Fixed HTTP 503 on Turso-backed sync by using a Workers-compatible fetch call and rejecting Turso redirects explicitly. Deploy the updated Worker to apply the repair.",
+        "Worker logs now show the database operation stage and the upstream HTTP status when available."
+      ]
+    },
     {
       "version": "0.1.114",
       "changes": [
