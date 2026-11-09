@@ -1,6 +1,7 @@
 import {AccountStore,equal,profilePage} from './accounts.mjs';
-import {TursoStore} from './turso.mjs';
+import {TursoHttpError,TursoStore} from './turso.mjs';
 const MAX_BODY = 2 * 1024 * 1024;
+const VERSION = '0.1.115';
 export function validate(key, record) {
   let parts;
   try { parts = JSON.parse(key); } catch { throw new Error('Invalid record key'); }
@@ -85,17 +86,26 @@ export class AuralisRoom {
       if (!Number.isSafeInteger(data.cursor) || data.cursor < 0 || !data.ops || Array.isArray(data.ops) || Object.keys(data.ops).length > 100) throw new Error('Invalid sync request');
       for (const [key,value] of Object.entries(data.ops)) validate(key,value);
       if(this.turso) {
+        let stage='initialize';
         const task=this.queue.then(async()=>{
           if(Array.from(this.sql.exec("SELECT key FROM room_flags WHERE key='deleted'")).length)throw new Error('Account deleted');
           // An older populated DO is never silently replaced by an empty database.
           if(Array.from(this.sql.exec('SELECT count(*) AS n FROM records'))[0].n) throw new Error('Legacy cloud data exists; deploy Turso under a new Worker name');
           if(!this.initialized) {await this.turso.initialize();this.initialized=true;}
+          stage='sync';
           const {changed,output}=await this.turso.sync(data,merge);
           if(changed) this.broadcast();
           return json(output);
         });
         this.queue=task.catch(()=>{});
-        try {return await task;} catch {return json({error:'Turso sync is unavailable. Check the deployment and retry; local changes are kept.'},503);}
+        try {
+          return await task;
+        } catch (error) {
+          const diagnostic={stage};
+          if(error instanceof TursoHttpError) diagnostic.tursoStatus=error.status;
+          console.warn('Auralis Turso sync failed',diagnostic);
+          return json({error:'Turso sync is unavailable. Check the deployment and retry; local changes are kept.'},503);
+        }
       }
       let changed=false;
       const output=this.state.storage.transactionSync(() => {
@@ -129,10 +139,10 @@ export default {
  const turso=Boolean(env.TURSO_DATABASE_URL&&env.TURSO_AUTH_TOKEN),partial=Boolean(env.TURSO_DATABASE_URL||env.TURSO_AUTH_TOKEN)&&!turso;
  const registry=()=>env.ROOM.get(env.ROOM.idFromName('account-registry'));
  const forward=(path,method=request.method,body)=>{const headers=new Headers(request.headers);headers.delete('Content-Length');return registry().fetch(new Request('https://internal'+path,{method,headers,...(body?{body}:{}),...(!body&& !['GET','HEAD'].includes(method)?{body:request.body,duplex:'half'}:{})}));};
- if((path==='/'||path==='/health')&&request.method==='GET'){const state=accounts?await (await forward('/_auth/status','GET')).json():{};return json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.110',configured:configured&&!partial,backend:turso?'turso':'durable-object',accounts,ownerCreated:state.ownerCreated===true});}
+ if((path==='/'||path==='/health')&&request.method==='GET'){const state=accounts?await (await forward('/_auth/status','GET')).json():{};return json({service:'auralis-sync',version:env.AURALIS_VERSION??VERSION,configured:configured&&!partial,backend:turso?'turso':'durable-object',accounts,ownerCreated:state.ownerCreated===true});}
  if(!configured)return json({error:'Sync service is not configured'},503);
  const key=await equal(request.headers.get('Authorization')??'',`Bearer ${env.AURALIS_SYNC_KEY}`);
- if(path==='/v1/info'&&request.method==='GET')return key?json({service:'auralis-sync',version:env.AURALIS_VERSION??'0.1.110',backend:turso?'turso':'durable-object'}):json({error:'Invalid setup secret'},401);
+ if(path==='/v1/info'&&request.method==='GET')return key?json({service:'auralis-sync',version:env.AURALIS_VERSION??VERSION,backend:turso?'turso':'durable-object'}):json({error:'Invalid setup secret'},401);
  if(partial)return json({error:'Turso configuration is incomplete'},503);
  if(accounts){
  if(path==='/profile'&&request.method==='GET')return profilePage();
