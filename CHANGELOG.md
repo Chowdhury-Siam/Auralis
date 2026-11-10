@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.118
+
+- Fixed cloud sync reverting corrected listening-stat titles and artists when a backup restored names without changing listening time or play counts.
+
 ## 0.1.117
 
 - Added a dedicated Export Backup page with section switches, a live selection count, and Select all and Deselect all controls.
