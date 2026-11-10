@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import 'data_backup.dart';
 import 'account_backup.dart';
+import 'backup_export_view.dart';
 import 'telegram/telegram_service.dart';
 import 'data_files.dart';
 import 'listening.dart';
@@ -38,8 +39,6 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
   bool _showArtists = false, _chartPlays = false;
   _StatsRange _range = _StatsRange.all;
   String? _status;
-  bool? _includeAccount;
-  bool get _withAccount => _includeAccount ?? widget.telegram?.ready == true;
   PlayerController get player => widget.player;
   String get _recovery =>
       p.join(player.settings.file.parent.path, 'auralis-before-restore.json');
@@ -47,17 +46,6 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
   void initState() {
     super.initState();
     _snapshot();
-    widget.telegram?.addListener(_telegramChanged);
-  }
-
-  void _telegramChanged() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    widget.telegram?.removeListener(_telegramChanged);
-    super.dispose();
   }
 
   void _snapshot() =>
@@ -263,35 +251,63 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     }
   }
 
-  Future<void> _backup() => _run(() async {
-    final path = await _destination(
-      'auralis-backup-${listeningDate(DateTime.now())}.json',
-      'json',
-    );
-    if (path == null) return;
-    await player.flushListeningStats(failOnError: true);
-    final data = DataBackup.create(player.settings, DateTime.now());
-    String text;
-    if (_withAccount && widget.telegram != null) {
-      final password = await _password(creating: true);
-      if (password == null) return;
-      // Pause streaming before closing TDLib to take a consistent snapshot.
-      if (player.audio.playing) await player.audio.toggle();
-      final account = await widget.telegram!.backupAccount();
-      text = await encryptAccountBackup(data, account, password);
-    } else {
-      text = data.encode();
-      DataBackup.parse(text);
-    }
-    await widget.files.write(path, text);
-    if (mounted) {
-      setState(
-        () => _status = AccountBackup.isEncrypted(text)
-            ? 'Backup saved with your Telegram sign-in. Keep the backup password.'
-            : 'Settings backup saved. This file does not contain your Telegram sign-in.',
+  Future<void> _chooseBackup() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (context) => BackupExportPage(
+        showTelegram: widget.telegram != null,
+        telegramAvailable: widget.telegram?.ready == true,
+        onExport: _backup,
+      ),
+    ),
+  );
+
+  Future<({bool saved, String? error})> _backup(
+    Set<BackupSection> sections,
+    bool includeTelegram,
+  ) async {
+    var saved = false;
+    await _run(() async {
+      final telegram = widget.telegram;
+      if (includeTelegram && telegram?.ready != true) {
+        throw const FormatException(
+          'Telegram is disconnected. Reconnect or turn off the Telegram account section.',
+        );
+      }
+      final path = await _destination(
+        'auralis-backup-${listeningDate(DateTime.now())}.json',
+        'json',
       );
-    }
-  });
+      if (path == null || !mounted) return;
+      await player.flushListeningStats(failOnError: true);
+      final data = DataBackup.create(
+        player.settings,
+        DateTime.now(),
+        sections: sections,
+      );
+      final plain = data.encode();
+      DataBackup.parse(plain);
+      var text = plain;
+      if (includeTelegram) {
+        if (!mounted) return;
+        final password = await _password(creating: true);
+        if (password == null) return;
+        // Pause streaming before closing TDLib to take a consistent snapshot.
+        if (player.audio.playing) await player.audio.toggle();
+        final account = await telegram!.backupAccount();
+        text = await encryptAccountBackup(data, account, password);
+      }
+      await widget.files.write(path, text);
+      saved = true;
+      if (mounted) {
+        setState(
+          () => _status = includeTelegram
+              ? 'Backup saved with your Telegram sign-in. Keep the backup password.'
+              : 'Backup saved.',
+        );
+      }
+    }, operation: 'Export');
+    return (saved: saved, error: _error ? _status : null);
+  }
 
   Future<void> _restore({bool recovery = false}) => _run(() async {
     final path = recovery ? _recovery : await widget.files.openBackup();
@@ -311,7 +327,20 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     } else {
       backup = DataBackup.parse(text);
     }
+    if (backup.snapshot.isEmpty && account == null) {
+      throw const FormatException('This backup has no sections to restore.');
+    }
     final stats = ListeningStats.fromJson(backup.snapshot['listening']);
+    final sections = backup.sections.map((section) => section.label).join(', ');
+    final summary = backup.isPartial
+        ? (sections.isEmpty
+              ? 'Sections: Telegram account only.'
+              : 'Sections: $sections.')
+        : '${(backup.snapshot['favoriteIds'] as List).length} favorites · ${(backup.snapshot['playlists'] as Map).length} playlists\n'
+              '${listeningTime(stats.milliseconds)} listened · ${stats.plays} qualified plays';
+    final restoreScope = backup.isPartial
+        ? 'The included sections replace their local copies. Other sections are kept.'
+        : 'This replaces local stats, collections and preferences.';
     if (!mounted) return;
     setState(() => _confirming = true);
     final confirmed = await showDialog<bool>(
@@ -321,11 +350,10 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         content: SingleChildScrollView(
           child: Text(
             'Created ${backup.createdAt.toLocal()}\n\n'
-            '${(backup.snapshot['favoriteIds'] as List).length} favorites · ${(backup.snapshot['playlists'] as Map).length} playlists\n'
-            '${listeningTime(stats.milliseconds)} listened · ${stats.plays} qualified plays\n\n'
-            'This replaces local stats, collections and preferences. Playback and the queue will stop. '
+            '$summary\n\n'
+            '$restoreScope Playback and the queue will stop. '
             'Your current settings are saved as a recovery copy first. Music files are kept. '
-            '${account != null ? 'Telegram sign-in: included. This replaces the local account with the saved session. Telegram may require reauthentication if that session has expired or been revoked.' : 'Telegram sign-in: not included. This file can only restore settings and collections. Your current sign-in is kept.'}',
+            '${account != null ? 'Telegram sign-in: included. This replaces the local account with the saved session. Telegram may require reauthentication if that session has expired or been revoked.' : 'Telegram sign-in: not included. Your current sign-in is kept.'}',
           ),
         ),
         actions: [
@@ -364,7 +392,9 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         final telegram = widget.telegram;
         _error = account != null && telegram?.error != null;
         _status = account == null
-            ? 'Settings restored. This backup has no Telegram sign-in; connect Telegram or restore a password-protected account backup.'
+            ? (backup.isPartial
+                  ? 'Selected sections restored. Your Telegram sign-in is kept.'
+                  : 'Settings restored. This backup has no Telegram sign-in; connect Telegram or restore a password-protected account backup.')
             : telegram!.error != null
             ? 'Settings and Telegram session restored, but Telegram could not reconnect. ${telegram.error}'
             : telegram.ready
@@ -831,32 +861,18 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     children: [
       const SizedBox(height: 8),
       const Text(
-        'Includes stats, favorites, playlists, recent music, channels and preferences. Add your Telegram sign-in with a password-protected account backup. Music files and the queue are excluded.',
+        'Choose sections to export, or restore a previous backup.',
         style: TextStyle(fontSize: 12),
       ),
-      if (widget.telegram != null)
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Include Telegram account'),
-          subtitle: Text(
-            widget.telegram!.ready
-                ? 'Password protected · briefly pauses playback and reconnects Telegram'
-                : 'Connect Telegram to include your sign-in',
-          ),
-          value: _withAccount,
-          onChanged: _busy || !widget.telegram!.ready
-              ? null
-              : (value) => setState(() => _includeAccount = value),
-        ),
       const SizedBox(height: 12),
       Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
           FilledButton.icon(
-            onPressed: _busy ? null : _backup,
+            onPressed: _busy ? null : _chooseBackup,
             icon: const Icon(Icons.backup_outlined),
-            label: const Text('Create backup'),
+            label: const Text('Export backup'),
           ),
           OutlinedButton.icon(
             onPressed: _busy ? null : () => _restore(),
