@@ -29,6 +29,9 @@ void main() {
         'auralis.exe',
         'flutter_windows.dll',
         'libmpv-2.dll',
+        'media_kit_video_plugin.dll',
+        'libEGL.dll',
+        'libGLESv2.dll',
         'native/tdjson.dll',
       ]) {
         await write(
