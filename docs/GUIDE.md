@@ -100,6 +100,14 @@ Windows requests a 360×480 logical client minimum and centers its initial windo
 
 Before the first timed lyric and during blank timestamped gaps, lyrics stay fully blurred with a small decorative music animation. It pauses with playback and respects system reduced motion. Highlighting resumes at the next timed words; Static mode remains available.
 
+## Telegram Video
+
+Hold **Home** for about a second on Android or Windows. Choose an accessible channel and search its videos, or use the link button to paste a public or private Telegram message link that your account can open. Ordinary video posts and recognized video files posted as documents appear in the browser. Use **Load older videos** to continue through the channel history.
+
+Auralis streams the original video using the same Telegram account and libmpv engine. The player supports fullscreen, seeking, playback speed, and embedded audio and subtitle track selection. On Android, double-tap either side of the video to seek or hold the video to play temporarily at 2×. The playback gestures and track controls were inspired by [mpvRx](https://github.com/Riteshp2001/mpvRx).
+
+Opening a video pauses music and keeps its queue and position. Press **Back** to return to the video browser, then again to return to music. Video uses temporary buffering and stays separate from music listening stats.
+
 ## Streaming audio quality
 
 Telegram playback uses the original file ID from the selected message. The streaming proxy passes its file bytes unchanged to libmpv: no re-encoding, lossy conversion, bitrate cap or lower-quality fallback. Download priority, buffering and byte-range seeking affect when bytes arrive, not their encoded quality. A slow download buffers or reports a stalled-transfer error rather than switching to a lower-bitrate copy.
@@ -114,7 +122,7 @@ Use **Windows x64**, Flutter **3.47.1** / Dart **3.13.1**, Git, PowerShell **7.4
 
 Windows build requirements are listed above. Android uses its separate workflow; see [docs/ANDROID.md](ANDROID.md).
 
-Pinned Dart dependencies and their transitive versions are in `pubspec.yaml` and `pubspec.lock`: Flutter, media_kit 1.2.6+auralis.2 (vendored MIT runtime with Windows COM/shutdown patches), media_kit_libs_windows_audio 1.0.9, ffi 2.2.0, path 1.9.1, path_provider 2.1.6, package_info_plus 10.2.1, crypto 3.0.7, and file_selector 1.1.0 for desktop save/open dialogs, media_kit_libs_android_audio 1.3.8, audio_service 0.18.19 and audio_session 0.2.4. Android file export/restore uses the Storage Access Framework. TDLib is built separately; no third-party Dart Telegram wrapper is used. Keep `third_party/media_kit` in Git with the app; its patch and original license are included there.
+Pinned Dart dependencies and their transitive versions are in `pubspec.yaml` and `pubspec.lock`: Flutter, media_kit 1.2.6+auralis.2 (vendored MIT runtime with Windows COM/shutdown patches), media_kit_video 2.0.1, media_kit_libs_windows_video 1.0.11, ffi 2.2.0, path 1.9.1, path_provider 2.1.6, package_info_plus 10.2.1, crypto 3.0.7, and file_selector 1.1.0 for desktop save/open dialogs, media_kit_libs_android_video 1.3.8, audio_service 0.18.19 and audio_session 0.2.4. Android file export/restore uses the Storage Access Framework. TDLib is built separately; no third-party Dart Telegram wrapper is used. Keep `third_party/media_kit` in Git with the app; its patch and original license are included there.
 
 From this directory:
 
@@ -191,7 +199,7 @@ Settings → Data & sync includes **Account & sync** for connecting and pairing 
 
 ## Refresh and offline artwork/lyrics
 
-Click Library Refresh to reload the selected channels, check the saved cache and process only tracks missing artwork or lyrics. If only one item is missing, the other is reused. The header progress counts only those tracks; a fully cached library has no caching pass. After checking, the header reports separate saved-artwork and saved-lyrics counts. Valid saved files are not rewritten. Embedded lyrics are preferred, followed by the configured lyric sources using the displayed title/artist/duration. Missing lyrics and network failures are skipped so the remaining tracks continue; Refresh retries unavailable entries later. Finished lyric files and retained artwork persist on this device, separately per Telegram session, and are read again after memory eviction or restart. Only extracted artwork/lyrics are kept; temporary audio metadata/playback buffers are cleaned by the existing audio-cache policy. Changing channels, accounts or closing the app stops the pass; clicking Refresh resumes with the remaining missing items. Invalid cache entries are treated as missing and can be fetched again. Imported/pasted lyrics are also saved in this device cache and remain outside portable backups.
+Click Library Refresh to reload the selected channels, check the saved cache and process only tracks missing artwork or lyrics. If only one item is missing, the other is reused. The header progress counts only those tracks; a fully cached library has no caching pass. After checking, the header reports separate artwork and lyrics counts verified on disk. Tap the counts to see the tracks still missing artwork or lyrics and the result of the last attempt. Valid saved files are not rewritten. Embedded lyrics are preferred, followed by the configured lyric sources using the displayed title/artist/duration. Missing lyrics and network failures are skipped so the remaining tracks continue; Refresh retries unavailable entries later. Finished lyric files and retained artwork persist on this device, separately per Telegram session, and are read again after memory eviction or restart. Only extracted artwork/lyrics are kept; temporary audio metadata/playback buffers are cleaned by the existing audio-cache policy. Changing channels, accounts or closing the app stops the pass; clicking Refresh resumes with the remaining missing items. Invalid cache entries are treated as missing and can be fetched again. Imported/pasted lyrics are also saved in this device cache and remain outside portable backups.
 
 On desktop the floating bottom player stays to the right of the navigation sidebar and includes the current artwork and track information. Page content remains visible behind its margins and sideways movement.
 
