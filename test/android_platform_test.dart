@@ -199,8 +199,11 @@ void main() {
         _ => throw StateError('Unexpected bridge call'),
       };
     });
-    expect(await files.savePath('stats.csv', 'csv'), uri);
-    expect(calls.last.arguments, {'name': 'stats.csv', 'mime': 'text/csv'});
+    expect(await files.savePath('backup.json'), uri);
+    expect(calls.last.arguments, {
+      'name': 'backup.json',
+      'mime': 'application/json',
+    });
     await files.write(uri, '夜の音楽');
     expect(calls.last.arguments['uri'], uri);
     expect(calls.last.arguments['bytes'], utf8.encode('夜の音楽'));
@@ -213,7 +216,7 @@ void main() {
     bytes = Uint8List.fromList([0xff]);
     await expectLater(files.read(uri), throwsFormatException);
     cancel = true;
-    expect(await files.savePath('backup.json', 'json'), isNull);
+    expect(await files.savePath('backup.json'), isNull);
     expect(await files.openBackup(), isNull);
     final dir = await Directory.systemTemp.createTemp('auralis-recovery');
     addTearDown(() => dir.delete(recursive: true));
