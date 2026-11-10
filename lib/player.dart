@@ -256,15 +256,15 @@ class PlayerController extends ChangeNotifier {
     if (restoringData) throw StateError('A restore is already running.');
     // Revalidate a detached copy before stopping playback or touching settings.
     final checked = DataBackup.parse(backup.encode());
-    await flushListeningStats(failOnError: true);
-
     restoringData = true;
     try {
+      await flushListeningStats(failOnError: true);
       await clear();
-      final recovery = utf8.encode(
-        DataBackup.create(settings, _now()).encode(),
-      );
-      await settings.replaceSnapshot(checked.snapshot, recovery);
+      final previous = DataBackup.create(settings, _now());
+      final snapshot = checked.isPartial
+          ? {...previous.snapshot, ...checked.snapshot}
+          : checked.snapshot;
+      await settings.replaceSnapshot(snapshot, utf8.encode(previous.encode()));
       _savedStatsRevision = _statsRevision;
       error = null;
       if (!_closed) await setVolume(settings.volume, persist: false);
