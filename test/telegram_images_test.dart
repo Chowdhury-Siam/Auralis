@@ -172,6 +172,34 @@ void main() {
   );
 
   test(
+    'refresh downloads a thumbnail again when TDLib removed its local file',
+    () async {
+      final track = song(1, thumbnail: 90);
+      expect(await service.image(90), photo.path);
+      await photo.delete();
+      final replacement = await File('${dir.path}/redownload.png')
+          .writeAsBytes(png);
+      td.onRequest = (request) async {
+        if (request['@type'] == 'downloadFile') {
+          return {
+            'local': {
+              'path': replacement.path,
+              'is_downloading_completed': true,
+            },
+          };
+        }
+        return null;
+      };
+      expect(await service.cacheCover(track, active: () => true), png);
+      expect(await service.hasCachedCover(track), isTrue);
+      expect(
+        td.requests.where((r) => r['@type'] == 'downloadFile'),
+        hasLength(2),
+      );
+    },
+  );
+
+  test(
     'visible artwork downloads are shared and lower priority than playback',
     () async {
       final first = service.image(90);
