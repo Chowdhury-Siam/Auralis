@@ -56,7 +56,6 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
   int _index = 0;
   int _previewDestination = 0;
   String _previewCollection = 'All songs';
-  bool _previewSearch = false;
   bool _busy = false, _checked = false, _restored = false;
   bool? _notifications, _battery;
   String? _error, _permissionError;
@@ -567,22 +566,17 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                 child: Text(
-                  _previewSearch
-                      ? 'Preview · Search'
-                      : 'Preview · ${AppNavigation.labels[_previewDestination]}',
+                  'Preview · ${AppNavigation.labels[_previewDestination]}',
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
               ),
               AppNavigation(
                 style: prefs.navigationStyle,
                 radius: prefs.navigationRadius,
+                reducedMotion: prefs.reducedMotion,
                 selected: _previewDestination,
-                onSelected: (value) => setState(() {
-                  _previewDestination = value;
-                  _previewSearch = false;
-                }),
-                onSearch: () =>
-                    setState(() => _previewSearch = !_previewSearch),
+                onSelected: (value) =>
+                    setState(() => _previewDestination = value),
               ),
             ],
           ),
@@ -602,7 +596,7 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
                 title: Text(style.label),
                 subtitle: Text(switch (style) {
                   AppNavigationStyle.expressive =>
-                    'Floating pill with a separate search button.',
+                    'Floating bar with labeled tabs.',
                   AppNavigationStyle.classic => 'A compact row of icons.',
                   AppNavigationStyle.fullWidth =>
                     'Labels across the bottom of the screen.',
