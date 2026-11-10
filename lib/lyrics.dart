@@ -282,7 +282,7 @@ class LyricsRepository extends ChangeNotifier {
           !result.lines.any((line) => line.text.trim().isNotEmpty)) {
         result = null;
       }
-      if (result != null) save(track, result);
+      if (result != null) unawaited(save(track, result));
     }
     result ??= await find(track);
     if (!active() || _closed || result == null) return null;
@@ -304,6 +304,20 @@ class LyricsRepository extends ChangeNotifier {
 
   Future<Lyrics?> loadCached(Track track) async {
     if (cached(track) case final value?) return value;
+    final saved = await _readSavedLyrics(track);
+    if (saved == null) return null;
+    if (cached(track) == null) {
+      _cache.remove(_key(track));
+      _cache[_key(track)] = saved;
+      if (_cache.length > 32) _cache.remove(_cache.keys.first);
+    }
+    return cached(track);
+  }
+
+  Future<bool> hasSavedLyrics(Track track) async =>
+      await _readSavedLyrics(track) != null;
+
+  Future<Lyrics?> _readSavedLyrics(Track track) async {
     final disk = cache?.call();
     final bytes = await disk?.read(track, 'lyrics', 2 * 1024 * 1024);
     if (bytes == null ||
@@ -331,12 +345,11 @@ class LyricsRepository extends ChangeNotifier {
         embedded: data['embedded'] == true,
         imported: data['imported'] == true,
       );
-      if (cached(track) == null) {
-        _cache.remove(_key(track));
-        _cache[_key(track)] = result;
-        if (_cache.length > 32) _cache.remove(_cache.keys.first);
-      }
-      return cached(track);
+      return result.instrumental ||
+              result.plain.trim().isNotEmpty ||
+              result.lines.any((line) => line.text.trim().isNotEmpty)
+          ? result
+          : null;
     } catch (_) {
       return null;
     }
@@ -377,14 +390,15 @@ class LyricsRepository extends ChangeNotifier {
   ]);
   bool contains(Track track) => _cache.containsKey(_key(track));
   Lyrics? cached(Track track) => _cache[_key(track)];
-  void save(Track track, Lyrics? lyrics) {
+  Future<void> save(Track track, Lyrics? lyrics) async {
     if (_closed) return;
     _pending.remove(_key(track));
     _cache.remove(_key(track));
     _cache[_key(track)] = lyrics;
     if (_cache.length > 32) _cache.remove(_cache.keys.first);
-    if (lyrics != null) unawaited(persist(track, lyrics));
+    final writing = lyrics == null ? null : persist(track, lyrics);
     notifyListeners();
+    await writing;
   }
 
   Future<Lyrics?> find(Track track, {bool refresh = false}) {
@@ -539,8 +553,10 @@ class LyricsRepository extends ChangeNotifier {
         }
         if (!current()) return superseded();
         if (result != null) {
-          save(track, result);
-          return result;
+          await save(track, result);
+          return !_closed && cache?.call().directory?.path == scope
+              ? cached(track) ?? result
+              : null;
         }
       }
       // Unavailability is retryable and must never become a cached "not found".
@@ -549,7 +565,7 @@ class LyricsRepository extends ChangeNotifier {
           'Lyrics sources are unavailable. Try again later.',
         );
       }
-      if (cached(track) == null) save(track, null);
+      if (cached(track) == null) unawaited(save(track, null));
       return null;
     } finally {
       if (identical(_pending[key], requestId)) _pending.remove(key);
