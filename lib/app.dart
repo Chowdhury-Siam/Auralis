@@ -20,6 +20,7 @@ import 'wave_seek_bar.dart';
 import 'now_playing_effects.dart';
 import 'data_files.dart';
 import 'stats_view.dart';
+import 'listening.dart';
 import 'sync/controller.dart';
 import 'sync/settings_view.dart';
 import 'release_notes.dart';
@@ -27,6 +28,8 @@ import 'app_navigation.dart';
 import 'setup_view.dart';
 import 'settings_view.dart';
 import 'preference_widgets.dart';
+
+part 'discovery_view.dart';
 
 const accent = Color(0xFFC7B5FF),
     surface = Color(0xFF19171E),
@@ -206,6 +209,7 @@ class _AuralisAppState extends State<AuralisApp> {
             onFinished: () => setState(() => _settingUp = false),
           )
         : PlayerShell(
+            startOnHome: true,
             player: widget.player,
             telegram: widget.telegram,
             startupWarning: widget.startupWarning,
@@ -217,7 +221,9 @@ class _AuralisAppState extends State<AuralisApp> {
   );
 }
 
-enum _Page { library, telegram, nowPlaying, settings }
+enum _Page { home, search, library, telegram, nowPlaying, settings }
+
+const _mainPages = [_Page.home, _Page.search, _Page.library];
 
 class PlayerShell extends StatefulWidget {
   const PlayerShell({
@@ -230,6 +236,7 @@ class PlayerShell extends StatefulWidget {
     this.updater,
     this.dataFiles = const DataFiles(),
     this.setupMode = false,
+    this.startOnHome = false,
   });
   final PlayerController player;
   final TelegramService telegram;
@@ -238,7 +245,7 @@ class PlayerShell extends StatefulWidget {
   final String? installedVersion;
   final AppUpdater? updater;
   final DataFiles dataFiles;
-  final bool setupMode;
+  final bool setupMode, startOnHome;
   @override
   State<PlayerShell> createState() => _PlayerShellState();
 }
@@ -246,7 +253,31 @@ class PlayerShell extends StatefulWidget {
 class _PlayerShellState extends State<PlayerShell>
     with SingleTickerProviderStateMixin {
   ColorScheme get _colors => Theme.of(context).colorScheme;
-  _Page destination = _Page.library;
+  _Page get _rootPage => widget.startOnHome ? _Page.home : _Page.library;
+  late _Page destination = _rootPage;
+  late _Page _primaryPage = _rootPage;
+  _BrowseBy _browseBy = _BrowseBy.channel;
+  bool _browseAsList = false, _mixExpanded = false;
+  void _toggleMixExpanded() => setState(() => _mixExpanded = !_mixExpanded);
+  void _openRecent() {
+    _navigate(_Page.library);
+    setState(() {
+      collection = 'Recently played';
+      selectedPlaylist = null;
+      search.clear();
+    });
+  }
+
+  String? _browseGroup;
+
+  void _setBrowseBy(_BrowseBy value) => setState(() {
+    _browseBy = value;
+    _browseGroup = null;
+  });
+  void _toggleBrowseLayout() => setState(() => _browseAsList = !_browseAsList);
+  void _selectBrowseGroup(String? group) =>
+      setState(() => _browseGroup = group);
+
   _Page _playerOrigin = _Page.library;
   bool showLyrics = false;
   String collection = 'All songs';
@@ -256,6 +287,7 @@ class _PlayerShellState extends State<PlayerShell>
   bool _cachingLibrary = false;
   String? _cacheSummary;
   final search = TextEditingController();
+  final _discoveryFocus = FocusNode();
   final settingsSearch = TextEditingController();
   SettingsSection? _settingsSection;
   late final ChannelLibrary library;
@@ -446,7 +478,10 @@ class _PlayerShellState extends State<PlayerShell>
     }
   }
 
+  bool get _keyboardOpen => MediaQuery.viewInsetsOf(context).bottom > 0;
+
   double get _dockPadding {
+    if (_keyboardOpen) return 16;
     final size = MediaQuery.sizeOf(context);
     final navigation =
         !widget.setupMode &&
@@ -537,11 +572,16 @@ class _PlayerShellState extends State<PlayerShell>
       _settingsSection = null;
       settingsSearch.clear();
     }
+    if (page != destination && page != _Page.nowPlaying) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      search.clear();
+      _browseGroup = null;
+    }
     setState(() {
+      if (_mainPages.contains(page)) _primaryPage = page;
       destination = page;
       _closingPlayer = false;
       showLyrics = openLyrics;
-      search.clear();
     });
   }
 
@@ -554,8 +594,13 @@ class _PlayerShellState extends State<PlayerShell>
       } else {
         unawaited(_closeNowPlaying());
       }
-    } else if (destination != _Page.library) {
-      _navigate(_Page.library);
+    } else if (destination == _Page.search && _browseGroup != null) {
+      search.clear();
+      _selectBrowseGroup(null);
+    } else if (destination == _Page.settings || destination == _Page.telegram) {
+      _navigate(_primaryPage);
+    } else if (destination != _rootPage) {
+      _navigate(_rootPage);
     }
   }
 
@@ -575,6 +620,7 @@ class _PlayerShellState extends State<PlayerShell>
     library.dispose();
     widget.sync?.removeListener(_syncChanged);
     search.dispose();
+    _discoveryFocus.dispose();
     settingsSearch.dispose();
     super.dispose();
   }
@@ -619,7 +665,9 @@ class _PlayerShellState extends State<PlayerShell>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!immersiveLyrics) ...[
+          if (!immersiveLyrics &&
+              page != _Page.home &&
+              page != _Page.search) ...[
             _header(narrow, short: short, page: page),
             SizedBox(height: short ? 10 : 22),
           ],
@@ -637,6 +685,8 @@ class _PlayerShellState extends State<PlayerShell>
               child: KeyedSubtree(
                 key: ValueKey((page, immersiveLyrics)),
                 child: switch (page) {
+                  _Page.home => _home(),
+                  _Page.search => _discover(),
                   _Page.library => _library(),
                   _Page.telegram => _telegram(),
                   _Page.settings => _settingsPage(),
@@ -671,7 +721,7 @@ class _PlayerShellState extends State<PlayerShell>
       final page = destination == _Page.nowPlaying
           ? _playerOrigin
           : destination;
-      final compact = viewport.width < 900;
+      final compact = viewport.width < 900 && !_keyboardOpen;
       final floatingNavigation =
           compact &&
           player.settings.navigationStyle != AppNavigationStyle.fullWidth;
@@ -700,7 +750,7 @@ class _PlayerShellState extends State<PlayerShell>
                 transitionCopy: transitionCopy,
               ),
             ),
-          if (player.current != null)
+          if (!_keyboardOpen && player.current != null)
             Positioned(
               left: 0,
               right: 0,
@@ -1119,22 +1169,26 @@ class _PlayerShellState extends State<PlayerShell>
   Future<void> _stats({bool backup = false}) async {
     await player.flushListeningStats();
     if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (_) => StatsDataDialog(
-        player: player,
-        telegram: telegram,
-        files: widget.dataFiles,
-        openBackupSection: backup,
-        onRestored: () async {
-          setState(() {
-            selectedPlaylist = null;
-            collection = 'All songs';
-          });
-          await library.refresh();
-        },
-      ),
+    Widget buildStats(BuildContext context) => StatsDataDialog(
+      player: player,
+      telegram: telegram,
+      files: widget.dataFiles,
+      fullscreen: !backup,
+      openBackupSection: backup,
+      onRestored: () async {
+        setState(() {
+          selectedPlaylist = null;
+          collection = 'All songs';
+        });
+        await library.refresh();
+      },
     );
+    if (backup) {
+      await showDialog<void>(context: context, builder: buildStats);
+    } else {
+      await Navigator.of(context)
+          .push<void>(MaterialPageRoute(builder: buildStats));
+    }
   }
 
   Future<void> _openSetup() => Navigator.of(context).push<void>(
@@ -1152,31 +1206,12 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Future<void> _searchLibrary() async {
-    _navigate(_Page.library);
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Search library'),
-        content: TextField(
-          controller: search,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Song, artist or channel',
-          ),
-          onSubmitted: (_) => Navigator.pop(context),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Done'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _openTelegram() => _navigate(_Page.telegram);
+
+  void _focusDiscovery() {
+    _navigate(_Page.search);
+    _discoveryFocus.requestFocus();
+  }
 
   void _notice(String value) {
     if (mounted) {
@@ -1214,18 +1249,25 @@ class _PlayerShellState extends State<PlayerShell>
         final narrow = box.maxWidth < 1180;
         final short = box.maxHeight < 560;
         // Leave room for the two-line player header at larger text sizes.
-        final updateTop = MediaQuery.paddingOf(context).top +
+        final updateTop =
+            MediaQuery.paddingOf(context).top +
             (destination == _Page.nowPlaying
-                ? 32 + math.max(48, MediaQuery.textScalerOf(context).scale(16) * 3)
+                ? 32 +
+                      math.max(
+                        48,
+                        MediaQuery.textScalerOf(context).scale(16) * 3,
+                      )
                 : 12);
         return PopScope<Object?>(
-          canPop: destination == _Page.library,
+          canPop: destination == _rootPage,
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop) _back();
           },
           child: CallbackShortcuts(
             bindings: {
               const SingleActivator(LogicalKeyboardKey.escape): _back,
+              const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+                  _focusDiscovery,
               const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () =>
                   player.restoringData
                   ? null
@@ -1328,18 +1370,16 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _bottomNavigation({
-    required _Page page,
-    bool transitionCopy = false,
-  }) {
-    const pages = [_Page.library, _Page.telegram, _Page.settings];
+  Widget _bottomNavigation({required _Page page, bool transitionCopy = false}) {
     return AppNavigation(
       key: transitionCopy ? null : const ValueKey('app-navigation'),
       style: player.settings.navigationStyle,
       radius: player.settings.navigationRadius,
-      selected: pages.indexOf(page),
-      onSelected: (i) => _navigate(pages[i]),
-      onSearch: _searchLibrary,
+      reducedMotion: _reducedPlayerMotion,
+      selected: _mainPages.indexOf(
+        _mainPages.contains(page) ? page : _primaryPage,
+      ),
+      onSelected: (i) => _navigate(_mainPages[i]),
     );
   }
 
@@ -1397,63 +1437,72 @@ class _PlayerShellState extends State<PlayerShell>
               ? 20
               : 32,
         ),
-        for (final (i, icon, label) in [
-          (_Page.library, Icons.library_music_rounded, 'Library'),
-          (_Page.telegram, Icons.send_rounded, 'Telegram'),
-        ])
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Tooltip(
-              message: label,
-              child: Material(
-                color: destination == i
-                    ? _colors.primaryContainer
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(18),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () => _navigate(i),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: short ? 10 : 16,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: narrow
-                          ? MainAxisAlignment.center
-                          : MainAxisAlignment.start,
-                      children: [
-                        Icon(
-                          icon,
-                          color: destination == i
-                              ? _colors.primary
-                              : _colors.onSurfaceVariant,
-                          size: 23,
-                        ),
-                        if (!narrow) ...[
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
+        Flexible(
+          fit: FlexFit.tight,
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              for (final (i, icon, label) in [
+                (_Page.home, Icons.home_rounded, 'Home'),
+                (_Page.search, Icons.search_rounded, 'Search'),
+                (_Page.library, Icons.library_music_rounded, 'Library'),
+                (_Page.telegram, Icons.send_rounded, 'Telegram'),
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Tooltip(
+                    message: label,
+                    child: Material(
+                      color: destination == i
+                          ? _colors.primaryContainer
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () => _navigate(i),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: short ? 10 : 16,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: narrow
+                                ? MainAxisAlignment.center
+                                : MainAxisAlignment.start,
+                            children: [
+                              Icon(
+                                icon,
                                 color: destination == i
                                     ? _colors.primary
                                     : _colors.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
+                                size: 23,
                               ),
-                            ),
+                              if (!narrow) ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: destination == i
+                                          ? _colors.primary
+                                          : _colors.onSurfaceVariant,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                        ],
-                      ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
+            ],
           ),
-        const Spacer(),
+        ),
         if (!narrow && !short)
           Padding(
             padding: const EdgeInsets.all(12),
@@ -1480,6 +1529,23 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
+  String get _backToPrimary =>
+      'Back to ${AppNavigation.labels[_mainPages.indexOf(_primaryPage)]}';
+
+  bool get _mobileNavigation => MediaQuery.sizeOf(context).width < 900;
+
+  Widget _settingsButton() => IconButton(
+    onPressed: () => _navigate(_Page.settings),
+    tooltip: 'Settings',
+    icon: const Icon(Icons.tune_rounded, size: 20),
+  );
+
+  Widget _telegramButton() => IconButton(
+    onPressed: _openTelegram,
+    tooltip: 'Telegram',
+    icon: const Icon(Icons.send_rounded, size: 20),
+  );
+
   Widget _header(
     bool narrow, {
     bool short = false,
@@ -1495,7 +1561,7 @@ class _PlayerShellState extends State<PlayerShell>
           children: [
             IconButton.filledTonal(
               tooltip: _settingsSection == null
-                  ? 'Back to Library'
+                  ? _backToPrimary
                   : 'Back to Settings',
               style: IconButton.styleFrom(
                 backgroundColor: _colors.primaryContainer,
@@ -1546,7 +1612,8 @@ class _PlayerShellState extends State<PlayerShell>
               children: [
                 IconButton.filledTonal(
                   key: const ValueKey('close-now-playing'),
-                  tooltip: 'Back to Library',
+                  tooltip:
+                      'Back to ${AppNavigation.labels[_mainPages.indexOf(_mainPages.contains(_playerOrigin) ? _playerOrigin : _primaryPage)]}',
                   onPressed: _closingPlayer ? null : _closeNowPlaying,
                   icon: const Icon(Icons.keyboard_arrow_down_rounded),
                 ),
@@ -1564,14 +1631,6 @@ class _PlayerShellState extends State<PlayerShell>
             )
           : Row(
               children: [
-                if (destination == _Page.settings) ...[
-                  IconButton(
-                    tooltip: 'Back to Library',
-                    onPressed: _back,
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                  const SizedBox(width: 12),
-                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1583,6 +1642,7 @@ class _PlayerShellState extends State<PlayerShell>
                             _Page.telegram => 'MUSIC IN YOUR CHANNELS',
                             _Page.settings => 'MAKE IT YOURS',
                             _Page.nowPlaying => 'IN THE MOMENT',
+                            _Page.home || _Page.search => '',
                           },
                           style: TextStyle(
                             fontSize: 9,
@@ -1598,6 +1658,8 @@ class _PlayerShellState extends State<PlayerShell>
                           _Page.telegram => 'Telegram',
                           _Page.settings => 'Settings',
                           _Page.nowPlaying => 'Now playing',
+                          _Page.home => 'Home',
+                          _Page.search => 'Search',
                         },
                         style: TextStyle(
                           fontSize: short
@@ -1616,6 +1678,10 @@ class _PlayerShellState extends State<PlayerShell>
                     ],
                   ),
                 ),
+                if (_mobileNavigation) ...[
+                  if (destination != _Page.telegram) _telegramButton(),
+                  _settingsButton(),
+                ],
                 if (destination == _Page.library) ...[
                   if (inlineCounts)
                     Padding(
@@ -1694,32 +1760,41 @@ class _PlayerShellState extends State<PlayerShell>
       style: TextStyle(color: _colors.onErrorContainer, fontSize: 12),
     ),
   );
-  Widget _search(String hint, {Widget? trailing}) => TextField(
-    controller: search,
-    decoration: InputDecoration(
-      hintText: hint,
-      prefixIcon: const Icon(Icons.search_rounded, size: 20),
-      contentPadding: const EdgeInsets.symmetric(vertical: 12),
-      suffixIcon: search.text.isEmpty && trailing == null
-          ? null
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (search.text.isNotEmpty)
-                  IconButton(
-                    onPressed: search.clear,
-                    tooltip: 'Clear search',
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                  ),
-                if (trailing != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: trailing,
-                  ),
-              ],
-            ),
-    ),
-  );
+  Widget _search(String hint, {Widget? trailing, bool discover = false}) =>
+      TextField(
+        controller: search,
+        focusNode: discover ? _discoveryFocus : null,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: hint,
+          border: discover
+              ? OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(28),
+                  borderSide: BorderSide.none,
+                )
+              : null,
+          prefixIcon: const Icon(Icons.search_rounded, size: 20),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          suffixIcon: search.text.isEmpty && trailing == null
+              ? null
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (search.text.isNotEmpty)
+                      IconButton(
+                        onPressed: search.clear,
+                        tooltip: 'Clear search',
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                      ),
+                    if (trailing != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: trailing,
+                      ),
+                  ],
+                ),
+        ),
+      );
 
   Future<String?> _editPlaylist({String? previous}) => showDialog<String>(
     context: context,
@@ -1990,8 +2065,11 @@ class _PlayerShellState extends State<PlayerShell>
         : collection == 'Playlists'
         ? player.settings.playlists[selectedPlaylist] ?? <String>[]
         : null;
-    if (ids == null) return tracks;
-    final byId = {for (final track in tracks) track.id: track};
+    return ids == null ? tracks : _tracksForIds(ids);
+  }
+
+  List<Track> _tracksForIds(Iterable<String> ids) {
+    final byId = {for (final track in library.tracks) track.id: track};
     return [
       for (final id in ids)
         if (byId[id] case final Track track) track,
@@ -2278,7 +2356,7 @@ class _PlayerShellState extends State<PlayerShell>
     },
   );
   Widget _trackList(List<Track> tracks, {bool preserveOrder = false}) {
-    final query = search.text.toLowerCase();
+    final query = search.text.trim().toLowerCase();
     final visible = tracks
         .where(
           (t) => '${t.title} ${t.artist} ${t.source}'.toLowerCase().contains(
