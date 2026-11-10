@@ -10,8 +10,9 @@ permissions:
   contents: read
   actions: write
 concurrency:
-  group: cleanup-${{ github.repository }}
-  cancel-in-progress: false
+  # Keep build artifacts available while the publisher is using them.
+  group: stable-release-${{ github.repository }}
+  queue: max
 jobs:
   cleanup:
     if: github.ref == 'refs/heads/main'
@@ -39,8 +40,8 @@ jobs:
             for (const run of runs.filter(r => r.path === '.github/workflows/publish-release.yml' && r.conclusion === 'success')) {
               const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {owner,repo,run_id:run.id,per_page:100});
               for (const artifact of artifacts) {
-                const match = /^published-([a-f0-9]{40})-([1-9][0-9]*)-([1-9][0-9]*)(?:-([1-9][0-9]*))?$/.exec(artifact.name);
-                if (match) { consumed.add(Number(match[2])); consumed.add(Number(match[3])); if (match[4]) consumed.add(Number(match[4])); }
+                const match = /^published-([a-f0-9]{40})-(0|[1-9][0-9]*)-(0|[1-9][0-9]*)(?:-([1-9][0-9]*))?$/.exec(artifact.name);
+                if (match) for (const id of match.slice(2)) if (Number(id) > 0) consumed.add(Number(id));
               }
             }
             // Existing published releases also prove older builds were consumed.
