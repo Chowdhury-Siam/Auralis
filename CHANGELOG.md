@@ -1,5 +1,22 @@
 # Auralis changes
 
+## 0.1.123
+
+- Sync recently played tracks and qualified plays promptly, send listening progress every five seconds, and refresh open listening stats when another device syncs.
+
+## 0.1.122
+
+- Merge the full cloud copy with the existing local sync document and keep pending changes for the next upload.
+- Add playback repeat and library sort order to General and move the setup shortcut to About.
+
+## 0.1.121
+
+- Removed standalone CSV and JSON exports and the Backup & Restore section from Listening stats.
+
+## 0.1.120
+
+- Show listening time or play count for every timeline period and wrap monthly bars on narrow screens.
+
 ## 0.1.119
 
 - Redesigned Backup & Restore with a compact dialog and distinct export, restore, and recovery actions.
