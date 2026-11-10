@@ -5,6 +5,7 @@ import 'package:auralis/app.dart';
 import 'package:auralis/app_navigation.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
+import 'package:auralis/stats_view.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
 import 'package:flutter/material.dart';
@@ -67,6 +68,8 @@ void main() {
       addTearDown(telegram.shutdown);
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
       final list = find.ancestor(
         of: find.byKey(const ValueKey('track-title-0')),
         matching: find.byType(ListView),
@@ -93,13 +96,7 @@ void main() {
             .descendant(of: navigation, matching: find.byType(Material))
             .first;
         expect(tester.getRect(capsule).bottom, lessThanOrEqualTo(844 - 24));
-        final x = style == AppNavigationStyle.expressive
-            ? tester.getRect(capsule).right + 4
-            : 100.0;
-        final gap = Offset(
-          x,
-          navBounds.top + (style == AppNavigationStyle.expressive ? 40 : 4),
-        );
+        final gap = Offset(100, navBounds.top + 4);
         // A drag through the unpainted gap reaches the real list underneath.
         await tester.dragFrom(gap, const Offset(0, -90));
         await tester.pumpAndSettle();
@@ -125,23 +122,95 @@ void main() {
       expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
       await tester.tap(find.byTooltip('Library').first);
       await tester.pumpAndSettle();
-      if (style == AppNavigationStyle.expressive) {
-        await tester.tap(find.byTooltip('Search library'));
-        await tester.pumpAndSettle();
-        final dialog = find.byType(AlertDialog);
-        expect(dialog, findsOneWidget);
-        await tester.enterText(
-          find.descendant(of: dialog, matching: find.byType(TextField)),
-          'Song 29',
-        );
-        await tester.tap(find.text('Done'));
-        await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('track-title-29')), findsOneWidget);
-        expect(find.byKey(const ValueKey('track-title-1')), findsNothing);
-      }
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      expect(find.text('Browse your library'), findsOneWidget);
+      await tester.tap(find.byTooltip('Show list'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Show grid'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Song 29');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('track-title-29')), findsOneWidget);
+      expect(find.byKey(const ValueKey('track-title-1')), findsNothing);
       expect(tester.widget<AppNavigation>(navigation).style, style);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });
   }
+
+  testWidgets('Home connects the daily mix, history, stats and Search groups', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final tracks = List.generate(
+      6,
+      (i) => Track(
+        id: '1:$i',
+        title: 'Track $i',
+        artist: i.isEven ? 'Lunar' : 'Solar',
+        source: 'Music',
+      ),
+    );
+    final settings = MemorySettings()
+      ..reducedMotion = true
+      ..automaticLyrics = false
+      ..recentIds = [tracks.first.id]
+      ..selectedChannels = [const MusicChat(1, 'Music')];
+    settings.listening.record(tracks.first, 125000, 2, DateTime.now());
+    final player = PlayerController(
+      FakeAudio(),
+      TelegramStreamProxy((_) async => {}),
+      settings,
+    );
+    final telegram = NavigationTelegram(tracks);
+    addTearDown(player.shutdown);
+    addTearDown(telegram.shutdown);
+    await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+    await tester.pumpAndSettle();
+    expect(find.text('Your Mix'), findsOneWidget);
+    expect(find.text('Daily Mix'), findsOneWidget);
+    final expand = find.text('Show full mix (6)');
+    await tester.drag(
+      find.byKey(const PageStorageKey('home-scroll')),
+      const Offset(0, -350),
+    );
+    await tester.pumpAndSettle();
+    expect(expand.hitTestable(), findsOneWidget);
+    await tester.tap(expand);
+    await tester.pumpAndSettle();
+    expect(find.text('Show fewer tracks'), findsOneWidget);
+
+    final stats = find.byTooltip('Open listening stats');
+    final scroll = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position;
+    scroll.jumpTo(scroll.maxScrollExtent);
+    await tester.pumpAndSettle();
+    await tester.tap(stats);
+    await tester.pumpAndSettle();
+    expect(find.byType(StatsDataDialog), findsOneWidget);
+    expect(find.text('2m 5s'), findsWidgets);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Artists'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Solar'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('track-title-1:1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('track-title-1:0')), findsNothing);
+    await tester.tap(find.byTooltip('Back to browse'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Lunar');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('track-title-1:0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('track-title-1:1')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 }
