@@ -121,9 +121,9 @@ void main() {
       }
       await tester.tap(find.widgetWithText(ListTile, 'Expressive pill'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Telegram'));
+      await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
-      expect(find.text('Preview · Telegram'), findsOneWidget);
+      expect(find.text('Preview · Library'), findsOneWidget);
       await capture('setup-navigation');
       for (var i = 0; i < 3; i++) {
         await tester.tap(find.byKey(const ValueKey('setup-next')));
@@ -135,7 +135,7 @@ void main() {
       expect(settings.setupComplete, isTrue);
       expect(settings.lastSeenRelease, currentReleaseVersion);
       expect(find.byType(SetupView), findsNothing);
-      expect(find.byTooltip('Search library'), findsOneWidget);
+      expect(find.byTooltip('Search'), findsOneWidget);
       expect(find.byType(AlertDialog), findsNothing);
       expect(tester.takeException(), isNull);
       await capture('floating-navigation');
@@ -450,18 +450,21 @@ void main() {
       expect(find.text('All set!'), findsOneWidget);
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('library-collection-menu')),
         findsOneWidget,
       );
       expect(find.byType(AppNavigation), findsOneWidget);
-      await tester.tap(find.byTooltip('Search library'));
+      await tester.tap(find.byTooltip('Search'));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsOneWidget);
-      await tester.enterText(find.byType(TextField).last, 'Example');
-      await tester.tap(find.text('Done'));
+      await tester.enterText(find.byType(TextField), 'Example');
       await tester.pumpAndSettle();
+      expect(find.text('Search results'), findsOneWidget);
       expect(find.text('Example'), findsOneWidget);
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
       settings.recentIds = ['saved'];
       player.refreshSettings();
       await tester.pumpAndSettle();
