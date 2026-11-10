@@ -120,8 +120,19 @@ class SyncDocument {
         final current = (records[key(parts)] as Map?)?['value'] as Map? ?? {};
         final ms = max(0, (value['milliseconds'] as int) - (was['milliseconds'] as int? ?? 0));
         final plays = max(0, (value['plays'] as int) - (was['plays'] as int? ?? 0));
-        if (ms > 0 || plays > 0) {
-          _put(parts, {...value, 'milliseconds': (current['milliseconds'] as int? ?? 0) + ms, 'plays': (current['plays'] as int? ?? 0) + plays}, seed);
+        final labelsChanged = kind == 'tracks' &&
+            was.isNotEmpty &&
+            const ['title', 'artist', 'source'].any((field) => value[field] != was[field]);
+        if (ms > 0 || plays > 0 || labelsChanged) {
+          final previousDate = was['lastListened'] as String? ?? '';
+          final restoredDate = value['lastListened'] as String? ?? '';
+          _put(parts, {
+            ...value,
+            if (labelsChanged && previousDate.compareTo(restoredDate) > 0)
+              'lastListened': previousDate,
+            'milliseconds': (current['milliseconds'] as int? ?? 0) + ms,
+            'plays': (current['plays'] as int? ?? 0) + plays,
+          }, seed);
         }
       }
     }
@@ -175,6 +186,7 @@ class SyncDocument {
     final headers = <String, (String, Map)>{};
     final channels = <Map<String, dynamic>>[];
     final tracks = <String, dynamic>{}, days = <String, dynamic>{};
+    final trackMetadata = <String, Map>{};
     for (final entry in records.entries) {
       final parts = (jsonDecode(entry.key) as List).cast<String>(), r = entry.value as Map;
       if (parts.first == 'playlist') {
@@ -205,10 +217,24 @@ class SyncDocument {
           final target = parts.first == 'stats' ? tracks : days, id = parts[2];
           final before = target[id] as Map? ?? {};
           final v = value as Map;
-          final newer = (v['lastListened'] as String? ?? '').compareTo(before['lastListened'] as String? ?? '') >= 0;
-          target[id] = {...(newer ? v : before),
+          var metadata = v;
+          if (parts.first == 'stats') {
+            final previousRecord = trackMetadata[id];
+            final dateOrder = (v['lastListened'] as String? ?? '')
+                .compareTo(before['lastListened'] as String? ?? '');
+            // Use the newer label revision when the last play is the same.
+            if (previousRecord == null || dateOrder > 0 ||
+                (dateOrder == 0 && compare(r, previousRecord) > 0)) {
+              trackMetadata[id] = r;
+            } else {
+              metadata = before;
+            }
+          }
+          target[id] = {
+            ...metadata,
             'milliseconds': (before['milliseconds'] as int? ?? 0) + (v['milliseconds'] as int),
-            'plays': (before['plays'] as int? ?? 0) + (v['plays'] as int)};
+            'plays': (before['plays'] as int? ?? 0) + (v['plays'] as int),
+          };
       }
     }
     recent.sort((a,b) => b.$2.compareTo(a.$2));
