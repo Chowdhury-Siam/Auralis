@@ -155,6 +155,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
       expect(find.text('Choose your music channels'), findsOneWidget);
       // Original test artwork is embedded in an MP3 with no Telegram thumbnail.
       await tester.runAsync(() async {
@@ -418,6 +420,8 @@ void main() {
             ),
           ),
         );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Library'));
         await tester.pumpAndSettle();
         expect(find.text('Connect Telegram for your music'), findsOneWidget);
         expect(find.text('Choose audio files'), findsNothing);
