@@ -83,7 +83,7 @@ See Telegram covers, channel avatars, and supported embedded MP3, FLAC, and M4A 
 
 ### 📊 Listening Stats
 
-View compact totals, a seven-day chart, and Tracks/Artists ranking tabs. Long-press an activity bar for its exact date and listening time. Export CSV or JSON; Backup & Restore expands when needed.
+View listening time and play counts by period, with Tracks and Artists rankings. Use Backup & Restore in Settings to save a restorable copy.
 
 ### 💾 Backup & Restore
 
@@ -147,7 +147,7 @@ Android APKs now always use optimized release mode. Run **Set up Android signing
 
 ### First launch
 
-A fresh install opens with **Worker Sync**. Sign in or create an account with your Worker URL, or connect later in **Settings → Account & sync**. Choose **Customize setup** for Telegram, backup restore, Android permissions, lyrics and interactive appearance previews, or **Skip setup** to go straight to Home. You can reopen setup under **Settings → General → Set up Auralis**.
+A fresh install opens with **Worker Sync**. Sign in or create an account with your Worker URL, or connect later in **Settings → Account & sync**. Choose **Customize setup** for Telegram, backup restore, Android permissions, lyrics and interactive appearance previews, or **Skip setup** to go straight to Home. You can reopen setup under **Settings → About → Set up Auralis**.
 
 | Welcome | Navigation | Translation menu |
 | --- | --- | --- |
@@ -217,7 +217,6 @@ See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality note
 | Task | Where to go |
 | --- | --- |
 | View listening time, play counts, and all-time rankings | **Home → Listening stats** or **Settings → Data & sync → Listening stats** |
-| Export stats as CSV or JSON | **Listening stats → Export CSV / Export JSON** |
 | Export or restore a backup | **Settings → Data & sync → Backup & Restore** |
 | Recover the data replaced by the last restore | **Restore recovery copy** in the backup section |
 
@@ -235,9 +234,10 @@ See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for val
 
 | Setting or action | Purpose |
 | --- | --- |
-| **General / Appearance** | Reopen setup, choose compact library navigation, phone navigation style and corner radius |
+| **General** | Choose playback repeat and library sort order |
+| **Appearance** | Choose compact library navigation, phone navigation style and corner radius |
 | **Lyrics & artwork → Lyrics & translation** | Automatic lookup/translation, direction, and primary/fallback providers |
-| **Data & sync → Listening stats** | Review listening activity and export data |
+| **Data & sync → Listening stats** | Review listening activity and rankings |
 | **Data & sync → Backup & Restore** | Save and recover your Telegram account, collections, stats, and preferences |
 | **App updates** | Check stable releases and choose whether to install |
 | **Privacy & security → Sign out of Telegram** | Stop playback, clear queue/channel selections, and forget saved API credentials after successful logout |
@@ -314,7 +314,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.119+120**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.123+124**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
