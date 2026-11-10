@@ -766,10 +766,7 @@ void main() {
         isTrue,
       );
       expect(
-        identical(
-          tester.widget<SnapshotWidget>(cachedBlur),
-          snapshot,
-        ),
+        identical(tester.widget<SnapshotWidget>(cachedBlur), snapshot),
         isTrue,
       );
       await gesture.up();
@@ -908,7 +905,7 @@ void main() {
 
   for (final size in [const Size(390, 844), const Size(1280, 714)]) {
     testWidgets(
-      'down arrow reveals Library and mini-player during collapse at $size',
+      'down arrow reveals Home and mini-player during collapse at $size',
       (tester) async {
         final (audio, player) = await mount(tester, size: size);
         await audio.toggle();
@@ -924,8 +921,8 @@ void main() {
         );
         expect(background, findsOneWidget);
         expect(
-          find.descendant(of: background, matching: find.text('Library')),
-          findsWidgets,
+          find.descendant(of: background, matching: find.text('Your Mix')),
+          findsOneWidget,
         );
         expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
         expect(
@@ -957,10 +954,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(background, findsNothing);
         expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
-        expect(
-          tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
-          'Library',
-        );
+        expect(find.text('Your Mix'), findsOneWidget);
         expect(player.current?.id, 'first');
         expect(audio.playing, isFalse);
         expect(
@@ -1074,10 +1068,7 @@ void main() {
       );
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(
-        tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
-        'Library',
-      );
+      expect(find.text('Your Mix'), findsOneWidget);
       expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
       expect(player.current?.id, 'first');
       expect(audio.playing, isTrue);
@@ -1086,44 +1077,37 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Settings is a selected full page and system Back returns to Library',
-    (tester) async {
-      await mount(
-        tester,
-        reduced: true,
-        openPlayer: false,
-        size: const Size(390, 844),
-      );
-      await tester.tap(find.byTooltip('Settings'));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('settings-page')).hitTestable(),
-        findsOneWidget,
-      );
-      expect(find.byType(AlertDialog), findsNothing);
-      expect(find.byType(Dialog), findsNothing);
-      final navigation = tester.widget<NavigationBar>(
-        find.byType(NavigationBar),
-      );
-      final destinations = navigation.destinations
-          .cast<NavigationDestination>();
-      expect(destinations.map((destination) => destination.label), [
-        'Library',
-        'Telegram',
-        'Settings',
-      ]);
-      expect(destinations[navigation.selectedIndex].label, 'Settings');
-      expect(find.byTooltip('Play queue'), findsNothing);
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
-      expect(
-        tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
-        'Library',
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('Settings is a full page and system Back returns to Home', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      reduced: true,
+      openPlayer: false,
+      size: const Size(390, 844),
+    );
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('settings-page')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(Dialog), findsNothing);
+    final navigation = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    final destinations = navigation.destinations.cast<NavigationDestination>();
+    expect(destinations.map((destination) => destination.label), [
+      'Home',
+      'Search',
+      'Library',
+    ]);
+    expect(destinations[navigation.selectedIndex].label, 'Home');
+    expect(find.byTooltip('Play queue'), findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Your Mix'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'player background covers the top inset while controls and retained dock stay safe',
@@ -1140,7 +1124,7 @@ void main() {
       final originalDock = tester.element(dock);
       final dockBounds = tester.getRect(dock);
       expect(
-        tester.getRect(find.byKey(const ValueKey('page-title'))).top,
+        tester.getRect(find.text('AURALIS')).top,
         greaterThanOrEqualTo(32),
       );
       await tester.tap(find.byKey(const ValueKey('open-current-track')));
@@ -1202,7 +1186,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('close-now-playing')));
       await tester.pumpAndSettle();
       expect(
-        tester.getRect(find.byKey(const ValueKey('page-title'))).top,
+        tester.getRect(find.text('AURALIS')).top,
         greaterThanOrEqualTo(24),
       );
       expect(tester.takeException(), isNull);
@@ -1230,7 +1214,7 @@ void main() {
         matching: find.byType(NavigationDestination),
       );
       expect(destinations, findsNWidgets(3));
-      for (final label in ['Library', 'Telegram', 'Settings']) {
+      for (final label in ['Home', 'Search', 'Library']) {
         final destination = find.widgetWithText(NavigationDestination, label);
         final icon = find.descendant(
           of: destination,
