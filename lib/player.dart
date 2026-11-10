@@ -186,6 +186,7 @@ class PlayerController extends ChangeNotifier {
     _samplePosition = audio.position;
     // Count only observed playback advancement, bounded by monotonic active time.
     // Long gaps (e.g. suspended PC) and seeks cannot inflate listening totals.
+    var playbackCheckpoint = false;
     if (wasPlaying &&
         track != null &&
         gap > Duration.zero &&
@@ -193,6 +194,7 @@ class PlayerController extends ChangeNotifier {
         advancement > Duration.zero) {
       final amount = min(gap.inMilliseconds, advancement.inMilliseconds);
       if (amount > 0) {
+        final firstSample = _sessionListened == 0;
         _sessionListened += amount;
         final duration = audio.duration > Duration.zero
             ? audio.duration
@@ -202,13 +204,15 @@ class PlayerController extends ChangeNotifier {
             : 30000;
         final play = !_qualifiedPlay && _sessionListened >= threshold;
         if (play) _qualifiedPlay = true;
+        playbackCheckpoint = firstSample || play;
         settings.listening.record(track, amount, play ? 1 : 0, _now());
         _statsRevision++;
       }
     }
     if (_statsRevision != _savedStatsRevision &&
-        (!_samplePlaying && wasPlaying ||
-            elapsed - _lastStatsSave >= const Duration(seconds: 30))) {
+        (playbackCheckpoint ||
+            !_samplePlaying && wasPlaying ||
+            elapsed - _lastStatsSave >= const Duration(seconds: 5))) {
       _lastStatsSave = elapsed;
       unawaited(_saveListening());
     }
