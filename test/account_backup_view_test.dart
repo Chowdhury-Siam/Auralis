@@ -59,14 +59,16 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData.dark().copyWith(
-            textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Segoe UI'),
-          ),
-          home: Scaffold(
-            body: RepaintBoundary(
-              key: boundary,
-              child: StatsDataDialog(
+        RepaintBoundary(
+          key: boundary,
+          child: MaterialApp(
+            theme: ThemeData.dark().copyWith(
+              textTheme: ThemeData.dark().textTheme.apply(
+                fontFamily: 'Segoe UI',
+              ),
+            ),
+            home: Scaffold(
+              body: StatsDataDialog(
                 player: player,
                 telegram: service,
                 files: files,
@@ -77,12 +79,18 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
-        isFalse,
+      final account = find.widgetWithText(
+        SwitchListTile,
+        'Include Telegram account',
       );
-      // A dialog opened during reconnect must include the account by default
-      // once Telegram becomes ready, without reopening the dialog.
+      final launch = find.text('Export backup');
+      await tester.tap(launch);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(account);
+      expect(tester.widget<SwitchListTile>(account).onChanged, isNull);
+      await tester.tap(find.byTooltip('Close export'));
+      await tester.pumpAndSettle();
+      // Open the picker after the account becomes available.
       await tester.runAsync(
         () => service.start(
           apiId: 12345,
@@ -91,36 +99,64 @@ void main() {
       );
       td.auth('authorizationStateReady');
       await tester.pumpAndSettle();
-      for (final size in [const Size(1280, 800), const Size(360, 640)]) {
+      await tester.tap(launch);
+      await tester.pumpAndSettle();
+      for (final size in [
+        const Size(1280, 800),
+        const Size(360, 640),
+        const Size(320, 530),
+      ]) {
         tester.view.physicalSize = size;
+        if (size.width == 320) {
+          tester.platformDispatcher.textScaleFactorTestValue = 2;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        }
         await tester.pumpAndSettle();
+        final list = find.byType(ListView);
+        final scrollable = find.descendant(
+          of: list,
+          matching: find.byType(Scrollable),
+        );
+        final position = tester.state<ScrollableState>(scrollable).position;
+        position.jumpTo(0);
+        await tester.pumpAndSettle();
+        expect(find.text('7 of 7 sections selected'), findsOneWidget);
         expect(
-          tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
-          isTrue,
+          find.byKey(const ValueKey('export-backup-submit')).hitTestable(),
+          findsOneWidget,
         );
         expect(tester.takeException(), isNull);
-        await tester.runAsync(() async {
-          final render =
-              boundary.currentContext!.findRenderObject()!
-                  as RenderRepaintBoundary;
-          final image = await render.toImage();
-          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          await File(
-            'docs/screenshots/backup-account-${size.width.toInt()}.png',
-          ).writeAsBytes(bytes!.buffer.asUint8List());
-          image.dispose();
-        });
+        if (size.width != 320) {
+          await tester.runAsync(() async {
+            final render =
+                boundary.currentContext!.findRenderObject()!
+                    as RenderRepaintBoundary;
+            final image = await render.toImage();
+            final bytes = await image.toByteData(
+              format: ui.ImageByteFormat.png,
+            );
+            await File(
+              'docs/screenshots/backup-account-${size.width.toInt()}.png',
+            ).writeAsBytes(bytes!.buffer.asUint8List());
+            image.dispose();
+          });
+        }
+        await tester.scrollUntilVisible(account, 250, scrollable: scrollable);
+        expect(tester.widget<SwitchListTile>(account).value, isTrue);
+        expect(tester.takeException(), isNull);
       }
+      tester.view.physicalSize = const Size(360, 640);
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+      await tester.pumpAndSettle();
       td.requests.clear();
-      final create = find.text('Create backup');
-      await tester.ensureVisible(create);
-      await tester.tap(create);
+      final submit = find.byKey(const ValueKey('export-backup-submit'));
+      await tester.tap(submit);
       await tester.pumpAndSettle();
       expect(find.text('Protect your Telegram backup'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.enterText(find.byType(TextField).first, 'short');
       await tester.enterText(find.byType(TextField).last, 'different');
-      await tester.tap(create.last);
+      await tester.tap(find.text('Create backup'));
       await tester.pumpAndSettle();
       expect(
         find.text('Use at least 10 characters and matching passwords.'),
@@ -132,6 +168,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 1));
       expect(service.ready, isTrue);
+      expect(submit, findsOneWidget);
+      await tester.tap(find.byTooltip('Close export'));
+      await tester.pumpAndSettle();
       expect(files.writes, 0);
       await tester.pumpWidget(const SizedBox());
       await tester.runAsync(() async {
