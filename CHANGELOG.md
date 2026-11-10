@@ -1,5 +1,12 @@
 # Auralis changes
 
+## 0.1.116
+
+- Added Home with a Daily Mix, recently played music, and a listening stats preview.
+- Added a Search tab with song, artist, and channel search, plus grid and list views for browsing channels and artists.
+- Redesigned Listening Stats with time ranges, an interactive timeline, track and artist rankings, and listening habits.
+- Put sync status and manual sync first in Account & sync, with separate sections for Telegram, the Worker, and account management.
+
 ## 0.1.115
 
 - Fixed HTTP 503 on Turso-backed sync by using a Workers-compatible fetch call and rejecting Turso redirects explicitly. Deploy the updated Worker to apply the repair.
