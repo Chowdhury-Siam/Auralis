@@ -175,6 +175,8 @@ void main() {
           .startsWith('Caching');
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
       telegram.pause = Completer<void>();
       await refresh();
       await until(() => telegram.artworkRequests.isNotEmpty);
@@ -213,6 +215,8 @@ void main() {
       // Recreate the repository, then verify all 43 disk entries (beyond its 32-item memory limit).
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
       await fullyCachedRefresh();
       tracks.add(song(43));
