@@ -11,13 +11,12 @@ import 'storage.dart';
 class DataFiles {
   const DataFiles();
 
-  Future<String?> savePath(String name, String extension) async =>
-      (await getSaveLocation(
-        suggestedName: name,
-        acceptedTypeGroups: [
-          XTypeGroup(label: extension.toUpperCase(), extensions: [extension]),
-        ],
-      ))?.path;
+  Future<String?> savePath(String name) async => (await getSaveLocation(
+    suggestedName: name,
+    acceptedTypeGroups: const [
+      XTypeGroup(label: 'Auralis backup', extensions: ['json']),
+    ],
+  ))?.path;
 
   Future<String?> openBackup() async => (await openFile(
     acceptedTypeGroups: const [
@@ -57,11 +56,10 @@ class AndroidDataFiles extends DataFiles {
   const AndroidDataFiles();
   static const _channel = MethodChannel('app.auralis/platform');
   @override
-  Future<String?> savePath(String name, String extension) =>
-      _channel.invokeMethod<String>('createDocument', {
-        'name': name,
-        'mime': extension == 'csv' ? 'text/csv' : 'application/json',
-      });
+  Future<String?> savePath(String name) => _channel.invokeMethod<String>(
+    'createDocument',
+    {'name': name, 'mime': 'application/json'},
+  );
   @override
   Future<String?> openBackup() => _channel.invokeMethod<String>('openDocument');
   @override
