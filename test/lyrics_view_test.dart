@@ -1260,7 +1260,7 @@ void main() {
         find.byKey(const ValueKey('now-playing-play-pause')).hitTestable(),
         findsOneWidget,
       );
-      await tester.tap(find.byTooltip('Back to Library'));
+      await tester.tap(find.byTooltip('Back to Home'));
       await tester.pumpAndSettle();
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
