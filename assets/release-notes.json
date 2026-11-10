@@ -1,6 +1,12 @@
 {
-  "current": "0.1.117",
+  "current": "0.1.118",
   "releases": [
+    {
+      "version": "0.1.118",
+      "changes": [
+        "Fixed cloud sync reverting corrected listening-stat titles and artists when a backup restored names without changing listening time or play counts."
+      ]
+    },
     {
       "version": "0.1.117",
       "changes": [
