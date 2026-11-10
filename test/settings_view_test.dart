@@ -91,6 +91,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Library'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('library-collection-menu')));
     await tester.pumpAndSettle();
     expect(
@@ -218,7 +220,7 @@ void main() {
               .getTopLeft(
                 find
                     .ancestor(
-                      of: find.byTooltip('Back to Library'),
+                      of: find.byTooltip('Back to Home'),
                       matching: find.byType(IconButton),
                     )
                     .first,
@@ -327,10 +329,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
-        expect(
-          tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
-          'Library',
-        );
+        expect(find.text('Your Mix'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
       },
