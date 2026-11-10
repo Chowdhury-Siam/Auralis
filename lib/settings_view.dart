@@ -6,7 +6,7 @@ enum SettingsSection {
   general(
     'General',
     Icons.widgets_rounded,
-    'setup welcome volume sleep timer playback',
+    'playback repeat queue library sort order',
   ),
   appearance(
     'Appearance',
@@ -21,7 +21,7 @@ enum SettingsSection {
   data(
     'Data & sync',
     Icons.cloud_sync_rounded,
-    'listening stats statistics time rankings activity export csv json backup restore recovery account worker devices telegram',
+    'listening stats statistics time rankings activity export backup restore recovery merge account worker devices telegram',
   ),
   privacy(
     'Privacy & security',
@@ -36,7 +36,7 @@ enum SettingsSection {
   about(
     'About',
     Icons.info_rounded,
-    'auralis version licenses licence agpl libmpv tdlib whats new changes',
+    'auralis version licenses licence agpl libmpv tdlib whats new changes setup wizard',
   );
 
   const SettingsSection(this.title, this.icon, this.keywords);
