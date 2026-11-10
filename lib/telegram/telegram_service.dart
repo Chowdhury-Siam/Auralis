@@ -286,8 +286,13 @@ class TelegramService extends ChangeNotifier {
         // the explicit refresh reached this track.
         if (track.coverFileId case final thumbnail?) {
           final request = _images[thumbnail];
-          if (request != null && await request == null && current()) {
-            _images.remove(thumbnail);
+          if (request != null) {
+            final path = await request;
+            if ((path == null || !await File(path).exists()) &&
+                current() &&
+                identical(_images[thumbnail], request)) {
+              _images.remove(thumbnail);
+            }
           }
         }
       }
@@ -357,12 +362,18 @@ class TelegramService extends ChangeNotifier {
         }
       }
       if (result == null && track.size > 0 && active()) {
-        final embedded = await _withAudioMetadata(
-          id,
-          generation,
-          (source) => readEmbeddedCover(source, track.size),
-        );
-        if (embedded != null && await _validCover(embedded)) result = embedded;
+        try {
+          final embedded = await _withAudioMetadata(
+            id,
+            generation,
+            (source) => readEmbeddedCover(source, track.size),
+          );
+          if (embedded != null && await _validCover(embedded)) {
+            result = embedded;
+          }
+        } catch (_) {
+          /* Use the Telegram preview even when the audio tag is unreadable. */
+        }
       }
       if (result == null &&
           track.coverPreview != null &&
@@ -729,7 +740,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.123',
+          'application_version': '0.1.125',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -838,25 +849,78 @@ class TelegramService extends ChangeNotifier {
     String title, {
     int before = 0,
     bool documents = false,
+  }) => _searchMedia(
+    chatId,
+    before: before,
+    filter: documents
+        ? 'searchMessagesFilterDocument'
+        : 'searchMessagesFilterAudio',
+    parse: (message) => Track.fromMessage(message, title),
+  );
+
+  Future<({List<Track> tracks, int nextMessageId})> videos(
+    MusicChat channel, {
+    int before = 0,
+    String query = '',
+    bool documents = false,
+  }) => _searchMedia(
+    channel.id,
+    before: before,
+    query: query,
+    limit: 40,
+    filter: documents
+        ? 'searchMessagesFilterDocument'
+        : 'searchMessagesFilterVideo',
+    parse: (message) => Track.fromVideoMessage(message, channel.title),
+  );
+
+  Future<Track?> videoLink(String value) async {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        !const {'t.me', 'telegram.me'}.contains(uri.host) ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasPort ||
+        uri.pathSegments.length < 2 ||
+        uri.pathSegments.length > 4 ||
+        int.tryParse(uri.pathSegments.last) == null) {
+      throw const FormatException('Enter a Telegram video message link.');
+    }
+    final client = transport;
+    final result = await client.request({
+      '@type': 'getMessageLinkInfo',
+      'url': uri.toString(),
+    });
+    final message = result['message'];
+    if (!ready || !identical(client, transport) || message is! Json) {
+      return null;
+    }
+    final source = _channels[message['chat_id']]?.title ?? 'Telegram';
+    return Track.fromVideoMessage(message, source);
+  }
+
+  Future<({List<Track> tracks, int nextMessageId})> _searchMedia(
+    int chatId, {
+    required int before,
+    required String filter,
+    required Track? Function(Json) parse,
+    String query = '',
+    int limit = 100,
   }) async {
     final result = await transport.request({
       '@type': 'searchChatMessages',
       'chat_id': chatId,
       'topic_id': null,
-      'query': '',
+      'query': query,
       'sender_id': null,
       'from_message_id': before,
       'offset': 0,
-      'limit': 100,
-      'filter': {
-        '@type': documents
-            ? 'searchMessagesFilterDocument'
-            : 'searchMessagesFilterAudio',
-      },
+      'limit': limit,
+      'filter': {'@type': filter},
     });
     return (
       tracks: (result['messages'] as List)
-          .map((m) => Track.fromMessage(m as Json, title))
+          .map((m) => parse(m as Json))
           .whereType<Track>()
           .toList(),
       nextMessageId: (result['next_from_message_id'] as int?) ?? 0,
