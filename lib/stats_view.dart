@@ -21,12 +21,13 @@ class StatsDataDialog extends StatefulWidget {
     this.onRestored,
     this.telegram,
     this.openBackupSection = false,
+    this.fullscreen = false,
   });
   final PlayerController player;
   final TelegramService? telegram;
   final DataFiles files;
   final Future<void> Function()? onRestored;
-  final bool openBackupSection;
+  final bool openBackupSection, fullscreen;
   @override
   State<StatsDataDialog> createState() => _StatsDataDialogState();
 }
@@ -34,7 +35,8 @@ class StatsDataDialog extends StatefulWidget {
 class _StatsDataDialogState extends State<StatsDataDialog> {
   late ListeningStats _stats;
   bool _busy = false, _error = false, _confirming = false;
-  bool _showArtists = false;
+  bool _showArtists = false, _chartPlays = false;
+  _StatsRange _range = _StatsRange.all;
   String? _status;
   bool? _includeAccount;
   bool get _withAccount => _includeAccount ?? widget.telegram?.ready == true;
@@ -375,214 +377,454 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     }
   }, operation: 'Restore');
 
-  Widget _totals(int artists) {
-    final colors = Theme.of(context).colorScheme;
-    return Material(
-      key: const ValueKey('stats-summary'),
-      color: colors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: LayoutBuilder(
-          builder: (context, box) {
-            final scale = MediaQuery.textScalerOf(context).scale(12) / 12;
-            final columns = scale > 1.3 || box.maxWidth < 250
-                ? 1
-                : box.maxWidth < 560
-                ? 2
-                : 4;
-            return Wrap(
-              spacing: 8,
-              runSpacing: 2,
-              children: [
-                for (final (label, value) in [
-                  ('Listened', listeningTime(_stats.milliseconds)),
-                  ('Plays', '${_stats.plays}'),
-                  ('Tracks', '${_stats.tracks.length}'),
-                  ('Artists', '$artists'),
-                ])
-                  SizedBox(
-                    width: (box.maxWidth - 8 * (columns - 1)) / columns,
-                    child: Tooltip(
-                      message: label == 'Plays'
-                          ? 'A play counts after 30 seconds, or half of a shorter track. Pauses, buffering, seeks and long inactive gaps do not add listening time.'
-                          : '$label: $value',
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 7,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      label,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: colors.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                                  if (label == 'Plays') ...[
-                                    const SizedBox(width: 3),
-                                    Icon(
-                                      Icons.info_outline_rounded,
-                                      size: 12,
-                                      color: colors.onSurfaceVariant,
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                value,
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
+  Widget _metricCard(
+    String label,
+    String value,
+    IconData icon, {
+    bool second = false,
+  }) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final foreground = second
+        ? colors.onTertiaryContainer
+        : colors.onPrimaryContainer;
+    return _StatsPanel(
+      color: second ? colors.tertiaryContainer : colors.primaryContainer,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: foreground, size: 20),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(color: foreground),
+          ),
+          Text(
+            value,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _activity(List<String> dates, int maximum) {
-    final colors = Theme.of(context).colorScheme;
-    return Row(
-      key: const ValueKey('stats-daily-activity'),
-      crossAxisAlignment: CrossAxisAlignment.end,
+  Widget _overview(int milliseconds, int plays) => LayoutBuilder(
+    key: const ValueKey('stats-summary'),
+    builder: (context, box) {
+      final time = _metricCard(
+        'Listened',
+        listeningTime(milliseconds),
+        Icons.headphones_rounded,
+      );
+      final count = Tooltip(
+        message: 'A play counts after 30 seconds, or half of a shorter track.',
+        child: _metricCard(
+          'Plays',
+          '$plays',
+          Icons.play_circle_outline_rounded,
+          second: true,
+        ),
+      );
+      return box.maxWidth < 280 ||
+              MediaQuery.textScalerOf(context).scale(16) > 28
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [time, const SizedBox(height: 8), count],
+            )
+          : Row(
+              children: [
+                Expanded(child: time),
+                const SizedBox(width: 10),
+                Expanded(child: count),
+              ],
+            );
+    },
+  );
+
+  Widget _section(String title, {String? subtitle}) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final date in dates)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: Semantics(
-                label:
-                    '$date: ${listeningTime(_stats.days[date]?.milliseconds ?? 0)}',
-                excludeSemantics: true,
-                child: Tooltip(
-                  message:
-                      '$date · ${listeningTime(_stats.days[date]?.milliseconds ?? 0)}',
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        height: 48,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: ColoredBox(
-                            color: colors.surfaceContainerHighest,
-                            child: Align(
-                              alignment: Alignment.bottomCenter,
-                              child: FractionallySizedBox(
-                                widthFactor: 1,
-                                heightFactor:
-                                    (_stats.days[date]?.milliseconds ?? 0) /
-                                    maximum,
-                                child: ColoredBox(color: colors.primary),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        date.substring(
-                          MediaQuery.textScalerOf(context).scale(10) > 14
-                              ? 8
-                              : 5,
-                        ),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+        Text(
+          title,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (subtitle != null)
+          Text(
+            subtitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
       ],
     );
   }
 
-  Widget _rankingRow(
-    int rank,
-    String title,
-    int milliseconds, {
-    String? subtitle,
-  }) => ConstrainedBox(
-    constraints: const BoxConstraints(minHeight: 40),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+  Widget _timeline(List<ListeningPoint> points) {
+    int amount(ListeningPoint point) =>
+        _chartPlays ? point.day.plays : point.day.milliseconds;
+    ListeningPoint? peak;
+    for (final point in points) {
+      if (amount(point) > (peak == null ? 0 : amount(peak))) peak = point;
+    }
+    return _StatsPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 24 * MediaQuery.textScalerOf(context).scale(11) / 11,
-            child: Text(
-              '$rank',
-              style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+          _section('Listening timeline', subtitle: _range.description),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            children: [
+              ChoiceChip(
+                label: const Text('Listening time'),
+                selected: !_chartPlays,
+                onSelected: (_) => setState(() => _chartPlays = false),
+              ),
+              ChoiceChip(
+                label: const Text('Play count'),
+                selected: _chartPlays,
+                onSelected: (_) => setState(() => _chartPlays = true),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (points.isEmpty)
+            const Text('Your listening timeline will appear here.')
+          else
+            ListeningBars(points: points, plays: _chartPlays),
+          if (peak != null) ...[
+            const Divider(height: 20),
+            Text(
+              'Peak · ${peak.label} · ${_chartPlays ? '${amount(peak)} plays' : listeningTime(amount(peak))}',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _habits(Map<String, ListeningDay> days) {
+    final activeDays = days.values
+        .where((day) => day.milliseconds > 0 || day.plays > 0)
+        .length;
+    final total = days.values.fold(0, (sum, day) => sum + day.milliseconds);
+    final byWeekday = List<int>.filled(7, 0);
+    for (final entry in days.entries) {
+      byWeekday[DateTime.parse(entry.key).weekday - 1] +=
+          entry.value.milliseconds;
+    }
+    final peak = byWeekday.reduce(math.max);
+    final weekday = const [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ][byWeekday.indexOf(peak)];
+    return _StatsPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _section('Listening habits', subtitle: _range.label),
+          const SizedBox(height: 6),
+          for (final (icon, label, value) in [
+            (Icons.calendar_today_outlined, 'Active days', '$activeDays'),
+            (
+              Icons.timelapse_rounded,
+              'Average per active day',
+              listeningTime(activeDays == 0 ? 0 : total ~/ activeDays),
+            ),
+            if (peak > 0)
+              (
+                Icons.bolt_rounded,
+                'Most active weekday',
+                '$weekday · ${listeningTime(peak)}',
+              ),
+          ])
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                icon,
+                size: 20,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: Text(label),
+              subtitle: Text(value),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ranking(
+    List<MapEntry<String, ListeningTrack>> tracks,
+    List<MapEntry<String, int>> artists,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    final rows = _showArtists
+        ? [
+            for (final artist in artists.take(10))
+              (artist.key, '', artist.value),
+          ]
+        : [
+            for (final track in tracks.take(10))
+              (
+                track.value.title,
+                '${track.value.artist} · ${track.value.plays} plays',
+                track.value.milliseconds,
+              ),
+          ];
+    return _StatsPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _section(
+            'Top categories',
+            subtitle: 'All-time listening by track or artist',
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            key: const ValueKey('stats-ranking-tabs'),
+            spacing: 6,
+            children: [
+              ChoiceChip(
+                label: const Text('Tracks'),
+                selected: !_showArtists,
+                onSelected: (_) => setState(() => _showArtists = false),
+              ),
+              ChoiceChip(
+                label: const Text('Artists'),
+                selected: _showArtists,
+                onSelected: (_) => setState(() => _showArtists = true),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          for (final (index, (name, detail, time)) in rows.indexed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: _StatsPanel(
+                radius: 16,
+                color: index == 0
+                    ? colors.secondaryContainer
+                    : colors.surfaceContainerHigh,
+                padding: const EdgeInsets.all(9),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 14,
+                          backgroundColor: colors.primaryContainer,
+                          foregroundColor: colors.onPrimaryContainer,
+                          child: Text(
+                            '${index + 1}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 4,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (detail.isNotEmpty)
+                                Text(
+                                  detail,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          flex: 2,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              listeningTime(time),
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: time / math.max(1, rows.first.$3),
+                        minHeight: 4,
+                        backgroundColor: colors.surfaceContainerHighest,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _concentration(
+    List<MapEntry<String, ListeningTrack>> tracks,
+    int total,
+  ) {
+    final time = tracks
+        .take(3)
+        .fold(0, (sum, track) => sum + track.value.milliseconds);
+    final fraction = total == 0 ? 0.0 : time / total;
+    final colors = Theme.of(context).colorScheme;
+    return _StatsPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _section(
+            'Track concentration',
+            subtitle: 'Share of all-time listening',
+          ),
+          const SizedBox(height: 14),
+          Center(
+            child: SizedBox.square(
+              dimension: 114,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CircularProgressIndicator(
+                    value: fraction,
+                    backgroundColor: colors.surfaceContainerHighest,
+                    strokeWidth: 9,
+                    strokeCap: StrokeCap.round,
+                    semanticsLabel:
+                        'Share of listening across the top three tracks',
+                  ),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${(fraction * 100).round()}%',
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (subtitle != null)
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            flex: 2,
-            child: Text(
-              listeningTime(milliseconds),
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 11),
-            ),
-          ),
+          const SizedBox(height: 12),
+          Text('Top 3 tracks · ${listeningTime(time)}'),
+          Text('${tracks.length} unique tracks'),
         ],
       ),
-    ),
-  );
+    );
+  }
+
+  Widget _dashboard() {
+    final tracks = _stats.topTracks;
+    final now = DateTime.now();
+    final days = _range.days(_stats, now);
+    final points = _range.points(_stats, days, now);
+    final milliseconds = _range == _StatsRange.all
+        ? _stats.milliseconds
+        : days.values.fold(0, (sum, day) => sum + day.milliseconds);
+    final plays = _range == _StatsRange.all
+        ? _stats.plays
+        : days.values.fold(0, (sum, day) => sum + day.plays);
+    final ranking = tracks.isEmpty
+        ? _StatsPanel(
+            child: const Text('Play some music to build your listening stats.'),
+          )
+        : _ranking(tracks, _stats.topArtists);
+    final timeline = _timeline(points);
+    final habits = _habits(days);
+    final concentration = tracks.isEmpty
+        ? null
+        : _concentration(tracks, _stats.milliseconds);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final range in _StatsRange.values)
+              ChoiceChip(
+                label: Text(range.label),
+                selected: range == _range,
+                onSelected: (_) => setState(() => _range = range),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _overview(milliseconds, plays),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, box) => box.maxWidth >= 730
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          timeline,
+                          const SizedBox(height: 12),
+                          habits,
+                          if (concentration != null) ...[
+                            const SizedBox(height: 12),
+                            concentration,
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: ranking),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    timeline,
+                    const SizedBox(height: 12),
+                    ranking,
+                    const SizedBox(height: 12),
+                    habits,
+                    if (concentration != null) ...[
+                      const SizedBox(height: 12),
+                      concentration,
+                    ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
 
   Widget _backupControls() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -634,219 +876,332 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final artists = _stats.topArtists, tracks = _stats.topTracks;
-    final today = DateTime.now();
-    final dates = [
-      for (var i = 6; i >= 0; i--)
-        listeningDate(DateTime(today.year, today.month, today.day - i)),
-    ];
-    final maximum = dates.fold<int>(
-      1,
-      (value, date) => math.max(value, _stats.days[date]?.milliseconds ?? 0),
-    );
     final exportStyle = OutlinedButton.styleFrom(
       textStyle: Theme.of(context).textTheme.labelLarge!.copyWith(fontSize: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       minimumSize: const Size(0, 36),
     );
+    final title = widget.openBackupSection
+        ? 'Backup & Restore'
+        : 'Listening stats';
+    final refresh = IconButton(
+      tooltip: 'Refresh listening stats',
+      onPressed: _busy
+          ? null
+          : () => _run(() => player.flushListeningStats(failOnError: true)),
+      icon: const Icon(Icons.refresh_rounded, size: 20),
+    );
+    final close = IconButton(
+      tooltip: 'Close',
+      onPressed: _busy ? null : () => Navigator.pop(context),
+      icon: const Icon(Icons.close_rounded, size: 20),
+    );
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_busy && !_confirming) const LinearProgressIndicator(minHeight: 2),
+        Flexible(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_status != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _status!,
+                        style: TextStyle(
+                          color: _error ? colors.error : colors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (!widget.openBackupSection) ...[
+                  _dashboard(),
+                  const Divider(height: 24),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      FilledButton.tonalIcon(
+                        style: exportStyle,
+                        onPressed: _busy ? null : () => _export('csv'),
+                        icon: const Icon(Icons.table_chart_outlined, size: 16),
+                        label: const Text('Export CSV'),
+                      ),
+                      OutlinedButton.icon(
+                        style: exportStyle,
+                        onPressed: _busy ? null : () => _export('json'),
+                        icon: const Icon(
+                          Icons.file_download_outlined,
+                          size: 16,
+                        ),
+                        label: const Text('Export JSON'),
+                      ),
+                    ],
+                  ),
+                  ExpansionTile(
+                    key: const ValueKey('stats-backup-section'),
+                    tilePadding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    title: const Text(
+                      'Backup & Restore',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    children: [_backupControls()],
+                  ),
+                ] else
+                  _backupControls(),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+    if (widget.fullscreen) {
+      return PopScope<Object?>(
+        canPop: !_busy,
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(title),
+            leading: close,
+            actions: [refresh],
+          ),
+          body: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1040),
+                child: SizedBox.expand(child: content),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 720,
-          maxHeight: math.min(620, MediaQuery.sizeOf(context).height * .9),
-        ),
+        constraints: const BoxConstraints(maxWidth: 720),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 4, 4, 0),
+              padding: const EdgeInsets.only(left: 14, right: 4),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
-                      widget.openBackupSection
-                          ? 'Backup & Restore'
-                          : 'Listening stats',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
-                  if (!widget.openBackupSection)
-                    IconButton(
-                      tooltip: 'Refresh listening stats',
-                      onPressed: _busy
-                          ? null
-                          : () => _run(() async {
-                              await player.flushListeningStats(
-                                failOnError: true,
-                              );
-                            }),
-                      icon: const Icon(Icons.refresh_rounded, size: 20),
-                    ),
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: _busy ? null : () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                  ),
+                  if (!widget.openBackupSection) refresh,
+                  close,
                 ],
               ),
             ),
-            if (_busy && !_confirming)
-              const LinearProgressIndicator(minHeight: 2),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (!widget.openBackupSection) ...[
-                      Text(
-                        'All time',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _totals(artists.length),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Daily activity · last 7 days',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _activity(dates, maximum),
-                      const SizedBox(height: 12),
-                      if (tracks.isEmpty)
-                        Text(
-                          'Play some music to build your listening stats. Earlier recent history is not estimated.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-                      if (tracks.isNotEmpty) ...[
-                        Wrap(
-                          alignment: WrapAlignment.spaceBetween,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 8,
-                          children: [
-                            const Text(
-                              'All-time ranking',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            SegmentedButton<bool>(
-                              key: const ValueKey('stats-ranking-tabs'),
-                              showSelectedIcon: false,
-                              style: SegmentedButton.styleFrom(
-                                textStyle: Theme.of(context)
-                                    .textTheme
-                                    .labelLarge!
-                                    .copyWith(fontSize: 12),
-                                visualDensity: VisualDensity.compact,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                minimumSize: const Size(0, 36),
-                              ),
-                              segments: const [
-                                ButtonSegment(
-                                  value: false,
-                                  label: Text('Tracks'),
-                                ),
-                                ButtonSegment(
-                                  value: true,
-                                  label: Text('Artists'),
-                                ),
-                              ],
-                              selected: {_showArtists},
-                              onSelectionChanged: (value) =>
-                                  setState(() => _showArtists = value.single),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        if (_showArtists)
-                          for (var i = 0; i < math.min(10, artists.length); i++)
-                            _rankingRow(i + 1, artists[i].key, artists[i].value)
-                        else
-                          for (var i = 0; i < math.min(10, tracks.length); i++)
-                            _rankingRow(
-                              i + 1,
-                              tracks[i].value.title,
-                              tracks[i].value.milliseconds,
-                              subtitle:
-                                  '${tracks[i].value.artist} · ${tracks[i].value.plays} plays',
-                            ),
-                      ],
-                      const Divider(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: [
-                          FilledButton.tonalIcon(
-                            style: exportStyle,
-                            onPressed: _busy ? null : () => _export('csv'),
-                            icon: const Icon(
-                              Icons.table_chart_outlined,
-                              size: 16,
-                            ),
-                            label: const Text('Export CSV'),
-                          ),
-                          OutlinedButton.icon(
-                            style: exportStyle,
-                            onPressed: _busy ? null : () => _export('json'),
-                            icon: const Icon(
-                              Icons.file_download_outlined,
-                              size: 16,
-                            ),
-                            label: const Text('Export JSON'),
-                          ),
-                        ],
-                      ),
-                      ExpansionTile(
-                        key: const ValueKey('stats-backup-section'),
-                        tilePadding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        title: const Text(
-                          'Backup & Restore',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        children: [_backupControls()],
-                      ),
-                    ] else
-                      _backupControls(),
-                    if (_status != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          _status!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _error ? colors.error : colors.primary,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
+            Flexible(child: content),
           ],
         ),
       ),
     );
   }
+}
+
+enum _StatsRange {
+  week('7 days', 'Daily activity in the last 7 days'),
+  month('30 days', 'Daily activity in the last 30 days'),
+  year('This year', 'Monthly activity this year'),
+  all('All time', 'Listening history grouped by year');
+
+  const _StatsRange(this.label, this.description);
+  final String label, description;
+
+  Map<String, ListeningDay> days(ListeningStats stats, DateTime now) {
+    if (this == all) return stats.days;
+    final start = listeningDate(switch (this) {
+      week => DateTime(now.year, now.month, now.day - 6),
+      month => DateTime(now.year, now.month, now.day - 29),
+      _ => DateTime(now.year),
+    });
+    final end = listeningDate(now);
+    return {
+      for (final entry in stats.days.entries)
+        if (entry.key.compareTo(start) >= 0 && entry.key.compareTo(end) <= 0)
+          entry.key: entry.value,
+    };
+  }
+
+  List<ListeningPoint> points(
+    ListeningStats stats,
+    Map<String, ListeningDay> days,
+    DateTime now,
+  ) {
+    if (this == week || this == month) {
+      return listeningDays(stats, now, this == week ? 7 : 30);
+    }
+    final grouped = <String, ListeningDay>{};
+    for (final entry in days.entries) {
+      final key = entry.key.substring(0, this == year ? 7 : 4);
+      final day = grouped.putIfAbsent(key, ListeningDay.new);
+      day.milliseconds += entry.value.milliseconds;
+      day.plays += entry.value.plays;
+    }
+    if (this == year) {
+      const labels = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      return [
+        for (var month = 1; month <= now.month; month++)
+          (
+            label: labels[month - 1],
+            day:
+                grouped[listeningDate(DateTime(now.year, month))
+                    .substring(0, 7)] ??
+                ListeningDay(),
+          ),
+      ];
+    }
+    return [
+      for (final key in grouped.keys.toList()..sort())
+        (label: key, day: grouped[key]!),
+    ];
+  }
+}
+
+typedef ListeningPoint = ({String label, ListeningDay day});
+
+List<ListeningPoint> listeningDays(
+  ListeningStats stats,
+  DateTime now,
+  int count,
+) => [
+  for (var offset = count - 1; offset >= 0; offset--)
+    (
+      label: listeningDate(DateTime(now.year, now.month, now.day - offset))
+          .substring(5),
+      day:
+          stats.days[listeningDate(
+            DateTime(now.year, now.month, now.day - offset),
+          )] ??
+          ListeningDay(),
+    ),
+];
+
+class ListeningBars extends StatelessWidget {
+  const ListeningBars({
+    super.key,
+    required this.points,
+    this.plays = false,
+    this.height = 104,
+  });
+  final List<ListeningPoint> points;
+  final bool plays;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    int value(ListeningPoint point) =>
+        plays ? point.day.plays : point.day.milliseconds;
+    final maximum = points.fold(1, (max, point) => math.max(max, value(point)));
+    final scale = MediaQuery.textScalerOf(context).scale(10);
+    return LayoutBuilder(
+      builder: (context, box) {
+        final width = math.max(
+          math.max(28.0, scale * 3.2),
+          box.maxWidth / math.max(1, points.length),
+        );
+        return SizedBox(
+          height: height + scale * 2.8,
+          child: ListView.builder(
+            primary: false,
+            scrollDirection: Axis.horizontal,
+            itemExtent: width,
+            itemCount: points.length,
+            itemBuilder: (context, index) {
+              final point = points[index];
+              final amount = value(point);
+              final label = plays ? '$amount plays' : listeningTime(amount);
+              return Tooltip(
+                message: '${point.label} · $label',
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: height,
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: AnimatedContainer(
+                          duration: MediaQuery.disableAnimationsOf(context)
+                              ? Duration.zero
+                              : const Duration(milliseconds: 220),
+                          height: math.max(3.0, height * amount / maximum),
+                          width: math.min(48, width * .68),
+                          decoration: BoxDecoration(
+                            color: amount == 0
+                                ? colors.surfaceContainerHighest
+                                : colors.primary,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      point.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontSize: 10,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StatsPanel extends StatelessWidget {
+  const _StatsPanel({
+    required this.child,
+    this.color,
+    this.radius = 24,
+    this.padding = const EdgeInsets.all(14),
+  });
+  final Widget child;
+  final Color? color;
+  final double radius;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: color ?? Theme.of(context).colorScheme.surfaceContainerLow,
+    borderRadius: BorderRadius.circular(radius),
+    child: Padding(padding: padding, child: child),
+  );
 }
