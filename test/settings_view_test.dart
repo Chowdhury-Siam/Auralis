@@ -122,6 +122,25 @@ void main() {
           )
           .first;
       expect(tester.widget<Material>(card).color, colors.surfaceContainerLow);
+      if (section == SettingsSection.general) {
+        expect(find.text('Set up Auralis'), findsNothing);
+        expect(find.text('Volume controls'), findsNothing);
+        expect(find.text('Sleep timer'), findsNothing);
+        await tester.tap(find.byTooltip('Playback repeat: Off'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Repeat queue'));
+        await tester.pumpAndSettle();
+        expect(settings.repeatMode, PlaybackRepeat.all);
+        await tester.tap(find.byTooltip('Library sort order: Newest first'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Oldest first'));
+        await tester.pumpAndSettle();
+        expect(settings.librarySort, LibrarySort.oldest);
+        expect(settings.saves, greaterThan(0));
+      }
+      if (section == SettingsSection.about) {
+        expect(find.text('Set up Auralis'), findsOneWidget);
+      }
       if (section == SettingsSection.appearance) {
         await tester.tap(find.byTooltip('App navigation: Expressive pill'));
         await tester.pumpAndSettle();
