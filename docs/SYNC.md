@@ -66,9 +66,9 @@ Sign out offers Keep local or Clear local; its saved snapshot and cloud library
 remain available after signing in again. Offline sign-out removes the local token;
 a server session that could not be revoked expires normally.
 
-Restore cloud copy explicitly replaces shared local fields, retaining the prior
-snapshot in the protected account journal. **Sync now** sends queued changes and
-fetches updates from the same account. Account deletion requires a password and removes only that user's
+**Merge cloud copy** fetches the full cloud library and combines it with this device’s data and pending changes. **Sync now** sends queued changes and pulls updates from the same account. Both use the same rules for conflicts and deliberate removals.
+
+Account deletion requires a password and removes only that user's
 records and sessions. Deleting the owner also removes its recovery vault, without
 promoting a new administrator or deleting other users.
 
@@ -101,7 +101,7 @@ library sort and repeat preference, plus the linked Telegram identity and its
 application API details. Telegram auth keys and session databases, music bytes,
 device volume, downloads and live playback are excluded. Existing field clocks,
 tombstones, per-device listening counters and durable outboxes remain unchanged.
-WebSockets notify the matching account, with polling as fallback.
+Starting a track updates Recently played, and qualified plays sync as soon as they are counted. Listening time syncs at playback checkpoints about five seconds apart. WebSocket notifications refresh connected devices, and five-second polling catches up while a live connection is unavailable.
 
 There is no hosted default cloud. The service limits accounts to 100 per Worker,
 saved sessions to 32 per account, live sockets to 32 per room and records to 50,000
