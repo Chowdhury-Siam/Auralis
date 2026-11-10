@@ -10,19 +10,19 @@ class AppNavigation extends StatelessWidget {
     required this.style,
     required this.radius,
     required this.selected,
+    this.reducedMotion = false,
     required this.onSelected,
-    required this.onSearch,
   });
   final AppNavigationStyle style;
   final double radius;
   final int selected;
+  final bool reducedMotion;
   final ValueChanged<int> onSelected;
-  final VoidCallback onSearch;
-  static const labels = ['Library', 'Telegram', 'Settings'];
+  static const labels = ['Home', 'Search', 'Library'];
   static const icons = [
+    Icons.home_rounded,
+    Icons.search_rounded,
     Icons.library_music_rounded,
-    Icons.send_rounded,
-    Icons.tune_rounded,
   ];
 
   @override
@@ -45,122 +45,75 @@ class AppNavigation extends StatelessWidget {
         ],
       );
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final showLabels = constraints.maxWidth >= 340;
-        return SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 80,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
+    final expressive = style == AppNavigationStyle.expressive;
+    return SafeArea(
+      top: false,
+      child: SizedBox(
+        height: 80,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Material(
+            color: colors.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(radius),
+            clipBehavior: Clip.antiAlias,
+            child: Row(
+              children: [
+                for (var i = 0; i < labels.length; i++)
                   Expanded(
-                    child: Material(
-                      color: colors.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(radius),
-                      clipBehavior: Clip.antiAlias,
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Row(
-                          children: [
-                            for (var i = 0; i < labels.length; i++)
-                              Expanded(
-                                flex:
-                                    style == AppNavigationStyle.expressive &&
-                                        showLabels &&
-                                        selected == i
-                                    ? 3
-                                    : 1,
-                                child: Semantics(
-                                  selected: selected == i,
-                                  child: Tooltip(
-                                    message: labels[i],
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(
-                                        radius,
-                                      ),
-                                      onTap: () => onSelected(i),
-                                      child: Container(
-                                        height: 52,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            radius,
-                                          ),
-                                          color: selected == i
-                                              ? colors.primaryContainer
-                                              : null,
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              icons[i],
-                                              size: 22,
-                                              color: selected == i
-                                                  ? colors.onPrimaryContainer
-                                                  : colors.onSurfaceVariant,
-                                            ),
-                                            if (style ==
-                                                    AppNavigationStyle
-                                                        .expressive &&
-                                                showLabels &&
-                                                selected == i) ...[
-                                              const SizedBox(width: 6),
-                                              Flexible(
-                                                child: Text(
-                                                  labels[i],
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: colors
-                                                        .onPrimaryContainer,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                    child: Semantics(
+                      selected: selected == i,
+                      button: true,
+                      child: Tooltip(
+                        message: labels[i],
+                        child: InkWell(
+                          onTap: () => onSelected(i),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedContainer(
+                                duration:
+                                    MediaQuery.disableAnimationsOf(context)
+                                    ? Duration.zero
+                                    : const Duration(milliseconds: 200),
+                                width: selected == i ? 56 : 42,
+                                height: expressive ? 28 : 40,
+                                decoration: BoxDecoration(
+                                  color: selected == i
+                                      ? colors.primaryContainer
+                                      : null,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Icon(
+                                  icons[i],
+                                  size: 21,
+                                  color: selected == i
+                                      ? colors.onPrimaryContainer
+                                      : colors.onSurfaceVariant,
                                 ),
                               ),
-                          ],
+                              if (expressive)
+                                Text(
+                                  labels[i],
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: selected == i
+                                            ? colors.primary
+                                            : colors.onSurfaceVariant,
+                                      ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  if (style == AppNavigationStyle.expressive) ...[
-                    const SizedBox(width: 8),
-                    Material(
-                      color: colors.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(radius),
-                      child: IconButton(
-                        tooltip: 'Search library',
-                        onPressed: onSearch,
-                        constraints: const BoxConstraints.tightFor(
-                          width: 52,
-                          height: 64,
-                        ),
-                        icon: const Icon(Icons.search_rounded),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+              ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
