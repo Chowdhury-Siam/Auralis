@@ -218,12 +218,12 @@ See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality note
 | --- | --- |
 | View listening time, play counts, and all-time rankings | **Home → Listening stats** or **Settings → Data & sync → Listening stats** |
 | Export stats as CSV or JSON | **Listening stats → Export CSV / Export JSON** |
-| Create or restore a backup | **Settings → Data & sync → Backup & Restore** |
+| Export or restore a backup | **Settings → Data & sync → Backup & Restore** |
 | Recover the data replaced by the last restore | **Restore recovery copy** in the backup section |
 
-A backup includes listening stats, favorites, playlists, recent music, channel selections, and preferences. **Include Telegram account** is enabled when connected: it adds your Telegram session, API details and database key inside a password-encrypted backup. Music files, artwork, lyrics, the queue and sleep timers are excluded.
+**Export Backup** lets you select listening stats, favorites, playlists, recent music, Telegram channels, and app preferences. **Include Telegram account** adds your Telegram sign-in to a password-protected backup when connected.
 
-Restoring previews the backup, then **replaces** saved local data and clears playback after confirmation. A recovery copy of the previous settings is saved first. Account backups require your backup password to restore; the session is re-encrypted for the destination device. The restore preview explicitly reports whether Telegram sign-in is included. Older settings-only JSON backups remain supported, but cannot restore an account; create a password-protected backup with **Include Telegram account** enabled on the signed-in device. Telegram may require a new login if a restored session has expired or been revoked.
+The restore preview lists the included sections. Restoring replaces those sections, keeps data outside them, and saves a recovery copy before clearing playback. Auralis still opens older full backups. Selective backups require Auralis 0.1.117 or later. Telegram may require a fresh login if a restored session expired or was revoked.
 
 See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for validation, recovery, and stats counting.
 
@@ -314,7 +314,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.116+117**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.117+118**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
