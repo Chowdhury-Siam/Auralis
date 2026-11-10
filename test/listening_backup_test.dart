@@ -65,7 +65,7 @@ class ChosenFiles extends DataFiles {
   String? chosenSave = testExportPath('export.json'), chosenOpen;
   final contents = <String, String>{};
   @override
-  Future<String?> savePath(String name, String extension) async => chosenSave;
+  Future<String?> savePath(String name) async => chosenSave;
   @override
   Future<String?> openBackup() async => chosenOpen;
   @override
@@ -236,55 +236,43 @@ void main() {
     expect(settings.listening.milliseconds, 15000);
   });
 
-  test(
-    'day splitting, metadata, CSV quoting and JSON statistics round-trip',
-    () {
-      const tricky = Track(
-        id: '-9:1',
-        title: '=HYPERLINK("test")\nwords',
-        artist: '@Artist',
-        source: 'Music, channel',
-      );
-      final stats = ListeningStats()
-        ..record(tricky, 2000, 1, DateTime(2026, 10, 21, 0, 0, 1));
-      expect(stats.days['2026-10-20']!.milliseconds, 1000);
-      expect(stats.days['2026-10-21']!.milliseconds, 1000);
-      expect(stats.days['2026-10-21']!.plays, 1);
-      final restored = ListeningStats.fromJson(
-        jsonDecode(jsonEncode(stats.toJson())),
-      );
-      expect(restored.toJson(), stats.toJson());
-      expect(restored.topArtists.single.key, '@Artist');
-      final csv = stats.toCsv();
-      expect(csv, startsWith('\uFEFFrecord_type,'));
-      expect(csv, contains('"\'=HYPERLINK(""test"")\nwords"'));
-      expect(csv, contains('"\'@Artist"'));
-      expect(csv, contains('"Music, channel"'));
-      expect(csv, contains('day,2026-10-20,,,,,1.000,0,'));
-      final longStats = ListeningStats()
-        ..record(
-          Track(
-            id: 'long',
-            title: 'x' * 2000,
-            artist: 'y' * 2000,
-            source: 'z' * 2000,
-          ),
-          1000,
-          0,
-          DateTime(2026, 10, 21),
-        );
-      expect(
-        ListeningStats.fromJson(longStats.toJson())
-            .tracks['long']!
-            .title
-            .length,
+  test('day splitting, metadata and JSON statistics round-trip', () {
+    const tricky = Track(
+      id: '-9:1',
+      title: '=HYPERLINK("test")\nwords',
+      artist: '@Artist',
+      source: 'Music, channel',
+    );
+    final stats = ListeningStats()
+      ..record(tricky, 2000, 1, DateTime(2026, 10, 21, 0, 0, 1));
+    expect(stats.days['2026-10-20']!.milliseconds, 1000);
+    expect(stats.days['2026-10-21']!.milliseconds, 1000);
+    expect(stats.days['2026-10-21']!.plays, 1);
+    final restored = ListeningStats.fromJson(
+      jsonDecode(jsonEncode(stats.toJson())),
+    );
+    expect(restored.toJson(), stats.toJson());
+    expect(restored.topArtists.single.key, '@Artist');
+    final longStats = ListeningStats()
+      ..record(
+        Track(
+          id: 'long',
+          title: 'x' * 2000,
+          artist: 'y' * 2000,
+          source: 'z' * 2000,
+        ),
         1000,
+        0,
+        DateTime(2026, 10, 21),
       );
-      final invalid = stats.toJson();
-      (invalid['days'] as Map)['2026-10-20']['milliseconds'] = -1;
-      expect(() => ListeningStats.fromJson(invalid), throwsFormatException);
-    },
-  );
+    expect(
+      ListeningStats.fromJson(longStats.toJson()).tracks['long']!.title.length,
+      1000,
+    );
+    final invalid = stats.toJson();
+    (invalid['days'] as Map)['2026-10-20']['milliseconds'] = -1;
+    expect(() => ListeningStats.fromJson(invalid), throwsFormatException);
+  });
 
   test('backup integrity and schema are validated before playback or settings change', () async {
     final settings = MemorySettings()..favoriteIds = {song.id};
@@ -410,6 +398,106 @@ void main() {
     },
   );
 
+  testWidgets('open listening stats refresh when synced settings arrive', (
+    tester,
+  ) async {
+    final settings = MemorySettings();
+    final player = PlayerController(
+      FakeAudio(),
+      TelegramStreamProxy((_) async => {}),
+      settings,
+    );
+    addTearDown(player.shutdown);
+    await tester.pumpWidget(
+      MaterialApp(home: StatsDataDialog(player: player, fullscreen: true)),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Your listening timeline will appear here.'),
+      findsOneWidget,
+    );
+
+    final synced = MemorySettings();
+    synced.listening.record(song, 125000, 2, DateTime.now());
+    settings.applyJson(synced.toJson());
+    player.refreshSettings();
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Your listening timeline will appear here.'),
+      findsNothing,
+    );
+    expect(find.text('2m 5s'), findsWidgets);
+    expect(find.text(song.title), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('monthly bars show every value at large text sizes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final points = [
+      for (var i = 0; i < months.length; i++)
+        (
+          label: months[i],
+          day: ListeningDay(milliseconds: i * 3600000, plays: i * 51),
+        ),
+    ];
+
+    for (final plays in [false, true]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: ListeningBars(
+                points: points,
+                plays: plays,
+                showValues: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (var i = 0; i < months.length; i++) {
+        final value = plays ? '${i * 51}' : listeningTime(i * 3600000);
+        final period = find.byTooltip(
+          '${months[i]} · ${plays ? '$value plays' : value}',
+        );
+        expect(
+          find.descendant(of: period, matching: find.text(value)),
+          findsOneWidget,
+        );
+      }
+      expect(
+        tester.getTopLeft(find.text('Dec')).dy,
+        greaterThan(tester.getTopLeft(find.text('Jan')).dy),
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets(
     'compact stats show the overview and keep rankings usable with large text',
     (tester) async {
@@ -455,6 +543,13 @@ void main() {
         await tester.tap(find.text('Play count'));
         await tester.pumpAndSettle();
         expect(find.text('Daily activity in the last 7 days'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(ListeningBars),
+            matching: find.text('2'),
+          ),
+          findsOneWidget,
+        );
         final tabs = find.byKey(const ValueKey('stats-ranking-tabs'));
         await tester.ensureVisible(tabs);
         await tester.pumpAndSettle();
@@ -488,7 +583,7 @@ void main() {
   );
 
   testWidgets(
-    'stats layouts, CSV/JSON export, backup, restore preview and cancellation',
+    'stats layouts and dedicated backup export, restore preview and cancellation',
     (tester) async {
       final settings = MemoryDataSettings()
         ..reducedMotion = true
@@ -506,14 +601,18 @@ void main() {
       tester.view.physicalSize = const Size(1280, 800);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      Widget view() => MaterialApp(
+      Widget view({bool backup = false}) => MaterialApp(
         theme: ThemeData.dark().copyWith(
           textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Segoe UI'),
         ),
         home: Scaffold(
           body: RepaintBoundary(
             key: boundary,
-            child: StatsDataDialog(player: player, files: files),
+            child: StatsDataDialog(
+              player: player,
+              files: files,
+              openBackupSection: backup,
+            ),
           ),
         ),
       );
@@ -542,9 +641,17 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      // Keep the safety check covered while using native external paths below.
+      expect(find.text('Export CSV'), findsNothing);
+      expect(find.text('Export JSON'), findsNothing);
+      expect(find.text('Backup & Restore'), findsNothing);
+
+      await tester.pumpWidget(view(backup: true));
+      await tester.pumpAndSettle();
+      final submit = find.byKey(const ValueKey('export-backup-submit'));
       files.chosenSave = settings.file.absolute.path;
-      await click('Export CSV');
+      await click('Export backup');
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
       expect(files.contents, isEmpty);
       expect(
         find.text(
@@ -552,22 +659,10 @@ void main() {
         ),
         findsOneWidget,
       );
+      await tester.tap(find.byTooltip('Close export'));
+      await tester.pumpAndSettle();
 
-      files.chosenSave = testExportPath('stats.csv');
-      await click('Export CSV');
-      expect(
-        files.contents[testExportPath('stats.csv')],
-        contains('qualified_plays'),
-      );
-      files.chosenSave = testExportPath('stats.json');
-      await click('Export JSON');
-      expect(
-        jsonDecode(files.contents[testExportPath('stats.json')]!)['format'],
-        'auralis-listening-stats',
-      );
-      await click('Backup & Restore');
       files.chosenSave = testExportPath('backup.json');
-      final submit = find.byKey(const ValueKey('export-backup-submit'));
       await click('Export backup');
       expect(find.text('6 of 6 sections selected'), findsOneWidget);
       await tester.tap(submit);
