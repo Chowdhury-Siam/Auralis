@@ -3647,28 +3647,25 @@ class _PlayerShellState extends State<PlayerShell>
 
   List<Widget> _settingsContent(SettingsSection section) => switch (section) {
     SettingsSection.general => [
-      ListTile(
-        leading: const PreferenceIcon(Icons.auto_awesome_rounded),
-        title: const Text('Set up Auralis'),
-        subtitle: const Text('Connection, appearance and playback preferences'),
-        trailing: const Icon(Icons.chevron_right_rounded, size: 18),
-        onTap: _openSetup,
+      PreferenceChoice<PlaybackRepeat>(
+        title: 'Playback repeat',
+        value: player.repeatMode,
+        values: PlaybackRepeat.values,
+        label: (mode) => switch (mode) {
+          PlaybackRepeat.off => 'Off',
+          PlaybackRepeat.all => 'Repeat queue',
+          PlaybackRepeat.one => 'Repeat one track',
+        },
+        onSelected: (mode) =>
+            _savePreferences(() => player.settings.repeatMode = mode),
       ),
-      ListTile(
-        leading: const PreferenceIcon(Icons.volume_up_outlined),
-        title: const Text('Volume controls'),
-        subtitle: Text(
-          Theme.of(context).platform == TargetPlatform.android
-              ? 'Use your phone’s volume buttons.'
-              : '↑ / ↓ changes volume and shows the level on screen.',
-        ),
-      ),
-      const ListTile(
-        leading: PreferenceIcon(Icons.bedtime_outlined),
-        title: Text('Sleep timer'),
-        subtitle: Text(
-          'Use the clock control in Now Playing to stop after a duration or at the end of a song.',
-        ),
+      PreferenceChoice<LibrarySort>(
+        title: 'Library sort order',
+        value: player.settings.librarySort,
+        values: LibrarySort.values,
+        label: (sort) => sort.label,
+        onSelected: (sort) =>
+            _savePreferences(() => player.settings.librarySort = sort),
       ),
     ],
     SettingsSection.appearance => [
@@ -3689,7 +3686,7 @@ class _PlayerShellState extends State<PlayerShell>
       ListTile(
         leading: const PreferenceIcon(Icons.bar_chart_rounded),
         title: const Text('Listening stats'),
-        subtitle: const Text('Listening time & export'),
+        subtitle: const Text('Listening time & play counts'),
         trailing: const Icon(Icons.chevron_right_rounded, size: 18),
         onTap: () => _stats(),
       ),
@@ -3766,6 +3763,13 @@ class _PlayerShellState extends State<PlayerShell>
               widget.updater?.currentVersion ??
               currentReleaseVersion,
         ),
+      ),
+      ListTile(
+        leading: const PreferenceIcon(Icons.auto_awesome_rounded),
+        title: const Text('Set up Auralis'),
+        subtitle: const Text('Reopen the setup wizard'),
+        trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+        onTap: _openSetup,
       ),
       ListTile(
         leading: const PreferenceIcon(Icons.description_outlined),
