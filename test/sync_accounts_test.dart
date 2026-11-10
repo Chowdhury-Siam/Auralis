@@ -819,7 +819,21 @@ void main() {
       await tester.pumpWidget(MaterialApp(home: SyncAccountPage(sync: sync)));
       await tester.pumpAndSettle();
       expect(find.text('Account & sync'), findsOneWidget);
-      expect(find.byKey(const ValueKey('sync-worker-url')), findsOneWidget);
+      final syncNow = find.text('Sync now');
+      expect(syncNow.hitTestable(), findsOneWidget);
+      final firstSync = tester.getTopLeft(syncNow);
+      final worker = find.text('Self-hosted Sync Worker');
+      await tester.scrollUntilVisible(
+        worker,
+        150,
+        scrollable: find.byType(Scrollable).first,
+      );
+      final workerOffset = tester.getTopLeft(worker);
+      if (size.width >= 820) {
+        expect(workerOffset.dx, greaterThan(firstSync.dx));
+      } else {
+        expect(find.byType(SelectableText), findsOneWidget);
+      }
       expect(tester.takeException(), isNull, reason: '$size');
       await tester.pumpWidget(const SizedBox());
     }
