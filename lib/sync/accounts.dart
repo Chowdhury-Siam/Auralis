@@ -507,51 +507,24 @@ extension AccountSync on SyncController {
   }
 
   Future<void> restoreCloudCopy() async {
-    if (!connected || busy) return;
+    if (_closed || !connected || busy || paused()) return;
+    final generation = _generation;
     accountBusy = true;
     _changed();
     try {
-      _stashCurrent();
-      _account?.data['beforeRestore'] = {
-        'snapshot': detached(settings.toJson()),
-        'state': detached(settings.syncState),
-      };
-      await _saveAccounts();
       final running = _running;
       if (running != null) await running;
-      final remote = <String, dynamic>{};
-      var cursor = 0, more = true;
-      while (more) {
-        final p = await _request(url, _key!, {
-          'cursor': cursor,
-          'ops': <String, dynamic>{},
-        });
-        remote.addAll(p['records'] as Map<String, dynamic>);
-        cursor = p['cursor'] as int;
-        more = p['more'] as bool;
-      }
-      final merged = SyncDocument({
-        'scope': settings.syncState['scope'],
-        'bootstrap': false,
-      });
-      merged.merge(remote);
-      merged.state['cursor'] = cursor;
-      final snapshot = merged.project({
-        ...settings.toJson(),
-        ..._emptyLibrary(),
-      });
-      DataBackup.validateSnapshot(snapshot);
-      settings.syncState = merged.state;
-      settings.applyJson(snapshot);
-      await settings.save();
+      if (_closed || generation != _generation || paused()) return;
+      if (!await _mergeCloudCopy(generation)) return;
       _stashCurrent();
       await _saveAccounts();
-      revision++;
-      onApplied();
-      status = 'Cloud copy restored.';
+      status = 'Cloud data merged with this device.';
       error = null;
     } finally {
       accountBusy = false;
+      if (!_closed && connected && document.dirty.isNotEmpty) {
+        _schedule();
+      }
       _changed();
     }
   }
