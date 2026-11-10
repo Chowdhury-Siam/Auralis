@@ -13,7 +13,7 @@ if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$Version") {
 if ($ValidateOnly) { Write-Output $Version; exit 0 }
 $Release = Join-Path $ProjectRoot 'build/windows/x64/runner/Release'
 $Dist = Join-Path $ProjectRoot 'dist'
-foreach ($File in @('auralis.exe', 'flutter_windows.dll', 'libmpv-2.dll', 'native/tdjson.dll')) {
+foreach ($File in @('auralis.exe', 'flutter_windows.dll', 'libmpv-2.dll', 'media_kit_video_plugin.dll', 'libEGL.dll', 'libGLESv2.dll', 'native/tdjson.dll')) {
     if (-not (Test-Path -LiteralPath (Join-Path $Release $File))) { throw "Build output missing: $File" }
 }
 New-Item -ItemType Directory -Force $Dist | Out-Null
