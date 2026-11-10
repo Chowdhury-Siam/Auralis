@@ -1,6 +1,12 @@
 {
-  "current": "0.1.118",
+  "current": "0.1.119",
   "releases": [
+    {
+      "version": "0.1.119",
+      "changes": [
+        "Redesigned Backup & Restore with a compact dialog and distinct export, restore, and recovery actions."
+      ]
+    },
     {
       "version": "0.1.118",
       "changes": [
