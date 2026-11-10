@@ -202,7 +202,7 @@ class _LyricsViewState extends State<LyricsView> {
       setState(() {
         if (result != null) {
           _lyrics = result;
-          widget.repository.save(track, result);
+          unawaited(widget.repository.save(track, result));
           _synced = result.lines.isNotEmpty;
         }
         _looked = online || result != null;
@@ -332,7 +332,7 @@ class _LyricsViewState extends State<LyricsView> {
       _error = null;
       _synced = lyrics.lines.isNotEmpty;
     });
-    widget.repository.save(track, lyrics);
+    unawaited(widget.repository.save(track, lyrics));
     _translateAutomatically();
   }
 
