@@ -468,7 +468,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text(song.title), findsOneWidget);
-        expect(find.text('Create backup'), findsNothing);
+        expect(find.text('Export backup'), findsNothing);
         expect(jsonEncode(settings.listening.toJson()), before);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
@@ -566,16 +566,76 @@ void main() {
       );
       await click('Backup & Restore');
       files.chosenSave = testExportPath('backup.json');
-      await click('Create backup');
+      final submit = find.byKey(const ValueKey('export-backup-submit'));
+      await click('Export backup');
+      expect(find.text('6 of 6 sections selected'), findsOneWidget);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
       expect(
         DataBackup.parse(files.contents[testExportPath('backup.json')]!)
             .snapshot['favoriteIds'],
         [song.id],
       );
+
+      files.chosenSave = testExportPath('favorites-only.json');
+      await click('Export backup');
+      await tester.tap(find.byTooltip('Deselect all'));
+      await tester.pumpAndSettle();
+      expect(find.text('0 of 6 sections selected'), findsOneWidget);
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      await tester.tap(find.byTooltip('Select all'));
+      await tester.pumpAndSettle();
+      expect(find.text('6 of 6 sections selected'), findsOneWidget);
+      await tester.tap(find.byTooltip('Deselect all'));
+      await tester.pumpAndSettle();
+      await click('Favorites');
+      final exportList = find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      );
+      tester.state<ScrollableState>(exportList).position.jumpTo(0);
+      await tester.pumpAndSettle();
+      expect(find.text('1 of 6 sections selected'), findsOneWidget);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      final partial = DataBackup.parse(files.contents[files.chosenSave]!);
+      expect(partial.isPartial, isTrue);
+      expect(partial.snapshot, {
+        'favoriteIds': [song.id],
+      });
+      final previousListening = settings.listening.toJson();
+      settings
+        ..favoriteIds = {'-3:3'}
+        ..volume = 36
+        ..playlists = {
+          'Keep this list': [song.id],
+        };
+      files.chosenOpen = files.chosenSave;
+      await click('Restore backup');
+      expect(find.textContaining('Sections: Favorites.'), findsOneWidget);
+      expect(find.textContaining('Other sections are kept.'), findsOneWidget);
+      await tester.tap(find.text('Restore'));
+      await tester.pumpAndSettle();
+      expect(settings.favoriteIds, {song.id});
+      expect(settings.volume, 36);
+      expect(settings.playlists, {
+        'Keep this list': [song.id],
+      });
+      expect(settings.listening.toJson(), previousListening);
+
       files.chosenSave = null;
       final before = files.contents.length;
-      await click('Create backup');
+      await click('Export backup');
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(
+        submit,
+        findsOneWidget,
+        reason: 'Cancel keeps the section picker open',
+      );
       expect(files.contents.length, before);
+      await tester.tap(find.byTooltip('Close export'));
+      await tester.pumpAndSettle();
       final candidate = MemorySettings()
         ..favoriteIds = {'-9:9'}
         ..volume = 55;
@@ -731,7 +791,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Backup & Restore'));
       await tester.pumpAndSettle();
-      expect(find.text('Create backup').hitTestable(), findsOneWidget);
+      expect(find.text('Export backup').hitTestable(), findsOneWidget);
       expect(find.text('Restore backup').hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.runAsync(() async {
