@@ -2,33 +2,118 @@ const builds = ['android.yml','windows.yml'];
 function trusted(run, repository, sha) {
   return run.head_sha === sha && run.head_branch === 'main' && run.head_repository?.full_name === repository && ['push','workflow_dispatch'].includes(run.event);
 }
-async function resolve(github, context) {
-  const {owner,repo}=context.repo, repository=`${owner}/${repo}`, trigger=context.payload.workflow_run;
-  const sha=trigger?.head_sha ?? context.sha;
-  if(!/^[a-f0-9]{40}$/.test(sha) || (trigger && (!trusted(trigger,repository,sha) || trigger.conclusion!=='success'))) return {ready:false};
-  const compare=await github.request('GET /repos/{owner}/{repo}/compare/{basehead}',{owner,repo,basehead:`${sha}...main`});
-  if(!['ahead','identical'].includes(compare.data.status)) throw new Error('Build commit is not on main');
-  const selected={head_sha:sha,ready:true};
-  for(const workflow_id of builds) {
-    const runs=await github.paginate(github.rest.actions.listWorkflowRuns,{owner,repo,workflow_id,head_sha:sha,status:'completed',per_page:100});
-    const matching=runs.filter(r=>trusted(r,repository,sha)&&r.conclusion==='success').sort((a,b)=>b.id-a.id);
-    let chosen;
-    for(const run of matching) {
-      const artifacts=await github.paginate(github.rest.actions.listWorkflowRunArtifacts,{owner,repo,run_id:run.id,per_page:100});
-      const artifact=artifacts.find(a=>!a.expired && (workflow_id==='windows.yml' ? a.name==='auralis-windows-x64' : /^auralis-android-arm64-v8a-(release|development)$/.test(a.name)));
-      if(workflow_id==='android.yml' && !selected.x64_run) {
-        const x64=artifacts.find(a=>!a.expired && /^auralis-android-x86_64-(release|development)$/.test(a.name));
-        if(x64) {selected.x64_run=run.id;selected.x64_artifact=x64.name;selected.x64_signed=x64.name.endsWith('-release');}
-      }
-      if(artifact && !chosen) chosen={run,artifact};
-      if(chosen && (workflow_id==='windows.yml' || selected.x64_run)) break;
-    }
-    if(!chosen) return {ready:false,head_sha:sha};
-    if(workflow_id==='windows.yml') selected.windows_run=chosen.run.id;
-    else {selected.android_run=chosen.run.id;selected.android_artifact=chosen.artifact.name;selected.signed=chosen.artifact.name.endsWith('-release');}
+function publishedAndroid(release, version, abi, bundle) {
+  if (!bundle) return false;
+  const signed = bundle.artifact.name.endsWith('-release');
+  const mode = signed ? 'release' : 'development-release';
+  const suffix = signed ? '' : '-development';
+  const assets = new Set(release.assets.map(asset => asset.name));
+  return [
+    `auralis-${version}-android-${abi}-${mode}.apk`,
+    `auralis-${version}-android-${abi}${suffix}-provenance.zip`,
+    `SHA256SUMS-android-${abi}${suffix}.txt`,
+  ].every(name => assets.has(name));
+}
+
+async function resolve(github, context, {allowAndroidOnly = false} = {}) {
+  const {owner, repo} = context.repo;
+  const repository = `${owner}/${repo}`;
+  const trigger = context.payload.workflow_run;
+  const sha = trigger?.head_sha ?? context.sha;
+  if (!/^[a-f0-9]{40}$/.test(sha) ||
+      (trigger && (!trusted(trigger, repository, sha) || trigger.conclusion !== 'success'))) {
+    return {ready: false};
   }
-  selected.receipt=`published-${sha}-${selected.android_run}-${selected.windows_run}${selected.x64_run?'-'+selected.x64_run:''}`;
-  return selected;
+  const compare = await github.request('GET /repos/{owner}/{repo}/compare/{basehead}', {
+    owner, repo, basehead: `${sha}...main`,
+  });
+  if (!['ahead', 'identical'].includes(compare.data.status)) {
+    throw new Error('Build commit is not on main');
+  }
+  const {data: manifest} = await github.rest.repos.getContent({
+    owner, repo, ref: sha, path: 'pubspec.yaml',
+  });
+  const version = Buffer.from(manifest.content, 'base64').toString('utf8')
+    .match(/^version:\s*((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))\+\d+\s*$/m)?.[1];
+  if (!version) throw new Error('Build commit needs a stable pubspec version');
+  const tag = `v${version}`;
+  let release;
+  try {
+    ({data: release} = await github.rest.repos.getReleaseByTag({owner, repo, tag}));
+  } catch (error) {
+    if (error.status !== 404) throw error;
+  }
+  if (release?.prerelease) throw new Error(`${tag} is already a prerelease`);
+  const stable = release?.draft === false;
+  // A rerun can use the older publisher YAML with the current main policy.
+  if (stable && !allowAndroidOnly) {
+    return {ready: false, head_sha: sha, reason: `${tag} is already stable.`};
+  }
+
+  let android, x64, windows;
+  for (const workflow_id of builds) {
+    // The Windows bundle has already been published for a stable release.
+    if (stable && workflow_id === 'windows.yml') continue;
+    const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+      owner, repo, workflow_id, head_sha: sha, status: 'completed', per_page: 100,
+    });
+    const matching = runs.filter(r => trusted(r, repository, sha) && r.conclusion === 'success')
+      .sort((a, b) => b.id - a.id);
+    for (const run of matching) {
+      let artifacts;
+      try {
+        artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+          owner, repo, run_id: run.id, per_page: 100,
+        });
+      } catch (error) {
+        if (error.status === 404) continue;
+        throw error;
+      }
+      const available = artifacts.filter(a => !a.expired);
+      if (workflow_id === 'windows.yml') {
+        const artifact = available.find(a => a.name === 'auralis-windows-x64');
+        if (artifact) {
+          windows = {run, artifact};
+          break;
+        }
+      } else {
+        const arm64 = available.find(a => /^auralis-android-arm64-v8a-(release|development)$/.test(a.name));
+        const optional = available.find(a => /^auralis-android-x86_64-(release|development)$/.test(a.name));
+        if (arm64 && !android) android = {run, artifact: arm64};
+        if (optional && !x64) x64 = {run, artifact: optional};
+        if (android && x64) break;
+      }
+    }
+  }
+
+  if (!stable && (!android || !windows)) return {ready: false, head_sha: sha};
+  if (stable) {
+    if (publishedAndroid(release, version, 'arm64-v8a', android)) android = undefined;
+    if (publishedAndroid(release, version, 'x86_64', x64)) x64 = undefined;
+    if (!android && !x64) {
+      return {
+        ready: false,
+        head_sha: sha,
+        reason: `${tag} is already stable. No additional Android bundles are available to publish.`,
+      };
+    }
+  }
+  const receipt = `published-${sha}-${android?.run.id ?? 0}-${windows?.run.id ?? 0}${x64 ? '-' + x64.run.id : ''}`;
+  return {
+    ready: true,
+    head_sha: sha,
+    windows_run: windows?.run.id ?? '',
+    windows_artifact_id: windows?.artifact.id ?? '',
+    android_run: android?.run.id ?? '',
+    android_artifact: android?.artifact.name ?? '',
+    android_artifact_id: android?.artifact.id ?? '',
+    signed: android?.artifact.name.endsWith('-release') ?? false,
+    x64_run: x64?.run.id ?? '',
+    x64_artifact: x64?.artifact.name ?? '',
+    x64_artifact_id: x64?.artifact.id ?? '',
+    x64_signed: x64?.artifact.name.endsWith('-release') ?? false,
+    receipt,
+  };
 }
 function cleanupCandidates(runs, currentRun, now=Date.now(), publishedBuilds=new Set(), publishedCommits=new Set()) {
   const failures=new Set(['failure','timed_out','startup_failure','action_required']);
