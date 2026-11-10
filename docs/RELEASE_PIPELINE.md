@@ -13,9 +13,12 @@ Auralis 0.1.64 adapts the Yutaka pipeline to Android and Windows.
    It downloads those build artifacts, verifies them with the existing publishers,
    uploads Android to the draft, then verifies Windows and publishes the release.
    A receipt records the exact consumed build-run IDs only after publication.
+   A repeat publish checks the stable tag before looking for Windows artifacts.
+   An available Android bundle can still add a missing ABI to an existing release.
 4. **Clean completed Auralis runs** (`cleanup-runs.yml`) removes completed green
    publisher/deployment/signing/older-cleanup runs. Successful `main` build runs
    are kept until a publication receipt proves their artifacts were consumed.
+   Cleanup and publishing share a queue so cleanup waits for an active publisher.
    Successful feature/PR/tag builds do not wait for publication. Completed gray
    skipped runs are eligible immediately at the next cleanup. Active runs,
    cancellations and the currently executing cleanup run are retained.
