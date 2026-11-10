@@ -9,7 +9,7 @@ permissions:
   actions: read
 concurrency:
   group: stable-release-${{ github.repository }}
-  cancel-in-progress: false
+  queue: max
 jobs:
   publish:
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)
@@ -29,9 +29,9 @@ jobs:
         with:
           script: |
             const {resolve} = require('./tool/release-policy.cjs');
-            const result = await resolve(github, context);
+            const result = await resolve(github, context, {allowAndroidOnly: true});
             for (const [key,value] of Object.entries(result)) core.setOutput(key,value);
-            if (!result.ready) core.info('Waiting for matching Android arm64 and Windows artifacts. Nothing is published or cleaned.');
+            if (!result.ready) core.info(result.reason ?? 'Waiting for matching Android arm64 and Windows artifacts.');
       - name: Checkout tested source
         if: steps.runs.outputs.ready == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -40,20 +40,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Download tested Windows bundle
-        if: steps.runs.outputs.ready == 'true'
+        if: steps.runs.outputs.ready == 'true' && steps.runs.outputs.windows_run != ''
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           github-token: ${{ github.token }}
           run-id: ${{ steps.runs.outputs.windows_run }}
-          name: auralis-windows-x64
+          artifact-ids: ${{ steps.runs.outputs.windows_artifact_id }}
+          merge-multiple: true
           path: dist
       - name: Download tested Android bundle
-        if: steps.runs.outputs.ready == 'true'
+        if: steps.runs.outputs.ready == 'true' && steps.runs.outputs.android_run != ''
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           github-token: ${{ github.token }}
           run-id: ${{ steps.runs.outputs.android_run }}
-          name: ${{ steps.runs.outputs.android_artifact }}
+          artifact-ids: ${{ steps.runs.outputs.android_artifact_id }}
+          merge-multiple: true
           path: dist/android
       - name: Download optional tested Android x64 bundle
         if: steps.runs.outputs.ready == 'true' && steps.runs.outputs.x64_run != ''
@@ -61,14 +63,17 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ steps.runs.outputs.x64_run }}
-          name: ${{ steps.runs.outputs.x64_artifact }}
+          artifact-ids: ${{ steps.runs.outputs.x64_artifact_id }}
+          merge-multiple: true
           path: dist/android-x64
-      - name: Verify and publish both platforms with matching release notes
+      - name: Verify and publish the selected bundles
         if: steps.runs.outputs.ready == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           TESTED_SHA: ${{ steps.runs.outputs.head_sha }}
+          ANDROID_RUN: ${{ steps.runs.outputs.android_run }}
+          WINDOWS_RUN: ${{ steps.runs.outputs.windows_run }}
           SIGNED: ${{ steps.runs.outputs.signed }}
           ABI: arm64-v8a
           X64_RUN: ${{ steps.runs.outputs.x64_run }}
@@ -81,17 +86,19 @@ jobs:
           $env:GITHUB_SHA = $env:TESTED_SHA
           python tool/release-notes.py --output dist/release-notes.md
           if ($LASTEXITCODE -ne 0) { throw 'Release notes validation failed.' }
-          python tool/publish-android.py
-          if ($LASTEXITCODE -ne 0) { throw 'Android assets failed verification; release remains unpublished.' }
+          if ($env:ANDROID_RUN) {
+            python tool/publish-android.py
+            if ($LASTEXITCODE -ne 0) { throw 'Android arm64 asset verification failed.' }
+          }
           if ($env:X64_RUN) {
-            Move-Item dist/android dist/android-arm64
+            if ($env:ANDROID_RUN) { Move-Item dist/android dist/android-arm64 }
             Move-Item dist/android-x64 dist/android
             $env:ABI = 'x86_64'
             $env:SIGNED = $env:X64_SIGNED
             python tool/publish-android.py
             if ($LASTEXITCODE -ne 0) { throw 'Android x64 asset verification failed.' }
           }
-          ./tool/publish-release.ps1
+          if ($env:WINDOWS_RUN) { ./tool/publish-release.ps1 }
       - name: Record consumed build artifacts
         if: steps.runs.outputs.ready == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
