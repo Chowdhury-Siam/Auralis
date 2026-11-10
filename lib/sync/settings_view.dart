@@ -188,15 +188,6 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
         ),
       ) ==
       true;
-  Future<void> _restore() async {
-    if (await _confirm(
-      'Restore cloud copy?',
-      'Replace shared local fields with this account’s cloud copy. A protected local snapshot is retained.',
-    )) {
-      await _run(sync.restoreCloudCopy);
-    }
-  }
-
   Future<void> _signOut() async {
     final clear = await showDialog<bool>(
       context: context,
@@ -774,9 +765,9 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
             label: const Text('Sync now'),
           ),
           FilledButton.tonalIcon(
-            onPressed: disabled ? null : _restore,
+            onPressed: disabled ? null : () => _run(sync.restoreCloudCopy),
             icon: const Icon(Icons.cloud_download_outlined),
-            label: const Text('Restore cloud copy'),
+            label: const Text('Merge cloud copy'),
           ),
         ],
       ),
