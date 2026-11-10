@@ -103,7 +103,9 @@ void main() {
         find.ancestor(of: dock, matching: find.byType(Positioned)),
         findsWidgets,
       );
-      await tester.tap(find.byType(TextField).first);
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(TextField));
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
       await tester.pump();
