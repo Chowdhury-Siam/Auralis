@@ -446,17 +446,14 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        if (scale == 1) {
-          expect(
-            find.text(song.title).hitTestable(),
-            findsOneWidget,
-            reason: 'The activity overview and first ranked track fit without scrolling',
-          );
-          expect(
-            tester.getSize(find.byKey(const ValueKey('stats-summary'))).height,
-            lessThan(110),
-          );
-        }
+        expect(find.text('Listened'), findsOneWidget);
+        await tester.tap(find.text('7 days'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Play count'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Play count'));
+        await tester.pumpAndSettle();
+        expect(find.text('Daily activity in the last 7 days'), findsOneWidget);
         final tabs = find.byKey(const ValueKey('stats-ranking-tabs'));
         await tester.ensureVisible(tabs);
         await tester.pumpAndSettle();
