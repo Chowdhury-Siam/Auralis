@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -34,7 +33,7 @@ class StatsDataDialog extends StatefulWidget {
 }
 
 class _StatsDataDialogState extends State<StatsDataDialog> {
-  late ListeningStats _stats;
+  late ListeningStats _stats, _sourceStats;
   bool _busy = false, _error = false, _confirming = false;
   bool _showArtists = false, _chartPlays = false;
   _StatsRange _range = _StatsRange.all;
@@ -46,10 +45,36 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
   void initState() {
     super.initState();
     _snapshot();
+    player.addListener(_refreshSyncedStats);
   }
 
-  void _snapshot() =>
-      _stats = ListeningStats.fromJson(player.settings.listening.toJson());
+  @override
+  void didUpdateWidget(covariant StatsDataDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.player != player) {
+      oldWidget.player.removeListener(_refreshSyncedStats);
+      player.addListener(_refreshSyncedStats);
+      _snapshot();
+    }
+  }
+
+  @override
+  void dispose() {
+    player.removeListener(_refreshSyncedStats);
+    super.dispose();
+  }
+
+  void _refreshSyncedStats() {
+    if (!widget.openBackupSection &&
+        !identical(_sourceStats, player.settings.listening)) {
+      setState(_snapshot);
+    }
+  }
+
+  void _snapshot() {
+    _sourceStats = player.settings.listening;
+    _stats = ListeningStats.fromJson(_sourceStats.toJson());
+  }
 
   Future<void> _run(
     Future<void> Function() action, {
@@ -122,8 +147,8 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     }
   }
 
-  Future<String?> _destination(String name, String extension) async {
-    final path = await widget.files.savePath(name, extension);
+  Future<String?> _destination(String name) async {
+    final path = await widget.files.savePath(name);
     if (path == null) return null;
     String normalized(String value) {
       final result = p.normalize(File(value).absolute.path);
@@ -139,26 +164,6 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     }
     return path;
   }
-
-  Future<void> _export(String extension) => _run(() async {
-    final path = await _destination(
-      'auralis-listening-${listeningDate(DateTime.now())}.$extension',
-      extension,
-    );
-    if (path == null) return;
-    await player.flushListeningStats(failOnError: true);
-    final stats = ListeningStats.fromJson(player.settings.listening.toJson());
-    final text = extension == 'csv'
-        ? stats.toCsv()
-        : const JsonEncoder.withIndent('  ').convert({
-            'format': 'auralis-listening-stats',
-            'version': 1,
-            'exportedAt': DateTime.now().toUtc().toIso8601String(),
-            'data': stats.toJson(),
-          });
-    await widget.files.write(path, text);
-    if (mounted) setState(() => _status = 'Listening data exported.');
-  });
 
   Future<String?> _password({required bool creating}) async {
     final password = TextEditingController();
@@ -275,7 +280,6 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
       }
       final path = await _destination(
         'auralis-backup-${listeningDate(DateTime.now())}.json',
-        'json',
       );
       if (path == null || !mounted) return;
       await player.flushListeningStats(failOnError: true);
@@ -528,7 +532,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
           if (points.isEmpty)
             const Text('Your listening timeline will appear here.')
           else
-            ListeningBars(points: points, plays: _chartPlays),
+            ListeningBars(points: points, plays: _chartPlays, showValues: true),
           if (peak != null) ...[
             const Divider(height: 20),
             Text(
@@ -1037,11 +1041,6 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final exportStyle = OutlinedButton.styleFrom(
-      textStyle: Theme.of(context).textTheme.labelLarge!.copyWith(fontSize: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      minimumSize: const Size(0, 36),
-    );
     const title = 'Listening stats';
     final refresh = IconButton(
       tooltip: 'Refresh listening stats',
@@ -1081,35 +1080,6 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
                     ),
                   ),
                 _dashboard(),
-                const Divider(height: 24),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    FilledButton.tonalIcon(
-                      style: exportStyle,
-                      onPressed: _busy ? null : () => _export('csv'),
-                      icon: const Icon(Icons.table_chart_outlined, size: 16),
-                      label: const Text('Export CSV'),
-                    ),
-                    OutlinedButton.icon(
-                      style: exportStyle,
-                      onPressed: _busy ? null : () => _export('json'),
-                      icon: const Icon(Icons.file_download_outlined, size: 16),
-                      label: const Text('Export JSON'),
-                    ),
-                  ],
-                ),
-                ExpansionTile(
-                  key: const ValueKey('stats-backup-section'),
-                  tilePadding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  title: const Text(
-                    'Backup & Restore',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  children: [_backupControls()],
-                ),
               ],
             ),
           ),
@@ -1263,10 +1233,11 @@ class ListeningBars extends StatelessWidget {
     super.key,
     required this.points,
     this.plays = false,
+    this.showValues = false,
     this.height = 104,
   });
   final List<ListeningPoint> points;
-  final bool plays;
+  final bool plays, showValues;
   final double height;
 
   @override
@@ -1276,61 +1247,108 @@ class ListeningBars extends StatelessWidget {
     int value(ListeningPoint point) =>
         plays ? point.day.plays : point.day.milliseconds;
     final maximum = points.fold(1, (max, point) => math.max(max, value(point)));
-    final scale = MediaQuery.textScalerOf(context).scale(10);
+    final scaler = MediaQuery.textScalerOf(context);
+    final scale = scaler.scale(10);
+    final labelStyle = (theme.textTheme.labelSmall ?? const TextStyle())
+        .copyWith(fontSize: 10, color: colors.onSurfaceVariant);
+    final valueStyle = labelStyle.copyWith(
+      color: colors.onSurface,
+      fontWeight: FontWeight.w700,
+    );
+    String valueLabel(int amount) => plays ? '$amount' : listeningTime(amount);
+    var minimumWidth = math.max(28.0, scale * 3.2);
+    if (showValues) {
+      final direction = Directionality.of(context);
+      for (final point in points) {
+        for (final (text, style) in [
+          (point.label, labelStyle),
+          (listeningTime(point.day.milliseconds), valueStyle),
+          ('${point.day.plays}', valueStyle),
+        ]) {
+          final measured = TextPainter.computeWidth(
+            text: TextSpan(text: text, style: style),
+            textDirection: direction,
+            textScaler: scaler,
+          );
+          minimumWidth = math.max(minimumWidth, measured + 12);
+        }
+      }
+    }
     return LayoutBuilder(
       builder: (context, box) {
-        final width = math.max(
-          math.max(28.0, scale * 3.2),
-          box.maxWidth / math.max(1, points.length),
-        );
+        final wraps = showValues && points.length <= 12;
+        final columns = math.max(1, (box.maxWidth / minimumWidth).floor());
+        final width = wraps
+            ? (box.maxWidth / math.max(1, math.min(columns, points.length)))
+                  .floorToDouble()
+            : math.max(minimumWidth, box.maxWidth / math.max(1, points.length));
+        final barHeight = wraps && columns < points.length
+            ? height * .72
+            : height;
+
+        Widget period(int index) {
+          final point = points[index];
+          final amount = value(point);
+          final label = valueLabel(amount);
+          return Tooltip(
+            message: '${point.label} · ${plays ? '$label plays' : label}',
+            child: Column(
+              children: [
+                SizedBox(
+                  height: barHeight,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: AnimatedContainer(
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                      height: math.max(3.0, barHeight * amount / maximum),
+                      width: math.min(48, width * .68),
+                      decoration: BoxDecoration(
+                        color: amount == 0
+                            ? colors.surfaceContainerHighest
+                            : colors.primary,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  point.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: labelStyle,
+                ),
+                if (showValues)
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: valueStyle,
+                  ),
+              ],
+            ),
+          );
+        }
+
+        if (wraps) {
+          return Wrap(
+            runSpacing: 12,
+            children: [
+              for (var index = 0; index < points.length; index++)
+                SizedBox(width: width, child: period(index)),
+            ],
+          );
+        }
         return SizedBox(
-          height: height + scale * 2.8,
+          height: barHeight + scale * (showValues ? 4.2 : 2.8),
           child: ListView.builder(
             primary: false,
             scrollDirection: Axis.horizontal,
             itemExtent: width,
             itemCount: points.length,
-            itemBuilder: (context, index) {
-              final point = points[index];
-              final amount = value(point);
-              final label = plays ? '$amount plays' : listeningTime(amount);
-              return Tooltip(
-                message: '${point.label} · $label',
-                child: Column(
-                  children: [
-                    SizedBox(
-                      height: height,
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: AnimatedContainer(
-                          duration: MediaQuery.disableAnimationsOf(context)
-                              ? Duration.zero
-                              : const Duration(milliseconds: 220),
-                          height: math.max(3.0, height * amount / maximum),
-                          width: math.min(48, width * .68),
-                          decoration: BoxDecoration(
-                            color: amount == 0
-                                ? colors.surfaceContainerHighest
-                                : colors.primary,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      point.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontSize: 10,
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+            itemBuilder: (context, index) => period(index),
           ),
         );
       },
