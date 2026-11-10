@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'fakes.dart';
 
@@ -745,9 +746,11 @@ void main() {
       'auralis-backup-menu',
     );
     addTearDown(() => directory.deleteSync(recursive: true));
-    final settings = AppSettings(File('${directory.path}/settings.json'))
+    final settings = AppSettings(File(p.join(directory.path, 'settings.json')))
       ..reducedMotion = true;
-    final recovery = File('${directory.path}/auralis-before-restore.json');
+    final recovery = File(
+      p.join(settings.file.parent.path, 'auralis-before-restore.json'),
+    );
     final backup = DataBackup.create(settings, DateTime.now()).encode();
     recovery.writeAsStringSync(backup);
     final files = ChosenFiles()..contents[recovery.path] = backup;
