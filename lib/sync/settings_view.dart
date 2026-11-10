@@ -99,10 +99,16 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
     }
   }
 
-  Future<void> _validate() => _run(() async {
-    final h = await sync.validateWorker(_url.text);
-    await sync.rememberService(_url.text);
-    if (mounted) {
+  Future<void> _validate({bool connected = false}) => _run(() async {
+    final endpoint = connected ? sync.serviceUrl : _url.text;
+    final h = await sync.validateWorker(endpoint);
+    if (!connected) await sync.rememberService(endpoint);
+    if (!mounted) return;
+    if (connected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sync Worker is reachable.')),
+      );
+    } else {
       setState(() {
         _ownerCreated = h['ownerCreated'] as bool?;
         if (_ownerCreated == false && !sync.signedIn) _register = true;
@@ -407,7 +413,9 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
 
   Widget _card(List<Widget> children) => Card(
     margin: const EdgeInsets.only(bottom: 12),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+    elevation: 0,
+    color: Theme.of(context).colorScheme.surfaceContainerLow,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     child: Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -459,6 +467,8 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   }
 
   Widget _telegramCard(bool disabled) => _card([
+    _sectionTitle(Icons.send_rounded, 'Telegram on your devices'),
+    const SizedBox(height: 4),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: const Text('Include Telegram account'),
@@ -565,9 +575,10 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
           ),
       ],
     ),
-    const Text(
-      'Keep Auralis open on a connected device to approve a new sign-in. If none is available, use normal Telegram sign-in. Each device keeps its own session.',
-    ),
+    if (sync.telegramIncluded)
+      const Text(
+        'Keep Auralis open on a connected device to approve a new sign-in, or use phone sign-in.',
+      ),
   ]);
   @override
   void dispose() {
@@ -580,326 +591,388 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
     super.dispose();
   }
 
+  Widget _sectionTitle(IconData icon, String title) => Row(
+    children: [
+      Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+      ),
+    ],
+  );
+
+  Widget _workerCard(bool disabled, {required bool connected}) => _card([
+    _sectionTitle(
+      Icons.dns_outlined,
+      _fromSetup ? 'Your Sync Worker' : 'Self-hosted Sync Worker',
+    ),
+    const SizedBox(height: 12),
+    if (connected) ...[
+      Text(
+        'Cloudflare Worker URL',
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
+      const SizedBox(height: 4),
+      SelectableText(sync.serviceUrl),
+      const SizedBox(height: 8),
+    ] else ...[
+      if (_fromSetup) ...[
+        const Text('Use the Worker URL for your Auralis account.'),
+        const SizedBox(height: 12),
+      ],
+      TextField(
+        key: const ValueKey('sync-worker-url'),
+        controller: _url,
+        enabled: !disabled && (!sync.signedIn || _adding),
+        keyboardType: TextInputType.url,
+        onChanged: (_) {
+          if (_ownerCreated != null) {
+            setState(() => _ownerCreated = null);
+          }
+        },
+        autocorrect: false,
+        decoration: const InputDecoration(
+          labelText: 'Cloudflare Worker URL',
+          prefixIcon: Icon(Icons.link_rounded),
+          hintText: 'https://auralis-sync.example.workers.dev',
+        ),
+      ),
+
+      const SizedBox(height: 12),
+    ],
+    Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        OutlinedButton.icon(
+          onPressed: disabled ? null : () => _validate(connected: connected),
+          icon: const Icon(Icons.verified_outlined),
+          label: Text(
+            connected ? 'Check connection' : 'Validate and use Worker',
+          ),
+        ),
+        if (sync.deploymentVault != null &&
+            (!sync.signedIn || sync.account!.admin)) ...[
+          TextButton.icon(
+            onPressed: disabled
+                ? null
+                : () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => SyncDeploymentPage(sync: sync),
+                    ),
+                  ),
+            icon: const Icon(Icons.rocket_launch_rounded),
+            label: const Text('Deploy Database'),
+          ),
+        ],
+      ],
+    ),
+  ]);
+
+  Widget _profileLink(bool disabled, String endpoint) => TextButton.icon(
+    onPressed: disabled
+        ? null
+        : () => _run(
+            () => openExternalLink(
+              '${SyncController.normalize(endpoint)}/profile',
+            ),
+          ),
+    icon: const Icon(Icons.open_in_new_rounded),
+    label: const Text('Account recovery & administration'),
+  );
+
+  Widget _accountActions(bool disabled) => _card([
+    _sectionTitle(Icons.manage_accounts_outlined, 'Manage account'),
+    const SizedBox(height: 8),
+    Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        TextButton.icon(
+          onPressed: disabled ? null : _switch,
+          icon: const Icon(Icons.swap_horiz_rounded),
+          label: const Text('Switch account'),
+        ),
+        TextButton.icon(
+          onPressed: disabled ? null : _signOut,
+          icon: const Icon(Icons.logout_rounded),
+          label: const Text('Sign out'),
+        ),
+      ],
+    ),
+    if (sync.serviceUrl.isNotEmpty)
+      Align(
+        alignment: Alignment.centerLeft,
+        child: _profileLink(disabled, sync.serviceUrl),
+      ),
+    const Divider(height: 16),
+    Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: disabled ? null : _delete,
+        style: TextButton.styleFrom(
+          foregroundColor: Theme.of(context).colorScheme.error,
+        ),
+        icon: const Icon(Icons.delete_outline_rounded),
+        label: const Text('Delete account'),
+      ),
+    ),
+  ]);
+
+  Widget _syncOverview(bool disabled, Widget feedback) {
+    final account = sync.account!;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return _card([
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colors.primaryContainer,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(
+              Icons.cloud_sync_rounded,
+              color: colors.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(account.username, style: theme.textTheme.headlineSmall),
+                const SizedBox(height: 2),
+                Text(
+                  '${sync.workerName}${account.admin ? ' · Administrator' : ''}',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+      Semantics(
+        liveRegion: true,
+        child: Text(sync.status, style: theme.textTheme.bodyLarge),
+      ),
+      feedback,
+      const SizedBox(height: 10),
+      Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          FilledButton.icon(
+            onPressed: disabled ? null : () => _run(sync.uploadLocalChanges),
+            icon: const Icon(Icons.sync_rounded),
+            label: const Text('Sync now'),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: disabled ? null : _restore,
+            icon: const Icon(Icons.cloud_download_outlined),
+            label: const Text('Restore cloud copy'),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      Text(
+        'Favorites, playlists, listening history, channels and shared preferences sync across your devices. Music files, volume and playback stay on this device.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: colors.onSurfaceVariant,
+        ),
+      ),
+    ]);
+  }
+
+  Widget _credentials(bool disabled) => _card([
+    Text(
+      _register
+          ? (_ownerCreated == false ? 'Create owner account' : 'Create account')
+          : 'Sign in',
+      style: Theme.of(context).textTheme.titleLarge,
+    ),
+    const SizedBox(height: 12),
+    TextField(
+      key: const ValueKey('sync-username'),
+      controller: _username,
+      enabled: !disabled,
+      autocorrect: false,
+      textInputAction: TextInputAction.next,
+      decoration: const InputDecoration(
+        labelText: 'Username',
+        prefixIcon: Icon(Icons.person_rounded),
+      ),
+    ),
+    const SizedBox(height: 12),
+    TextField(
+      key: const ValueKey('sync-password'),
+      controller: _password,
+      enabled: !disabled,
+      obscureText: _obscure,
+      autocorrect: false,
+      enableSuggestions: false,
+      onSubmitted: (_) => disabled ? null : _login(),
+      decoration: InputDecoration(
+        labelText: 'Password',
+        helperText: _register ? 'At least 10 characters' : null,
+        prefixIcon: const Icon(Icons.lock_rounded),
+        suffixIcon: IconButton(
+          tooltip: _obscure ? 'Show password' : 'Hide password',
+          onPressed: () => setState(() => _obscure = !_obscure),
+          icon: Icon(
+            _obscure ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+          ),
+        ),
+      ),
+    ),
+    if (_register && _ownerCreated != true) ...[
+      const SizedBox(height: 12),
+      TextField(
+        controller: _claim,
+        enabled: !disabled,
+        obscureText: true,
+        autocorrect: false,
+        enableSuggestions: false,
+        decoration: const InputDecoration(
+          labelText: 'Existing sync key / owner setup secret',
+          helperText: 'Filled automatically on the deploying device.',
+        ),
+      ),
+    ],
+    const SizedBox(height: 16),
+    if (_fromSetup && _error != null)
+      Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Semantics(
+          liveRegion: true,
+          child: Text(
+            _error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+      ),
+    FilledButton(
+      onPressed: disabled ? null : _login,
+      child: Text(_register ? 'Create account' : 'Sign in'),
+    ),
+    TextButton(
+      onPressed: disabled ? null : () => setState(() => _register = !_register),
+      child: Text(
+        _register ? 'Already have an account? Sign in' : 'Create an account',
+      ),
+    ),
+    TextButton(
+      onPressed: disabled ? null : _recover,
+      child: const Text('Recover with recovery code'),
+    ),
+    if (sync.savedAccounts.isNotEmpty)
+      TextButton(
+        onPressed: disabled ? null : _switch,
+        child: const Text('Switch account'),
+      ),
+    if (_adding)
+      TextButton(
+        onPressed: disabled
+            ? null
+            : () => setState(() {
+                _adding = false;
+                _url.text = sync.serviceUrl;
+                _error = null;
+                _ownerCreated = null;
+              }),
+        child: const Text('Cancel'),
+      ),
+  ]);
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: sync,
     builder: (context, _) {
       final disabled = _working || sync.busy;
+      final connected = sync.signedIn && !_adding;
+      final error =
+          (_fromSetup && !connected ? null : _error) ??
+          sync.error ??
+          sync.deploymentError ??
+          sync.workerUpdateError;
+      final feedback = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (disabled || sync.syncing)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: LinearProgressIndicator(minHeight: 3),
+            ),
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  error,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            ),
+        ],
+      );
       return PopScope<Object?>(
         canPop: !disabled,
         child: Scaffold(
           appBar: AppBar(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_fromSetup ? 'Connect Worker Sync' : 'Account & sync'),
-                if (sync.signedIn)
-                  Text(
-                    sync.account!.username,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-              ],
-            ),
+            title: Text(_fromSetup ? 'Connect Worker Sync' : 'Account & sync'),
           ),
           body: SafeArea(
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _card([
-                      Text(
-                        _fromSetup
-                            ? 'Your Sync Worker'
-                            : 'Self-hosted Sync Worker',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (_fromSetup) ...[
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Use the Worker URL for your Auralis account.',
-                        ),
+                constraints: BoxConstraints(maxWidth: connected ? 1080 : 620),
+                child: LayoutBuilder(
+                  builder: (context, box) {
+                    final worker = _workerCard(disabled, connected: connected);
+                    final main = [
+                      if (connected) ...[
+                        _syncOverview(disabled, feedback),
+                        if (sync.telegramSyncAvailable) _telegramCard(disabled),
+                      ] else ...[
+                        worker,
+                        feedback,
+                        _credentials(disabled),
+                        if (sync.serviceUrl.isNotEmpty)
+                          _profileLink(disabled, _url.text),
                       ],
-                      const SizedBox(height: 14),
-                      TextField(
-                        key: const ValueKey('sync-worker-url'),
-                        controller: _url,
-                        enabled: !disabled && (!sync.signedIn || _adding),
-                        keyboardType: TextInputType.url,
-                        onChanged: (_) {
-                          if (_ownerCreated != null) {
-                            setState(() => _ownerCreated = null);
-                          }
-                        },
-                        autocorrect: false,
-                        decoration: const InputDecoration(
-                          labelText: 'Cloudflare Worker URL',
-                          prefixIcon: Icon(Icons.link_rounded),
-                          hintText: 'https://auralis-sync.example.workers.dev',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: disabled ? null : _validate,
-                        icon: const Icon(Icons.verified_rounded),
-                        label: const Text('Validate and use Worker'),
-                      ),
-                      if (sync.deploymentVault != null &&
-                          (!sync.signedIn || sync.account!.admin)) ...[
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          onPressed: disabled
-                              ? null
-                              : () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute<void>(
-                                    builder: (_) =>
-                                        SyncDeploymentPage(sync: sync),
-                                  ),
-                                ),
-                          icon: const Icon(Icons.rocket_launch_rounded),
-                          label: const Text('Deploy Database'),
-                        ),
-                      ],
-                    ]),
-                    if (sync.signedIn && !_adding) ...[
-                      _card([
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            Icons.cloud_done_rounded,
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 36,
-                          ),
-                          title: Text(
-                            sync.workerName,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Text(sync.status),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          key: ValueKey(('signed-sync-user', sync.account!.id)),
-                          readOnly: true,
-                          initialValue: sync.account!.username,
-                          decoration: InputDecoration(
-                            labelText:
-                                'Username${sync.account!.admin ? ' · Administrator' : ''}',
-                            prefixIcon: const Icon(Icons.person_rounded),
-                          ),
-                        ),
-                      ]),
-                      LayoutBuilder(
-                        builder: (context, box) {
-                          final buttons = [
-                            FilledButton.tonalIcon(
-                              onPressed: disabled
-                                  ? null
-                                  : () => _run(sync.uploadLocalChanges),
-                              icon: const Icon(Icons.sync_rounded),
-                              label: const Text('Sync now'),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: disabled ? null : _restore,
-                              icon: const Icon(Icons.cloud_download_rounded),
-                              label: const Text('Restore cloud copy'),
-                            ),
-                          ];
-                          return box.maxWidth < 340
-                              ? Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    buttons[0],
-                                    const SizedBox(height: 8),
-                                    buttons[1],
-                                  ],
-                                )
-                              : Row(
-                                  children: [
-                                    Expanded(child: buttons[0]),
-                                    const SizedBox(width: 8),
-                                    Expanded(child: buttons[1]),
-                                  ],
-                                );
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      OutlinedButton.icon(
-                        onPressed: disabled ? null : _switch,
-                        icon: const Icon(Icons.swap_horiz_rounded),
-                        label: const Text('Switch account'),
-                      ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: disabled ? null : _signOut,
-                        icon: const Icon(Icons.logout_rounded),
-                        label: const Text('Sign out'),
-                      ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: disabled ? null : _delete,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Theme.of(context).colorScheme.error,
-                        ),
-                        icon: const Icon(Icons.delete_forever_rounded),
-                        label: const Text('Delete account'),
-                      ),
-                    ] else
-                      _card([
-                        Text(
-                          _register
-                              ? (_ownerCreated == false
-                                    ? 'Create owner account'
-                                    : 'Create account')
-                              : 'Sign in',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          key: const ValueKey('sync-username'),
-                          controller: _username,
-                          enabled: !disabled,
-                          autocorrect: false,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Username',
-                            prefixIcon: Icon(Icons.person_rounded),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          key: const ValueKey('sync-password'),
-                          controller: _password,
-                          enabled: !disabled,
-                          obscureText: _obscure,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          onSubmitted: (_) => disabled ? null : _login(),
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            helperText: _register
-                                ? 'At least 10 characters'
-                                : null,
-                            prefixIcon: const Icon(Icons.lock_rounded),
-                            suffixIcon: IconButton(
-                              tooltip: _obscure
-                                  ? 'Show password'
-                                  : 'Hide password',
-                              onPressed: () =>
-                                  setState(() => _obscure = !_obscure),
-                              icon: Icon(
-                                _obscure
-                                    ? Icons.visibility_rounded
-                                    : Icons.visibility_off_rounded,
+                    ];
+                    final secondary = [
+                      worker,
+                      if (connected) _accountActions(disabled),
+                    ];
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      children: [
+                        if (connected && box.maxWidth >= 820)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 6, child: Column(children: main)),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 4,
+                                child: Column(children: secondary),
                               ),
-                            ),
-                          ),
-                        ),
-                        if (_register && _ownerCreated != true) ...[
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _claim,
-                            enabled: !disabled,
-                            obscureText: true,
-                            autocorrect: false,
-                            enableSuggestions: false,
-                            decoration: const InputDecoration(
-                              labelText:
-                                  'Existing sync key / owner setup secret',
-                              helperText: 'Filled automatically on the deploying device.',
-                            ),
-                          ),
+                            ],
+                          )
+                        else ...[
+                          ...main,
+                          if (connected) ...secondary,
                         ],
-                        const SizedBox(height: 16),
-                        if (_fromSetup && _error != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Semantics(
-                              liveRegion: true,
-                              child: Text(
-                                _error!,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                              ),
-                            ),
-                          ),
-                        FilledButton(
-                          onPressed: disabled ? null : _login,
-                          child: Text(_register ? 'Create account' : 'Sign in'),
-                        ),
-                        TextButton(
-                          onPressed: disabled
-                              ? null
-                              : () => setState(() => _register = !_register),
-                          child: Text(
-                            _register
-                                ? 'Already have an account? Sign in'
-                                : 'Create an account',
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: disabled ? null : _recover,
-                          child: const Text('Recover with recovery code'),
-                        ),
-                        if (sync.savedAccounts.isNotEmpty)
-                          TextButton(
-                            onPressed: disabled ? null : _switch,
-                            child: const Text('Switch account'),
-                          ),
-                        if (_adding)
-                          TextButton(
-                            onPressed: disabled
-                                ? null
-                                : () => setState(() => _adding = false),
-                            child: const Text('Cancel'),
-                          ),
-                      ]),
-                    if (sync.telegramSyncAvailable && !_adding)
-                      _telegramCard(disabled),
-                    if (disabled || sync.syncing)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: LinearProgressIndicator(),
-                      ),
-                    if ((_fromSetup && (!sync.signedIn || _adding)
-                                ? null
-                                : _error) ??
-                            sync.error ??
-                            sync.deploymentError ??
-                            sync.workerUpdateError
-                        case final String error)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          error,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Favorites, playlists, recent music, listening statistics, channels and shared preferences sync. Your linked Telegram account can connect on other devices with approval. Music, volume and playback stay on this device.',
-                    ),
-                    if (sync.serviceUrl.isNotEmpty)
-                      TextButton.icon(
-                        onPressed: disabled
-                            ? null
-                            : () => _run(
-                                () => openExternalLink(
-                                  '${SyncController.normalize(_url.text)}/profile',
-                                ),
-                              ),
-                        icon: const Icon(Icons.open_in_new_rounded),
-                        label: const Text('Account recovery & administration'),
-                      ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
