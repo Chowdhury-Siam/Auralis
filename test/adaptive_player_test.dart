@@ -456,6 +456,8 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Library'));
+        await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: '$size Library');
         if (size.width >= 600 && size.height < 560) {
           expect(
