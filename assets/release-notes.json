@@ -1,6 +1,18 @@
 {
-  "current": "0.1.123",
+  "current": "0.1.125",
   "releases": [
+    {
+      "version": "0.1.125",
+      "changes": [
+        "Hold Home to open Telegram Video. Browse a channel or paste a message link, then stream with fullscreen, seek gestures, speed, and audio and subtitle track controls."
+      ]
+    },
+    {
+      "version": "0.1.124",
+      "changes": [
+        "Retry missing local thumbnails and confirm lyrics are saved to disk before counting them. Tap the Library cache totals to see which tracks still need artwork or lyrics."
+      ]
+    },
     {
       "version": "0.1.123",
       "changes": [
