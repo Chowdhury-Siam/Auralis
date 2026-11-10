@@ -1,6 +1,31 @@
 {
-  "current": "0.1.119",
+  "current": "0.1.123",
   "releases": [
+    {
+      "version": "0.1.123",
+      "changes": [
+        "Sync recently played tracks and qualified plays promptly, send listening progress every five seconds, and refresh open listening stats when another device syncs."
+      ]
+    },
+    {
+      "version": "0.1.122",
+      "changes": [
+        "Merge the full cloud copy with the existing local sync document and keep pending changes for the next upload.",
+        "Add playback repeat and library sort order to General and move the setup shortcut to About."
+      ]
+    },
+    {
+      "version": "0.1.121",
+      "changes": [
+        "Removed standalone CSV and JSON exports and the Backup & Restore section from Listening stats."
+      ]
+    },
+    {
+      "version": "0.1.120",
+      "changes": [
+        "Show listening time or play count for every timeline period and wrap monthly bars on narrow screens."
+      ]
+    },
     {
       "version": "0.1.119",
       "changes": [
