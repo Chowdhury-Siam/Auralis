@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:auralis/data_backup.dart';
 import 'package:auralis/models.dart';
+import 'package:auralis/player.dart';
 import 'package:auralis/sync/controller.dart';
 import 'package:auralis/sync/document.dart';
 import 'package:auralis/sync/deployment.dart';
 import 'package:auralis/sync/deployment_view.dart';
 import 'package:auralis/sync/settings_view.dart';
+import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -61,6 +64,8 @@ class AccountRequest extends Fake implements HttpClientRequest {
 }
 
 class AccountClient extends Fake implements HttpClient {
+  AccountClient({this.openLive});
+  final Future<HttpClientRequest> Function()? openLive;
   bool owner = false, ownerCreated = true;
   Map<String, dynamic>? deployment;
   Response Function(AccountRequest, Map<String, dynamic>)? syncReply;
@@ -72,6 +77,7 @@ class AccountClient extends Fake implements HttpClient {
     final r = AccountRequest(method, uri, _reply);
     requests.add(r);
     if (uri.path == '/v1/live') {
+      if (openLive case final open?) return open();
       throw const SocketException('Live transport is offline in account tests');
     }
     return r;
@@ -153,9 +159,161 @@ class AccountClient extends Fake implements HttpClient {
   void close({bool force = false}) {}
 }
 
+class LoopbackHttpOverrides extends HttpOverrides {}
+
+class SyncPlaybackAudio extends FakeAudio {
+  void advance(Duration amount) {
+    position += amount;
+    notifyListeners();
+  }
+}
+
 void main() {
+  test('online devices receive play starts, listening progress and qualified plays automatically', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final liveClient = LoopbackHttpOverrides().createHttpClient(null);
+    final liveUri = Uri.http('127.0.0.1:${server.port}', '/v1/live');
+    final peers = <WebSocket>[];
+    final live = Completer<void>();
+    server.listen((request) async {
+      final socket = await WebSocketTransformer.upgrade(request);
+      peers.add(socket);
+      socket.listen((_) {}, onDone: () => peers.remove(socket));
+      if (peers.length == 2 && !live.isCompleted) live.complete();
+    });
+
+    final cloud = SyncDocument({});
+    var revision = 0;
+    final client = AccountClient(openLive: () => liveClient.getUrl(liveUri))
+      ..syncReply = (request, data) {
+        final previous = jsonEncode(cloud.records);
+        cloud.merge(data['ops'] as Map<String, dynamic>);
+        if (jsonEncode(cloud.records) != previous) {
+          revision++;
+          for (final peer in peers) {
+            peer.add('changed');
+          }
+        }
+        return Response(
+          utf8.encode(
+            jsonEncode({
+              'cursor': revision,
+              'more': false,
+              'records': data['cursor'] == revision ? {} : cloud.records,
+            }),
+          ),
+        );
+      };
+    try {
+      await HttpOverrides.runZoned(() async {
+        final sender = AccountSettings(), receiver = AccountSettings();
+        void Function()? received;
+        var paused = false;
+        final a = SyncController(
+          sender,
+          AccountVault(),
+          onApplied: () {},
+          paused: () => paused,
+        );
+        final b = SyncController(
+          receiver,
+          AccountVault(),
+          onApplied: () => received?.call(),
+          paused: () => paused,
+        );
+        final audio = SyncPlaybackAudio()
+          ..duration = const Duration(seconds: 16);
+        var elapsed = Duration.zero;
+        final player = PlayerController(
+          audio,
+          TelegramStreamProxy((_) async => {}),
+          sender,
+          elapsed: () => elapsed,
+        );
+        const track = Track(
+          id: '-100:20',
+          title: 'Test song',
+          artist: 'Test artist',
+          source: 'Music',
+          fileId: 1,
+          size: 100,
+          duration: Duration(seconds: 16),
+        );
+
+        Future<void> expectRemote(
+          bool Function() check,
+          Future<void> Function() action,
+        ) async {
+          final delivered = Completer<void>();
+          received = () {
+            if (!delivered.isCompleted && check()) delivered.complete();
+          };
+          try {
+            await action();
+            received?.call();
+            await delivered.future.timeout(
+              const Duration(seconds: 4),
+              onTimeout: () => throw StateError(
+                'Sender: ${sender.recentIds}, ${sender.listening.milliseconds} ms, ${sender.listening.plays} plays (${a.error}); receiver: ${receiver.recentIds}, ${receiver.listening.milliseconds} ms, ${receiver.listening.plays} plays (${b.error})',
+              ),
+            );
+          } finally {
+            received = null;
+          }
+        }
+
+        Future<void> playFor(int seconds) async {
+          final amount = Duration(seconds: seconds);
+          elapsed += amount;
+          audio.advance(amount);
+        }
+
+        try {
+          for (final sync in [a, b]) {
+            await sync.signIn('https://sync.example', 'alice', 'test-password');
+          }
+          await live.future.timeout(
+            const Duration(seconds: 4),
+            onTimeout: () => throw StateError(
+              'Connected sockets: ${peers.length}; requests: ${client.requests.map((r) => r.uri.path).toList()}',
+            ),
+          );
+          await expectRemote(
+            () => receiver.recentIds.firstOrNull == track.id,
+            () => player.play(track),
+          );
+          await expectRemote(
+            () => receiver.listening.milliseconds == 1000,
+            () => playFor(1),
+          );
+          expect(receiver.listening.plays, 0);
+          await expectRemote(
+            () => receiver.listening.milliseconds == 6000,
+            () => playFor(5),
+          );
+          await expectRemote(
+            () => receiver.listening.plays == 1,
+            () => playFor(2),
+          );
+          expect(receiver.listening.milliseconds, 8000);
+        } finally {
+          paused = true;
+          await player.shutdown();
+          await a.close();
+          await b.close();
+        }
+      }, createHttpClient: (_) => client);
+    } finally {
+      liveClient.close(force: true);
+      for (final peer in peers.toList()) {
+        unawaited(peer.close());
+      }
+      await server.close(force: true);
+    }
+  });
+
   test(
-    'two devices exchange edits across paginated listening history',
+    'cloud merge and sync preserve both devices’ edits across pages',
     () async {
       final cloud = SyncDocument({});
       final revisions = <String, int>{};
@@ -261,8 +419,53 @@ void main() {
           expect(desktop.listening.toJson(), phone.listening.toJson());
           expect(a.document.dirty, isEmpty);
           expect(b.document.dirty, isEmpty);
+          final total = desktop.listening.milliseconds;
+          final plays = desktop.listening.plays;
+          desktop.favoriteIds.add('desktop-pending');
+          desktop.playlists['Desktop mix'] = ['song-1'];
+          desktop.playlists['Phone mix']!.add('song-2');
+          desktop.listening.record(song(0), 9000, 1, desktopDay);
+          await desktop.save();
+          phone.favoriteIds.add('phone-pending');
+          phone.playlists['Phone mix']!.add('song-3');
+          phone.listening.record(song(0), 4000, 1, phoneDay);
+          await phone.save();
+          await b.uploadLocalChanges();
+
+          final beforeMerge = client.requests.length;
+          await a.restoreCloudCopy();
+          expect(a.status, 'Cloud data merged with this device.');
+          final requests = client.requests.skip(beforeMerge);
+          expect(requests, isNotEmpty);
+          for (final request in requests) {
+            expect(request.uri.path, '/v1/sync');
+            expect(jsonDecode(utf8.decode(request.bytes))['ops'], isEmpty);
+          }
+          expect(desktop.favoriteIds, {
+            'phone-favorite',
+            'desktop-pending',
+            'phone-pending',
+          });
+          expect(desktop.playlists['Desktop mix'], ['song-1']);
+          expect(
+            desktop.playlists['Phone mix'],
+            unorderedEquals(['song-0', 'song-2', 'song-3']),
+          );
+          expect(desktop.listening.milliseconds, total + 13000);
+          expect(desktop.listening.plays, plays + 2);
+          expect(a.document.dirty, isNotEmpty);
+
+          final merged = desktop.toJson();
+          await a.restoreCloudCopy();
+          expect(desktop.toJson(), merged);
+          await a.uploadLocalChanges();
+          await b.uploadLocalChanges();
+          expect(phone.toJson(), merged);
+          expect(a.document.dirty, isEmpty);
+          expect(b.document.dirty, isEmpty);
+
           final backup = DataBackup.create(desktop, phoneDay);
-          expect(DataBackup.parse(backup.encode()).snapshot, desktop.toJson());
+          expect(DataBackup.parse(backup.encode()).snapshot, merged);
         } finally {
           paused = true;
           await a.close();
@@ -821,6 +1024,7 @@ void main() {
       expect(find.text('Account & sync'), findsOneWidget);
       final syncNow = find.text('Sync now');
       expect(syncNow.hitTestable(), findsOneWidget);
+      expect(find.text('Merge cloud copy').hitTestable(), findsOneWidget);
       final firstSync = tester.getTopLeft(syncNow);
       final worker = find.text('Self-hosted Sync Worker');
       await tester.scrollUntilVisible(
