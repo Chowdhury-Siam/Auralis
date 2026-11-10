@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.119
+
+- Redesigned Backup & Restore with a compact dialog and distinct export, restore, and recovery actions.
+
 ## 0.1.118
 
 - Fixed cloud sync reverting corrected listening-stat titles and artists when a backup restored names without changing listening time or play counts.
