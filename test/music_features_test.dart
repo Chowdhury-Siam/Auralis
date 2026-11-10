@@ -332,6 +332,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Recently played'));
       await tester.pumpAndSettle();
       expect(
