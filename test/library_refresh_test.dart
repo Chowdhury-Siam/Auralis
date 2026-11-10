@@ -228,6 +228,28 @@ void main() {
       await until(() => telegram.lyricRequests.length == 3 && !caching());
       expect(telegram.artworkRequests.last, '43');
       expect(telegram.lyricRequests.last, '43');
+      final blocked = song(44);
+      final lyricPath = Directory(
+        '${directory.path}/${disk.key(blocked)}.lyrics',
+      );
+      await tester.runAsync(() => lyricPath.create());
+      tracks.add(blocked);
+      await refresh();
+      await until(
+        () => find.text('Artwork 45/45 · Lyrics 44/45').evaluate().isNotEmpty,
+      );
+      await tester.tap(find.byKey(const ValueKey('library-counts')));
+      await tester.pumpAndSettle();
+      expect(find.text('Library cache'), findsOneWidget);
+      expect(find.text('Artist\nCouldn’t save lyrics'), findsOneWidget);
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      await tester.runAsync(() => lyricPath.delete());
+      await refresh();
+      await until(
+        () => find.text('Artwork 45/45 · Lyrics 45/45').evaluate().isNotEmpty,
+      );
+      expect(telegram.lyricRequests.where((id) => id == '44'), hasLength(1));
       expect(tester.takeException(), isNull);
       // Exercise teardown with disk work that originates in the fake clock too.
       unawaited(disk.write(song(999), 'art', png));
