@@ -44,6 +44,8 @@ void main() {
         settings.recentIds = ['saved'];
         await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
         await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Library'));
+        await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         final menu = find.byKey(const ValueKey('library-collection-menu'));
         final search = find.ancestor(
