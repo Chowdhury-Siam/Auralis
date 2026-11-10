@@ -38,7 +38,9 @@ class SyncController extends ChangeNotifier {
     this.telegram,
   }) {
     settings.captureSync = _capture;
-    settings.onSaved = _schedule;
+    settings.onSaved = () {
+      if (connected && document.dirty.isNotEmpty) _schedule();
+    };
     telegram?.addListener(_telegramChanged);
     if (telegram != null) {
       _telegramTimer = Timer.periodic(
@@ -79,7 +81,6 @@ class SyncController extends ChangeNotifier {
   int _telegramEpoch = 0;
   bool _closed = false, syncing = false, _again = false;
   int _generation = 0, revision = 0;
-  DateTime? _lastStatsUpload;
   Timer? _debounce, _poll, _retry;
   WebSocket? _socket;
   int? _connectingLive;
@@ -170,7 +171,6 @@ class SyncController extends ChangeNotifier {
     _retry?.cancel();
     _url = endpoint;
     _key = key;
-    _lastStatsUpload = null;
     final scope = sha256
         .convert(utf8.encode('$endpoint:${_account?.id ?? key}'))
         .toString();
@@ -184,10 +184,7 @@ class SyncController extends ChangeNotifier {
       settings.syncState = {'scope': scope};
       _capture(settings.toJson());
     }
-    _poll = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => unawaited(sync()),
-    );
+    _pollSync(const Duration(seconds: 5));
     unawaited(_connectLive(_generation));
     status = 'Connected. Syncing…';
     error = null;
@@ -198,11 +195,21 @@ class SyncController extends ChangeNotifier {
     if (connected && !_closed) document.capture(snapshot);
   }
 
+  void _pollSync(Duration interval) {
+    _poll?.cancel();
+    _poll = Timer.periodic(interval, (_) => unawaited(sync()));
+  }
+
   void _schedule() {
-    if (!connected || _closed || syncing || accountBusy) return;
-    _debounce?.cancel();
+    if (!connected ||
+        _closed ||
+        syncing ||
+        accountBusy ||
+        _debounce?.isActive == true) {
+      return;
+    }
     _debounce = Timer(
-      const Duration(milliseconds: 350),
+      const Duration(milliseconds: 150),
       () => unawaited(sync()),
     );
   }
@@ -241,40 +248,13 @@ class SyncController extends ChangeNotifier {
     return result;
   }
 
-  bool _deviceStats(String key) {
-    final parts = jsonDecode(key) as List;
-    return (parts.first == 'stats' || parts.first == 'day') &&
-        parts[1] == settings.syncState['device'];
-  }
-
-  bool get _statsDue =>
-      _lastStatsUpload == null ||
-      DateTime.now().difference(_lastStatsUpload!) >=
-          const Duration(seconds: 30);
-  void _schedulePending() {
-    if (_closed || !connected) return;
-    if (document.dirty.isNotEmpty &&
-        document.dirty.every(_deviceStats) &&
-        !_statsDue) {
-      final remaining =
-          const Duration(seconds: 30) -
-          DateTime.now().difference(_lastStatsUpload!);
-      _debounce?.cancel();
-      _debounce = Timer(
-        remaining.isNegative ? Duration.zero : remaining,
-        () => unawaited(sync()),
-      );
-    } else {
-      _schedule();
-    }
-  }
-
   Future<void> sync() {
     if (_closed || !connected || paused() || accountBusy) return Future.value();
     if (_running != null) {
       _again = true;
       return _running!;
     }
+    _debounce?.cancel();
     final task = _sync(_generation);
     _running = task;
     return task.whenComplete(() {
@@ -286,12 +266,12 @@ class SyncController extends ChangeNotifier {
           connected &&
           error == null &&
           document.dirty.isNotEmpty) {
-        _schedulePending();
+        _schedule();
       }
     });
   }
 
-  Future<bool> _bootstrap(int generation) async {
+  Future<bool> _mergeCloudCopy(int generation) async {
     await settings.save();
     final remote = <String, dynamic>{};
     var cursor = 0, more = true;
@@ -307,7 +287,7 @@ class SyncController extends ChangeNotifier {
     }
     _capture(settings.toJson());
     final merged = SyncDocument(detached(settings.syncState));
-    merged.reconcileBaseline(remote);
+    if (merged.state['bootstrap'] == true) merged.reconcileBaseline(remote);
     merged.merge(remote);
     merged.state['cursor'] = cursor;
     merged.state['bootstrap'] = false;
@@ -328,26 +308,21 @@ class SyncController extends ChangeNotifier {
     _changed();
     try {
       if (document.state['bootstrap'] == true &&
-          !await _bootstrap(generation)) {
+          !await _mergeCloudCopy(generation)) {
         return;
       }
       var more = true;
-      final statsAllowed = _statsDue;
       final sentKeys = <String>{};
-      bool eligible(String key) => !_deviceStats(key) || statsAllowed;
       while (more && !_closed && generation == _generation && !paused()) {
         // Persist local edits/outbox before sending them, including offline changes.
         await settings.save();
         final doc = document;
         final sent = <String, dynamic>{
           for (final k
-              in doc.dirty
-                  .where((k) => eligible(k) && !sentKeys.contains(k))
-                  .take(100))
+              in doc.dirty.where((k) => !sentKeys.contains(k)).take(100))
             k: detached(Map<String, dynamic>.from(doc.records[k] as Map)),
         };
         sentKeys.addAll(sent.keys);
-        if (sent.keys.any(_deviceStats)) _lastStatsUpload = DateTime.now();
         final result = await _request(_url!, _key!, {
           'cursor': doc.state['cursor'],
           'ops': sent,
@@ -374,7 +349,7 @@ class SyncController extends ChangeNotifier {
         onApplied();
         more =
             result['more'] == true ||
-            remaining.any((key) => eligible(key) && !sentKeys.contains(key));
+            remaining.any((key) => !sentKeys.contains(key));
       }
       status = 'Up to date across your devices.';
     } catch (failure) {
@@ -429,18 +404,18 @@ class SyncController extends ChangeNotifier {
       _socket = socket;
       await _live?.cancel();
       unawaited(old?.close());
+      if (_closed || generation != _generation) {
+        await socket.close();
+        return;
+      }
       _live = socket.listen(
-        (_) {
-          if (syncing) {
-            _again = true;
-          } else {
-            _schedule();
-          }
-        },
+        (_) => unawaited(sync()),
         onError: (Object _) => _reconnect(generation, socket),
         onDone: () => _reconnect(generation, socket),
         cancelOnError: true,
       );
+      _pollSync(const Duration(seconds: 30));
+      unawaited(sync());
     } catch (_) {
       abandoned = true;
       _reconnect(generation);
@@ -455,7 +430,10 @@ class SyncController extends ChangeNotifier {
         (socket != null && !identical(socket, _socket))) {
       return;
     }
-    _socket = null;
+    if (_socket != null) {
+      _socket = null;
+      _pollSync(const Duration(seconds: 5));
+    }
     _retry?.cancel();
     _retry = Timer(
       const Duration(seconds: 10),
@@ -512,7 +490,6 @@ class SyncController extends ChangeNotifier {
     if (_closed || !connected || paused()) return;
     final running = _running;
     if (running != null) await running;
-    _lastStatsUpload = null;
     await sync();
   }
 
