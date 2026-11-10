@@ -14,6 +14,7 @@ import 'player.dart';
 import 'telegram/telegram_service.dart';
 import 'telegram/phone_login.dart';
 import 'telegram/channel_library.dart';
+import 'telegram_video_view.dart';
 import 'updater.dart';
 import 'update_widgets.dart';
 import 'wave_seek_bar.dart';
@@ -258,6 +259,7 @@ class _PlayerShellState extends State<PlayerShell>
   late _Page _primaryPage = _rootPage;
   _BrowseBy _browseBy = _BrowseBy.channel;
   bool _browseAsList = false, _mixExpanded = false;
+  bool _videosOpen = false;
   void _toggleMixExpanded() => setState(() => _mixExpanded = !_mixExpanded);
   void _openRecent() {
     _navigate(_Page.library);
@@ -285,7 +287,12 @@ class _PlayerShellState extends State<PlayerShell>
   late final LyricsRepository lyrics;
   int _cacheGeneration = 0, _cachedTracks = 0, _cacheTotal = 0;
   bool _cachingLibrary = false;
-  String? _cacheSummary;
+  ({
+    String summary,
+    (String?, String) scope,
+    List<({Track track, String details})> issues,
+  })?
+  _cacheReport;
   final search = TextEditingController();
   final _discoveryFocus = FocusNode();
   final settingsSearch = TextEditingController();
@@ -1075,36 +1082,37 @@ class _PlayerShellState extends State<PlayerShell>
     },
   );
 
+  (String?, String) get _libraryCacheScope => (
+    telegram.mediaCache.directory?.path,
+    player.settings.selectedChannels.map((channel) => channel.id).join(','),
+  );
+
   Future<void> _refreshLibrary() async {
     final generation = ++_cacheGeneration;
     setState(() {
       _cachingLibrary = false;
       _cachedTracks = 0;
-      _cacheSummary = null;
+      _cacheReport = null;
     });
     telegram.clearImageCache();
     await library.refresh();
     if (!mounted || generation != _cacheGeneration || !telegram.ready) return;
     final tracks = List<Track>.of(library.tracks);
-    final scope = telegram.mediaCache.directory?.path;
-    final channels = player.settings.selectedChannels
-        .map((c) => c.id)
-        .join(',');
+    final scope = _libraryCacheScope;
     bool active() =>
         mounted &&
         generation == _cacheGeneration &&
         telegram.ready &&
-        telegram.mediaCache.directory?.path == scope &&
-        player.settings.selectedChannels.map((c) => c.id).join(',') ==
-            channels &&
+        _libraryCacheScope == scope &&
         !player.restoringData;
     var savedArtwork = 0, savedLyrics = 0;
     final pending = <({Track track, bool artwork, bool lyrics})>[];
+    final issues = <({Track track, String details})>[];
     for (final track in tracks) {
       if (!active()) return;
       final artwork = !await telegram.hasCachedCover(track);
       if (!active()) return;
-      final missingLyrics = await lyrics.loadCached(track) == null;
+      final missingLyrics = !await lyrics.hasSavedLyrics(track);
       if (!active()) return;
       if (!artwork) savedArtwork++;
       if (!missingLyrics) savedLyrics++;
@@ -1119,39 +1127,60 @@ class _PlayerShellState extends State<PlayerShell>
     for (final work in pending) {
       final track = work.track;
       if (!active()) break;
-      try {
-        if (work.artwork && !await telegram.hasCachedCover(track) && active()) {
-          await telegram.cacheCover(track, active: active);
-        }
-      } catch (_) {
-        /* Continue other tracks. */
-      }
-      if (!active()) break;
-      try {
-        if (work.lyrics && await lyrics.loadCached(track) == null && active()) {
-          Lyrics? value;
-          try {
-            value = await telegram.embeddedLyrics(track);
-          } catch (_) {
-            // An unreadable embedded tag must not block online fallbacks.
-          }
+      final details = <String>[];
+      if (work.artwork) {
+        try {
+          final cover = await telegram.cacheCover(track, active: active);
           if (!active()) break;
-          // An import or playback lookup completed while reading the tag.
-          value = lyrics.cached(track) ?? value;
-          value ??= await lyrics.find(track);
-          if (active() &&
-              value != null &&
-              !identical(lyrics.cached(track), value)) {
-            lyrics.save(track, value);
+          if (await telegram.hasCachedCover(track)) {
+            savedArtwork++;
+          } else {
+            details.add(
+              cover == null ? 'Artwork unavailable' : 'Couldn’t save artwork',
+            );
           }
+        } catch (_) {
+          details.add('Artwork lookup failed');
         }
-      } catch (_) {
-        /* Unavailable lyrics do not stop the remaining library. */
       }
       if (!active()) break;
-      if (work.artwork && await telegram.hasCachedCover(track)) savedArtwork++;
-      if (work.lyrics && await lyrics.loadCached(track) != null) savedLyrics++;
+      if (work.lyrics) {
+        var failure = 'No matching lyrics';
+        try {
+          if (!await lyrics.hasSavedLyrics(track) && active()) {
+            var value = lyrics.cached(track);
+            if (value == null) {
+              try {
+                value = await telegram.embeddedLyrics(track);
+              } catch (_) {
+                // An unreadable embedded tag must not block online fallbacks.
+              }
+              if (!active()) break;
+              value = lyrics.cached(track) ?? value;
+            }
+            if (value != null) {
+              await lyrics.save(track, value);
+            } else {
+              value = await lyrics.find(track);
+            }
+            if (value != null) failure = 'Couldn’t save lyrics';
+          }
+        } on FormatException {
+          failure = 'Song name or artist needed for lyrics lookup';
+        } catch (_) {
+          failure = 'Lyrics lookup failed';
+        }
+        if (!active()) break;
+        if (await lyrics.hasSavedLyrics(track)) {
+          savedLyrics++;
+        } else {
+          details.add(failure);
+        }
+      }
       if (!active()) break;
+      if (details.isNotEmpty) {
+        issues.add((track: track, details: details.join(' · ')));
+      }
       setState(() => _cachedTracks++);
       await Future<void>.delayed(const Duration(milliseconds: 30));
     }
@@ -1159,8 +1188,12 @@ class _PlayerShellState extends State<PlayerShell>
       setState(() {
         _cachingLibrary = false;
         if (active()) {
-          _cacheSummary =
-              'Artwork $savedArtwork/${tracks.length} · Lyrics $savedLyrics/${tracks.length}';
+          _cacheReport = (
+            summary:
+                'Artwork $savedArtwork/${tracks.length} · Lyrics $savedLyrics/${tracks.length}',
+            scope: scope,
+            issues: issues,
+          );
         }
       });
     }
@@ -1380,7 +1413,24 @@ class _PlayerShellState extends State<PlayerShell>
         _mainPages.contains(page) ? page : _primaryPage,
       ),
       onSelected: (i) => _navigate(_mainPages[i]),
+      onHomeHold: transitionCopy ? null : _openVideos,
     );
+  }
+
+  Future<void> _openVideos() async {
+    if (_videosOpen) return;
+    _videosOpen = true;
+    try {
+      final route = MaterialPageRoute<bool>(
+        builder: (context) =>
+            TelegramVideoView(telegram: telegram, music: player),
+      );
+      final connect = await Navigator.of(context).push(route);
+      await route.completed;
+      if (connect == true && mounted) _navigate(_Page.telegram);
+    } finally {
+      _videosOpen = false;
+    }
   }
 
   Widget _navigation(bool narrow, {bool short = false}) => Container(
@@ -1450,50 +1500,56 @@ class _PlayerShellState extends State<PlayerShell>
               ])
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Tooltip(
-                    message: label,
-                    child: Material(
-                      color: destination == i
-                          ? _colors.primaryContainer
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(18),
-                      child: InkWell(
+                  child: _sidebarDestination(
+                    i,
+                    Tooltip(
+                      message: label,
+                      triggerMode: i == _Page.home
+                          ? TooltipTriggerMode.manual
+                          : null,
+                      child: Material(
+                        color: destination == i
+                            ? _colors.primaryContainer
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(18),
-                        onTap: () => _navigate(i),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: short ? 10 : 16,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: narrow
-                                ? MainAxisAlignment.center
-                                : MainAxisAlignment.start,
-                            children: [
-                              Icon(
-                                icon,
-                                color: destination == i
-                                    ? _colors.primary
-                                    : _colors.onSurfaceVariant,
-                                size: 23,
-                              ),
-                              if (!narrow) ...[
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: destination == i
-                                          ? _colors.primary
-                                          : _colors.onSurfaceVariant,
-                                      fontWeight: FontWeight.w600,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(18),
+                          onTap: () => _navigate(i),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: short ? 10 : 16,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: narrow
+                                  ? MainAxisAlignment.center
+                                  : MainAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  icon,
+                                  color: destination == i
+                                      ? _colors.primary
+                                      : _colors.onSurfaceVariant,
+                                  size: 23,
+                                ),
+                                if (!narrow) ...[
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: destination == i
+                                            ? _colors.primary
+                                            : _colors.onSurfaceVariant,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -1528,6 +1584,9 @@ class _PlayerShellState extends State<PlayerShell>
       ],
     ),
   );
+
+  Widget _sidebarDestination(_Page page, Widget child) =>
+      page == _Page.home ? HomeHold(onHold: _openVideos, child: child) : child;
 
   String get _backToPrimary =>
       'Back to ${AppNavigation.labels[_mainPages.indexOf(_primaryPage)]}';
@@ -2156,20 +2215,78 @@ class _PlayerShellState extends State<PlayerShell>
     final channels = player.settings.selectedChannels.length;
     final label =
         '$trackText · $channels ${channels == 1 ? 'channel' : 'channels'}';
-    return Tooltip(
-      message: _cachingLibrary
-          ? 'Caching artwork and lyrics: $_cachedTracks / $_cacheTotal'
-          : _cacheSummary == null
-          ? label
-          : '$label\nLast refresh: $_cacheSummary. These are saved-cache totals. Refresh retries uncached items.',
-      child: Text(
-        _cachingLibrary
-            ? 'Caching $_cachedTracks / $_cacheTotal'
-            : _cacheSummary ?? label,
-        key: const ValueKey('library-counts'),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 11),
+    final report = _cacheReport;
+    final summary = telegram.ready && report?.scope == _libraryCacheScope
+        ? report?.summary
+        : null;
+    final text = Text(
+      _cachingLibrary
+          ? 'Caching $_cachedTracks / $_cacheTotal'
+          : summary ?? label,
+      key: const ValueKey('library-counts'),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: summary == null ? _colors.onSurfaceVariant : _colors.primary,
+        fontSize: 11,
+      ),
+    );
+    if (report == null || summary == null) return text;
+    final issues = report.issues;
+    return InkWell(
+      onTap: () => unawaited(
+        showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Library cache'),
+            content: issues.isEmpty
+                ? Text(
+                    '$summary\nAll artwork and lyrics are saved on this device.',
+                  )
+                : SizedBox(
+                    width: 380,
+                    height: math.min(
+                      360.0,
+                      MediaQuery.sizeOf(context).height * 0.45,
+                    ),
+                    child: ListView.builder(
+                      itemCount: issues.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return Text(
+                            '$summary\nUncached tracks from the last refresh',
+                          );
+                        }
+                        final issue = issues[index - 1];
+                        final artist = issue.track.artist.trim();
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(issue.track.title),
+                          subtitle: Text(
+                            artist.isEmpty
+                                ? issue.details
+                                : '$artist\n${issue.details}',
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: text),
+          const SizedBox(width: 4),
+          Icon(Icons.info_outline_rounded, color: _colors.primary, size: 13),
+        ],
       ),
     );
   }
