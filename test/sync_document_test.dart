@@ -54,6 +54,58 @@ void main() {
     a.capture(result);a.merge(b.records);
     expect(a.project(result)['listening'],result['listening']);
   });
+  test('restored track labels sync without adding plays or listening time', () {
+    const id = 'pixelplayer:499';
+    const listened = '2026-10-24T10:00:00.000Z';
+    final initial = snapshot();
+    initial['listening'] = {
+      'tracks': {
+        id: {
+          'title': 'PixelPlayer track 499',
+          'artist': '',
+          'source': 'PixelPlayer',
+          'milliseconds': 1000,
+          'plays': 1,
+          'lastListened': listened,
+        },
+      },
+      'days': {
+        '2026-10-24': {'milliseconds': 1000, 'plays': 1},
+      },
+    };
+    final desktop = doc('a', initial);
+    final phone = doc('b', initial);
+    final phoneListening = phone.project(initial);
+    phoneListening['listening']['tracks'][id]['milliseconds'] = 1600;
+    phoneListening['listening']['days']['2026-10-24']['milliseconds'] = 1600;
+    phone.capture(phoneListening);
+    desktop.merge(phone.records);
+
+    final corrected = desktop.project(initial);
+    final track = corrected['listening']['tracks'][id] as Map;
+    track['title'] = 'NIGHT';
+    track['artist'] = 'Stray Kids';
+    desktop.capture(corrected);
+    final correctionKey = SyncDocument.key(['stats', desktop.device, id]);
+    expect(desktop.dirty, contains(correctionKey));
+    expect(desktop.records[correctionKey]['value']['milliseconds'], 0);
+    expect(desktop.records[correctionKey]['value']['plays'], 0);
+
+    final records = desktop.records.entries.toList();
+    final ordered = doc('c', snapshot())
+      ..merge(Map.fromEntries(records));
+    final reversed = doc('d', snapshot())
+      ..merge(Map.fromEntries(records.reversed));
+    phone.merge(desktop.records);
+    for (final device in [desktop, phone, ordered, reversed]) {
+      final projected = device.project(initial);
+      expect(projected['listening'], corrected['listening']);
+      device.capture(projected);
+      device.merge(desktop.records);
+      expect(device.project(initial)['listening'], corrected['listening']);
+      DataBackup.validateSnapshot(projected);
+    }
+  });
   test('pairing a restored aggregate does not re-count existing cloud device components',() {
     final initial=snapshot();initial['listening']={'tracks':{'song':{'title':'Song','artist':'Artist','source':'Channel','milliseconds':1000,'plays':1,'lastListened':null}},'days':{'2026-10-24':{'milliseconds':1000,'plays':1}}};
     final old=doc('a',initial);
