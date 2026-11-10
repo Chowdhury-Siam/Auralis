@@ -147,7 +147,7 @@ Android APKs now always use optimized release mode. Run **Set up Android signing
 
 ### First launch
 
-A fresh install opens with **Worker Sync**. Sign in or create an account with your Worker URL, or connect later in **Settings → Account & sync**. Choose **Customize setup** for Telegram, backup restore, Android permissions, lyrics and interactive appearance previews, or **Skip setup** to go straight to the Library. You can reopen setup under **Settings → General → Set up Auralis**.
+A fresh install opens with **Worker Sync**. Sign in or create an account with your Worker URL, or connect later in **Settings → Account & sync**. Choose **Customize setup** for Telegram, backup restore, Android permissions, lyrics and interactive appearance previews, or **Skip setup** to go straight to Home. You can reopen setup under **Settings → General → Set up Auralis**.
 
 | Welcome | Navigation | Translation menu |
 | --- | --- | --- |
@@ -176,7 +176,7 @@ Use **Load more** in Telegram to discover more accessible channels and **Refresh
 | **Playlists** | Named, ordered collections you can create, rename, and delete |
 | **Recently played** | The last 100 unique successfully opened tracks |
 
-Track/channel counts and icon-only Refresh/Sort controls sit in the Library header. On narrow screens, the counts appear beneath the title. Choose channels in Telegram; listening stats remain in the full Settings page. Phone navigation has Library, Telegram, Now playing and Settings; the standalone Play Queue page is removed.
+Track/channel counts and icon-only Refresh/Sort controls sit in the Library header. On narrow screens, the counts appear beneath the title. Home shows your Daily Mix, recent music, and listening stats. Search finds songs, artists, and channels, with grid and list browsing for artists and channels. On phones, use the Home, Search, and Library tabs and the header shortcuts for Telegram and Settings.
 
 Use a track's actions to favorite it, play it next, or add it to a playlist. Library sorting leaves saved playlist order unchanged. Deleting a playlist removes the collection, not files from Telegram.
 
@@ -216,7 +216,7 @@ See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality note
 
 | Task | Where to go |
 | --- | --- |
-| View listening time, rankings, and daily activity | **Settings → Data & sync → Listening stats** |
+| View listening time, play counts, and all-time rankings | **Home → Listening stats** or **Settings → Data & sync → Listening stats** |
 | Export stats as CSV or JSON | **Listening stats → Export CSV / Export JSON** |
 | Create or restore a backup | **Settings → Data & sync → Backup & Restore** |
 | Recover the data replaced by the last restore | **Restore recovery copy** in the backup section |
@@ -314,7 +314,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.115+116**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.116+117**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
