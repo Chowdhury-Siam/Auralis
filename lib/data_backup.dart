@@ -6,22 +6,87 @@ import 'listening.dart';
 import 'models.dart';
 import 'storage.dart';
 
+enum BackupSection {
+  playlists('Playlists', 'Your custom playlists and track order.', {
+    'playlists',
+  }),
+  preferences(
+    'App preferences',
+    'Playback, navigation, lyrics and other app settings.',
+    {
+      'compactLibrary',
+      'navigationStyle',
+      'navigationRadius',
+      'reducedMotion',
+      'automaticUpdates',
+      'volume',
+      'automaticLyrics',
+      'automaticTranslation',
+      'keepArtwork',
+      'artworkPreload',
+      'lyricsFirst',
+      'lyricsFallback',
+      'translationFirst',
+      'translationFallback',
+      'translationDirection',
+      'librarySort',
+      'repeatMode',
+    },
+  ),
+  favorites('Favorites', 'Tracks you marked as favorites.', {'favoriteIds'}),
+  recent('Recently played', 'Your recent listening history.', {'recentIds'}),
+  listening('Listening stats', 'Listening time, play counts and rankings.', {
+    'listening',
+  }),
+  channels('Telegram channels', 'The channels selected for your library.', {
+    'selectedChannels',
+  });
+
+  const BackupSection(this.label, this.description, this.keys);
+
+  final String label, description;
+  final Set<String> keys;
+
+  bool isIn(Map<String, dynamic> data) => keys.any(data.containsKey);
+}
+
 class DataBackup {
-  DataBackup._(this.snapshot, this.createdAt);
+  DataBackup._(this.snapshot, this.createdAt, this._version);
   final Map<String, dynamic> snapshot;
   final DateTime createdAt;
+  final int _version;
+  bool get isPartial => _version == 2;
+  Iterable<BackupSection> get sections =>
+      BackupSection.values.where((section) => section.isIn(snapshot));
   static const maxBytes = 64 * 1024 * 1024;
 
-  static DataBackup create(AppSettings settings, DateTime now) => DataBackup._(
-    jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>,
-    now.toUtc(),
-  );
+  static DataBackup create(
+    AppSettings settings,
+    DateTime now, {
+    Set<BackupSection>? sections,
+  }) {
+    final data = settings.toJson();
+    final partial =
+        sections != null && sections.length != BackupSection.values.length;
+    final snapshot = partial
+        ? {
+            for (final section in sections)
+              for (final key in section.keys)
+                if (data.containsKey(key)) key: data[key],
+          }
+        : data;
+    return DataBackup._(
+      jsonDecode(jsonEncode(snapshot)) as Map<String, dynamic>,
+      now.toUtc(),
+      partial ? 2 : 1,
+    );
+  }
 
   String encode() {
     final digest = sha256.convert(utf8.encode(jsonEncode(snapshot))).toString();
     return const JsonEncoder.withIndent('  ').convert({
       'format': 'auralis-backup',
-      'version': 1,
+      'version': _version,
       'createdAt': createdAt.toUtc().toIso8601String(),
       'data': snapshot,
       'sha256': digest,
@@ -35,11 +100,11 @@ class DataBackup {
     final json = jsonDecode(text);
     if (json is! Map<String, dynamic> ||
         json['format'] != 'auralis-backup' ||
-        json['version'] != 1) {
-      throw const FormatException(
-        'Choose a supported Auralis backup (version 1).',
-      );
+        json['version'] is! int ||
+        (json['version'] != 1 && json['version'] != 2)) {
+      throw const FormatException('Choose a supported Auralis backup.');
     }
+    final version = json['version'] as int;
     final snapshot = json['data'];
     final stamp = json['createdAt'];
     final created = stamp is String ? DateTime.tryParse(stamp) : null;
@@ -54,11 +119,11 @@ class DataBackup {
         'Backup integrity check failed. The file may be damaged.',
       );
     }
-    _validate(snapshot);
-    return DataBackup._(snapshot, created);
+    _validate(snapshot, partial: version == 2);
+    return DataBackup._(snapshot, created, version);
   }
 
-  static void _validate(Map<String, dynamic> data) {
+  static void _validatePreferences(Map<String, dynamic> data) {
     if (data['reducedMotion'] is! bool || data['automaticUpdates'] is! bool) {
       throw const FormatException('Invalid preferences.');
     }
@@ -121,6 +186,20 @@ class DataBackup {
         )) {
       throw const FormatException('Invalid translation direction.');
     }
+  }
+
+  static final _allowed = {
+    for (final section in BackupSection.values) ...section.keys,
+  };
+
+  static void _validate(Map<String, dynamic> data, {bool partial = false}) {
+    if (data.keys.any((key) => !_allowed.contains(key))) {
+      throw const FormatException('Backup contains unsupported app data.');
+    }
+    if (!partial || BackupSection.preferences.isIn(data)) {
+      _validatePreferences(data);
+    }
+
     void ids(Object? value, int maximum) {
       if (value is! List || value.length > maximum) {
         throw const FormatException('Invalid collection size.');
@@ -133,64 +212,46 @@ class DataBackup {
       }
     }
 
-    ids(data['favoriteIds'], 10000);
-    ids(data['recentIds'], 100);
-    final playlists = data['playlists'];
-    if (playlists is! Map || playlists.length > 100) {
-      throw const FormatException('Invalid playlists.');
+    if (!partial || data.containsKey('favoriteIds')) {
+      ids(data['favoriteIds'], 10000);
     }
-    final names = <String>{};
-    for (final entry in playlists.entries) {
-      final name = dataText(entry.key, maximum: 60, empty: false);
-      if (name.trim() != name || !names.add(name.toLowerCase())) {
-        throw const FormatException('Invalid playlist name.');
+    if (!partial || data.containsKey('recentIds')) {
+      ids(data['recentIds'], 100);
+    }
+    if (!partial || data.containsKey('playlists')) {
+      final playlists = data['playlists'];
+      if (playlists is! Map || playlists.length > 100) {
+        throw const FormatException('Invalid playlists.');
       }
-      ids(entry.value, 5000);
-    }
-    final channels = data['selectedChannels'];
-    if (channels is! List || channels.length > 1000) {
-      throw const FormatException('Invalid channel preferences.');
-    }
-    final channelIds = <int>{};
-    for (final channel in channels) {
-      if (channel is! Map ||
-          channel['id'] is! int ||
-          !channelIds.add(channel['id'] as int)) {
-        throw const FormatException('Invalid channel reference.');
+      final names = <String>{};
+      for (final entry in playlists.entries) {
+        final name = dataText(entry.key, maximum: 60, empty: false);
+        if (name.trim() != name || !names.add(name.toLowerCase())) {
+          throw const FormatException('Invalid playlist name.');
+        }
+        ids(entry.value, 5000);
       }
-      dataText(channel['title']);
     }
-    if (data['listening'] == null) {
-      throw const FormatException('Listening statistics are missing.');
+    if (!partial || data.containsKey('selectedChannels')) {
+      final channels = data['selectedChannels'];
+      if (channels is! List || channels.length > 1000) {
+        throw const FormatException('Invalid channel preferences.');
+      }
+      final channelIds = <int>{};
+      for (final channel in channels) {
+        if (channel is! Map ||
+            channel['id'] is! int ||
+            !channelIds.add(channel['id'] as int)) {
+          throw const FormatException('Invalid channel reference.');
+        }
+        dataText(channel['title']);
+      }
     }
-    ListeningStats.fromJson(data['listening']);
-    // Keep the restore scope explicit: never restore arbitrary settings/paths/secrets.
-    const allowed = {
-      'compactLibrary',
-      'navigationStyle',
-      'navigationRadius',
-      'reducedMotion',
-      'automaticUpdates',
-      'volume',
-      'automaticLyrics',
-      'automaticTranslation',
-      'keepArtwork',
-      'artworkPreload',
-      'lyricsFirst',
-      'lyricsFallback',
-      'translationFirst',
-      'translationFallback',
-      'translationDirection',
-      'librarySort',
-      'repeatMode',
-      'favoriteIds',
-      'playlists',
-      'recentIds',
-      'selectedChannels',
-      'listening',
-    };
-    if (data.keys.any((key) => !allowed.contains(key))) {
-      throw const FormatException('Backup contains unsupported app data.');
+    if (!partial || data.containsKey('listening')) {
+      if (data['listening'] == null) {
+        throw const FormatException('Listening statistics are missing.');
+      }
+      ListeningStats.fromJson(data['listening']);
     }
   }
 
