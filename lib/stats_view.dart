@@ -856,38 +856,183 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     );
   }
 
+  Widget _backupAction({
+    required IconData icon,
+    required String title,
+    required String description,
+    required VoidCallback onTap,
+    bool primary = false,
+  }) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final foreground = primary ? colors.onPrimaryContainer : colors.onSurface;
+    return Material(
+      color: primary ? colors.primaryContainer : colors.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        enabled: !_busy,
+        onTap: _busy ? null : onTap,
+        contentPadding: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: primary
+                ? colors.primary.withValues(alpha: 0.16)
+                : colors.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            size: 21,
+            color: primary ? foreground : colors.primary,
+          ),
+        ),
+        title: Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          description,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: primary ? foreground : colors.onSurfaceVariant,
+          ),
+        ),
+        trailing: Icon(
+          Icons.chevron_right_rounded,
+          color: foreground,
+          size: 20,
+        ),
+      ),
+    );
+  }
+
   Widget _backupControls() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      _backupAction(
+        icon: Icons.upload_file_rounded,
+        title: 'Export backup',
+        description: 'Choose what to include and save a copy.',
+        primary: true,
+        onTap: _chooseBackup,
+      ),
       const SizedBox(height: 8),
-      const Text(
-        'Choose sections to export, or restore a previous backup.',
-        style: TextStyle(fontSize: 12),
+      _backupAction(
+        icon: Icons.folder_open_rounded,
+        title: 'Restore backup',
+        description: 'Open a backup file and review its contents.',
+        onTap: _restore,
       ),
-      const SizedBox(height: 12),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          FilledButton.icon(
-            onPressed: _busy ? null : _chooseBackup,
-            icon: const Icon(Icons.backup_outlined),
-            label: const Text('Export backup'),
-          ),
-          OutlinedButton.icon(
-            onPressed: _busy ? null : () => _restore(),
-            icon: const Icon(Icons.restore_rounded),
-            label: const Text('Restore backup'),
-          ),
-          if (File(_recovery).existsSync())
-            TextButton(
-              onPressed: _busy ? null : () => _restore(recovery: true),
-              child: const Text('Restore recovery copy'),
-            ),
-        ],
-      ),
+      if (File(_recovery).existsSync()) ...[
+        const SizedBox(height: 8),
+        _backupAction(
+          icon: Icons.history_rounded,
+          title: 'Restore recovery copy',
+          description: 'Use the copy saved before your last restore.',
+          onTap: () => _restore(recovery: true),
+        ),
+      ],
     ],
   );
+
+  Widget _backupDialog(Widget close) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return PopScope<void>(
+      canPop: !_busy,
+      child: Dialog(
+        constraints: const BoxConstraints(maxWidth: 460),
+        insetPadding: const EdgeInsets.all(16),
+        backgroundColor: colors.surfaceContainerLow,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: colors.outlineVariant),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: colors.secondaryContainer,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.shield_outlined,
+                      color: colors.onSecondaryContainer,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        'Backup & Restore',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                  close,
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Backups can include your listening stats, collections, and preferences.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_busy && !_confirming) ...[
+                const LinearProgressIndicator(minHeight: 3),
+                const SizedBox(height: 12),
+              ],
+              if (_status case final status?) ...[
+                Semantics(
+                  liveRegion: true,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: _error
+                          ? colors.errorContainer
+                          : colors.secondaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        status,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: _error
+                              ? colors.onErrorContainer
+                              : colors.onSecondaryContainer,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              _backupControls(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -897,9 +1042,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       minimumSize: const Size(0, 36),
     );
-    final title = widget.openBackupSection
-        ? 'Backup & Restore'
-        : 'Listening stats';
+    const title = 'Listening stats';
     final refresh = IconButton(
       tooltip: 'Refresh listening stats',
       onPressed: _busy
@@ -912,6 +1055,8 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
       onPressed: _busy ? null : () => Navigator.pop(context),
       icon: const Icon(Icons.close_rounded, size: 20),
     );
+    if (widget.openBackupSection) return _backupDialog(close);
+
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -935,45 +1080,36 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
                       ),
                     ),
                   ),
-                if (!widget.openBackupSection) ...[
-                  _dashboard(),
-                  const Divider(height: 24),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      FilledButton.tonalIcon(
-                        style: exportStyle,
-                        onPressed: _busy ? null : () => _export('csv'),
-                        icon: const Icon(Icons.table_chart_outlined, size: 16),
-                        label: const Text('Export CSV'),
-                      ),
-                      OutlinedButton.icon(
-                        style: exportStyle,
-                        onPressed: _busy ? null : () => _export('json'),
-                        icon: const Icon(
-                          Icons.file_download_outlined,
-                          size: 16,
-                        ),
-                        label: const Text('Export JSON'),
-                      ),
-                    ],
-                  ),
-                  ExpansionTile(
-                    key: const ValueKey('stats-backup-section'),
-                    tilePadding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    title: const Text(
-                      'Backup & Restore',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                _dashboard(),
+                const Divider(height: 24),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    FilledButton.tonalIcon(
+                      style: exportStyle,
+                      onPressed: _busy ? null : () => _export('csv'),
+                      icon: const Icon(Icons.table_chart_outlined, size: 16),
+                      label: const Text('Export CSV'),
                     ),
-                    children: [_backupControls()],
+                    OutlinedButton.icon(
+                      style: exportStyle,
+                      onPressed: _busy ? null : () => _export('json'),
+                      icon: const Icon(Icons.file_download_outlined, size: 16),
+                      label: const Text('Export JSON'),
+                    ),
+                  ],
+                ),
+                ExpansionTile(
+                  key: const ValueKey('stats-backup-section'),
+                  tilePadding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  title: const Text(
+                    'Backup & Restore',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
-                ] else
-                  _backupControls(),
+                  children: [_backupControls()],
+                ),
               ],
             ),
           ),
@@ -1018,7 +1154,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
-                  if (!widget.openBackupSection) refresh,
+                  refresh,
                   close,
                 ],
               ),
