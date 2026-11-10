@@ -184,52 +184,6 @@ class ListeningStats {
     dataInteger(result.days.values.fold<int>(0, (sum, day) => sum + day.plays));
     return result;
   }
-
-  String toCsv() {
-    String cell(String value) {
-      // Telegram metadata is untrusted spreadsheet input.
-      if (RegExp(r'^\s*[=+@-]|^[\t\r\n]').hasMatch(value)) value = "'$value";
-      return '"${value.replaceAll('"', '""')}"';
-    }
-
-    final rows = <String>[
-      'record_type,date,track_id,title,artist,source,listen_seconds,qualified_plays,last_listened_at',
-    ];
-    for (final entry in topTracks) {
-      final track = entry.value;
-      rows.add(
-        [
-          'track',
-          '',
-          cell(entry.key),
-          cell(track.title),
-          cell(track.artist),
-          cell(track.source),
-          (track.milliseconds / 1000).toStringAsFixed(3),
-          '${track.plays}',
-          cell(track.lastListened?.toUtc().toIso8601String() ?? ''),
-        ].join(','),
-      );
-    }
-    final dates = days.keys.toList()..sort();
-    for (final date in dates) {
-      final day = days[date]!;
-      rows.add(
-        [
-          'day',
-          date,
-          '',
-          '',
-          '',
-          '',
-          (day.milliseconds / 1000).toStringAsFixed(3),
-          '${day.plays}',
-          '',
-        ].join(','),
-      );
-    }
-    return '\uFEFF${rows.join('\r\n')}\r\n';
-  }
 }
 
 String listeningTime(int milliseconds) {
