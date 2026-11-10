@@ -159,6 +159,8 @@ A fresh install opens with **Worker Sync**. Sign in or create an account with yo
 3. Select one or more channels and choose **Open Library**.
 4. Wait for the selected channels' audio posts to load, then choose a track to play.
 
+Hold **Home** for about a second to open **Telegram Video**. Pick a channel or paste a Telegram video message link. Press **Back** to return to music. See the [video playback guide](docs/GUIDE.md#telegram-video).
+
 Maintainers must set the two [Telegram build secrets](docs/TELEGRAM_BUILD.md) before building releases. Local/PR builds without application credentials retain manual API setup using an application registered at [my.telegram.org](https://my.telegram.org).
 
 Use **Load more** in Telegram to discover more accessible channels and **Refresh** in Library to scan for new music or retry partial failures. Refresh caches only missing artwork or lyrics and reuses valid saved items, including after restart. Auralis respects your account's existing channel access; it does not join channels automatically.
@@ -314,7 +316,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.123+124**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.125+126**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
