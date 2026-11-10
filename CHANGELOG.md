@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.125
+
+- Hold Home to open Telegram Video. Browse a channel or paste a message link, then stream with fullscreen, seek gestures, speed, and audio and subtitle track controls.
+
+## 0.1.124
+
+- Retry missing local thumbnails and confirm lyrics are saved to disk before counting them. Tap the Library cache totals to see which tracks still need artwork or lyrics.
+
 ## 0.1.123
 
 - Sync recently played tracks and qualified plays promptly, send listening progress every five seconds, and refresh open listening stats when another device syncs.
