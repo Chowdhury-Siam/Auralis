@@ -23,6 +23,23 @@ const audioExtensions = [
   'wma',
 ];
 
+const _videoExtensions = {
+  '.mp4',
+  '.mkv',
+  '.webm',
+  '.mov',
+  '.avi',
+  '.m4v',
+  '.mpg',
+  '.mpeg',
+  '.ts',
+  '.m2ts',
+  '.wmv',
+  '.3gp',
+  '.flv',
+  '.ogv',
+};
+
 class Track {
   const Track({
     required this.id,
@@ -42,6 +59,52 @@ class Track {
   final Uint8List? coverPreview;
   final int size, date;
   final Duration duration;
+
+  // Video sources use the same byte-range proxy as music. They never enter
+  // the music library or the listening history.
+  static Track? fromVideoMessage(Map<String, dynamic> message, String source) {
+    final content = message['content'];
+    if (content is! Map<String, dynamic>) return null;
+    final key = switch (content['@type']) {
+      'messageVideo' => 'video',
+      'messageDocument' => 'document',
+      _ => null,
+    };
+    final media = content[key];
+    if (key == null || media is! Map<String, dynamic>) return null;
+    final name = (media['file_name'] as String? ?? '').trim();
+    if (key == 'document' &&
+        !_videoExtensions.contains(p.extension(name).toLowerCase())) {
+      return null;
+    }
+    final file = media[key];
+    if (file is! Map<String, dynamic> ||
+        file['id'] is! int ||
+        file['size'] is! int ||
+        (file['id'] as int) <= 0 ||
+        (file['size'] as int) <= 0) {
+      return null;
+    }
+    final caption = (content['caption']?['text'] as String? ?? '').trim();
+    final title = p.basenameWithoutExtension(name);
+    return Track(
+      id: '${message['chat_id']}:${message['id']}',
+      title: title.isNotEmpty
+          ? title
+          : caption.isNotEmpty
+          ? caption.split('\n').first
+          : 'Telegram video',
+      artist: '',
+      source: source,
+      fileId: file['id'] as int,
+      size: file['size'] as int,
+      duration: Duration(seconds: media['duration'] as int? ?? 0),
+      date: message['date'] as int? ?? 0,
+      mime: media['mime_type'] as String? ?? 'application/octet-stream',
+      coverPreview: decodePreview(media['minithumbnail']?['data']),
+      coverFileId: media['thumbnail']?['file']?['id'] as int?,
+    );
+  }
 
   static Track? fromMessage(Map<String, dynamic> message, String chatTitle) {
     final content = message['content'] as Map<String, dynamic>?;
