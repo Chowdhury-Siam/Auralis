@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.117
+
+- Added a dedicated Export Backup page with section switches, a live selection count, and Select all and Deselect all controls.
+- Selective backups restore the sections they contain and keep other local data. Full backups and password-protected Telegram backups remain supported.
+
 ## 0.1.116
 
 - Added Home with a Daily Mix, recently played music, and a listening stats preview.
