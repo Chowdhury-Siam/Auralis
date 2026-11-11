@@ -388,6 +388,7 @@ extension AccountSync on SyncController {
               'username': username.trim().toLowerCase(),
               'password': password,
               if (register) 'claimKey': proof,
+              if (!register && telegram != null) 'automaticTelegram': true,
             },
           ),
           incoming = _validatedSession(result, endpoint, username);
@@ -407,6 +408,11 @@ extension AccountSync on SyncController {
           );
         }
         rethrow;
+      }
+      if (result['telegramGrant']
+          case {'token': final String token, 'expires': final int expires}
+          when !register && token.isNotEmpty && token.length <= 2000) {
+        _telegramLoginGrant = (token: token, expires: expires);
       }
       return result['recoveryCode'] as String?;
     } finally {
