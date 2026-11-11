@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.155
+
+- Keep the backup selection summary and options reachable when resizing at large text sizes.
+
 ## 0.1.154
 
 - Update CI widget tests for channel selection and make the Telegram account backup setup deterministic.
