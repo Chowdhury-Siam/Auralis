@@ -1,6 +1,12 @@
 {
-  "current": "0.1.145",
+  "current": "0.1.146",
   "releases": [
+    {
+      "version": "0.1.146",
+      "changes": [
+        "Fix build analysis errors in Video mode."
+      ]
+    },
     {
       "version": "0.1.145",
       "changes": [
