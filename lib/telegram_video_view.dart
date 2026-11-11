@@ -103,7 +103,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   late bool _ready;
   late final StreamSubscription<({int chatId, Track video})> _postSubscription;
   _VideoResults? _library;
-  bool _showSearchChannel = false;
+  bool _showSearchChannel = false, _browseChannelsAsList = false;
   int _tab = 0;
   final _recent = <Track>[];
   int _generation = 0;
@@ -749,7 +749,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
           ))
         : const <MusicChat>[];
+    final padding = EdgeInsets.only(bottom: _bottomPadding(context));
+    final showHeader = MediaQuery.viewInsetsOf(this.context).bottom == 0;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
@@ -789,66 +792,114 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                 ),
               ),
             ),
-            if (_ready) _openLinkButton(),
             if (widget.onSettings != null &&
-                MediaQuery.sizeOf(context).width < 900)
+                MediaQuery.sizeOf(context).width < 900) ...[
+              const SizedBox(width: 8),
               IconButton(
                 tooltip: 'Settings',
                 onPressed: widget.onSettings,
-                icon: const Icon(Icons.settings_outlined, size: 20),
+                icon: const Icon(Icons.tune_rounded, size: 20),
               ),
+            ],
           ],
         ),
         const SizedBox(height: 12),
+        if (_ready && showHeader) ...[
+          _heading(
+            query.isEmpty ? 'Browse channels' : 'Matching channels',
+            action: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _openLinkButton(),
+                if (channels.isNotEmpty)
+                  discoveryLayoutButton(
+                    list: _browseChannelsAsList,
+                    onPressed: () => setState(
+                      () => _browseChannelsAsList = !_browseChannelsAsList,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
         Expanded(
-          child: ListView.separated(
-            key: ValueKey(query),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.only(bottom: _bottomPadding(context)),
-            itemCount: channels.isEmpty ? 1 : channels.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              if (!_ready) return _connectState(context);
-              if (channels.isEmpty) {
-                return query.isNotEmpty
-                    ? _emptyState(context, title: 'No matching channels')
-                    : _emptyState(
+          child: channels.isEmpty
+              ? ListView(
+                  padding: padding,
+                  children: [
+                    if (!_ready)
+                      _connectState(context)
+                    else if (query.isNotEmpty)
+                      _emptyState(context, title: 'No matching channels')
+                    else
+                      _emptyState(
                         context,
                         title: 'No Telegram channels available',
                         action: TextButton(
                           onPressed: () => _refreshChannels(reportError: true),
                           child: const Text('Refresh channels'),
                         ),
-                      );
-              }
-              final channel = channels[index];
-              final selected = channel.id == _library?.channel.id;
-              return _VideoListRow(
-                key: ValueKey(channel.id),
-                title: channel.title,
-                subtitle: selected ? 'Selected in Library' : null,
-                selected: selected,
-                artwork: _VideoArtwork(
-                  telegram: _telegram,
-                  fileId: channel.photoFileId,
-                  preview: channel.photoPreview,
-                  placeholderIcon: Icons.video_library_outlined,
+                      ),
+                  ],
+                )
+              : _browseChannelsAsList
+              ? ListView.separated(
+                  key: ValueKey(query),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: padding,
+                  itemCount: channels.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, index) => _channelRow(channels[index]),
+                )
+              : GridView.builder(
+                  key: ValueKey(query),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: padding,
+                  gridDelegate: discoveryGridDelegate(context),
+                  itemCount: channels.length,
+                  itemBuilder: (_, index) {
+                    final channel = channels[index];
+                    final selected = channel.id == _library?.channel.id;
+                    return DiscoveryTile(
+                      key: ValueKey(channel.id),
+                      title: channel.title,
+                      subtitle: selected ? 'Selected in Library' : null,
+                      icon: Icons.campaign_rounded,
+                      index: index,
+                      selected: selected,
+                      onTap: () => _openChannelFromSearch(channel),
+                    );
+                  },
                 ),
-                trailing: Icon(
-                  selected
-                      ? Icons.check_circle_rounded
-                      : Icons.chevron_right_rounded,
-                  color: selected
-                      ? Theme.of(context).colorScheme.onPrimaryContainer
-                      : null,
-                  size: selected ? 24 : 30,
-                ),
-                onTap: () => _openChannelFromSearch(channel),
-              );
-            },
-          ),
         ),
       ],
+    );
+  }
+
+  Widget _channelRow(MusicChat channel) {
+    final selected = channel.id == _library?.channel.id;
+    return _VideoListRow(
+      key: ValueKey(channel.id),
+      title: channel.title,
+      subtitle: selected ? 'Selected in Library' : null,
+      selected: selected,
+      artwork: _VideoArtwork(
+        telegram: _telegram,
+        fileId: channel.photoFileId,
+        preview: channel.photoPreview,
+        placeholderIcon: Icons.video_library_outlined,
+      ),
+      trailing: Icon(
+        selected ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+        color: selected
+            ? Theme.of(context).colorScheme.onPrimaryContainer
+            : null,
+        size: selected ? 24 : 30,
+      ),
+      onTap: () => _openChannelFromSearch(channel),
     );
   }
 
