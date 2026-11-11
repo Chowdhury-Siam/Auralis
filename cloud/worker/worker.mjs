@@ -1,7 +1,7 @@
 import {AccountStore,equal,profilePage} from './accounts.mjs';
 import {TursoHttpError,TursoStore} from './turso.mjs';
 const MAX_BODY = 2 * 1024 * 1024;
-const VERSION = '0.1.115';
+const VERSION = '0.1.136';
 export function validate(key, record) {
   let parts;
   try { parts = JSON.parse(key); } catch { throw new Error('Invalid record key'); }
