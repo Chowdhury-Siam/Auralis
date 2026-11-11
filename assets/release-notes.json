@@ -1,6 +1,27 @@
 {
-  "current": "0.1.142",
+  "current": "0.1.145",
   "releases": [
+    {
+      "version": "0.1.145",
+      "changes": [
+        "Simplify first-run setup and Appearance settings."
+      ]
+    },
+    {
+      "version": "0.1.144",
+      "changes": [
+        "Remove Web playback, Syncplay, and the Open files, Browse folders, Open stream, and Open playlist actions from Video mode.",
+        "Release the video decoder before closing its Telegram stream and wait for video cleanup on app exit."
+      ]
+    },
+    {
+      "version": "0.1.143",
+      "changes": [
+        "Trim, center-crop, and compress local videos to MP4 with presets, audio removal, progress, and cancellation.",
+        "Save and reorder video playlists, discover local M3U and M3U8 files in browsed folders, and reopen videos from persistent playback history.",
+        "Capture frames to a snapshot library with preview, PNG export, and deletion. Remember subtitle styling and ambient lighting, and import skip segments from marked chapters."
+      ]
+    },
     {
       "version": "0.1.142",
       "changes": [
