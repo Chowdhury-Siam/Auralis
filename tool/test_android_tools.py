@@ -61,7 +61,7 @@ class AndroidToolsTest(unittest.TestCase):
             with zipfile.ZipFile(apk, 'w') as archive:
                 for name in ('AndroidManifest.xml', 'classes.dex'):
                     archive.writestr(name, b'fixture')
-                for name in ('tdjson', 'mpv', 'mediakitandroidhelper', 'flutter', 'qjs', 'python3.13'):
+                for name in ('tdjson', 'mpv', 'mediakitandroidhelper', 'flutter'):
                     archive.writestr('lib/arm64-v8a/lib' + name + '.so', elf())
             verify.verify_apk(apk, 'arm64-v8a')
             with self.assertRaises(ValueError):
@@ -82,7 +82,7 @@ class AndroidToolsTest(unittest.TestCase):
             with zipfile.ZipFile(apk, 'w') as archive:
                 for name in ('AndroidManifest.xml', 'classes.dex'):
                     archive.writestr(name, b'fixture')
-                for lib in ('tdjson', 'mpv', 'mediakitandroidhelper', 'flutter', 'qjs', 'python3.13'):
+                for lib in ('tdjson', 'mpv', 'mediakitandroidhelper', 'flutter'):
                     archive.writestr(f'lib/arm64-v8a/lib{lib}.so', elf())
                 archive.writestr('lib/x86_64/libmpv.so', elf(machine=62))
             with self.assertRaisesRegex(ValueError, 'Unexpected ABI'):
