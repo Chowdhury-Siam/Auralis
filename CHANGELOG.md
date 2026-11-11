@@ -1,5 +1,14 @@
 # Auralis changes
 
+## 0.1.135
+
+- Let Video Library and channel results scroll behind the floating navigation bar, matching Music. Keep the last item above the bar when fully scrolled.
+
+## 0.1.134
+
+- Use one Auralis layout for in-app dialogs, including Telegram sign-in, playlists, lyrics, backups, sync accounts, video controls, and updates.
+- Match menu choices, selected rows, search fields, cards, buttons, chips, tooltips, and notifications to the active artwork theme.
+
 ## 0.1.133
 
 - Mark the selected channel in Video Search and automatically load all playable videos as Telegram pages arrive.
