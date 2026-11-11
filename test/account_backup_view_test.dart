@@ -106,6 +106,10 @@ void main() {
       await tester.tap(launch);
       await tester.pumpAndSettle();
       final sectionCount = BackupSection.values.length + 1;
+      final summary = find.text(
+        '$sectionCount of $sectionCount sections selected',
+      );
+      final submit = find.byKey(const ValueKey('export-backup-submit'));
       for (final size in [
         const Size(1280, 800),
         const Size(360, 640),
@@ -117,23 +121,14 @@ void main() {
           addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         }
         await tester.pumpAndSettle();
-        final list = find.byType(ListView);
-        final scrollable = find.descendant(
-          of: list,
-          matching: find.byType(Scrollable),
-        );
-        final position = tester.state<ScrollableState>(scrollable).position;
-        position.jumpTo(position.minScrollExtent);
+        await tester.ensureVisible(summary);
         await tester.pumpAndSettle();
         expect(
-          find.text('$sectionCount of $sectionCount sections selected'),
+          summary.hitTestable(),
           findsOneWidget,
           reason: 'Export selection summary at $size',
         );
-        expect(
-          find.byKey(const ValueKey('export-backup-submit')).hitTestable(),
-          findsOneWidget,
-        );
+        expect(submit.hitTestable(), findsOneWidget);
         expect(tester.takeException(), isNull);
         if (size.width != 320) {
           await tester.runAsync(() async {
@@ -150,7 +145,9 @@ void main() {
             image.dispose();
           });
         }
-        await tester.scrollUntilVisible(account, 250, scrollable: scrollable);
+        await tester.ensureVisible(account);
+        await tester.pumpAndSettle();
+        expect(account.hitTestable(), findsOneWidget);
         expect(tester.widget<SwitchListTile>(account).value, isTrue);
         expect(tester.takeException(), isNull);
       }
@@ -158,7 +155,6 @@ void main() {
       tester.platformDispatcher.clearTextScaleFactorTestValue();
       await tester.pumpAndSettle();
       td.requests.clear();
-      final submit = find.byKey(const ValueKey('export-backup-submit'));
       await tester.tap(submit);
       await tester.pumpAndSettle();
       expect(find.text('Protect your Telegram backup'), findsOneWidget);
