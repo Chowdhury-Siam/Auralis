@@ -180,16 +180,115 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(find.text('Telegram Video'), findsOneWidget);
+    expect(find.text('Auralis Video'), findsOneWidget);
+    await tester.tap(find.text('Cinema').last);
+    await tester.pumpAndSettle();
     expect(find.text('New release'), findsOneWidget);
 
     await tester.tap(find.text('Load older videos'));
     await tester.pumpAndSettle();
     expect(find.text('New release'), findsOneWidget);
     expect(find.text('Older film'), findsOneWidget);
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Switch to Music'));
     await tester.pumpAndSettle();
-    expect(find.text('Telegram Video'), findsNothing);
-    expect(find.text('Library'), findsWidgets);
+    expect(find.text('Auralis Video'), findsNothing);
+    expect(find.text('Your Mix'), findsOneWidget);
+  });
+  test(
+    'startup interface settings preserve old installs and round-trip',
+    () async {
+      final settings = MemorySettings();
+      settings.applyJson({});
+      expect(settings.defaultInterface, AppInterface.music);
+      settings.defaultInterface = AppInterface.video;
+      settings.videoChannelId = channel.id;
+      final restored = MemorySettings()..applyJson(settings.toJson());
+      expect(restored.defaultInterface, AppInterface.video);
+      expect(restored.videoChannelId, channel.id);
+      restored.applyJson({'defaultInterface': 'invalid'});
+      expect(restored.defaultInterface, AppInterface.music);
+    },
+  );
+
+  testWidgets(
+    'Video startup opens its own home and settings can switch to Music',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final telegram = TelegramService(
+        Directory('unused'),
+        MemoryVault(),
+        transport: FakeTd(),
+      );
+      final player = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy(telegram.request),
+        MemorySettings()..defaultInterface = AppInterface.video,
+      );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        await player.shutdown();
+        await telegram.shutdown();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlayerShell(
+            startOnHome: true,
+            player: player,
+            telegram: telegram,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Auralis Video'), findsOneWidget);
+      expect(find.text('Connect Telegram'), findsOneWidget);
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('General'));
+      await tester.pumpAndSettle();
+      expect(find.text('Open on startup'), findsOneWidget);
+      await tester.tap(find.text('Switch to Music'));
+      await tester.pumpAndSettle();
+      expect(find.text('Your Mix'), findsOneWidget);
+    },
+  );
+  testWidgets('setup startup choice opens the selected Video interface', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final settings = MemorySettings();
+    final telegram = TelegramService(
+      Directory('unused'),
+      MemoryVault(),
+      transport: FakeTd(),
+    );
+    final player = PlayerController(
+      FakeAudio(),
+      TelegramStreamProxy(telegram.request),
+      settings,
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      await player.shutdown();
+      await telegram.shutdown();
+    });
+    await tester.pumpWidget(
+      AuralisApp(player: player, telegram: telegram, showSetup: true),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Open on startup: Music'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Video').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('setup-skip')));
+    await tester.pumpAndSettle();
+    expect(settings.defaultInterface, AppInterface.video);
+    expect(settings.setupComplete, isTrue);
+    expect(find.text('Auralis Video'), findsOneWidget);
   });
 }
