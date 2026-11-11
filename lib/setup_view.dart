@@ -386,10 +386,19 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
   };
 
   Widget _controls() => switch (_step) {
-    _Step.welcome => switch (widget.sync) {
-      final SyncController sync => _syncCard(sync),
-      null => const SizedBox.shrink(),
-    },
+    _Step.welcome => Column(
+      children: [
+        DefaultInterfacePreference(
+          value: prefs.defaultInterface,
+          onSelected: (mode) => _change(() => prefs.defaultInterface = mode),
+        ),
+        const SizedBox(height: 12),
+        switch (widget.sync) {
+          final SyncController sync => _syncCard(sync),
+          null => const SizedBox.shrink(),
+        },
+      ],
+    ),
     _Step.telegram => Column(
       children: [
         Text(
