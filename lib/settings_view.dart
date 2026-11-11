@@ -13,7 +13,7 @@ enum SettingsSection {
   appearance(
     'Appearance',
     Icons.palette_rounded,
-    'compact library navigation pill corner radius theme layout',
+    'app navigation pill corner radius theme',
   ),
   media(
     'Lyrics & artwork',
