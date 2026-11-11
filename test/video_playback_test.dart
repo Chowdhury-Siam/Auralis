@@ -318,130 +318,142 @@ void main() {
       );
       var minimized = false;
       var browserTaps = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: auralisTheme(
-            ColorScheme.fromSeed(
-              seedColor: Colors.purple,
-              brightness: Brightness.dark,
-            ),
-          ),
-          home: StatefulBuilder(
-            builder: (context, update) => Stack(
-              fit: StackFit.expand,
-              children: [
-                Align(
-                  alignment: Alignment.topLeft,
-                  child: TextButton(
-                    onPressed: () => browserTaps++,
-                    child: const Text('Video browser'),
-                  ),
-                ),
-                VideoPlayback(
-                  sources: [first, second],
-                  initialIndex: 0,
-                  telegram: telegram,
-                  music: music,
-                  proxy: proxy,
-                  onOpened: (_) {},
-                  minimized: minimized,
-                  onBack: () => update(() => minimized = true),
-                  onMinimize: () => update(() => minimized = true),
-                  onExpand: () => update(() => minimized = false),
-                  createController: () => surface,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      for (final size in [
-        const Size(320, 540),
-        const Size(800, 390),
-        const Size(1280, 720),
-      ]) {
-        tester.view.physicalSize = size;
-        tester.platformDispatcher.textScaleFactorTestValue = size.width < 400
-            ? 1.7
-            : 1;
-        await tester.pumpAndSettle();
-        expect(
-          find.byTooltip('More player controls').hitTestable(),
-          findsOneWidget,
-        );
-        expect(
-          find.byTooltip('Now playing queue').hitTestable(),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(const ValueKey('video-seek')).hitTestable(),
-          findsOneWidget,
-        );
-        expect(tester.takeException(), isNull, reason: '$size');
-      }
-
-      const seekZone = Offset(1100, 300);
-      await tester.tapAt(seekZone);
-      await tester.pump(const Duration(milliseconds: 60));
-      await tester.tapAt(seekZone);
-      await tester.pumpAndSettle();
-      expect(native.state.position, const Duration(seconds: 10));
-
-      await tester.tap(find.byTooltip('Lock controls'));
-      await tester.pumpAndSettle();
-      expect(find.byTooltip('More player controls'), findsNothing);
-      await tester.tap(find.byTooltip('Unlock controls'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byTooltip('Chapters and bookmarks'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Part two'));
-      await tester.pumpAndSettle();
-      expect(native.state.position, const Duration(seconds: 45));
-
-      await tester.tap(find.byTooltip('Now playing queue'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Second video'));
-      await tester.pumpAndSettle();
-      expect(native.opened.last.start, const Duration(seconds: 21));
-      expect(find.textContaining('Second video'), findsOneWidget);
-      expect(
-        music.settings.videoPlayback.positions[first.id],
-        const Duration(seconds: 45),
-      );
-      await tester.tap(find.byTooltip('More player controls'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Minimize video'));
-      await tester.pumpAndSettle();
-      final dock = find.byKey(const ValueKey('video-mini-player'));
-      expect(dock.hitTestable(), findsOneWidget);
-      await tester.tap(find.text('Video browser'));
-      expect(browserTaps, 1);
-      await tester.tap(find.byTooltip('Pause video'));
-      await tester.pumpAndSettle();
-      expect(native.state.playing, isFalse);
-      await tester.tap(find.text('Second video'));
-      await tester.pumpAndSettle();
-      expect(dock, findsNothing);
-      expect(native.opened, hasLength(2));
-      expect(tester.takeException(), isNull);
-
       final events = <String>[];
       final decoderReleased = Completer<void>();
-      native.beforeDispose = () async {
-        events.add('decoder');
-        await decoderReleased.future;
-      };
-      proxy.onStop = () => events.add('stream');
-      final release = music.releaseVideo!();
-      await tester.pumpAndSettle();
-      expect(find.byType(Video), findsNothing);
-      expect(events, ['decoder']);
-      await tester.pumpWidget(const SizedBox.shrink());
-      decoderReleased.complete();
-      await release;
+      var releaseFinished = false;
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: auralisTheme(
+              ColorScheme.fromSeed(
+                seedColor: Colors.purple,
+                brightness: Brightness.dark,
+              ),
+            ),
+            home: StatefulBuilder(
+              builder: (context, update) => Stack(
+                fit: StackFit.expand,
+                children: [
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: TextButton(
+                      onPressed: () => browserTaps++,
+                      child: const Text('Video browser'),
+                    ),
+                  ),
+                  VideoPlayback(
+                    sources: [first, second],
+                    initialIndex: 0,
+                    telegram: telegram,
+                    music: music,
+                    proxy: proxy,
+                    onOpened: (_) {},
+                    minimized: minimized,
+                    onBack: () => update(() => minimized = true),
+                    onMinimize: () => update(() => minimized = true),
+                    onExpand: () => update(() => minimized = false),
+                    createController: () => surface,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        for (final size in [
+          const Size(320, 540),
+          const Size(800, 390),
+          const Size(1280, 720),
+        ]) {
+          tester.view.physicalSize = size;
+          tester.platformDispatcher.textScaleFactorTestValue = size.width < 400
+              ? 1.7
+              : 1;
+          await tester.pumpAndSettle();
+          expect(
+            find.byTooltip('More player controls').hitTestable(),
+            findsOneWidget,
+          );
+          expect(
+            find.byTooltip('Now playing queue').hitTestable(),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('video-seek')).hitTestable(),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull, reason: '$size');
+        }
+
+        const seekZone = Offset(1100, 300);
+        await tester.tapAt(seekZone);
+        await tester.pump(const Duration(milliseconds: 60));
+        await tester.tapAt(seekZone);
+        await tester.pumpAndSettle();
+        expect(native.state.position, const Duration(seconds: 10));
+
+        await tester.tap(find.byTooltip('Lock controls'));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('More player controls'), findsNothing);
+        await tester.tap(find.byTooltip('Unlock controls'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byTooltip('Chapters and bookmarks'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Part two'));
+        await tester.pumpAndSettle();
+        expect(native.state.position, const Duration(seconds: 45));
+
+        await tester.tap(find.byTooltip('Now playing queue'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Second video'));
+        await tester.pumpAndSettle();
+        expect(native.opened.last.start, const Duration(seconds: 21));
+        expect(find.textContaining('Second video'), findsOneWidget);
+        expect(
+          music.settings.videoPlayback.positions[first.id],
+          const Duration(seconds: 45),
+        );
+        await tester.tap(find.byTooltip('More player controls'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Minimize video'));
+        await tester.pumpAndSettle();
+        final dock = find.byKey(const ValueKey('video-mini-player'));
+        expect(dock.hitTestable(), findsOneWidget);
+        await tester.tap(find.text('Video browser'));
+        expect(browserTaps, 1);
+        await tester.tap(find.byTooltip('Pause video'));
+        await tester.pumpAndSettle();
+        expect(native.state.playing, isFalse);
+        await tester.tap(find.text('Second video'));
+        await tester.pumpAndSettle();
+        expect(dock, findsNothing);
+        expect(native.opened, hasLength(2));
+        expect(tester.takeException(), isNull);
+
+        native.beforeDispose = () async {
+          events.add('decoder');
+          await decoderReleased.future;
+        };
+        proxy.onStop = () => events.add('stream');
+        unawaited(music.releaseVideo!().then((_) {
+          releaseFinished = true;
+        }));
+        await tester.pumpAndSettle();
+        expect(find.byType(Video), findsNothing);
+        expect(events, ['decoder']);
+        expect(releaseFinished, isFalse);
+      } finally {
+        try {
+          await tester.pumpWidget(const SizedBox.shrink());
+        } finally {
+          decoderReleased.complete();
+          // Drain shutdown microtasks before the test's fake clock stops.
+          await tester.pump();
+        }
+      }
+      expect(releaseFinished, isTrue);
       expect(events, ['decoder', 'stream']);
       expect(music.releaseVideo, isNull);
       expect(tester.takeException(), isNull);
