@@ -12,10 +12,32 @@ function backend() {
  }};
  return {room:new AuralisRoom(state),db,state};
 }
-async function sync(room,ops={},cursor=0) {
- const response=await room.fetch(new Request('https://example.com/v1/sync',{method:'POST',body:JSON.stringify({ops,cursor})}));
+async function sync(room,ops={},cursor=0,videoActivity=false) {
+ const response=await room.fetch(new Request('https://example.com/v1/sync',{method:'POST',body:JSON.stringify({ops,cursor,videoActivity})}));
  return {status:response.status,body:await response.json()};
 }
+test('video activity merges with tombstones and stays hidden from older clients', async()=>{
+ const {room,db}=backend();
+ const recent=key(['videoRecent','-100123:19']),watched=key(['videoWatched','-100123:19']);
+ const episode={title:'Episode 19',channel:'TV',openedAt:100,position:23000};
+ let response=await sync(room,{[recent]:r(episode),[watched]:r(true)},0,true);
+ assert.equal(response.status,200);
+ assert.equal(response.body.videoActivity,true);
+ assert.deepEqual(response.body.records[recent].value,episode);
+ assert.equal(response.body.records[watched].value,true);
+ const legacy=await sync(room);
+ assert.deepEqual(legacy.body.records,{});
+ assert.equal(legacy.body.cursor,response.body.cursor);
+ assert.equal(legacy.body.videoActivity,undefined);
+ response=await sync(room,{[watched]:r(null,2,other)},response.body.cursor,true);
+ assert.equal(response.body.records[watched].value,null);
+ response=await sync(room,{[watched]:r(true),[recent]:r(null,3)},0,true);
+ assert.equal(response.body.records[watched].value,null);
+ assert.equal(response.body.records[recent].value,null);
+ const invalid=await sync(room,{[key(['videoRecent','file:///private'])]:r(episode)},0,true);
+ assert.equal(invalid.status,400);
+ db.close();
+});
 test('offline additions merge, tombstones win and retries do not duplicate revisions',async()=>{
  const {room,db}=backend();
  const a=key(['favorite','a']),b=key(['favorite','b']);
