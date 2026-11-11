@@ -19,7 +19,7 @@ import 'telegram/telegram_service.dart';
 import 'telegram/phone_login.dart';
 import 'telegram/channel_library.dart';
 import 'telegram_video_view.dart';
-import 'video_folder_browser.dart';
+import 'video_files.dart';
 import 'video_playback_data.dart';
 import 'updater.dart';
 import 'update_widgets.dart';
@@ -2347,7 +2347,6 @@ class _PlayerShellState extends State<PlayerShell>
 
   Widget _library() => LayoutBuilder(
     builder: (context, box) {
-      final compact = box.maxHeight < 330;
       final tracks = _collectionTracks();
       final playlistOverview =
           collection == 'Playlists' && selectedPlaylist == null;
@@ -2380,26 +2379,6 @@ class _PlayerShellState extends State<PlayerShell>
                   ),
               ],
             ),
-            if (!player.settings.compactLibrary &&
-                (!compact || selectedPlaylist == null)) ...[
-              const SizedBox(height: 4),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final (label, _) in _libraryCollections)
-                      Padding(
-                        padding: const EdgeInsetsDirectional.only(end: 8),
-                        child: ChoiceChip(
-                          label: Text(label),
-                          selected: collection == label,
-                          onSelected: (_) => _selectLibraryCollection(label),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
             Padding(
               padding: const EdgeInsets.only(top: 3, bottom: 8),
               child: Align(
