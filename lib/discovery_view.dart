@@ -64,7 +64,7 @@ extension _DiscoveryPages on _PlayerShellState {
         : library.loading
         ? 'Your mix will be ready when your tracks load.'
         : 'Refresh your library or choose a channel that has music.';
-    final mixCard = _DiscoveryCard(
+    final mixCard = DiscoveryCard(
       padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -178,7 +178,7 @@ extension _DiscoveryPages on _PlayerShellState {
             ),
           ),
         const SizedBox(height: 18),
-        _DiscoveryCard(
+        DiscoveryCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -263,9 +263,10 @@ extension _DiscoveryPages on _PlayerShellState {
               ],
             ),
             const SizedBox(height: 10),
-            _MixHero(
+            DiscoveryHero(
               tracks: daily.take(4).toList(),
-              telegram: telegram,
+              artwork: (track) =>
+                  Artwork(seed: track.title, telegram: telegram, track: track),
               description: hasMusic
                   ? 'A daily mix from your music library.'
                   : prompt,
@@ -325,7 +326,7 @@ extension _DiscoveryPages on _PlayerShellState {
   }
 
   Widget _recentPill(Track track, List<Track> queue, int index) {
-    final (background, foreground) = _browseColors(index, _colors);
+    final (background, foreground) = discoveryColors(index, _colors);
     return Material(
       color: background,
       borderRadius: BorderRadius.circular(24),
@@ -473,7 +474,7 @@ extension _DiscoveryPages on _PlayerShellState {
                   ? ListView(
                       padding: EdgeInsets.only(bottom: _dockPadding),
                       children: [
-                        _DiscoveryCard(
+                        DiscoveryCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -542,214 +543,18 @@ extension _DiscoveryPages on _PlayerShellState {
     final name = _browseBy.name(entry.value.first);
     final count =
         '${entry.value.length} ${entry.value.length == 1 ? 'track' : 'tracks'}';
-    final (background, foreground) = _browseColors(index, _colors);
     void open() {
       FocusManager.instance.primaryFocus?.unfocus();
       _selectBrowseGroup(entry.key);
     }
 
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(list ? 16 : 22),
-      clipBehavior: Clip.antiAlias,
-      child: list
-          ? ListTile(
-              leading: Icon(_browseBy.icon, color: foreground),
-              title: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle: Text(count),
-              textColor: foreground,
-              trailing: Icon(Icons.chevron_right_rounded, color: foreground),
-              onTap: open,
-            )
-          : InkWell(
-              onTap: open,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Positioned(
-                    right: -10,
-                    bottom: -20,
-                    child: ExcludeSemantics(
-                      child: Transform.rotate(
-                        angle: -.18,
-                        child: Icon(
-                          _browseBy.icon,
-                          size: 98,
-                          color: foreground.withValues(alpha: .2),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: foreground,
-                              fontSize: 17,
-                              height: 1.12,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          count,
-                          style: TextStyle(color: foreground, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-    );
-  }
-}
-
-(Color, Color) _browseColors(int index, ColorScheme colors) =>
-    switch (index % 5) {
-      0 => (colors.primaryContainer, colors.onPrimaryContainer),
-      1 => (colors.tertiaryContainer, colors.onTertiaryContainer),
-      2 => (const Color(0xFF17474A), const Color(0xFFB3F3EE)),
-      3 => (colors.secondaryContainer, colors.onSecondaryContainer),
-      _ => (const Color(0xFF55354A), const Color(0xFFFFDBEE)),
-    };
-
-class _DiscoveryCard extends StatelessWidget {
-  const _DiscoveryCard({
-    required this.child,
-    this.padding = const EdgeInsets.all(16),
-  });
-  final Widget child;
-  final EdgeInsets padding;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: BorderRadius.circular(24),
-    clipBehavior: Clip.antiAlias,
-    child: Padding(padding: padding, child: child),
-  );
-}
-
-class _MixHero extends StatelessWidget {
-  const _MixHero({
-    required this.tracks,
-    required this.telegram,
-    required this.description,
-    required this.action,
-  });
-  final List<Track> tracks;
-  final TelegramService telegram;
-  final String description;
-  final Widget action;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(30),
-      clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, box) {
-          final wide = box.maxWidth >= 620;
-          final title = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your Mix',
-                style: TextStyle(
-                  fontSize: wide ? 64 : 49,
-                  height: 1.02,
-                  letterSpacing: -2,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                description,
-                style: TextStyle(color: colors.onSurfaceVariant),
-              ),
-            ],
-          );
-          final intro = Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: tracks.isNotEmpty && !wide
-                ? Row(
-                    children: [
-                      Expanded(child: title),
-                      const SizedBox(width: 8),
-                      action,
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [title, const SizedBox(height: 12), action],
-                  ),
-          );
-          final collage = ExcludeSemantics(
-            child: SizedBox(
-              width: wide ? math.min(420.0, box.maxWidth * .46) : box.maxWidth,
-              height: wide ? 205 : 128,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (tracks.isEmpty)
-                    Icon(
-                      Icons.graphic_eq_rounded,
-                      size: 90,
-                      color: colors.primary.withValues(alpha: .32),
-                    ),
-                  for (var i = tracks.length - 1; i >= 0; i--)
-                    Align(
-                      alignment: const [
-                        Alignment(.04, -.12),
-                        Alignment(-.84, .5),
-                        Alignment(.88, .47),
-                        Alignment(.72, -.8),
-                      ][i],
-                      child: Transform.rotate(
-                        angle: const [-.12, -.20, .19, .26][i],
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(i == 0 ? 30 : 20),
-                          child: SizedBox.square(
-                            dimension: i == 0
-                                ? (wide ? 142 : 102)
-                                : (wide ? 78 : 52),
-                            child: Artwork(
-                              seed: tracks[i].title,
-                              telegram: telegram,
-                              track: tracks[i],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
-          return wide
-              ? Row(
-                  children: [
-                    Expanded(child: intro),
-                    collage,
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [intro, collage],
-                );
-        },
-      ),
+    return DiscoveryTile(
+      title: name,
+      subtitle: count,
+      icon: _browseBy.icon,
+      index: index,
+      list: list,
+      onTap: open,
     );
   }
 }
