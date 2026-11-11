@@ -2,6 +2,10 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import 'app_popups.dart';
+import 'preference_widgets.dart';
+
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
@@ -171,53 +175,51 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     String? error;
     setState(() => _confirming = true);
     try {
-      return await showDialog<String>(
+      return await showAuralisDialog<String>(
         context: context,
         builder: (context) => StatefulBuilder(
-          builder: (context, update) => AlertDialog(
+          builder: (context, update) => AuralisDialog(
             title: Text(
               creating ? 'Protect your Telegram backup' : 'Unlock backup',
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    creating
-                        ? 'Choose a password of at least 10 characters. You will need it to restore your Telegram sign-in. Auralis does not save this password.'
-                        : 'Enter the password used when this backup was created.',
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  creating
+                      ? 'Choose a password of at least 10 characters. You will need it to restore your Telegram sign-in. Auralis does not save this password.'
+                      : 'Enter the password used when this backup was created.',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: password,
+                  obscureText: true,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration: const InputDecoration(
+                    labelText: 'Backup password',
                   ),
-                  const SizedBox(height: 16),
+                ),
+                if (creating) ...[
+                  const SizedBox(height: 12),
                   TextField(
-                    controller: password,
+                    controller: repeat,
                     obscureText: true,
                     autocorrect: false,
                     enableSuggestions: false,
                     decoration: const InputDecoration(
-                      labelText: 'Backup password',
+                      labelText: 'Confirm password',
                     ),
                   ),
-                  if (creating) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: repeat,
-                      obscureText: true,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      decoration: const InputDecoration(
-                        labelText: 'Confirm password',
-                      ),
-                    ),
-                  ],
-                  if (error != null)
-                    Text(
-                      error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
                 ],
-              ),
+                if (error != null)
+                  Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
             ),
             actions: [
               TextButton(
@@ -347,18 +349,16 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         : 'This replaces local stats, collections and preferences.';
     if (!mounted) return;
     setState(() => _confirming = true);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAuralisDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => AuralisDialog(
         title: const Text('Restore this backup?'),
-        content: SingleChildScrollView(
-          child: Text(
-            'Created ${backup.createdAt.toLocal()}\n\n'
-            '$summary\n\n'
-            '$restoreScope Playback and the queue will stop. '
-            'Your current settings are saved as a recovery copy first. Music files are kept. '
-            '${account != null ? 'Telegram sign-in: included. This replaces the local account with the saved session. Telegram may require reauthentication if that session has expired or been revoked.' : 'Telegram sign-in: not included. Your current sign-in is kept.'}',
-          ),
+        content: Text(
+          'Created ${backup.createdAt.toLocal()}\n\n'
+          '$summary\n\n'
+          '$restoreScope Playback and the queue will stop. '
+          'Your current settings are saved as a recovery copy first. Music files are kept. '
+          '${account != null ? 'Telegram sign-in: included. This replaces the local account with the saved session. Telegram may require reauthentication if that session has expired or been revoked.' : 'Telegram sign-in: not included. Your current sign-in is kept.'}',
         ),
         actions: [
           TextButton(
@@ -949,84 +949,55 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     final colors = theme.colorScheme;
     return PopScope<void>(
       canPop: !_busy,
-      child: Dialog(
-        constraints: const BoxConstraints(maxWidth: 460),
-        insetPadding: const EdgeInsets.all(16),
-        clipBehavior: Clip.antiAlias,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: colors.secondaryContainer,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      Icons.shield_outlined,
-                      color: colors.onSecondaryContainer,
-                    ),
+      child: AuralisDialog(
+        width: 420,
+        title: AuralisDialogTitle(
+          'Backup & Restore',
+          leading: const PreferenceIcon(Icons.shield_outlined),
+          actions: [close],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Backups can include your listening stats, collections, and preferences.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (_busy && !_confirming) ...[
+              const LinearProgressIndicator(minHeight: 3),
+              const SizedBox(height: 12),
+            ],
+            if (_status case final status?) ...[
+              Semantics(
+                liveRegion: true,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _error
+                        ? colors.errorContainer
+                        : colors.secondaryContainer,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text(
-                        'Backup & Restore',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      status,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: _error
+                            ? colors.onErrorContainer
+                            : colors.onSecondaryContainer,
                       ),
                     ),
                   ),
-                  close,
-                ],
+                ),
               ),
               const SizedBox(height: 12),
-              Text(
-                'Backups can include your listening stats, collections, and preferences.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (_busy && !_confirming) ...[
-                const LinearProgressIndicator(minHeight: 3),
-                const SizedBox(height: 12),
-              ],
-              if (_status case final status?) ...[
-                Semantics(
-                  liveRegion: true,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: _error
-                          ? colors.errorContainer
-                          : colors.secondaryContainer,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        status,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: _error
-                              ? colors.onErrorContainer
-                              : colors.onSecondaryContainer,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-              _backupControls(),
             ],
-          ),
+            _backupControls(),
+          ],
         ),
       ),
     );
@@ -1100,32 +1071,14 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         ),
       );
     }
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-      constraints: const BoxConstraints(maxWidth: 720),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 14, right: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  refresh,
-                  close,
-                ],
-              ),
-            ),
-            Flexible(child: content),
-          ],
-        ),
+    return PopScope<Object?>(
+      canPop: !_busy,
+      child: AuralisDialog(
+        width: 680,
+        maxWidth: 720,
+        scrollable: false,
+        title: AuralisDialogTitle(title, actions: [refresh, close]),
+        content: content,
       ),
     );
   }
