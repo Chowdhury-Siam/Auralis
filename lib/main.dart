@@ -14,6 +14,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
+import 'app_theme.dart';
 import 'android_audio.dart';
 import 'android_updater.dart';
 import 'data_files.dart';
@@ -175,7 +176,14 @@ Future<void> main() async {
     await lock?.close();
     runApp(
       MaterialApp(
-        theme: ThemeData.dark(),
+        theme: auralisTheme(
+          ColorScheme.fromSeed(
+            seedColor: accent,
+            brightness: Brightness.dark,
+            primary: accent,
+            surface: surface,
+          ),
+        ),
         home: Scaffold(
           body: Center(
             child: Padding(
