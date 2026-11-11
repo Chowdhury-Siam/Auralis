@@ -61,7 +61,6 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final settings = SavedSettings()
-      ..compactLibrary = true
       ..navigationStyle = AppNavigationStyle.expressive;
     final player = PlayerController(
       FakeAudio(),
@@ -330,12 +329,8 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Appearance'));
         await tester.pumpAndSettle();
-        await tester.tap(
-          find.widgetWithText(SwitchListTile, 'Compact library navigation'),
-        );
-        await tester.pumpAndSettle();
-        expect(settings.compactLibrary, isTrue);
-        expect(settings.saves, greaterThan(0));
+        expect(find.text('App navigation'), findsOneWidget);
+        expect(find.text('Compact library navigation'), findsNothing);
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
