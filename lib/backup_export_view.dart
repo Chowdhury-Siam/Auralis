@@ -139,70 +139,75 @@ class _BackupExportPageState extends State<BackupExportPage> {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 680),
-              child: ListView(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                children: [
-                  Card.filled(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Choose what to include in your backup.'),
-                          const SizedBox(height: 6),
-                          Semantics(
-                            liveRegion: true,
-                            child: Text(
-                              '$_selected of $_available sections selected',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: colors.primary,
-                                fontWeight: FontWeight.w700,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Card.filled(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Choose what to include in your backup.',
+                            ),
+                            const SizedBox(height: 6),
+                            Semantics(
+                              liveRegion: true,
+                              child: Text(
+                                '$_selected of $_available sections selected',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: colors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  for (final section in BackupSection.values) ...[
-                    _section(
-                      icon: switch (section) {
-                        BackupSection.playlists => Icons.playlist_play_rounded,
-                        BackupSection.preferences => Icons.settings_outlined,
-                        BackupSection.favorites =>
-                          Icons.favorite_border_rounded,
-                        BackupSection.recent => Icons.history_rounded,
-                        BackupSection.listening => Icons.insights_rounded,
-                        BackupSection.channels => Icons.campaign_outlined,
-                      },
-                      title: section.label,
-                      description: section.description,
-                      selected: _sections.contains(section),
-                      onChanged: (selected) => setState(() {
-                        if (selected) {
-                          _sections.add(section);
-                        } else {
-                          _sections.remove(section);
-                        }
-                      }),
-                    ),
-                    const SizedBox(height: 9),
+                    for (final section in BackupSection.values) ...[
+                      _section(
+                        icon: switch (section) {
+                          BackupSection.playlists => Icons.playlist_play_rounded,
+                          BackupSection.preferences => Icons.settings_outlined,
+                          BackupSection.favorites =>
+                            Icons.favorite_border_rounded,
+                          BackupSection.recent => Icons.history_rounded,
+                          BackupSection.listening => Icons.insights_rounded,
+                          BackupSection.channels => Icons.campaign_outlined,
+                        },
+                        title: section.label,
+                        description: section.description,
+                        selected: _sections.contains(section),
+                        onChanged: (selected) => setState(() {
+                          if (selected) {
+                            _sections.add(section);
+                          } else {
+                            _sections.remove(section);
+                          }
+                        }),
+                      ),
+                      const SizedBox(height: 9),
+                    ],
+                    if (widget.showTelegram)
+                      _section(
+                        icon: Icons.lock_outline_rounded,
+                        title: 'Include Telegram account',
+                        description: widget.telegramAvailable
+                            ? 'Adds your sign-in in a password-protected backup. Playback briefly pauses.'
+                            : 'Connect Telegram to include your sign-in.',
+                        selected: _includeTelegram,
+                        onChanged: widget.telegramAvailable
+                            ? (selected) =>
+                                  setState(() => _includeTelegram = selected)
+                            : null,
+                      ),
                   ],
-                  if (widget.showTelegram)
-                    _section(
-                      icon: Icons.lock_outline_rounded,
-                      title: 'Include Telegram account',
-                      description: widget.telegramAvailable
-                          ? 'Adds your sign-in in a password-protected backup. Playback briefly pauses.'
-                          : 'Connect Telegram to include your sign-in.',
-                      selected: _includeTelegram,
-                      onChanged: widget.telegramAvailable
-                          ? (selected) =>
-                                setState(() => _includeTelegram = selected)
-                          : null,
-                    ),
-                ],
+                ),
               ),
             ),
           ),
