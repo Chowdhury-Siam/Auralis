@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'app_popups.dart';
+import 'app_theme.dart';
+
 class PreferenceIcon extends StatelessWidget {
   const PreferenceIcon(this.icon, {super.key});
   final IconData icon;
@@ -26,10 +29,7 @@ class PreferenceCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Material(
       color: colors.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: colors.outlineVariant.withValues(alpha: .35)),
-      ),
+      shape: auralisSurfaceShape(colors, borderOpacity: .35),
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -61,56 +61,19 @@ class ChoiceMenu<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     // Integer menu results keep nullable choices distinct from dismissal.
-    return PopupMenuButton<int>(
+    return AuralisPopupMenu<int>(
       enabled: enabled,
       tooltip: '$title: ${label(value)}',
-      position: PopupMenuPosition.under,
-      offset: const Offset(0, 6),
       constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
-      clipBehavior: Clip.antiAlias,
       onSelected: (index) => onSelected(values[index]),
       itemBuilder: (_) => [
         for (var i = 0; i < values.length; i++)
           PopupMenuItem<int>(
             value: i,
             padding: EdgeInsets.zero,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                color: values[i] == value
-                    ? colors.primary.withValues(alpha: .12)
-                    : null,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 20,
-                    child: values[i] == value
-                        ? Icon(
-                            Icons.check_rounded,
-                            size: 18,
-                            color: colors.primary,
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      label(values[i]),
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: values[i] == value
-                            ? colors.primary
-                            : colors.onSurface,
-                        fontWeight: values[i] == value
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            child: AuralisMenuRow(
+              title: label(values[i]),
+              selected: values[i] == value,
             ),
           ),
       ],
