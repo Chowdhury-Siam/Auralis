@@ -30,6 +30,8 @@ import 'setup_view.dart';
 import 'settings_view.dart';
 import 'preference_widgets.dart';
 
+import 'discovery_widgets.dart';
+
 part 'discovery_view.dart';
 
 const accent = Color(0xFFC7B5FF),
@@ -1459,160 +1461,17 @@ class _PlayerShellState extends State<PlayerShell>
     _primaryPage = _Page.home;
   });
 
-  Widget _navigation(bool narrow, {bool short = false}) => Container(
-    width: narrow ? 72 : 202,
-    decoration: BoxDecoration(
-      color: _colors.surfaceContainerLowest,
-      border: Border(right: BorderSide(color: _colors.surfaceContainerHigh)),
-    ),
-    padding: EdgeInsets.symmetric(
-      horizontal: narrow ? 8 : 14,
-      vertical: short ? 8 : 16,
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (!short)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.graphic_eq_rounded, color: _colors.primary, size: 30),
-              if (!narrow) ...[
-                const SizedBox(width: 10),
-                const Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      'Auralis',
-                      style: TextStyle(
-                        fontSize: 27,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -1.3,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        if (!short) const SizedBox(height: 8),
-        if (!narrow && !short)
-          Text(
-            'A LITTLE CLOSER TO MUSIC',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _colors.onSurfaceVariant,
-              fontSize: 8,
-              letterSpacing: 1.4,
-            ),
-          ),
-        SizedBox(
-          height: short
-              ? 0
-              : narrow
-              ? 20
-              : 32,
-        ),
-        Flexible(
-          fit: FlexFit.tight,
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              for (final (i, icon, label) in [
-                (_Page.home, Icons.home_rounded, 'Home'),
-                (_Page.search, Icons.search_rounded, 'Search'),
-                (_Page.library, Icons.library_music_rounded, 'Library'),
-                (_Page.telegram, Icons.send_rounded, 'Telegram'),
-              ])
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _sidebarDestination(
-                    i,
-                    Tooltip(
-                      message: label,
-                      triggerMode: i == _Page.home
-                          ? TooltipTriggerMode.manual
-                          : null,
-                      child: Material(
-                        color: destination == i
-                            ? _colors.primaryContainer
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(18),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(18),
-                          onTap: () => _navigate(i),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: short ? 10 : 16,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: narrow
-                                  ? MainAxisAlignment.center
-                                  : MainAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  icon,
-                                  color: destination == i
-                                      ? _colors.primary
-                                      : _colors.onSurfaceVariant,
-                                  size: 23,
-                                ),
-                                if (!narrow) ...[
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: destination == i
-                                            ? _colors.primary
-                                            : _colors.onSurfaceVariant,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        if (!narrow && !short)
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(
-              'YOUR MUSIC. YOUR SPACE.\n\nIndependent. Open source.',
-              style: TextStyle(
-                color: _colors.onSurfaceVariant,
-                fontSize: 10,
-                height: 1.4,
-              ),
-            ),
-          ),
-        IconButton(
-          onPressed: () => _navigate(_Page.settings),
-          tooltip: 'Settings',
-          style: IconButton.styleFrom(
-            backgroundColor: destination == _Page.settings
-                ? _colors.primaryContainer
-                : Colors.transparent,
-          ),
-          icon: const Icon(Icons.tune_rounded),
-        ),
-      ],
-    ),
+  Widget _navigation(bool narrow, {bool short = false}) => AppSidebar(
+    narrow: narrow,
+    short: short,
+    selected: _mainPages.indexOf(destination),
+    onSelected: (i) => _navigate(_mainPages[i]),
+    onHomeHold: _openVideos,
+    onTelegram: () => _navigate(_Page.telegram),
+    onSettings: () => _navigate(_Page.settings),
+    telegramSelected: destination == _Page.telegram,
+    settingsSelected: destination == _Page.settings,
   );
-
-  Widget _sidebarDestination(_Page page, Widget child) =>
-      page == _Page.home ? HomeHold(onHold: _openVideos, child: child) : child;
 
   String get _backToPrimary =>
       'Back to ${AppNavigation.labels[_mainPages.indexOf(_primaryPage)]}';
