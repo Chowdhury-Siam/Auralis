@@ -109,7 +109,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   _VideoResults? _library;
   bool _showSearchChannel = false, _browseChannelsAsList = false;
   int _tab = 0;
-  int _generation = 0;
   bool _openingPlayer = false, _videoMinimized = false;
   List<VideoSource>? _playbackSources;
   int _playbackIndex = 0;
@@ -176,7 +175,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     if (_telegram.ready != _ready) {
       setState(() {
         _ready = _telegram.ready;
-        _generation++;
         _library = null;
         _showSearchChannel = false;
         _search.clear();
