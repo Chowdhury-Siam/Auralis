@@ -6,7 +6,7 @@ enum SettingsSection {
   general(
     'General',
     Icons.widgets_rounded,
-    'playback repeat queue library sort order',
+    'default interface startup music video playback repeat queue library sort order',
   ),
   appearance(
     'Appearance',
