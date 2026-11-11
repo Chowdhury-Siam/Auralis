@@ -3,6 +3,10 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+
+import 'app_popups.dart';
+import 'preference_widgets.dart';
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
@@ -259,36 +263,31 @@ class _LyricsViewState extends State<LyricsView> {
     final track = _track;
     if (track == null) return;
     var text = '';
-    final lyrics = await showDialog<Lyrics>(
+    final lyrics = await showAuralisDialog<Lyrics>(
       context: context,
       builder: (context) {
         String? error;
         return StatefulBuilder(
-          builder: (context, update) => AlertDialog(
+          builder: (context, update) => AuralisDialog(
             title: const Text('Paste lyrics'),
-            content: SizedBox(
-              width: 520,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Use plain text or LRC with [mm:ss.xx] timestamps. Kept only for this app session.',
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      onChanged: (value) => text = value,
-                      minLines: 4,
-                      maxLines: 9,
-                      maxLength: 256 * 1024,
-                      decoration: InputDecoration(
-                        hintText: '[00:12.50] A lyric line',
-                        errorText: error,
-                      ),
-                    ),
-                  ],
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Use plain text or LRC with [mm:ss.xx] timestamps. Kept only for this app session.',
                 ),
-              ),
+                const SizedBox(height: 12),
+                TextField(
+                  onChanged: (value) => text = value,
+                  minLines: 4,
+                  maxLines: 9,
+                  maxLength: 256 * 1024,
+                  decoration: InputDecoration(
+                    hintText: '[00:12.50] A lyric line',
+                    errorText: error,
+                  ),
+                ),
+              ],
             ),
             actions: [
               TextButton(
@@ -346,7 +345,7 @@ class _LyricsViewState extends State<LyricsView> {
     };
     Future<List<LyricsSearchMatch>>? request;
     LyricsSearchBy? selected;
-    final lyrics = await showDialog<Lyrics>(
+    final lyrics = await showAuralisDialog<Lyrics>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, update) => FutureBuilder(
@@ -354,86 +353,77 @@ class _LyricsViewState extends State<LyricsView> {
           builder: (context, snapshot) {
             final waiting = snapshot.connectionState == ConnectionState.waiting;
             final matches = snapshot.data ?? const <LyricsSearchMatch>[];
-            return AlertDialog(
+            return AuralisDialog(
               title: const Text('Search lyrics by'),
-              scrollable: true,
-              content: SizedBox(
-                width: 440,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final MapEntry(key: by, value: query)
-                        in queries.entries)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(
-                          by == LyricsSearchBy.title
-                              ? Icons.music_note_rounded
-                              : Icons.person_rounded,
-                        ),
-                        title: Text(
-                          by == LyricsSearchBy.title ? 'Song name' : 'Artist',
-                        ),
-                        subtitle: Text(
-                          query.isEmpty ? 'Unavailable for this track' : query,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        enabled:
-                            !waiting &&
-                            query.isNotEmpty &&
-                            query.length <= 1000,
-                        selected: selected == by,
-                        onTap: () => update(() {
-                          selected = by;
-                          request = repository.search(track, by);
-                        }),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final MapEntry(key: by, value: query) in queries.entries)
+                    AuralisChoiceTile(
+                      leading: Icon(
+                        by == LyricsSearchBy.title
+                            ? Icons.music_note_rounded
+                            : Icons.person_rounded,
                       ),
-                    if (selected != null) ...[
-                      const Divider(),
-                      if (waiting)
-                        const LinearProgressIndicator(
-                          semanticsLabel: 'Searching for lyrics',
-                        )
-                      else if (snapshot.hasError)
-                        const Text(
-                          'Could not search LRCLIB. Choose a search option to retry.',
-                        )
-                      else if (matches.isEmpty)
-                        const Text('No matches. Try the other search option.')
-                      else ...[
-                        const Text('Choose a match to use its lyrics.'),
-                        for (final match in matches)
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              match.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              [
-                                match.artist,
-                                if (match.album.isNotEmpty) match.album,
-                                if (match.duration case final duration?)
-                                  '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}',
-                                if (match.lyrics.instrumental)
-                                  'Instrumental'
-                                else
-                                  match.lyrics.lines.isEmpty
-                                      ? 'Plain lyrics'
-                                      : 'Synced lyrics',
-                              ].join(' · '),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onTap: () => Navigator.pop(context, match.lyrics),
+                      title: Text(
+                        by == LyricsSearchBy.title ? 'Song name' : 'Artist',
+                      ),
+                      subtitle: Text(
+                        query.isEmpty ? 'Unavailable for this track' : query,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      enabled:
+                          !waiting && query.isNotEmpty && query.length <= 1000,
+                      selected: selected == by,
+                      onTap: () => update(() {
+                        selected = by;
+                        request = repository.search(track, by);
+                      }),
+                    ),
+                  if (selected != null) ...[
+                    const Divider(),
+                    if (waiting)
+                      const LinearProgressIndicator(
+                        semanticsLabel: 'Searching for lyrics',
+                      )
+                    else if (snapshot.hasError)
+                      const Text(
+                        'Could not search LRCLIB. Choose a search option to retry.',
+                      )
+                    else if (matches.isEmpty)
+                      const Text('No matches. Try the other search option.')
+                    else ...[
+                      const Text('Choose a match to use its lyrics.'),
+                      for (final match in matches)
+                        AuralisChoiceTile(
+                          title: Text(
+                            match.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                      ],
+                          subtitle: Text(
+                            [
+                              match.artist,
+                              if (match.album.isNotEmpty) match.album,
+                              if (match.duration case final duration?)
+                                '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                              if (match.lyrics.instrumental)
+                                'Instrumental'
+                              else
+                                match.lyrics.lines.isEmpty
+                                    ? 'Plain lyrics'
+                                    : 'Synced lyrics',
+                            ].join(' · '),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () => Navigator.pop(context, match.lyrics),
+                        ),
                     ],
                   ],
-                ),
+                ],
               ),
               actions: [
                 TextButton(
@@ -473,9 +463,9 @@ class _LyricsViewState extends State<LyricsView> {
     final confirmed =
         automatic ||
         widget.player.settings.automaticTranslation ||
-        await showDialog<bool>(
+        await showAuralisDialog<bool>(
               context: context,
-              builder: (context) => AlertDialog(
+              builder: (context) => AuralisDialog(
                 title: Text(widget.player.settings.translationDirection.label),
                 content: Text(
                   'Translate with ${widget.player.settings.translationFirst.label}'
@@ -536,11 +526,10 @@ class _LyricsViewState extends State<LyricsView> {
         identical(source, _lyrics) &&
         identical(track, widget.player.current);
     var direction = 'ja/en';
-    final selected = await showDialog<String>(
+    final selected = await showAuralisDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, update) => AlertDialog(
-          scrollable: true,
+        builder: (context, update) => AuralisDialog(
           title: const Text('Translate with DeepL'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -551,26 +540,14 @@ class _LyricsViewState extends State<LyricsView> {
                 'Paste the lyrics there to translate. Results stay in the browser. No API key is needed.',
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                dropdownColor: _colors.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(24),
-                initialValue: direction,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Translation direction',
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'ja/en',
-                    child: Text('Japanese → English'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'en/ja',
-                    child: Text('English → Japanese'),
-                  ),
-                ],
-                onChanged: (value) =>
-                    update(() => direction = value ?? direction),
+              PreferenceChoice<String>(
+                title: 'Translation direction',
+                value: direction,
+                values: const ['ja/en', 'en/ja'],
+                label: (value) => value == 'ja/en'
+                    ? 'Japanese → English'
+                    : 'English → Japanese',
+                onSelected: (value) => update(() => direction = value),
               ),
             ],
           ),
@@ -638,13 +615,12 @@ class _LyricsViewState extends State<LyricsView> {
   }) => PopupMenuItem<String>(
     value: value,
     enabled: enabled,
-    height: 64,
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    padding: EdgeInsets.zero,
     child: Builder(
       builder: (context) {
         void openAlternate() => Navigator.pop(context, alternateValue);
         final alternate = enabled && alternateValue != null;
-        final entry = _LyricsMenuEntry(
+        final entry = AuralisMenuRow(
           icon: icon,
           title: title,
           subtitle: subtitle,
@@ -701,11 +677,9 @@ class _LyricsViewState extends State<LyricsView> {
     ),
   ];
 
-  Widget _options() => PopupMenuButton<String>(
+  Widget _options() => AuralisPopupMenu<String>(
     tooltip: 'Lyrics options',
-    position: PopupMenuPosition.under,
     constraints: const BoxConstraints(minWidth: 280, maxWidth: 300),
-    offset: const Offset(0, 10),
     icon: const Icon(Icons.more_horiz_rounded),
     onSelected: (value) {
       if (value == 'import') {
@@ -954,12 +928,10 @@ class _LyricsViewState extends State<LyricsView> {
         if (_lyrics != null &&
             !_lyrics!.instrumental &&
             _lyrics!.plain.trim().isNotEmpty)
-          PopupMenuButton<String>(
+          AuralisPopupMenu<String>(
             key: const ValueKey('lyrics-translate'),
             tooltip: 'Translate lyrics',
             enabled: !_loading && !_openingDeepL && !_translating,
-            position: PopupMenuPosition.under,
-            offset: const Offset(0, 8),
             constraints: const BoxConstraints(minWidth: 260, maxWidth: 300),
             icon: _translating
                 ? const SizedBox.square(
@@ -1182,83 +1154,6 @@ class _LyricsViewState extends State<LyricsView> {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-class _LyricsMenuEntry extends StatelessWidget {
-  const _LyricsMenuEntry({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.enabled,
-    this.trailing,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool enabled;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final foreground = enabled ? colors.onSurface : colors.onSurfaceVariant;
-    final secondary = colors.onSurfaceVariant.withValues(
-      alpha: enabled ? 1 : .48,
-    );
-    return Container(
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: enabled
-                  ? colors.primary.withValues(alpha: .14)
-                  : colors.onSurface.withValues(alpha: .05),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: foreground, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    height: 1.15,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: secondary,
-                    fontSize: 12.2,
-                    fontWeight: FontWeight.w500,
-                    height: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ?trailing,
-        ],
       ),
     );
   }
