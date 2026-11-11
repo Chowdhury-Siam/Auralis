@@ -187,7 +187,7 @@ void main() {
     await restored.load();
     expect(restored.volume, 100);
     expect(restored.selectedChannels, isEmpty);
-    expect(restored.librarySort, LibrarySort.newest);
+    expect(restored.librarySort, LibrarySort.title);
     await restored.save();
     expect(
       jsonDecode(await file.readAsString()),
