@@ -1,6 +1,14 @@
 {
-  "current": "0.1.132",
+  "current": "0.1.133",
   "releases": [
+    {
+      "version": "0.1.133",
+      "changes": [
+        "Mark the selected channel in Video Search and automatically load all playable videos as Telegram pages arrive.",
+        "Upgrade cached low-resolution previews when sharper artwork is available. Preload neighboring covers, use sharper artwork on high-density displays, and keep blur, swipe, and player transitions.",
+        "Use the active artwork theme across app dialogs, menus, notifications, and video controls."
+      ]
+    },
     {
       "version": "0.1.132",
       "changes": [
