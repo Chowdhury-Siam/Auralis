@@ -4,7 +4,6 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.chaquo.python")
 }
 
 val targetPlatform = (findProperty("target-platform") as? String) ?: "android-arm64"
@@ -51,26 +50,18 @@ android {
             signingConfig = if (signingFile.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
-    // QuickJS is an executable in nativeLibraryDir, which requires extraction.
     packaging.jniLibs.useLegacyPackaging = true
+    packaging.jniLibs.excludes.add("**/libqjs.so")
     // Each workflow build packages one ABI; missing Telegram binaries fail early.
     sourceSets["main"].jniLibs.srcDir("src/main/jniLibs")
 }
 
 kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
 flutter { source = "../.." }
-chaquopy {
-    defaultConfig {
-        version = "3.13"
-        pip {
-            install("yt-dlp==2026.10.26")
-            install("yt-dlp-ejs==0.8.0")
-        }
-    }
-}
-
 dependencies {
     implementation("androidx.core:core:1.17.0")
+    implementation("androidx.media3:media3-effect:1.8.1")
+    implementation("androidx.media3:media3-transformer:1.8.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
 }
