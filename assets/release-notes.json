@@ -1,6 +1,12 @@
 {
-  "current": "0.1.153",
+  "current": "0.1.154",
   "releases": [
+    {
+      "version": "0.1.154",
+      "changes": [
+        "Update CI widget tests for channel selection and make the Telegram account backup setup deterministic."
+      ]
+    },
     {
       "version": "0.1.153",
       "changes": [
