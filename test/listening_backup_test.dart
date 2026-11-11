@@ -685,13 +685,10 @@ void main() {
       await tester.tap(find.byTooltip('Deselect all'));
       await tester.pumpAndSettle();
       await click('Favorites');
-      final exportList = find.descendant(
-        of: find.byType(ListView),
-        matching: find.byType(Scrollable),
-      );
-      tester.state<ScrollableState>(exportList).position.jumpTo(0);
+      final summary = find.text('1 of 6 sections selected');
+      await tester.ensureVisible(summary);
       await tester.pumpAndSettle();
-      expect(find.text('1 of 6 sections selected'), findsOneWidget);
+      expect(summary.hitTestable(), findsOneWidget);
       await tester.tap(submit);
       await tester.pumpAndSettle();
       final partial = DataBackup.parse(files.contents[files.chosenSave]!);
