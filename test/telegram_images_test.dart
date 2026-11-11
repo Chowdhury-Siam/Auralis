@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
@@ -102,6 +103,27 @@ void main() {
     expect(await service.hasCachedCover(track), isFalse);
   });
 
+  test('a saved preview is upgraded to the embedded cover without clearing the cache', () async {
+    final codec = await ui.instantiateImageCodec(png, targetWidth: 24);
+    final frame = await codec.getNextFrame();
+    final data = await frame.image.toByteData(format: ui.ImageByteFormat.png);
+    frame.image.dispose();
+    codec.dispose();
+    final preview = data!.buffer.asUint8List();
+    final track = song(1, thumbnail: 90);
+    await service.mediaCache.write(track, 'art', preview);
+    await photo.writeAsBytes(preview);
+    cachedAudio();
+
+    expect(await service.cover(track), png);
+    expect(await service.mediaCache.read(track, 'art', 1 << 20), png);
+    expect(service.cachedCover(track), png);
+    final requests = td.requests.length;
+    service.clearImageCache();
+    expect(await service.cover(track), png);
+    expect(td.requests, hasLength(requests));
+  });
+
   test(
     'saved covers bypass busy metadata and corrupt images remain missing',
     () async {
@@ -193,7 +215,9 @@ void main() {
       expect(await service.cacheCover(track, active: () => true), png);
       expect(await service.hasCachedCover(track), isTrue);
       expect(
-        td.requests.where((r) => r['@type'] == 'downloadFile'),
+        td.requests.where(
+          (r) => r['@type'] == 'downloadFile' && r['file_id'] == 90,
+        ),
         hasLength(2),
       );
     },
