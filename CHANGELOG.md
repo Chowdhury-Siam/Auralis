@@ -1,5 +1,20 @@
 # Auralis changes
 
+## 0.1.152
+
+- Wait for Windows video textures and the renderer to shut down before closing the player.
+
+## 0.1.151
+
+- Mark Telegram episodes watched after playback, or change the watched status manually.
+- Sync Telegram video history, resume positions, and watched markers between devices.
+- Select channels directly from Browse channels. Remove Telegram link opening and video compression.
+
+## 0.1.150
+
+- Group video controls by task and improve the audio, subtitle, decoder, speed, chapters, and queue panels.
+- Stop Windows video playback before detaching the video surface and releasing the decoder.
+
 ## 0.1.149
 
 - Accept either startup order for concurrent artwork requests in CI.
