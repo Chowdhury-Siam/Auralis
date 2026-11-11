@@ -85,6 +85,9 @@ class FakeTd extends TdTransport {
     if (json['@type'] == 'getAuthorizationState') {
       return {'@type': 'authorizationStateWaitTdlibParameters'};
     }
+    if (json['@type'] == 'getChatHistory') {
+      return {'@type': 'messages', 'messages': []};
+    }
     if (json['@type'] == 'searchChatMessages') {
       return {'messages': [], 'next_from_message_id': 777};
     }
