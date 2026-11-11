@@ -1,6 +1,12 @@
 {
-  "current": "0.1.146",
+  "current": "0.1.147",
   "releases": [
+    {
+      "version": "0.1.147",
+      "changes": [
+        "Fix the video shutdown test's asynchronous cleanup in CI."
+      ]
+    },
     {
       "version": "0.1.146",
       "changes": [
