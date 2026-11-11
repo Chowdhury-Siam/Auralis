@@ -162,6 +162,7 @@ class PlayerController extends ChangeNotifier {
   bool _samplePlaying = false, _qualifiedPlay = false;
   int _sessionListened = 0, _statsRevision = 0, _savedStatsRevision = 0;
   bool restoringData = false;
+  Future<void> Function()? releaseVideo;
 
   void _audioChanged() {
     _recordListening();
@@ -630,6 +631,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> shutdown() async {
+    await releaseVideo?.call();
     await flushListeningStats();
     _closed = true;
     _watch.stop();
