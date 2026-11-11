@@ -1,117 +1,6 @@
 part of 'video_playback.dart';
 
 extension _VideoPlaybackTools on _VideoPlaybackState {
-  Future<void> _syncplayPanel(BuildContext context) async {
-    var address = '';
-    var user = '';
-    var room = '';
-    var password = '';
-    String? error;
-    await showAuralisDialog<void>(
-      context: context,
-      builder: (dialog) => ListenableBuilder(
-        listenable: _room,
-        builder: (context, _) => StatefulBuilder(
-          builder: (context, update) {
-            void join() {
-              try {
-                final endpoint = VideoSyncplay.endpoint(address);
-                if (user.trim().isEmpty || room.trim().isEmpty) {
-                  throw const FormatException('Enter a name and room.');
-                }
-                update(() => error = null);
-                unawaited(
-                  _room.connect(
-                    endpoint,
-                    username: user.trim(),
-                    roomName: room.trim(),
-                    password: password,
-                  ),
-                );
-              } on FormatException catch (failure) {
-                update(() => error = failure.message);
-              }
-            }
-
-            final locked = _room.connecting || _room.connected;
-            final notice = error ?? _room.error;
-            return AuralisDialog(
-              title: const Text('Syncplay room'),
-              content: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_room.connected) ...[
-                    Text('Room · ${_room.room}'),
-                    Text('Joined as ${_room.user}'),
-                    const SizedBox(height: 8),
-                    Text(_room.users.take(20).join(', ')),
-                  ] else ...[
-                    const Text(
-                      'Open the same video on each device before joining. '
-                      'The room shares the video title and synchronizes playback.',
-                    ),
-                    const SizedBox(height: 12),
-                    for (final (label, hint, secret, setter) in [
-                      (
-                        'Server',
-                        'syncplay.pl:8999',
-                        false,
-                        (String value) => address = value,
-                      ),
-                      (
-                        'Your name',
-                        null,
-                        false,
-                        (String value) => user = value,
-                      ),
-                      ('Room', null, false, (String value) => room = value),
-                      (
-                        'Server password (optional)',
-                        null,
-                        true,
-                        (String value) => password = value,
-                      ),
-                    ])
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: TextField(
-                          enabled: !locked,
-                          obscureText: secret,
-                          maxLength: secret ? 256 : 128,
-                          onChanged: setter,
-                          decoration: InputDecoration(
-                            labelText: label,
-                            hintText: hint,
-                            counterText: '',
-                          ),
-                        ),
-                      ),
-                    if (_room.connecting) const LinearProgressIndicator(),
-                  ],
-                  if (notice != null) Text(notice),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialog),
-                  child: const Text('Done'),
-                ),
-                if (locked)
-                  TextButton(
-                    onPressed: _room.disconnect,
-                    child: Text(
-                      _room.connecting ? 'Cancel connection' : 'Leave room',
-                    ),
-                  )
-                else
-                  FilledButton(onPressed: join, child: const Text('Join')),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
 
   static const _customSlots = [
     VideoControl.customOne,
@@ -245,7 +134,22 @@ extension _VideoPlaybackTools on _VideoPlaybackState {
   Future<void> _skipSegmentsPanel(BuildContext context) async {
     final id = _source.id;
     final active = _currentSegment;
+    final chapterSegments = videoChapterSegments(_chapters, _duration)
+        .where((candidate) => !_segments.any(
+          (saved) => candidate.start < saved.end && saved.start < candidate.end,
+        ))
+        .take(math.max(0, 30 - _segments.length))
+        .toList();
     final action = await _choose<_PanelAction>(context, 'Skip segments', [
+      if (chapterSegments.isNotEmpty)
+        (
+          value: () async {
+            _data.setSkipSegments(id, [..._segments, ...chapterSegments]);
+            _saveSettings();
+          },
+          label: 'Import ${chapterSegments.length} marked chapters',
+          selected: false,
+        ),
       if (_duration > Duration.zero)
         (
           value: () => _findAniSkip(context),
