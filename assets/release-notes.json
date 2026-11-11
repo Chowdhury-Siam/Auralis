@@ -1,6 +1,12 @@
 {
-  "current": "0.1.147",
+  "current": "0.1.148",
   "releases": [
+    {
+      "version": "0.1.148",
+      "changes": [
+        "Synchronize video shutdown assertions with decoder and stream disposal in CI."
+      ]
+    },
     {
       "version": "0.1.147",
       "changes": [
