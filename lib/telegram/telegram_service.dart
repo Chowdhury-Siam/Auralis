@@ -856,7 +856,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.142',
+          'application_version': '0.1.145',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -1009,6 +1009,21 @@ class TelegramService extends ChangeNotifier {
         .map((message) => Track.fromVideoMessage(message, channel.title))
         .whereType<Track>()
         .toList();
+  }
+
+  Future<Track?> restoreVideo(Track reference) async {
+    final parts = reference.id.split(':').map(int.tryParse).toList();
+    if (!ready || parts.length != 2 || parts.any((part) => part == null)) {
+      return null;
+    }
+    final client = transport;
+    final message = await client.request({
+      '@type': 'getMessage',
+      'chat_id': parts[0],
+      'message_id': parts[1],
+    });
+    if (!ready || !identical(client, transport)) return null;
+    return Track.fromVideoMessage(message, reference.source);
   }
 
   Future<Track?> videoLink(String value) async {
