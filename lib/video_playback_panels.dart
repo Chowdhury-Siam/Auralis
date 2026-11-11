@@ -280,6 +280,11 @@ extension _PlaybackPanels on _VideoPlaybackState {
     if (_canPlay && _player != null) {
       try {
         await _native.setProperty(name, value);
+        if (VideoPlaybackData.isSubtitleStyle(name, value) &&
+            _data.subtitleStyle[name] != value) {
+          _data.subtitleStyle[name] = value;
+          _saveSettings();
+        }
       } catch (_) {
         _notice('The decoder could not change this setting.');
       }
@@ -296,35 +301,10 @@ extension _PlaybackPanels on _VideoPlaybackState {
             'Now playing · ${_queue.length}',
             actions: [
               IconButton(
-                tooltip: 'Add files to queue',
-                onPressed: () async {
-                  try {
-                    final files = await _withFilePicker(pickVideoFiles);
-                    if (!_canPlay || !dialog.mounted) return;
-                    for (final file in files) {
-                      if (!_queue.any((entry) => entry.id == file.id)) {
-                        _queue.add(file);
-                      }
-                    }
-                    _changed();
-                  } catch (_) {
-                    _notice('Could not add the selected files.');
-                  }
-                },
-                icon: const Icon(Icons.playlist_add_rounded),
-              ),
-              IconButton(
-                tooltip: 'Add stream to queue',
-                onPressed: () async {
-                  final stream = await showVideoStreamDialog(dialog, _data);
-                  if (stream == null || !_canPlay || !dialog.mounted) return;
-                  if (stream.webOptions != null) _saveSettings();
-                  if (!_queue.any((entry) => entry.id == stream.id)) {
-                    _queue.add(stream);
-                    _changed();
-                  }
-                },
-                icon: const Icon(Icons.add_link_rounded),
+                tooltip: 'Save queue as video playlist',
+                onPressed: () => saveVideoPlaylist(dialog, _data,
+                    widget.music.settings.save, List<VideoSource>.of(_queue)),
+                icon: const Icon(Icons.save_outlined),
               ),
             ],
           ),
@@ -629,45 +609,29 @@ extension _PlaybackPanels on _VideoPlaybackState {
 
   Future<void> _saveFrame() async {
     if (!_canPlay || _player == null) return;
-    final bytes = await _player!.screenshot(
-      format: 'image/png',
-      includeLibassSubtitles: true,
-    );
-    if (!_canPlay || bytes == null) {
-      _notice('A video frame is not available yet.');
-      return;
-    }
-    final title = _source.title.replaceAll(
-      RegExp(r'[^\p{L}\p{N}._-]+', unicode: true),
-      '_',
-    );
-    final stem = title.characters.take(72).toString();
-    final filename =
-        '${stem.isEmpty ? 'video' : stem}-${_position.inMilliseconds}ms.png';
-    if (Platform.isAndroid) {
-      const platform = MethodChannel('app.auralis/platform');
-      final uri = await _withFilePicker(
-        () => platform.invokeMethod<String>('createDocument', {
-          'name': filename,
-          'mime': 'image/png',
-        }),
+    final source = _source;
+    final position = _position;
+    try {
+      final bytes = await _player!.screenshot(
+        format: 'image/png',
+        includeLibassSubtitles: _data.snapshotSubtitles,
       );
-      if (uri == null) return;
-      await platform.invokeMethod<void>('writeDocument', {
-        'uri': uri,
-        'bytes': bytes,
-      });
-    } else {
-      final path = await getSaveLocation(
-        suggestedName: filename,
-        acceptedTypeGroups: const [
-          XTypeGroup(label: 'PNG', extensions: ['png']),
-        ],
+      if (!_canPlay || _source.id != source.id || bytes == null) {
+        _notice('A video frame is not available yet.');
+        return;
+      }
+      final title = source.title.replaceAll(
+        RegExp(r'[^\p{L}\p{N}._-]+', unicode: true),
+        '_',
       );
-      if (path == null) return;
-      await File(path.path).writeAsBytes(bytes);
+      final stem = title.characters.take(72).toString();
+      final filename =
+          '${stem.isEmpty ? 'video' : stem}-${position.inMilliseconds}ms.png';
+      await storeVideoSnapshot(bytes, filename);
+      _notice('Frame saved to Video snapshots.');
+    } catch (_) {
+      _notice('Could not save the video frame.');
     }
-    _notice('Video frame saved.');
   }
 
   Future<void> _settingsPanel(BuildContext context) async {
@@ -737,6 +701,11 @@ extension _PlaybackPanels on _VideoPlaybackState {
                   'Automatically skip saved segments',
                   _data.autoSkip,
                   (value) => _data.autoSkip = value,
+                ),
+                toggle(
+                  'Include subtitles in snapshots',
+                  _data.snapshotSubtitles,
+                  (value) => _data.snapshotSubtitles = value,
                 ),
                 toggle(
                   'Continue playing in the background',
@@ -1215,11 +1184,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
           selected: false,
         ),
         (
-          value: () => _syncplayPanel(context),
-          label: 'Syncplay room',
-          selected: _room.connected,
-        ),
-        (
           value: () => _chaptersPanel(context),
           label: 'Chapters and bookmarks',
           selected: false,
@@ -1295,6 +1259,13 @@ extension _PlaybackPanels on _VideoPlaybackState {
           selected: false,
         ),
         (value: _saveFrame, label: 'Save video frame', selected: false),
+        if (isEditableVideo(_source) && _duration > Duration.zero)
+          (
+            value: () => _withFilePicker(() => showVideoExport(context, [_source],
+                duration: _duration, position: _position)),
+            label: 'Trim or compress video',
+            selected: false,
+          ),
         (
           value: () => _open(resume: false),
           label: 'Restart video',
