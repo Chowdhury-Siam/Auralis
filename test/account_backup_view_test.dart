@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:auralis/data_backup.dart';
 import 'package:auralis/data_files.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/stats_view.dart';
@@ -90,16 +91,21 @@ void main() {
       await tester.tap(find.byTooltip('Close export'));
       await tester.pumpAndSettle();
       // Open the picker after the account becomes available.
+      td.onRequest = (request) async =>
+          request['@type'] == 'getAuthorizationState'
+          ? {'@type': 'authorizationStateReady'}
+          : null;
       await tester.runAsync(
         () => service.start(
           apiId: 12345,
           apiHash: 'abcdef0123456789abcdef0123456789',
         ),
       );
-      td.auth('authorizationStateReady');
+      expect(service.ready, isTrue, reason: service.error);
       await tester.pumpAndSettle();
       await tester.tap(launch);
       await tester.pumpAndSettle();
+      final sectionCount = BackupSection.values.length + 1;
       for (final size in [
         const Size(1280, 800),
         const Size(360, 640),
@@ -117,9 +123,13 @@ void main() {
           matching: find.byType(Scrollable),
         );
         final position = tester.state<ScrollableState>(scrollable).position;
-        position.jumpTo(0);
+        position.jumpTo(position.minScrollExtent);
         await tester.pumpAndSettle();
-        expect(find.text('7 of 7 sections selected'), findsOneWidget);
+        expect(
+          find.text('$sectionCount of $sectionCount sections selected'),
+          findsOneWidget,
+          reason: 'Export selection summary at $size',
+        );
         expect(
           find.byKey(const ValueKey('export-backup-submit')).hitTestable(),
           findsOneWidget,
