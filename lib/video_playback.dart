@@ -21,10 +21,10 @@ import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
 import 'video_playback_data.dart';
 import 'video_library.dart';
-import 'video_export.dart';
 
 part 'video_playback_controls.dart';
 part 'video_playback_panels.dart';
+part 'video_playback_popup.dart';
 part 'video_playback_processing.dart';
 part 'video_playback_tools.dart';
 part 'video_playback_lookup.dart';
@@ -67,6 +67,7 @@ class VideoPlayback extends StatefulWidget {
     required this.music,
     required this.proxy,
     required this.onOpened,
+    this.onWatched,
     this.minimized = false,
     this.miniBottomInset = 0,
     this.onBack,
@@ -83,6 +84,7 @@ class VideoPlayback extends StatefulWidget {
   final PlayerController music;
   final TelegramStreamProxy proxy;
   final ValueChanged<VideoSource> onOpened;
+  final VoidCallback? onWatched;
   final bool minimized;
   final double miniBottomInset;
   final VoidCallback? onBack, onMinimize, onExpand, onClose;
@@ -145,6 +147,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
   bool _loading = true,
       _opening = false,
       _closed = false,
+      _surfaceDetached = false,
       _positionReady = false;
   bool _invalidated = false, _pip = false, _locked = false, _shuffle = false;
   bool _mirror = false,
@@ -329,7 +332,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
   Future<void> _openVideo({required bool resume}) async {
     _opening = _loading = true;
     _positionReady = false;
-    _resumeSeek = resume && _data.positions[_source.id] != null;
+    _resumeSeek = resume && !_data.isWatched(_source) &&
+        _data.positions[_source.id] != null;
     _error = null;
     _chapters = const [];
     _loopA = _loopB = null;
@@ -394,11 +398,13 @@ class _VideoPlaybackState extends State<VideoPlayback>
             }
           }),
           player.stream.completed.listen((completed) {
-            if (completed && !_opening && !_repeatVideo && _canPlay) {
+            if (completed && !_opening && _error == null && _canPlay) {
+              _data.setWatched(_source, true);
               _data.positions.remove(_source.id);
               _positionReady = false;
               _saveSettings();
-              if (_data.autoAdvance) unawaited(_step(1));
+              widget.onWatched?.call();
+              if (!_repeatVideo && _data.autoAdvance) unawaited(_step(1));
             }
           }),
           player.stream.playing.listen((playing) {
@@ -545,6 +551,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
       return;
     }
     final id = _source.id;
+    if (_data.isWatched(_source)) return;
     if (_hasHistoryRecord && !_data.history.containsKey(id)) return;
     final old = _data.positions[id];
     if (old == _position) return;
@@ -697,13 +704,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
     VideoPlayback playback, {
     required bool detachSurface,
   }) async {
-    if (detachSurface && mounted && _video != null) {
-      // App exit can run before Flutter unmounts the player.
-      setState(() => _video = null);
-      if (WidgetsBinding.instance.framesEnabled) {
-        await WidgetsBinding.instance.endOfFrame;
-      }
-    }
     await _releaseStep(() async {
       await _openingTask;
     }, 'finish opening media');
@@ -711,6 +711,19 @@ class _VideoPlaybackState extends State<VideoPlayback>
       await _releaseStep(subscription.cancel, 'detach playback listener');
     }
     await _releaseStep(() => _shaderUpdates, 'finish video filter changes');
+    if (Platform.isWindows) {
+      // Unload playback while the Windows renderer can still consume its last
+      // update. Disposing the player also tears down the native texture.
+      await _releaseStep(() async {
+        await _player?.stop();
+      }, 'stop Windows video playback');
+    }
+    if (detachSurface && mounted && _video != null) {
+      setState(() => _surfaceDetached = true);
+      if (WidgetsBinding.instance.framesEnabled) {
+        await WidgetsBinding.instance.endOfFrame;
+      }
+    }
     await _releaseStep(() async {
       await _player?.dispose();
     }, 'release the decoder');
@@ -801,7 +814,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   @override
   Widget build(BuildContext context) {
-    if (_closed) return const SizedBox.shrink();
+    if (_surfaceDetached) return const SizedBox.shrink();
     final video = _video;
     final surface = Scaffold(
       backgroundColor: Colors.black,
