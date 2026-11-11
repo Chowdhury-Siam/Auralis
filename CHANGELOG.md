@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.131
+
+- Fall back to the public GitHub release and its published checksums if the Releases API is unavailable. Keep platform, installer size, and SHA-256 checks.
+- Show a more specific update-check error and add a GitHub Releases button for manual downloads.
+
 ## 0.1.130
 
 - Find Telegram channels by name in Video Search and open them in Library. Filter the channel picker to switch channels from either tab.
