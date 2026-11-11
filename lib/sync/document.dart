@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../listening.dart';
+import '../video_playback_data.dart';
 
 String newSyncKey() => List.generate(32, (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join();
 Map<String, dynamic> detached(Map<String, dynamic> data) => jsonDecode(jsonEncode(data)) as Map<String, dynamic>;
@@ -22,6 +23,8 @@ class SyncDocument {
   late final Set<String> _dirty = (state['dirty'] as List).cast<String>().toSet();
   Set<String> get dirty => _dirty;
   static String key(List<String> parts) => jsonEncode(parts);
+  static bool isVideoRecord(String key) =>
+      key.startsWith('["videoRecent",') || key.startsWith('["videoWatched",');
   static int compare(Map a, Map b) {
     final clock = (a['clock'] as int).compareTo(b['clock'] as int);
     return clock == 0 ? (a['device'] as String).compareTo(b['device'] as String) : clock;
@@ -45,6 +48,12 @@ class SyncDocument {
         if (parts.length != 3 || (parts[1] as String).length > 60 || (value != null && (value is! int || value < 0 || value > 5000))) throw const FormatException('Invalid playlist entry.');
       case 'recent':
         if (parts.length != 2 || (value != null && (value is! int || value < 0 || value > 9007199254740991))) throw const FormatException('Invalid recent track.');
+      case 'videoRecent' || 'videoWatched':
+        if (parts.length != 2 || !TelegramVideoActivity.isMessage(parts[1]) ||
+            (value != null && (parts[0] == 'videoRecent'
+                ? !TelegramVideoActivity.isRecent(value) : value != true))) {
+          throw const FormatException('Invalid Telegram video record.');
+        }
       case 'channel':
         if (parts.length != 2 || int.tryParse(parts[1] as String) == null || (value != null && (value is! String || value.length > 1000))) throw const FormatException('Invalid channel.');
       case 'pref':
@@ -108,6 +117,31 @@ class SyncDocument {
     }
     for (final name in ['librarySort','repeatMode']) {
       if (seed || old[name] != snapshot[name]) _put(['pref', name], snapshot[name], seed);
+    }
+    final beforeVideo = old[TelegramVideoActivity.key] as Map? ?? {};
+    final afterVideo = snapshot[TelegramVideoActivity.key] as Map? ?? {};
+    final videoSeed = seed || !old.containsKey(TelegramVideoActivity.key);
+    final beforeOpened = beforeVideo['recent'] as Map? ?? {};
+    final afterOpened = afterVideo['recent'] as Map? ?? {};
+    for (final id in {...beforeOpened.keys, ...afterOpened.keys}.cast<String>()) {
+      if (videoSeed || jsonEncode(beforeOpened[id]) != jsonEncode(afterOpened[id])) {
+        _put(['videoRecent', id], afterOpened[id], videoSeed);
+      }
+    }
+    if (beforeOpened.isNotEmpty && afterOpened.isEmpty) {
+      for (final record in records.keys.toList()) {
+        if (record.startsWith('["videoRecent",')) {
+          _put((jsonDecode(record) as List).cast<String>(), null, false);
+        }
+      }
+    }
+    final beforeWatched = (beforeVideo['watched'] as List? ?? []).toSet();
+    final afterWatched = (afterVideo['watched'] as List? ?? []).toSet();
+    for (final id in {...beforeWatched, ...afterWatched}.cast<String>()) {
+      final watched = afterWatched.contains(id);
+      if (videoSeed || watched != beforeWatched.contains(id)) {
+        _put(['videoWatched', id], watched ? true : null, videoSeed);
+      }
     }
     for (final kind in ['tracks','days']) {
       final before = (old['listening'] as Map?)?[kind] as Map? ?? {};
@@ -187,6 +221,8 @@ class SyncDocument {
     final channels = <Map<String, dynamic>>[];
     final tracks = <String, dynamic>{}, days = <String, dynamic>{};
     final trackMetadata = <String, Map>{};
+    final opened = <MapEntry<String, Map>>[];
+    final watched = <String>[];
     for (final entry in records.entries) {
       final parts = (jsonDecode(entry.key) as List).cast<String>(), r = entry.value as Map;
       if (parts.first == 'playlist') {
@@ -204,6 +240,8 @@ class SyncDocument {
       switch (parts.first) {
         case 'favorite': favorites.add(parts[1]);
         case 'recent': recent.add((parts[1], value as int));
+        case 'videoRecent': opened.add(MapEntry(parts[1], value as Map));
+        case 'videoWatched': watched.add(parts[1]);
         case 'pref': result[parts[1]] = value;
         case 'channel': channels.add({'id': int.parse(parts[1]), 'title': value});
         case 'entry':
@@ -241,6 +279,15 @@ class SyncDocument {
 
     result['favoriteIds'] = favorites..sort();
     result['recentIds'] = recent.take(100).map((r) => r.$1).toList();
+    opened.sort((a, b) {
+      final time = (b.value['openedAt'] as int).compareTo(a.value['openedAt'] as int);
+      return time == 0 ? a.key.compareTo(b.key) : time;
+    });
+    watched.sort();
+    result[TelegramVideoActivity.key] = {
+      'recent': Map.fromEntries(opened.take(TelegramVideoActivity.recentLimit)),
+      'watched': watched.take(TelegramVideoActivity.watchedLimit).toList(),
+    };
     final ordered = <String, List<String>>{};
     for (final e in playlists.entries) {
       final items = e.value.entries.toList()..sort((a,b) => a.value.$1 == b.value.$1 ? a.key.compareTo(b.key) : a.value.$1.compareTo(b.value.$1));
