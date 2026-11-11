@@ -182,6 +182,14 @@ enum TranslationDirection {
   final String label, source, target;
 }
 
+enum AppInterface {
+  music('Music'),
+  video('Video');
+
+  const AppInterface(this.label);
+  final String label;
+}
+
 enum PlaybackRepeat { off, all, one }
 
 enum AppNavigationStyle {
