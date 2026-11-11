@@ -159,7 +159,7 @@ A fresh install opens with **Worker Sync**. Sign in or create an account with yo
 3. Select one or more channels and choose **Open Library**.
 4. Wait for the selected channels' audio posts to load, then choose a track to play.
 
-Choose **Music** or **Video** as your default interface in setup or **Settings → General → Open on startup**. Hold **Home** for about a second to switch interfaces. Pick a channel or paste a Telegram video message link. Use **Switch to Music** or hold **Home** to return to music. Both interfaces use the same navigation appearance, Home cards, Search tiles, and desktop sidebar. See the [video playback guide](docs/GUIDE.md#telegram-video).
+Choose **Music** or **Video** as your default interface in setup or **Settings → General → Open on startup**. Hold **Home** for about a second to switch interfaces. Pick a channel or paste a Telegram video message link. Use **Switch to Music** or hold **Home** to return to music. Both interfaces use the same navigation appearance, Home cards, and desktop sidebar. Video Search finds videos in a chosen channel, and Video Library browses that channel’s video posts. See the [video playback guide](docs/GUIDE.md#telegram-video).
 
 Maintainers must set the two [Telegram build secrets](docs/TELEGRAM_BUILD.md) before building releases. Local/PR builds without application credentials retain manual API setup using an application registered at [my.telegram.org](https://my.telegram.org).
 
@@ -316,7 +316,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.127+128**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.129+130**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
