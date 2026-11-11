@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.132
+
+- Remove the channel dropdowns from Video Library and Search. Find channels by name in Video Search.
+- Open a channel's videos inside Search with the same compact rows, square artwork, and sort order as Library. Library remembers the last channel opened.
+
 ## 0.1.131
 
 - Fall back to the public GitHub release and its published checksums if the Releases API is unavailable. Keep platform, installer size, and SHA-256 checks.
