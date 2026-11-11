@@ -116,20 +116,25 @@ and application API details are encrypted with an account-bound AES-GCM context
 inside your private Worker. No Telegram auth key, TDLib database, login code,
 two-step password or music is uploaded.
 
-On a new device, sign in to the same Auralis account. Auralis starts a fresh
-Telegram login using the linked application details and displays a six-digit
-approval code in Account & sync. Keep Auralis open on an already connected device,
-open its Account & sync page, tap **Approve new Telegram device** and enter the
-code displayed on the new device. Telegram creates an independent authorization
-for that device. If Telegram requests a two-step password, enter it on the new
-device; it goes directly to Telegram.
+With the updated Worker, sign in with your password on the new device and keep
+Auralis open on a device already connected to the same Auralis and Telegram
+accounts. Auralis starts Telegram's device sign-in and the connected device
+confirms it automatically in the background. Each device gets its own Telegram
+session. If Telegram requests its two-step password, enter it on the new device.
+That password goes directly to Telegram.
 
-Device requests expire after two minutes. TDLib refreshes its login links as
-needed, so use the currently displayed code. A request can be claimed only once,
-by a different signed-in Auralis session belonging to the same account. Only a
-matching code reveals its encrypted temporary login token to the approver. The
-token is erased after completion; requests are cleared by unlinking, sign-out,
-password recovery and account deletion. Failed approval waits for a fresh request.
+The Worker issues a ten-minute authorization for automatic linking after a
+password sign-in. It applies only to that Auralis account session and stays in
+memory on the new device. Each encrypted Telegram login link expires after two
+minutes, can be claimed once, and is erased after completion. Unlinking, sign-out,
+password recovery, and account deletion clear pending links. Auralis password
+resets require re-linking Telegram from a connected device before password
+sign-ins can authorize automatic linking again.
+
+Update both apps and the Worker before signing in on a new device. An older
+Worker or a restored Auralis sign-in without a fresh password uses the existing
+six-digit approval flow. To use automatic linking from a saved sign-in, sign in
+with your password again.
 
 If no connected device is available, select **Use phone sign-in instead** on the
 new device, then use normal Telegram sign-in in the Telegram tab. This cancels
@@ -167,7 +172,7 @@ edits, rollback, restart recovery, owner credential access and responsive forms.
 These checks use fakes and SQLite; live Cloudflare deployment and real-device
 multi-account timing require your deployment credentials.
 
-The Telegram-link tests cover code verification, expiry, one-use tokens,
-per-account isolation, unlinking, preserving local API identity, phone fallback,
-local-only two-step passwords and phone/landscape/desktop layouts. Live Telegram
-approval and device builds are not exercised by these simulated checks.
+The Telegram-link tests cover password-bound automatic linking, manual code
+verification, expiry, one-use tokens, per-account and per-session isolation,
+password recovery, unlinking, phone fallback, and local-only Telegram passwords.
+Live Telegram approval and device builds require a connected device.
