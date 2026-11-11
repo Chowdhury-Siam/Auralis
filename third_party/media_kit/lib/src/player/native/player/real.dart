@@ -1363,6 +1363,7 @@ class NativePlayer extends PlatformPlayer {
   Future<void> command(
     List<String> command, {
     bool waitForInitialization = true,
+    bool checkError = false,
   }) async {
     if (disposed) {
       throw AssertionError('[Player] has been disposed');
@@ -1373,7 +1374,23 @@ class NativePlayer extends PlatformPlayer {
       await waitForVideoControllerInitializationIfAttached;
     }
 
-    await _command(command);
+    await _command(command, checkError: checkError);
+  }
+
+  /// Loads a user-selected mpv configuration from an absolute local path.
+  Future<void> loadConfiguration(String path) async {
+    await waitForPlayerInitialization;
+    await waitForVideoControllerInitializationIfAttached;
+    if (disposed) throw StateError('Player has been disposed');
+    final name = path.toNativeUtf8();
+    try {
+      final code = mpv.mpv_load_config_file(ctx, name.cast());
+      if (code < 0) {
+        throw StateError(mpv.mpv_error_string(code).cast<Utf8>().toDartString());
+      }
+    } finally {
+      calloc.free(name);
+    }
   }
 
   Future<void> _handler(Pointer<generated.mpv_event> event) async {
@@ -2614,30 +2631,37 @@ class NativePlayer extends PlatformPlayer {
     calloc.free(string);
   }
 
-  Future<void> _command(List<String> args) async {
+  Future<void> _command(List<String> args, {bool checkError = false}) async {
     final pointers = args.map<Pointer<Utf8>>((e) => e.toNativeUtf8()).toList();
-    final arr = calloc<Pointer<Utf8>>(128);
-    for (int i = 0; i < args.length; i++) {
-      (arr + i).value = pointers[i];
-    }
-
-    if (configuration.async) {
-      final requestNumber = _asyncRequestNumber++;
-      final completer = _commandRequests[requestNumber] = Completer<int>();
-      final immediate = mpv.mpv_command_async(ctx, requestNumber, arr.cast());
-      final text = '_command(${args.join(', ')})';
-      if (immediate < 0) {
-        // Sending failed.
-        _logError(immediate, text);
-        return;
+    final arr = calloc<Pointer<Utf8>>(pointers.length + 1);
+    try {
+      for (var i = 0; i < pointers.length; i++) {
+        arr[i] = pointers[i];
       }
-      _logError(await completer.future, text);
-    } else {
-      mpv.mpv_command(ctx, arr.cast());
+      final int code;
+      if (configuration.async) {
+        final requestNumber = _asyncRequestNumber++;
+        final completer = _commandRequests[requestNumber] = Completer<int>();
+        final immediate = mpv.mpv_command_async(ctx, requestNumber, arr.cast());
+        if (immediate < 0) {
+          _commandRequests.remove(requestNumber);
+          code = immediate;
+        } else {
+          code = await completer.future;
+        }
+      } else {
+        code = mpv.mpv_command(ctx, arr.cast());
+      }
+      if (checkError && code < 0) {
+        throw StateError(mpv.mpv_error_string(code).cast<Utf8>().toDartString());
+      }
+      if (configuration.async) {
+        _logError(code, '_command(${args.join(', ')})');
+      }
+    } finally {
+      calloc.free(arr);
+      pointers.forEach(calloc.free);
     }
-
-    calloc.free(arr);
-    pointers.forEach(calloc.free);
   }
 
   String _sanitizeUri(String uri) {
