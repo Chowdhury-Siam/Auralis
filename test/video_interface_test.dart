@@ -33,7 +33,7 @@ void main() {
 
   for (final style in AppNavigationStyle.values) {
     testWidgets(
-      'Video shares Music navigation appearance and searches channel videos: ${style.name}',
+      'Video shares Music navigation appearance and searches for channels: ${style.name}',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = const Size(390, 844);
@@ -49,12 +49,7 @@ void main() {
             ? {
                 'messages':
                     request['filter']?['@type'] == 'searchMessagesFilterVideo'
-                    ? [
-                        if (request['query'] == 'trailer')
-                          post(31, 'Trailer.mp4')
-                        else
-                          post(30, 'Full movie.mp4'),
-                      ]
+                    ? [post(30, 'Full movie.mp4')]
                     : [],
                 'next_from_message_id': 0,
               }
@@ -101,34 +96,31 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(
-          find.widgetWithText(TextField, 'Search videos or channels'),
-          findsOneWidget,
-        );
-        expect(find.byType(DiscoveryTile), findsNothing);
-        expect(find.text('Music only'), findsNothing);
-        expect(find.text('Find videos or channels'), findsOneWidget);
-        await tester.tap(find.byTooltip('Choose video channel'));
-        await tester.pumpAndSettle();
-        final dialog = find.byType(AlertDialog);
-        expect(dialog, findsOneWidget);
-        expect(tester.getCenter(dialog).dx, closeTo(195, 1));
-        await tester.tap(find.widgetWithText(ListTile, channel.title));
-        await tester.pumpAndSettle();
-        expect(tester.widget<AppNavigation>(navigation).selected, 1);
-        expect(find.text('Trailer'), findsNothing);
+        final searchField = find.widgetWithText(TextField, 'Search channels');
+        expect(searchField, findsOneWidget);
+        expect(find.byTooltip('Choose video channel'), findsNothing);
+        expect(find.text(channel.title), findsOneWidget);
+        expect(find.text('Music only'), findsOneWidget);
         expect(settings.videoChannelId, isNull);
-        await tester.enterText(find.byType(TextField), 'trailer');
+
+        await tester.enterText(searchField, 'Full movie');
         await tester.testTextInput.receiveAction(TextInputAction.search);
         await tester.pumpAndSettle();
+        expect(find.text('No matching channels'), findsOneWidget);
         expect(
-          td.requests.where(
-            (r) =>
-                r['@type'] == 'searchChatMessages' && r['query'] == 'trailer',
-          ),
-          hasLength(2),
+          td.requests.where((r) => r['@type'] == 'searchChatMessages'),
+          isEmpty,
         );
-        expect(find.text('Trailer'), findsOneWidget);
+
+        await tester.enterText(searchField, channel.title.toUpperCase());
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await tester.pumpAndSettle();
+        expect(tester.widget<AppNavigation>(navigation).selected, 1);
+        expect(find.text('Full movie'), findsOneWidget);
+        expect(find.byTooltip('Back to channels'), findsOneWidget);
+        expect(settings.videoChannelId, channel.id);
+        final videoRow = find.byKey(ValueKey('${channel.id}:30'));
+        final searchRowSize = tester.getSize(videoRow);
 
         await tester.tap(
           find.descendant(
@@ -137,25 +129,15 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('Trailer'), findsNothing);
-        expect(find.text('Browse channel videos'), findsOneWidget);
-        await tester.tap(find.byTooltip('Choose video channel'));
-        await tester.pumpAndSettle();
-        expect(find.text('Videos found'), findsOneWidget);
-        await tester.tap(find.widgetWithText(ListTile, channel.title));
-        await tester.pumpAndSettle();
+        expect(find.byTooltip('Choose video channel'), findsNothing);
         expect(find.text('Full movie'), findsOneWidget);
-        expect(settings.videoChannelId, channel.id);
-
-        await tester.tap(
-          find.descendant(
-            of: navigation,
-            matching: find.byIcon(Icons.search_rounded),
-          ),
+        expect(tester.getSize(videoRow), searchRowSize);
+        expect(
+          td.requests
+              .where((r) => r['@type'] == 'searchChatMessages')
+              .map((r) => r['query']),
+          ['', ''],
         );
-        await tester.pumpAndSettle();
-        expect(find.text('Trailer'), findsOneWidget);
-        expect(find.text('Full movie'), findsNothing);
         expect(tester.takeException(), isNull);
         // Home hold still switches interfaces with all three navigation styles.
         final hold = await tester.startGesture(
@@ -270,33 +252,37 @@ void main() {
       await openTab(Icons.search_rounded);
       final searchesBefore = td.requests.length;
       await tester.enterText(
-        find.widgetWithText(TextField, 'Search videos or channels'),
+        find.widgetWithText(TextField, 'Search channels'),
         'ARCHI',
       );
       await tester.pumpAndSettle();
       expect(td.requests, hasLength(searchesBefore));
-      await tester.tap(find.widgetWithText(ListTile, archive.title));
+      expect(find.text(channel.title), findsNothing);
+      await tester.tap(find.text(archive.title));
       await tester.pumpAndSettle();
-      expect(tester.widget<AppNavigation>(navigation).selected, 2);
+      expect(tester.widget<AppNavigation>(navigation).selected, 1);
       expect(find.text('Archive episode'), findsOneWidget);
       expect(alpha, findsNothing);
       expect(settings.videoChannelId, archive.id);
 
-      await tester.tap(find.byTooltip('Choose video channel'));
+      await tester.tap(find.byTooltip('Back to channels'));
       await tester.pumpAndSettle();
-      final pickerSearch = find.widgetWithText(TextField, 'Search channels');
-      await tester.enterText(pickerSearch, 'cine');
+      final searchField = find.widgetWithText(TextField, 'Search channels');
+      expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
+      await tester.enterText(searchField, 'cine');
       await tester.pumpAndSettle();
-      expect(find.widgetWithText(ListTile, archive.title), findsNothing);
+      expect(find.text(archive.title), findsNothing);
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
       expect(settings.videoChannelId, channel.id);
       expect(find.text('Archive episode'), findsNothing);
       expect(
         tester.getTopLeft(zebra).dy,
         lessThan(tester.getTopLeft(alpha).dy),
       );
+      await openTab(Icons.video_library_rounded);
+      expect(find.text('Archive episode'), findsNothing);
+      expect(find.text('Alpha'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -354,19 +340,14 @@ void main() {
       if (size.width >= 900) expect(find.byType(AppSidebar), findsOneWidget);
       await tester.tap(find.byIcon(Icons.search_rounded).last);
       await tester.pumpAndSettle();
-      expect(find.text('Find videos or channels'), findsOneWidget);
+      final searchField = find.widgetWithText(TextField, 'Search channels');
+      expect(searchField, findsOneWidget);
       expect(find.text('Trailer'), findsNothing);
-      await tester.tap(find.byTooltip('Choose video channel'));
+      await tester.enterText(searchField, 'number 18');
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsOneWidget);
       final lastChannel = find.text('Long Telegram channel title number 18');
-      await tester.ensureVisible(lastChannel);
-      await tester.pumpAndSettle();
       expect(lastChannel.hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
       await tester.tap(find.byTooltip('Open Telegram link'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);
