@@ -131,7 +131,7 @@ void main() {
         await tester.tap(find.text('Repeat queue'));
         await tester.pumpAndSettle();
         expect(settings.repeatMode, PlaybackRepeat.all);
-        await tester.tap(find.byTooltip('Library sort order: Newest first'));
+        await tester.tap(find.byTooltip('Library sort order: Title (A–Z)'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Oldest first'));
         await tester.pumpAndSettle();
