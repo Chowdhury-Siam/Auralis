@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import '../data_backup.dart';
 import '../storage.dart';
 import '../telegram/telegram_service.dart';
+import '../video_playback_data.dart';
 import 'document.dart';
 import 'deployment.dart';
 part 'accounts.dart';
@@ -39,7 +40,7 @@ class SyncController extends ChangeNotifier {
   }) {
     settings.captureSync = _capture;
     settings.onSaved = () {
-      if (connected && document.dirty.isNotEmpty) _schedule();
+      if (connected && document.dirty.any(_canSend)) _schedule();
     };
     telegram?.addListener(_telegramChanged);
     if (telegram != null) {
@@ -93,6 +94,9 @@ class SyncController extends ChangeNotifier {
   bool get connected => _url != null;
   String get url => _url ?? '';
   SyncDocument get document => SyncDocument(settings.syncState);
+  bool _canSend(String key) =>
+      settings.syncState['videoActivitySupported'] == true ||
+      !SyncDocument.isVideoRecord(key);
   static String normalize(String value) {
     final uri = Uri.tryParse(value.trim().replaceFirst(RegExp(r'/+$'), ''));
     if (uri == null ||
@@ -226,7 +230,7 @@ class SyncController extends ChangeNotifier {
     request.followRedirects = false;
     request.headers.set('Authorization', 'Bearer $key');
     request.headers.contentType = ContentType.json;
-    request.add(utf8.encode(jsonEncode(data)));
+    request.add(utf8.encode(jsonEncode({...data, 'videoActivity': true})));
     final response = await request.close().timeout(const Duration(seconds: 15));
     final bytes = <int>[];
     await for (final chunk in response.timeout(const Duration(seconds: 15))) {
@@ -266,7 +270,7 @@ class SyncController extends ChangeNotifier {
       } else if (!_closed &&
           connected &&
           error == null &&
-          document.dirty.isNotEmpty) {
+          document.dirty.any(_canSend)) {
         _schedule();
       }
     });
@@ -275,7 +279,7 @@ class SyncController extends ChangeNotifier {
   Future<bool> _mergeCloudCopy(int generation) async {
     await settings.save();
     final remote = <String, dynamic>{};
-    var cursor = 0, more = true;
+    var cursor = 0, more = true, videoSupported = false;
     while (more) {
       final page = await _request(_url!, _key!, {
         'cursor': cursor,
@@ -285,6 +289,7 @@ class SyncController extends ChangeNotifier {
       remote.addAll(page['records'] as Map<String, dynamic>);
       cursor = page['cursor'] as int;
       more = page['more'] as bool;
+      videoSupported = page['videoActivity'] == true;
     }
     _capture(settings.toJson());
     final merged = SyncDocument(detached(settings.syncState));
@@ -292,6 +297,7 @@ class SyncController extends ChangeNotifier {
     merged.merge(remote);
     merged.state['cursor'] = cursor;
     merged.state['bootstrap'] = false;
+    merged.state['videoActivitySupported'] = videoSupported;
     final snapshot = merged.project(settings.toJson());
     DataBackup.validateSnapshot(snapshot);
     settings.syncState = merged.state;
@@ -320,7 +326,7 @@ class SyncController extends ChangeNotifier {
         final doc = document;
         final sent = <String, dynamic>{
           for (final k
-              in doc.dirty.where((k) => !sentKeys.contains(k)).take(100))
+              in doc.dirty.where((k) => _canSend(k) && !sentKeys.contains(k)).take(100))
             k: detached(Map<String, dynamic>.from(doc.records[k] as Map)),
         };
         sentKeys.addAll(sent.keys);
@@ -329,6 +335,13 @@ class SyncController extends ChangeNotifier {
           'ops': sent,
         });
         if (_closed || generation != _generation || paused()) return;
+        if (result['videoActivity'] == true &&
+            doc.state['videoActivitySupported'] != true) {
+          // Earlier clients advanced past revisions they could not read.
+          if (!await _mergeCloudCopy(generation)) return;
+          sentKeys.removeAll(sent.keys);
+          continue;
+        }
         // Capture edits made while HTTP was pending before merging remote fields.
         _capture(settings.toJson());
         final merged = SyncDocument(detached(settings.syncState));
@@ -350,9 +363,11 @@ class SyncController extends ChangeNotifier {
         onApplied();
         more =
             result['more'] == true ||
-            remaining.any((key) => !sentKeys.contains(key));
+            remaining.any((key) => _canSend(key) && !sentKeys.contains(key));
       }
-      status = 'Up to date across your devices.';
+      status = document.dirty.any((key) => !_canSend(key))
+          ? 'Update the sync Worker to share video activity.'
+          : 'Up to date across your devices.';
     } catch (failure) {
       if (!_closed && generation == _generation) {
         _client.close(force: true);
