@@ -301,6 +301,12 @@ void main() {
         of: channelRow(chat),
         matching: find.text('Selected in Library'),
       );
+      expect(find.text('Browse channels'), findsOneWidget);
+      expect(find.byType(DiscoveryTile), findsNWidgets(2));
+      expect(
+        tester.getTopLeft(channelRow(channel)).dy,
+        tester.getTopLeft(channelRow(archive)).dy,
+      );
       expect(selectedIn(channel), findsOneWidget);
       expect(selectedIn(archive), findsNothing);
       final searchesBefore = td.requests.length;
@@ -309,6 +315,11 @@ void main() {
         'ARCHI',
       );
       await tester.pumpAndSettle();
+      expect(find.text('Matching channels'), findsOneWidget);
+      expect(find.byType(DiscoveryTile), findsOneWidget);
+      await tester.tap(find.byTooltip('Show list'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DiscoveryTile), findsNothing);
       expect(td.requests, hasLength(searchesBefore));
       expect(find.text(channel.title), findsNothing);
       await tester.tap(find.text(archive.title));
@@ -321,6 +332,11 @@ void main() {
       await tester.tap(find.byTooltip('Back to channels'));
       await tester.pumpAndSettle();
       final searchField = find.widgetWithText(TextField, 'Search channels');
+      expect(selectedIn(archive), findsOneWidget);
+      expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
+      await tester.tap(find.byTooltip('Show grid'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DiscoveryTile), findsOneWidget);
       expect(selectedIn(archive), findsOneWidget);
       expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
       await tester.enterText(searchField, 'cine');
