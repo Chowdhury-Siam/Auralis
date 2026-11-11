@@ -102,11 +102,11 @@ Before the first timed lyric and during blank timestamped gaps, lyrics stay full
 
 ## Telegram Video
 
-Hold **Home** for about a second on Android or Windows. Choose an accessible channel and search its videos, or use the link button to paste a public or private Telegram message link that your account can open. Ordinary video posts and recognized video files posted as documents appear in the browser. Use **Load older videos** to continue through the channel history.
+Choose **Music** or **Video** under **Open on startup** in setup or **Settings → General**. Hold **Home** for about a second on Android or Windows to switch interfaces. Video has its own Home, Search and Library, and remembers its selected channel separately from Music. Choose an accessible channel and search its videos, or use the link button to paste a public or private Telegram message link that your account can open. Ordinary video posts and recognized video files posted as documents appear in the browser. Use **Load older videos** to continue through the channel history.
 
 Auralis streams the original video using the same Telegram account and libmpv engine. The player supports fullscreen, seeking, playback speed, and embedded audio and subtitle track selection. On Android, double-tap either side of the video to seek or hold the video to play temporarily at 2×. The playback gestures and track controls were inspired by [mpvRx](https://github.com/Riteshp2001/mpvRx).
 
-Opening a video pauses music and keeps its queue and position. Press **Back** to return to the video browser, then again to return to music. Video uses temporary buffering and stays separate from music listening stats.
+Opening a video pauses music and keeps its queue and position. Press **Back** to return to the video browser. Use **Switch to Music** or hold **Home** to return to the music interface. Video uses temporary buffering and stays separate from music listening stats.
 
 ## Streaming audio quality
 
