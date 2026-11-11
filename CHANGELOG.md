@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.147
+
+- Fix the video shutdown test's asynchronous cleanup in CI.
+
 ## 0.1.146
 
 - Fix build analysis errors in Video mode.
