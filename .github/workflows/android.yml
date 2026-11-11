@@ -47,11 +47,14 @@ jobs:
           channel: stable
           cache: true
           pub-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
       - name: Install Android and host build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build gperf libssl-dev zlib1g-dev
-          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
       - name: Prepare Telegram build credentials
         env:
           TELEGRAM_API_ID: ${{ github.event_name != 'pull_request' && secrets.TELEGRAM_API_ID || '' }}
@@ -92,6 +95,8 @@ jobs:
           path: |
             android/app/src/main/jniLibs/
             native/android/
+      - name: Build QuickJS for video websites
+        run: bash tool/build-qjs-android.sh "$ABI"
       - name: Configure automatic APK signing
         id: signing
         env:
@@ -108,19 +113,19 @@ jobs:
         run: |
           if [ "$ABI" = arm64-v8a ]; then target=android-arm64; else target=android-x64; fi
           if [ "$SIGNED" = true ]; then flavor=release; else flavor=development-release; fi
-          # --target-platform alone can leave third-party native libraries for
-          # other ABIs in the APK; Flutter's ABI split enforces a single ABI.
-          flutter build apk --release --no-pub --split-per-abi --target-platform "$target" --dart-define-from-file="$RUNNER_TEMP/auralis-telegram-build.json"
+          # Gradle restricts Flutter and all native dependencies to this ABI.
+          flutter build apk --release --no-pub --target-platform "$target" --dart-define-from-file="$RUNNER_TEMP/auralis-telegram-build.json"
           mkdir -p dist/android
           version=$(sed -n 's/^version: \([^+]*\)+.*/\1/p' pubspec.yaml)
-          source_apk="build/app/outputs/flutter-apk/app-$ABI-release.apk"
-          test -f "$source_apk" || { echo "Missing split APK: $source_apk" >&2; exit 1; }
+          source_apk="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$source_apk" || { echo "Missing release APK: $source_apk" >&2; exit 1; }
           cp "$source_apk" "dist/android/auralis-$version-android-$ABI-$flavor.apk"
           python3 tool/verify-android.py "dist/android/auralis-$version-android-$ABI-$flavor.apk" "$ABI"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "dist/android/auralis-$version-android-$ABI-$flavor.apk"
           "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "dist/android/auralis-$version-android-$ABI-$flavor.apk"
           test "$(apkanalyzer manifest debuggable "dist/android/auralis-$version-android-$ABI-$flavor.apk")" = false
           cp -r native/android/licenses dist/android/
+          cp docs/QUICKJS-LICENSE.txt dist/android/licenses/
           cp native/android/build-manifest.json dist/android/
           cp THIRD_PARTY_NOTICES.md docs/ANDROID.md dist/android/
           (cd dist/android && sha256sum *.apk > SHA256SUMS.txt)
