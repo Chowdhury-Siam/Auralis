@@ -110,6 +110,33 @@ void main() {
         player.notifyListeners();
         await tester.pumpAndSettle();
         expect(dock, findsOneWidget, reason: '$size loaded and paused');
+        final dockTheme = Theme.of(tester.element(dock)).colorScheme;
+        expect(tester.widget<Material>(dock).color, dockTheme.primaryContainer);
+        final preview = find.byKey(const ValueKey('open-current-track'));
+        expect(
+          find.descendant(of: preview, matching: find.byType(ClipOval)),
+          findsOneWidget,
+        );
+        final seek = find.byKey(const ValueKey('playback-seek'));
+        final play = find.descendant(
+          of: dock,
+          matching: find.byTooltip('Play'),
+        );
+        expect(
+          tester.getCenter(play).dy,
+          closeTo(tester.getCenter(preview).dy, 1),
+        );
+        if (size.width < 600) {
+          expect(
+            tester.getTopLeft(seek).dy,
+            greaterThanOrEqualTo(tester.getBottomLeft(preview).dy),
+          );
+        } else {
+          expect(
+            tester.getCenter(seek).dy,
+            closeTo(tester.getCenter(preview).dy, 1),
+          );
+        }
         await tester.tap(
           find.descendant(of: dock, matching: find.byTooltip('Play')),
         );
@@ -175,7 +202,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 300));
           final dock = find.byKey(const ValueKey('player-bar'));
           final card = tester.widget<Material>(dock);
-          expect(card.borderRadius, BorderRadius.circular(28));
+          expect(card.borderRadius, BorderRadius.circular(24));
           expect(card.clipBehavior, Clip.antiAlias);
           for (final key in [
             'sleep-timer-control',
