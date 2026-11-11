@@ -1,5 +1,20 @@
 # Auralis changes
 
+## 0.1.145
+
+- Simplify first-run setup and Appearance settings.
+
+## 0.1.144
+
+- Remove Web playback, Syncplay, and the Open files, Browse folders, Open stream, and Open playlist actions from Video mode.
+- Release the video decoder before closing its Telegram stream and wait for video cleanup on app exit.
+
+## 0.1.143
+
+- Trim, center-crop, and compress local videos to MP4 with presets, audio removal, progress, and cancellation.
+- Save and reorder video playlists, discover local M3U and M3U8 files in browsed folders, and reopen videos from persistent playback history.
+- Capture frames to a snapshot library with preview, PNG export, and deletion. Remember subtitle styling and ambient lighting, and import skip segments from marked chapters.
+
 ## 0.1.142
 
 - Browse pinned local video folders with grid and list views, queue selection, sorting, and resume markers. Open videos shared to Auralis from Android.
