@@ -11,7 +11,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.drawable.Icon
-import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -34,7 +33,7 @@ internal class VideoWindow(
 
     private val channel = MethodChannel(messenger, "app.auralis/video")
     private val documents = VideoDocuments(activity, messenger, io)
-    private val web = VideoWebStreams(activity)
+    private val exporter = VideoExporter(activity, io)
     private val toggleAction = "${activity.packageName}.VIDEO_PIP_TOGGLE"
     private var picker: MethodChannel.Result? = null
     private var autoPip = false
@@ -67,10 +66,9 @@ internal class VideoWindow(
             try {
                 when (call.method) {
                     "openFiles" -> openFiles(result)
-                    "resolveWebVideo" -> web.resolve(call.argument("url"), call.argument("format"), result)
-                    "openFolder" -> documents.openFolder(result)
-                    "listFolder" -> documents.listFolder(call.argument("root"), call.argument("folder"), result)
-                    "forgetFolder" -> documents.forgetFolder(call.arguments as? String, result)
+                    "exportVideo" -> exporter.start(call, result)
+                    "exportProgress" -> result.success(exporter.progress())
+                    "cancelExport" -> { exporter.cancel(); result.success(null) }
                     "matchRefreshRate" -> {
                         matchRefreshRate((call.arguments as? Number)?.toDouble())
                         result.success(null)
@@ -191,12 +189,9 @@ internal class VideoWindow(
         }
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
             .addCategory(Intent.CATEGORY_OPENABLE)
-            .setType("*/*")
-            .putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
-                "video/*", "application/vnd.apple.mpegurl", "application/octet-stream",
-            ))
+            .setType("video/*")
             .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         picker = result
         try {
             @Suppress("DEPRECATION")
@@ -208,7 +203,6 @@ internal class VideoWindow(
     }
 
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        if (documents.onActivityResult(requestCode, resultCode, data)) return true
         if (requestCode != OPEN_FILES) return false
         val callback = picker ?: return true
         if (resultCode != Activity.RESULT_OK || data == null) {
@@ -218,6 +212,13 @@ internal class VideoWindow(
         }
         val uris = VideoDocuments.intentFiles(data)
         io.execute {
+            if (data.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0) {
+                for (uri in uris) runCatching {
+                    activity.contentResolver.takePersistableUriPermission(
+                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                }
+            }
             val files = documents.describe(uris)
             activity.runOnUiThread {
                 if (!closed && picker === callback) {
@@ -232,7 +233,7 @@ internal class VideoWindow(
     fun close() {
         closed = true
         documents.close()
-        web.close()
+        exporter.cancel()
         if (supported) activity.unregisterReceiver(receiver)
         picker?.success(null)
         picker = null
