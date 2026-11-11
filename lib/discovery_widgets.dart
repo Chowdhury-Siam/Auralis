@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart';
 import 'models.dart';
 
 (Color, Color) discoveryColors(int index, ColorScheme colors) =>
@@ -23,12 +24,15 @@ class DiscoveryCard extends StatelessWidget {
   final EdgeInsets padding;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: BorderRadius.circular(24),
-    clipBehavior: Clip.antiAlias,
-    child: Padding(padding: padding, child: child),
-  );
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.surfaceContainerLow,
+      shape: auralisSurfaceShape(colors, borderOpacity: .35),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
+    );
+  }
 }
 
 class DiscoveryHero extends StatelessWidget {
