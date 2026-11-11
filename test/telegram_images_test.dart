@@ -656,12 +656,13 @@ void main() {
       return bytes;
     });
     expect(thirdCompleted, isFalse);
-    expect(pending.keys, [1, 2]);
+    // Independent artwork cache lookups can reach TDLib in either order.
+    expect(pending.keys, unorderedEquals([1, 2]));
     pending[1]!.complete({'size': 0});
     pending[2]!.complete({'size': 0});
     await Future.wait([first, second]);
     await retryStarted.future;
-    expect(pending.keys, [1, 2, 3]);
+    expect(pending.keys, unorderedEquals([1, 2, 3]));
     pending[3]!.complete({'size': 0});
     expect(await third, isNull);
   });
