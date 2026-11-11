@@ -16,6 +16,7 @@ import 'package:auralis/sync/controller.dart';
 import 'package:auralis/sync/settings_view.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -115,7 +116,7 @@ void main() {
       }
 
       await capture('setup-welcome');
-      for (var i = 0; i < 7; i++) {
+      for (var i = 0; i < 6; i++) {
         await tester.tap(find.byKey(const ValueKey('setup-next')));
         await tester.pumpAndSettle();
       }
@@ -257,14 +258,12 @@ void main() {
     final fresh = AppSettings(file);
     await fresh.load();
     expect(fresh.setupComplete, isFalse);
-    fresh.compactLibrary = true;
     fresh.navigationStyle = AppNavigationStyle.expressive;
     fresh.navigationRadius = 16;
     await fresh.save();
     final resumed = AppSettings(file);
     await resumed.load();
     expect(resumed.setupComplete, isFalse);
-    expect(resumed.compactLibrary, isTrue);
     expect(resumed.navigationRadius, 16);
     resumed.setupComplete = true;
     await resumed.save();
@@ -272,17 +271,29 @@ void main() {
     await complete.load();
     expect(complete.setupComplete, isTrue);
     final backup = DataBackup.create(complete, DateTime(2026));
-    DataBackup.parse(backup.encode());
+    final encoded = jsonDecode(backup.encode()) as Map<String, dynamic>;
+    final oldSnapshot = encoded['data'] as Map<String, dynamic>;
+    expect(oldSnapshot, isNot(contains('compactLibrary')));
+    oldSnapshot['compactLibrary'] = false;
+    encoded['sha256'] = sha256
+        .convert(utf8.encode(jsonEncode(oldSnapshot)))
+        .toString();
+    expect(
+      DataBackup.parse(jsonEncode(encoded)).snapshot,
+      isNot(contains('compactLibrary')),
+    );
     expect(complete.toJson().containsKey('_setupComplete'), isFalse);
     await file.writeAsString(
       jsonEncode({
         'favoriteIds': ['kept'],
         'volume': 42,
+        'compactLibrary': false,
       }),
     );
     await complete.load();
     expect(complete.setupComplete, isTrue);
     expect(complete.favoriteIds, {'kept'});
+    expect(complete.toJson(), isNot(contains('compactLibrary')));
     expect(complete.navigationStyle, AppNavigationStyle.fullWidth);
 
     final original = Lyrics.parse(
@@ -375,12 +386,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(settings.automaticTranslation, isFalse);
       await next(); // artwork
-      await next(); // library
-      await tester.ensureVisible(find.text('Compact mode'));
-      await tester.tap(find.widgetWithText(SwitchListTile, 'Compact mode'));
-      await tester.pumpAndSettle();
-      expect(settings.compactLibrary, isTrue);
       await next(); // navigation
+      expect(find.text('Make it feel yours'), findsOneWidget);
       await tester.ensureVisible(
         find.widgetWithText(ListTile, 'Expressive pill'),
       );
@@ -389,7 +396,7 @@ void main() {
       expect(settings.navigationStyle, AppNavigationStyle.expressive);
       await tester.tap(find.byTooltip('Previous setup step'));
       await tester.pumpAndSettle();
-      expect(settings.compactLibrary, isTrue);
+      expect(find.text('Covers stay with you'), findsOneWidget);
       expect(settings.setupComplete, isFalse);
       await next();
       await next(); // playback
@@ -411,7 +418,6 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final settings = MemorySettings()
-        ..compactLibrary = true
         ..navigationStyle = AppNavigationStyle.expressive;
       final player = PlayerController(
         FakeAudio(),
@@ -442,7 +448,7 @@ void main() {
           ),
         ),
       );
-      for (var step = 0; step < 8; step++) {
+      for (var step = 0; step < 7; step++) {
         await tester.tap(find.byKey(const ValueKey('setup-next')));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: 'Step ${step + 1}');
