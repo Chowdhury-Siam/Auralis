@@ -75,9 +75,27 @@ class TelegramClient extends AccountClient {
   final profiles = <String, Map<String, dynamic>>{};
   final disabled = <String>{};
   bool pending = false;
+  bool automaticLinking = false, pendingAutomatic = false;
+  static const testGrant = 'ephemeral-password-proof';
   Completer<void>? holdGet, getStarted;
   @override
   Future<HttpClientRequest> openUrl(String method, Uri uri) async {
+    if (automaticLinking && uri.path == '/v1/auth/login') {
+      final request = AccountRequest(method, uri, (r) {
+        final data = jsonDecode(utf8.decode(r.bytes)) as Map;
+        expect(data['password'], 'test-password');
+        expect(data['automaticTelegram'], isTrue);
+        final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        return response({
+          'user': {'id': 'a' * 32, 'username': 'alice', 'admin': false},
+          'token': 'alice-session',
+          'expires': now + 86400,
+          'telegramGrant': {'token': testGrant, 'expires': now + 600},
+        });
+      });
+      requests.add(request);
+      return request;
+    }
     if (!uri.path.startsWith('/v1/account/telegram')) {
       return super.openUrl(method, uri);
     }
@@ -120,28 +138,36 @@ class TelegramClient extends AccountClient {
       return response({
         'enabled': !disabled.contains(name),
         'profile': profiles[name],
+        if (automaticLinking) 'automaticLinking': true,
       });
     }
-    if (path.endsWith('/requests')) {
+    if (path.endsWith('/requests') || path.endsWith('/requests/automatic')) {
       if (r.method == 'POST') {
         pending = true;
         expect(data['link'], loginLink);
+        pendingAutomatic = data['grant'] == testGrant;
         return response({
           'id': requestId,
-          'code': '123456',
+          if (pendingAutomatic) 'automatic': true else 'code': '123456',
           'expires': 2000000000,
         });
       }
       return response({
         'requests': pending
             ? [
-                {'id': requestId, 'expires': 2000000000},
+                {
+                  'id': requestId,
+                  'expires': 2000000000,
+                  if (pendingAutomatic) 'automatic': true,
+                },
               ]
             : [],
       });
     }
     if (path.endsWith('/claim')) {
-      if (data['code'] != '123456') {
+      if (pendingAutomatic) {
+        expect(data, {'automatic': true, 'userId': 123456});
+      } else if (data['code'] != '123456') {
         return response({'error': 'Code does not match'}, 400);
       }
       return response({'link': loginLink, 'userId': 123456});
@@ -339,6 +365,31 @@ void main() {
       expect(td.qrRequests, 1);
     });
   });
+  test(
+    'password sign-in pairs through a connected device without a code',
+    () async {
+      final client = TelegramClient()
+        ..automaticLinking = true
+        ..profiles['alice'] = {...profile};
+      final fresh = CloudTelegram(connected: false);
+      final connected = CloudTelegram();
+      await withSync(client, fresh, (receiver) async {
+        await receiver.syncTelegramAccount();
+        expect(fresh.qrRequests, 1);
+        expect(client.pendingAutomatic, isTrue);
+        expect(receiver.telegramPairCode, isNull);
+        expect(receiver.telegramSyncStatus, contains('connect automatically'));
+        expect(receiver.account!.data.containsKey('telegramGrant'), isFalse);
+
+        await withSync(client, connected, (approver) async {
+          await approver.syncTelegramAccount();
+          expect(connected.approvals, 1);
+          expect(approver.telegramDeviceRequests, isEmpty);
+          expect(client.pending, isFalse);
+        });
+      });
+    },
+  );
   test('approval checks account identity and code before creating an independent session', () async {
     final client = TelegramClient()
       ..profiles['alice'] = {...profile}
