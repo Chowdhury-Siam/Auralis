@@ -702,7 +702,8 @@ class _PlayerShellState extends State<PlayerShell>
         children: [
           if (!immersiveLyrics &&
               page != _Page.home &&
-              page != _Page.search) ...[
+              page != _Page.search &&
+              page != _Page.library) ...[
             _header(narrow, short: short, page: page),
             SizedBox(height: short ? 10 : 22),
           ],
@@ -1517,9 +1518,6 @@ class _PlayerShellState extends State<PlayerShell>
   }) => LayoutBuilder(
     builder: (context, box) {
       final destination = page ?? this.destination;
-      final inlineCounts =
-          box.maxWidth >= 560 &&
-          MediaQuery.textScalerOf(context).scale(12) <= 16;
       if (destination == _Page.settings) {
         return Row(
           children: [
@@ -1635,62 +1633,12 @@ class _PlayerShellState extends State<PlayerShell>
                           letterSpacing: -1.4,
                         ),
                       ),
-                      if (destination == _Page.library && !inlineCounts) ...[
-                        const SizedBox(height: 3),
-                        _libraryCounts(),
-                      ],
                     ],
                   ),
                 ),
                 if (_mobileNavigation) ...[
                   if (destination != _Page.telegram) _telegramButton(),
                   _settingsButton(),
-                ],
-                if (destination == _Page.library) ...[
-                  if (inlineCounts)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 230),
-                        child: _libraryCounts(),
-                      ),
-                    ),
-                  IconButton(
-                    key: const ValueKey('library-refresh'),
-                    tooltip: 'Refresh library',
-                    onPressed:
-                        !telegram.ready || library.saving || library.loading
-                        ? null
-                        : () {
-                            unawaited(_refreshLibrary());
-                          },
-                    icon: const Icon(Icons.refresh_rounded, size: 20),
-                  ),
-                  AuralisPopupMenu<LibrarySort>(
-                    tooltip: 'Sort Library',
-                    icon: const Icon(Icons.sort_rounded),
-                    itemBuilder: (context) => [
-                      for (final sort in LibrarySort.values)
-                        PopupMenuItem<LibrarySort>(
-                          value: sort,
-                          padding: EdgeInsets.zero,
-                          child: AuralisMenuRow(
-                            title: sort.label,
-                            selected: player.settings.librarySort == sort,
-                          ),
-                        ),
-                    ],
-                    onSelected: (sort) async {
-                      setState(() => player.settings.librarySort = sort);
-                      try {
-                        await player.settings.save();
-                      } catch (_) {
-                        _notice(
-                          'Sort changed for this session. Could not save your preference.',
-                        );
-                      }
-                    },
-                  ),
                 ],
               ],
             );
@@ -2072,20 +2020,19 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Widget _libraryCounts() {
-    final tracks = _collectionTracks();
+  Widget _libraryCounts(int trackCount) {
     final savedCount = collection == 'Favorites'
         ? player.settings.favoriteIds.length
         : collection == 'Recently played'
         ? player.settings.recentIds.length
         : selectedPlaylist != null
         ? player.settings.playlists[selectedPlaylist]?.length ?? 0
-        : tracks.length;
+        : trackCount;
     final trackText = collection == 'Playlists' && selectedPlaylist == null
         ? '${player.settings.playlists.length} playlists'
         : collection == 'All songs'
-        ? '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'}'
-        : '${tracks.length} of $savedCount loaded';
+        ? '$trackCount ${trackCount == 1 ? 'track' : 'tracks'}'
+        : '$trackCount of $savedCount loaded';
     final channels = player.settings.selectedChannels.length;
     final label =
         '$trackText · $channels ${channels == 1 ? 'channel' : 'channels'}';
@@ -2166,195 +2113,405 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
+  static const _libraryCollections = [
+    ('All songs', Icons.library_music_rounded),
+    ('Favorites', Icons.favorite_rounded),
+    ('Playlists', Icons.playlist_play_rounded),
+    ('Recently played', Icons.history_rounded),
+  ];
+
+  void _selectLibraryCollection(String value) => setState(() {
+    collection = value;
+    selectedPlaylist = null;
+    search.clear();
+  });
+
+  Widget _libraryCollectionMenu() {
+    final collectionIcon = _libraryCollections
+        .firstWhere((entry) => entry.$1 == collection)
+        .$2;
+    final background = _colors.primaryContainer;
+    final foreground = _colors.onPrimaryContainer;
+    const outer = Radius.circular(32), inner = Radius.circular(6);
+    return AuralisPopupMenu<int>(
+      key: const ValueKey('library-collection-menu'),
+      tooltip: 'Library collection: $collection',
+      constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
+      onSelected: (index) =>
+          _selectLibraryCollection(_libraryCollections[index].$1),
+      itemBuilder: (_) => [
+        for (final (index, (label, icon)) in _libraryCollections.indexed)
+          PopupMenuItem<int>(
+            value: index,
+            padding: EdgeInsets.zero,
+            child: AuralisMenuRow(
+              title: label,
+              icon: icon,
+              selected: collection == label,
+            ),
+          ),
+      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 52),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: const BorderRadiusDirectional.horizontal(
+                  start: outer,
+                  end: inner,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(collectionIcon, color: foreground, size: 22),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      collection,
+                      key: const ValueKey('page-title'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: 25,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -.6,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Container(
+            width: 48,
+            height: 52,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: const BorderRadiusDirectional.horizontal(
+                start: inner,
+                end: outer,
+              ),
+            ),
+            child: Icon(Icons.expand_more_rounded, color: foreground),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _libraryToolbar(List<Track> visible, {required bool showLabel}) {
+    final VoidCallback? shuffle = visible.isEmpty
+        ? null
+        : () {
+            final queue = List<Track>.of(visible)..shuffle();
+            unawaited(player.play(queue.first, from: queue));
+          };
+    final shuffleStyle = FilledButton.styleFrom(
+      backgroundColor: _colors.tertiaryContainer,
+      foregroundColor: _colors.onTertiaryContainer,
+      minimumSize: const Size(48, 44),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      shape: const StadiumBorder(),
+    );
+    final actionStyle = IconButton.styleFrom(
+      backgroundColor: _colors.secondaryContainer,
+      foregroundColor: _colors.onSecondaryContainer,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    );
+    return Row(
+      children: [
+        Tooltip(
+          message: 'Shuffle collection',
+          child: showLabel
+              ? FilledButton.icon(
+                  style: shuffleStyle,
+                  onPressed: shuffle,
+                  icon: const Icon(Icons.shuffle_rounded, size: 20),
+                  label: const Text('Shuffle'),
+                )
+              : IconButton.filledTonal(
+                  style: IconButton.styleFrom(
+                    backgroundColor: _colors.tertiaryContainer,
+                    foregroundColor: _colors.onTertiaryContainer,
+                  ),
+                  onPressed: shuffle,
+                  icon: const Icon(Icons.shuffle_rounded, size: 20),
+                ),
+        ),
+        const Spacer(),
+        if (_mobileNavigation) ...[
+          IconButton.filledTonal(
+            style: actionStyle,
+            tooltip: 'Telegram',
+            onPressed: _openTelegram,
+            icon: const Icon(Icons.send_rounded, size: 20),
+          ),
+          const SizedBox(width: 4),
+        ],
+        IconButton.filledTonal(
+          key: const ValueKey('library-refresh'),
+          style: actionStyle,
+          tooltip: 'Refresh library',
+          onPressed: !telegram.ready || library.saving || library.loading
+              ? null
+              : () => unawaited(_refreshLibrary()),
+          icon: const Icon(Icons.refresh_rounded, size: 20),
+        ),
+        const SizedBox(width: 4),
+        AuralisPopupMenu<LibrarySort>(
+          tooltip: 'Sort Library',
+          itemBuilder: (_) => [
+            for (final sort in LibrarySort.values)
+              PopupMenuItem<LibrarySort>(
+                value: sort,
+                padding: EdgeInsets.zero,
+                child: AuralisMenuRow(
+                  title: sort.label,
+                  selected: player.settings.librarySort == sort,
+                ),
+              ),
+          ],
+          onSelected: (sort) async {
+            setState(() => player.settings.librarySort = sort);
+            try {
+              await player.settings.save();
+            } catch (_) {
+              _notice(
+                'Sort changed for this session. Could not save your preference.',
+              );
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Ink(
+              width: 48,
+              height: 40,
+              decoration: BoxDecoration(
+                color: _colors.secondaryContainer,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                Icons.sort_rounded,
+                color: _colors.onSecondaryContainer,
+                size: 20,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _library() => LayoutBuilder(
     builder: (context, box) {
       final compact = box.maxHeight < 330;
       final tracks = _collectionTracks();
+      final playlistOverview =
+          collection == 'Playlists' && selectedPlaylist == null;
+      final visible = _visibleTracks(
+        tracks,
+        preserveOrder:
+            collection == 'Recently played' || collection == 'Playlists',
+      );
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _search(
-                  collection == 'Playlists' && selectedPlaylist == null
-                      ? 'Search playlists'
-                      : 'Search your music',
-                ),
-              ),
-              if (player.settings.compactLibrary) ...[
-                const SizedBox(width: 8),
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: math.min(220, box.maxWidth * .42),
-                  ),
-                  child: ChoiceMenu<String>(
-                    key: const ValueKey('library-collection-menu'),
-                    title: 'Library collection',
-                    tonal: true,
-                    value: collection,
-                    values: const [
-                      'All songs',
-                      'Favorites',
-                      'Playlists',
-                      'Recently played',
-                    ],
-                    label: (value) => value,
-                    onSelected: (value) => setState(() {
-                      collection = value;
-                      selectedPlaylist = null;
-                      search.clear();
-                    }),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          if (!player.settings.compactLibrary &&
-              (!compact || selectedPlaylist == null)) ...[
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final label in [
-                    'All songs',
-                    'Favorites',
-                    'Playlists',
-                    'Recently played',
-                  ])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(label),
-                        selected: collection == label,
-                        onSelected: (_) => setState(() {
-                          collection = label;
-                          selectedPlaylist = null;
-                          search.clear();
-                        }),
-                      ),
-                    ),
-                  if (collection == 'Recently played' &&
-                      player.settings.recentIds.isNotEmpty)
-                    TextButton(
-                      onPressed: player.clearRecent,
-                      child: const Text('Clear history'),
-                    ),
-                ],
-              ),
-            ),
-          ],
-          if (player.settings.compactLibrary &&
-              collection == 'Recently played' &&
-              player.settings.recentIds.isNotEmpty)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: player.clearRecent,
-                child: const Text('Clear history'),
-              ),
-            ),
-          if (collection == 'Playlists' && selectedPlaylist != null)
+          if (!_keyboardOpen) ...[
             Row(
               children: [
-                IconButton(
-                  tooltip: 'Back to playlists',
-                  onPressed: () => setState(() {
-                    selectedPlaylist = null;
-                    search.clear();
-                  }),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
                 Expanded(
-                  child: Text(
-                    selectedPlaylist!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: _libraryCollectionMenu(),
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Rename playlist',
-                  onPressed: () async {
-                    final name = await _editPlaylist(
-                      previous: selectedPlaylist,
-                    );
-                    if (mounted && name != null) {
-                      setState(() => selectedPlaylist = name);
-                    }
-                  },
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Delete playlist',
-                  onPressed: () => _deletePlaylist(selectedPlaylist!),
-                  icon: const Icon(Icons.delete_outline_rounded),
-                ),
+                if (_mobileNavigation)
+                  IconButton.filledTonal(
+                    tooltip: 'Settings',
+                    style: IconButton.styleFrom(
+                      backgroundColor: _colors.primaryContainer,
+                      foregroundColor: _colors.onPrimaryContainer,
+                    ),
+                    onPressed: () => _navigate(_Page.settings),
+                    icon: const Icon(Icons.settings_outlined, size: 20),
+                  ),
               ],
             ),
-          if (library.error != null) _banner(library.error!),
-          if (library.loading) ...[
-            const LinearProgressIndicator(minHeight: 2),
+            if (!player.settings.compactLibrary &&
+                (!compact || selectedPlaylist == null)) ...[
+              const SizedBox(height: 4),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final (label, _) in _libraryCollections)
+                      Padding(
+                        padding: const EdgeInsetsDirectional.only(end: 8),
+                        child: ChoiceChip(
+                          label: Text(label),
+                          selected: collection == label,
+                          onSelected: (_) => _selectLibraryCollection(label),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'Loading music from your channels…',
-                style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 11),
+              padding: const EdgeInsets.only(top: 3, bottom: 8),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: _libraryCounts(tracks.length),
               ),
             ),
           ],
-          const SizedBox(height: 8),
           Expanded(
-            child: collection == 'Playlists' && selectedPlaylist == null
-                ? _playlists()
-                : !telegram.ready
-                ? _empty(
-                    Icons.send_rounded,
-                    'Connect Telegram for your music',
-                    'Sign in and choose channels to fill your Library.',
-                    action: FilledButton.tonalIcon(
-                      onPressed: _openTelegram,
-                      icon: const Icon(Icons.send_rounded),
-                      label: const Text('Connect Telegram'),
+            child: Material(
+              color: _colors.surfaceContainerLowest,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(26),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!_keyboardOpen) ...[
+                      _libraryToolbar(
+                        playlistOverview ? const [] : visible,
+                        showLabel:
+                            box.maxWidth >= 330 &&
+                            MediaQuery.textScalerOf(context).scale(14) <= 18,
+                      ),
+                      const SizedBox(height: 5),
+                    ],
+                    _search(
+                      playlistOverview
+                          ? 'Search playlists'
+                          : 'Search your music',
                     ),
-                  )
-                : player.settings.selectedChannels.isEmpty
-                ? _empty(
-                    Icons.campaign_rounded,
-                    'Choose your music channels',
-                    'Select channels in Telegram. Their music appears here together.',
-                    action: FilledButton.tonalIcon(
-                      onPressed: _openTelegram,
-                      icon: const Icon(Icons.playlist_add_rounded),
-                      label: const Text('Choose channels'),
+                    if (collection == 'Recently played' &&
+                        player.settings.recentIds.isNotEmpty)
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton(
+                          onPressed: player.clearRecent,
+                          child: const Text('Clear history'),
+                        ),
+                      ),
+                    if (collection == 'Playlists' && selectedPlaylist != null)
+                      Row(
+                        children: [
+                          IconButton(
+                            tooltip: 'Back to playlists',
+                            onPressed: () => setState(() {
+                              selectedPlaylist = null;
+                              search.clear();
+                            }),
+                            icon: const Icon(Icons.arrow_back_rounded),
+                          ),
+                          Expanded(
+                            child: Text(
+                              selectedPlaylist!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Rename playlist',
+                            onPressed: () async {
+                              final name = await _editPlaylist(
+                                previous: selectedPlaylist,
+                              );
+                              if (mounted && name != null) {
+                                setState(() => selectedPlaylist = name);
+                              }
+                            },
+                            icon: const Icon(Icons.edit_outlined),
+                          ),
+                          IconButton(
+                            tooltip: 'Delete playlist',
+                            onPressed: () => _deletePlaylist(selectedPlaylist!),
+                            icon: const Icon(Icons.delete_outline_rounded),
+                          ),
+                        ],
+                      ),
+                    if (library.error != null) _banner(library.error!),
+                    if (library.loading) ...[
+                      const LinearProgressIndicator(minHeight: 2),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'Loading music from your channels…',
+                          style: TextStyle(
+                            color: _colors.onSurfaceVariant,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: playlistOverview
+                          ? _playlists()
+                          : !telegram.ready
+                          ? _empty(
+                              Icons.send_rounded,
+                              'Connect Telegram for your music',
+                              'Sign in and choose channels to fill your Library.',
+                              action: FilledButton.tonalIcon(
+                                onPressed: _openTelegram,
+                                icon: const Icon(Icons.send_rounded),
+                                label: const Text('Connect Telegram'),
+                              ),
+                            )
+                          : player.settings.selectedChannels.isEmpty
+                          ? _empty(
+                              Icons.campaign_rounded,
+                              'Choose your music channels',
+                              'Select channels in Telegram. Their music appears here together.',
+                              action: FilledButton.tonalIcon(
+                                onPressed: _openTelegram,
+                                icon: const Icon(Icons.playlist_add_rounded),
+                                label: const Text('Choose channels'),
+                              ),
+                            )
+                          : library.tracks.isEmpty
+                          ? _empty(
+                              Icons.library_music_rounded,
+                              library.loading
+                                  ? 'Finding your music'
+                                  : 'No music loaded',
+                              library.loading
+                                  ? 'Tracks appear here as your channels load.'
+                                  : 'Refresh to try again, or choose different channels.',
+                            )
+                          : tracks.isEmpty && collection != 'All songs'
+                          ? _empty(
+                              Icons.music_note_rounded,
+                              'No loaded tracks in this collection',
+                              'Add music using track actions. Saved entries appear when their Telegram channels are selected and loaded.',
+                            )
+                          : _trackList(visible),
                     ),
-                  )
-                : library.tracks.isEmpty
-                ? _empty(
-                    Icons.library_music_rounded,
-                    library.loading ? 'Finding your music' : 'No music loaded',
-                    library.loading
-                        ? 'Tracks appear here as your channels load.'
-                        : 'Refresh to try again, or choose different channels.',
-                  )
-                : tracks.isEmpty && collection != 'All songs'
-                ? _empty(
-                    Icons.music_note_rounded,
-                    'No loaded tracks in this collection',
-                    'Add music using track actions. Saved entries appear when their Telegram channels are selected and loaded.',
-                  )
-                : _trackList(
-                    tracks,
-                    preserveOrder:
-                        collection == 'Recently played' ||
-                        collection == 'Playlists',
-                  ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       );
     },
   );
-  Widget _trackList(List<Track> tracks, {bool preserveOrder = false}) {
+
+  List<Track> _visibleTracks(List<Track> tracks, {bool preserveOrder = false}) {
     final query = search.text.trim().toLowerCase();
     final visible = tracks
         .where(
@@ -2364,6 +2521,10 @@ class _PlayerShellState extends State<PlayerShell>
         )
         .toList();
     if (!preserveOrder) visible.sort(player.settings.librarySort.compare);
+    return visible;
+  }
+
+  Widget _trackList(List<Track> visible) {
     if (visible.isEmpty) {
       return _empty(
         Icons.search_off_rounded,
