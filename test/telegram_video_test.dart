@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:auralis/app.dart';
@@ -25,7 +26,7 @@ Json post(int id, String name, {bool document = false}) {
       media: {
         'file_name': name,
         'duration': 90,
-        'mime_type': 'video/mp4',
+        'mime_type': name.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4',
         media: {'id': id, 'size': 64},
       },
     },
@@ -87,6 +88,123 @@ void main() {
     },
   );
 
+  testWidgets(
+    'open picker discovers a new channel and Library shows history and live videos before search catches up',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final td = FakeTd();
+      final delayedIndex = Completer<void>();
+      td.onRequest = (request) async {
+        if (request['@type'] == 'getChatHistory') {
+          expect(request['chat_id'], channel.id);
+          return {
+            'messages': [
+              post(40, 'New episode', document: true),
+              post(20, 'Music.mp3', document: true),
+            ],
+          };
+        }
+        if (request['@type'] == 'searchChatMessages' &&
+            request['chat_id'] == channel.id) {
+          await delayedIndex.future;
+          throw TdException(400, 'Search index is unavailable');
+        }
+        return null;
+      };
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('auralis-video-channel-'),
+      );
+      final telegram = TelegramService(
+        directory!,
+        MemoryVault(),
+        transport: td,
+      );
+      await tester.runAsync(() async {
+        await telegram.start(
+          apiId: 12345,
+          apiHash: 'abcdef0123456789abcdef0123456789',
+        );
+        td.auth('authorizationStateReady');
+        await telegram.refreshChats();
+      });
+      final player = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy(telegram.request),
+        MemorySettings()..defaultInterface = AppInterface.video,
+      );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        await player.shutdown();
+        await telegram.shutdown();
+        await directory.delete(recursive: true);
+      });
+      await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+      await tester.pumpAndSettle();
+      final navigation = find.byKey(const ValueKey('video-navigation'));
+      await tester.tap(
+        find.descendant(
+          of: navigation,
+          matching: find.byIcon(Icons.video_library_rounded),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Choose video channel'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(ListTile, channel.title), findsNothing);
+      td.events.add({
+        '@type': 'updateNewChat',
+        'chat': {
+          'id': channel.id,
+          'title': channel.title,
+          'type': {'@type': 'chatTypeSupergroup', 'is_channel': true},
+        },
+      });
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, channel.title));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('New episode'), findsOneWidget);
+      expect(find.text('Music'), findsNothing);
+      expect(delayedIndex.isCompleted, isFalse);
+
+      final incoming = post(41, 'Next episode.mp4');
+      td.events.add({
+        '@type': 'updateChatLastMessage',
+        'chat_id': channel.id,
+        'last_message': incoming,
+      });
+      td.events.add({'@type': 'updateNewMessage', 'message': incoming});
+      delayedIndex.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Next episode'), findsOneWidget);
+      expect(find.text('New episode'), findsOneWidget);
+      expect(find.text('Could not load videos'), findsNothing);
+      final distance =
+          tester.getCenter(find.text('New episode')).dy -
+          tester.getCenter(find.text('Next episode')).dy;
+      expect(distance, inExclusiveRange(0, 110));
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold).first).extendBody,
+        isFalse,
+      );
+
+      final refreshes = td.requests
+          .where((r) => r['@type'] == 'loadChats')
+          .length;
+      await tester.tap(find.byTooltip('Refresh videos'));
+      await tester.pumpAndSettle();
+      expect(
+        td.requests.where((r) => r['@type'] == 'loadChats').length,
+        greaterThan(refreshes),
+      );
+      expect(find.text('New episode'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final style in AppNavigationStyle.values) {
     testWidgets('Home hold opens videos in ${style.name} navigation', (
       tester,
@@ -119,81 +237,86 @@ void main() {
     });
   }
 
-  testWidgets('desktop Home opens channel videos and can load older results', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1100, 750);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    addTearDown(tester.view.resetPhysicalSize);
-    final td = FakeTd();
-    final telegram = TelegramService(
-      Directory('unused'),
-      MemoryVault(),
-      transport: td,
-    )..state = 'authorizationStateReady';
-    td.onRequest = (request) async {
-      switch (request['@type']) {
-        case 'getChat':
-          return {
-            'id': channel.id,
-            'title': channel.title,
-            'type': {'@type': 'chatTypeSupergroup', 'is_channel': true},
-          };
-        case 'searchChatMessages':
-          if (request['filter']?['@type'] == 'searchMessagesFilterVideo') {
-            final first = request['from_message_id'] == 0;
+  testWidgets(
+    'desktop Home opens the video library and can load older results',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1100, 750);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final td = FakeTd();
+      final telegram = TelegramService(
+        Directory('unused'),
+        MemoryVault(),
+        transport: td,
+      )..state = 'authorizationStateReady';
+      td.onRequest = (request) async {
+        switch (request['@type']) {
+          case 'getChat':
             return {
-              'messages': [
-                if (first)
-                  post(30, 'New release.mp4')
-                else
-                  post(20, 'Older film.mp4'),
-              ],
-              'next_from_message_id': first ? 25 : 0,
+              'id': channel.id,
+              'title': channel.title,
+              'type': {'@type': 'chatTypeSupergroup', 'is_channel': true},
             };
-          }
-          return {'messages': [], 'next_from_message_id': 0};
-        default:
-          return null;
-      }
-    };
-    final player = PlayerController(
-      FakeAudio(),
-      TelegramStreamProxy(telegram.request),
-      MemorySettings()..selectedChannels = [channel],
-    );
-    addTearDown(() async {
-      await tester.pumpWidget(const SizedBox());
-      await player.shutdown();
-      await telegram.shutdown();
-    });
-    await tester.pumpWidget(
-      MaterialApp(
-        home: PlayerShell(player: player, telegram: telegram),
-      ),
-    );
-    await tester.pumpAndSettle();
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byTooltip('Home')),
-    );
-    await tester.pump(const Duration(seconds: 1));
-    await gesture.up();
-    await tester.pumpAndSettle();
-    expect(find.text('Auralis Video'), findsOneWidget);
-    await tester.tap(find.text('Cinema').last);
-    await tester.pumpAndSettle();
-    expect(find.text('New release'), findsOneWidget);
+          case 'searchChatMessages':
+            if (request['filter']?['@type'] == 'searchMessagesFilterVideo') {
+              final first = request['from_message_id'] == 0;
+              return {
+                'messages': [
+                  if (first)
+                    post(30, 'New release.mp4')
+                  else
+                    post(20, 'Older film.mp4'),
+                ],
+                'next_from_message_id': first ? 25 : 0,
+              };
+            }
+            return {'messages': [], 'next_from_message_id': 0};
+          default:
+            return null;
+        }
+      };
+      final player = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy(telegram.request),
+        MemorySettings()..selectedChannels = [channel],
+      );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        await player.shutdown();
+        await telegram.shutdown();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlayerShell(player: player, telegram: telegram),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byTooltip('Home')),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.text('Auralis Video'), findsOneWidget);
+      await tester.tap(find.text('Browse videos'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Choose video channel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, channel.title));
+      await tester.pumpAndSettle();
+      expect(find.text('New release'), findsOneWidget);
 
-    await tester.tap(find.text('Load older videos'));
-    await tester.pumpAndSettle();
-    expect(find.text('New release'), findsOneWidget);
-    expect(find.text('Older film'), findsOneWidget);
-    await tester.tap(find.byTooltip('Switch to Music'));
-    await tester.pumpAndSettle();
-    expect(find.text('Auralis Video'), findsNothing);
-    expect(find.text('Your Mix'), findsOneWidget);
-  });
+      await tester.tap(find.text('Load older videos'));
+      await tester.pumpAndSettle();
+      expect(find.text('New release'), findsOneWidget);
+      expect(find.text('Older film'), findsOneWidget);
+      await tester.tap(find.byTooltip('Switch to Music'));
+      await tester.pumpAndSettle();
+      expect(find.text('Auralis Video'), findsNothing);
+      expect(find.text('Your Mix'), findsOneWidget);
+    },
+  );
   test(
     'startup interface settings preserve old installs and round-trip',
     () async {
