@@ -87,7 +87,7 @@ To test on a connected x86_64 emulator, build TDLib and QuickJS for x86_64 and u
 
 ### CI SDK command-line setup
 
-The Android workflow explicitly runs the commit-pinned android-actions/setup-android action after Java setup and before invoking sdkmanager. This provisions the command-line tools, accepts SDK licenses and adds sdkmanager to PATH; the following step installs the pinned Android 36/build tools/NDK packages. The apt-get output in the reported failure was successful; exit 127 came from the missing sdkmanager command. That SDK setup correction did not require an app version bump; see pubspec.yaml for the current app version. Commit the complete corrected source and run the Android APK build workflow on that commit; rerunning the previous commit uses its old workflow.
+The Android workflow uses the commit-pinned Android SDK setup action for the command-line tools and licenses. The SDK supplies the pinned Android platform, build tools, NDK, CMake, and Ninja. On a TDLib cache miss, the workflow uses the runner's gperf or builds checksum-verified GNU gperf 3.1. The job uses the development headers already installed on the Ubuntu 24.04 runner. Commit the corrected workflow and run the Android APK build against that commit.
 
 
 ### Flutter 3.47.1 / Gradle compatibility
