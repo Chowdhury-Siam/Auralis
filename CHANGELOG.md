@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.149
+
+- Accept either startup order for concurrent artwork requests in CI.
+
 ## 0.1.148
 
 - Synchronize video shutdown assertions with decoder and stream disposal in CI.
