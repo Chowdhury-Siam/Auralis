@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'app_popups.dart';
+import 'app_theme.dart';
+
 import 'external_links.dart';
 import 'updater.dart';
 import 'release_notes.dart';
@@ -297,12 +300,10 @@ class _UpdateBannerState extends State<UpdateBanner> {
             key: const ValueKey('update-card'),
             color: colors.surfaceContainerHigh,
             surfaceTintColor: Colors.transparent,
-            elevation: 4,
-            shadowColor: Colors.black.withValues(alpha: .30),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(22),
-              side: BorderSide(color: colors.outlineVariant),
-            ),
+            elevation: 6,
+            shadowColor: colors.shadow.withValues(alpha: .34),
+            shape: auralisSurfaceShape(colors),
+            clipBehavior: Clip.antiAlias,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
               child: LayoutBuilder(
@@ -356,25 +357,14 @@ Future<void> confirmUpdate(BuildContext context, AppUpdater updater) async {
     await updater.install();
     return;
   }
-  final accepted = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Install update and restart?'),
-      content: Text(
+  final accepted = await confirmAuralisAction(
+    context,
+    title: 'Install update and restart?',
+    message:
         'The ${updater.available?.version} installer passed its SHA-256 checksum check. '
         'Auralis will close and open the Windows installer. Complete its steps to install and reopen Auralis. Your settings and Telegram session stay on this device.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialogContext, false),
-          child: const Text('Later'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(dialogContext, true),
-          child: Text(updater.installLabel),
-        ),
-      ],
-    ),
+    cancelLabel: 'Later',
+    confirmLabel: updater.installLabel,
   );
   if (accepted == true) await updater.install();
 }
