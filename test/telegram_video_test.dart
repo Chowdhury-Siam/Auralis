@@ -312,9 +312,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('New release'), findsOneWidget);
 
-      await tester.tap(find.text('Load older videos'));
-      await tester.pumpAndSettle();
-      expect(find.text('New release'), findsOneWidget);
+      expect(find.text('Load older videos'), findsNothing);
+      expect(
+        td.requests.where(
+          (r) =>
+              r['@type'] == 'searchChatMessages' && r['from_message_id'] == 25,
+        ),
+        hasLength(1),
+      );
       expect(find.text('Older film'), findsOneWidget);
       await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
