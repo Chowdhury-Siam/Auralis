@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.139
+
+- Give Music Library a split collection selector and a themed toolbar for shuffle, refresh, and sorting. Keep search in its own field and retain the optional collection tabs.
+
 ## 0.1.138
 
 - Match Video Search to Music’s browse layout with themed channel tiles and a list toggle. Highlight the active Library channel in both views.
