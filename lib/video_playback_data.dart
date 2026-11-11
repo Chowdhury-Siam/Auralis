@@ -4,27 +4,70 @@ import 'dart:math' as math;
 import 'package:crypto/crypto.dart';
 
 import 'models.dart';
-import 'video_web_streams.dart';
 
 class VideoSource {
   const VideoSource.telegram(Track track)
     : telegram = track,
       uri = null,
-      name = null,
-      webOptions = null;
-  const VideoSource.file(this.uri, this.name, {this.webOptions})
+      name = null;
+  const VideoSource.file(this.uri, this.name)
     : telegram = null;
 
   final Track? telegram;
   final Uri? uri;
   final String? name;
-  final VideoWebOptions? webOptions;
 
   String get title => telegram?.title ?? name ?? 'Video';
   Duration get duration => telegram?.duration ?? Duration.zero;
+  bool get canPlay => telegram != null ||
+      (uri != null && _isLocalVideoUri(uri!, title));
   String get id => telegram != null
       ? 'telegram:${telegram!.id}'
       : 'file:${sha256.convert(utf8.encode(uri.toString()))}';
+
+  Map<String, Object?> toJson() => {
+    'title': title,
+    if (telegram case final Track track) 'message': track.id,
+    if (uri case final Uri uri) 'uri': uri.toString(),
+  };
+
+  static VideoSource? restore(Object? raw) {
+    if (raw is! Map || raw['title'] is! String) return null;
+    final title = raw['title'] as String;
+    if (raw['message'] case final String id
+        when RegExp(r'^-?\d+:\d+$').hasMatch(id)) {
+      return VideoSource.telegram(
+        Track(id: id, title: title, artist: '', source: 'Telegram'),
+      );
+    }
+    if (raw['uri'] case final String value when value.length <= 8192) {
+      final uri = Uri.tryParse(value);
+      if (uri != null && _isLocalVideoUri(uri, title)) {
+        return VideoSource.file(uri, title);
+      }
+    }
+    return null;
+  }
+
+  static bool _isLocalVideoUri(Uri uri, String title) {
+    final playlist = RegExp(r'\.m3u8?$', caseSensitive: false);
+    if (uri.userInfo.isNotEmpty ||
+        playlist.hasMatch(uri.path) ||
+        playlist.hasMatch(title)) {
+      return false;
+    }
+    return switch (uri.scheme) {
+      'file' => uri.path.isNotEmpty && (uri.host.isEmpty || uri.host == 'localhost'),
+      'content' => uri.host.isNotEmpty,
+      _ => false,
+    };
+  }
+}
+
+class VideoHistoryEntry {
+  const VideoHistoryEntry(this.source, this.playedAt);
+  final VideoSource source;
+  final DateTime playedAt;
 }
 
 class VideoBookmark {
@@ -33,50 +76,6 @@ class VideoBookmark {
   final String name;
 }
 
-/// HLS manifests represent one stream. M3U lists represent a queue.
-List<VideoSource> parseVideoPlaylist(String text, {Uri? base}) {
-  final lines = const LineSplitter().convert(text);
-  if (lines.any((line) => line.trimLeft().startsWith('#EXT-X-'))) {
-    throw const FormatException('Open an HLS manifest as a video stream.');
-  }
-  final result = <VideoSource>[];
-  final seen = <Uri>{};
-  String? title;
-  for (final raw in lines) {
-    final line = raw.replaceFirst('\ufeff', '').trim();
-    if (line.startsWith('#EXTINF:')) {
-      final comma = line.indexOf(',');
-      title = comma < 0 ? null : line.substring(comma + 1).trim();
-    } else if (line.isNotEmpty && !line.startsWith('#')) {
-      var uri = Uri.tryParse(line);
-      if (base?.scheme == 'file' &&
-          (RegExp(r'^[A-Za-z]:[\\/]').hasMatch(line) ||
-              line.startsWith(r'\\'))) {
-        uri = Uri.file(line, windows: true);
-      } else if (uri?.hasScheme == false && base != null) {
-        uri = base.resolveUri(uri!);
-      }
-      if (uri != null &&
-          (uri.scheme == 'file' && base?.scheme == 'file' ||
-              {'http', 'https'}.contains(uri.scheme) &&
-                  uri.host.isNotEmpty &&
-                  uri.userInfo.isEmpty) &&
-          seen.add(uri)) {
-        result.add(
-          VideoSource.file(
-            uri,
-            title?.isNotEmpty == true
-                ? title
-                : uri.pathSegments.lastOrNull ?? uri.host,
-          ),
-        );
-        if (result.length == 1000) break;
-      }
-      title = null;
-    }
-  }
-  return result;
-}
 
 class VideoSkipSegment {
   const VideoSkipSegment(this.start, this.end, this.label);
@@ -85,6 +84,29 @@ class VideoSkipSegment {
   final String label;
 
   bool contains(Duration position) => position >= start && position < end;
+}
+
+List<VideoSkipSegment> videoChapterSegments(
+  List<VideoBookmark> chapters, Duration duration,
+) {
+  final names = RegExp(
+    r'^(?:intro(?:duction)?|opening(?: credits)?|recap|previously on|outro|end(?:ing)? credits|credits|next episode preview)(?:$|[\s:–-])',
+    caseSensitive: false,
+  );
+  return [
+    for (var i = 0; i < chapters.length; i++)
+      if (names.hasMatch(chapters[i].name.trim()) &&
+          chapters[i].position >= Duration.zero &&
+          chapters[i].position < duration &&
+          (i + 1 < chapters.length ? chapters[i + 1].position : duration) >
+              chapters[i].position)
+        VideoSkipSegment(
+          chapters[i].position,
+          i + 1 < chapters.length && chapters[i + 1].position < duration
+              ? chapters[i + 1].position : duration,
+          chapters[i].name,
+        ),
+  ];
 }
 
 class VideoCommand {
@@ -208,9 +230,11 @@ enum VideoHdrProfile {
 }
 
 class VideoPlaybackData {
-  final folders = <String, String>{};
-  String? lastLocalVideo;
-  VideoWebOptions webOptions = const VideoWebOptions();
+  final playlists = <String, List<VideoSource>>{};
+  final history = <String, VideoHistoryEntry>{};
+  final subtitleStyle = <String, String>{};
+  bool snapshotSubtitles = true;
+  String ambientMode = 'off';
   final positions = <String, Duration>{};
   final bookmarks = <String, List<VideoBookmark>>{};
   final skipSegments = <String, List<VideoSkipSegment>>{};
@@ -252,6 +276,57 @@ class VideoPlaybackData {
 
   static const _limit = 300;
 
+  static bool isSubtitleStyle(String name, String value) {
+    final range = switch (name) {
+      'sub-scale' || 'secondary-sub-scale' => (.4, 2.5),
+      'sub-pos' || 'secondary-sub-pos' => (0.0, 100.0),
+      'sub-border-size' => (0.0, 10.0),
+      'sub-shadow-offset' => (0.0, 8.0),
+      _ => null,
+    };
+    if (range != null) {
+      final number = double.tryParse(value);
+      return number != null && number >= range.$1 && number <= range.$2;
+    }
+    return switch (name) {
+      'sub-ass-override' => const {'yes', 'force'}.contains(value),
+      'sub-bold' || 'sub-italic' => const {'yes', 'no'}.contains(value),
+      _ => false,
+    };
+  }
+
+  void recordVideo(VideoSource source, {DateTime? at}) {
+    if (!source.canPlay) return;
+    history.remove(source.id);
+    history[source.id] = VideoHistoryEntry(source, at ?? DateTime.now());
+    if (history.length > _limit) history.remove(history.keys.first);
+  }
+
+  void removeHistory(String id) {
+    history.remove(id);
+    positions.remove(id);
+  }
+
+  void clearHistory() {
+    history.clear();
+    positions.clear();
+  }
+
+  void putPlaylist(String name, Iterable<VideoSource> items) {
+    name = name.trim();
+    if (name.isEmpty || name.length > 80 ||
+        (playlists.length >= 100 && !playlists.containsKey(name))) {
+      throw const FormatException('Use a name of 1–80 characters and up to 100 playlists.');
+    }
+    final entries = <String, VideoSource>{};
+    for (final item in items) {
+      if (!item.canPlay) continue;
+      entries.putIfAbsent(item.id, () => item);
+      if (entries.length == 1000) break;
+    }
+    playlists[name] = entries.values.toList();
+  }
+
   void remember(String id, Duration position, Duration duration) {
     positions.remove(id);
     if (position >= const Duration(seconds: 3) &&
@@ -272,6 +347,10 @@ class VideoPlaybackData {
   }
 
   void clearTelegram() {
+    history.removeWhere((_, entry) => entry.source.telegram != null);
+    for (final list in playlists.values) {
+      list.removeWhere((source) => source.telegram != null);
+    }
     positions.removeWhere((id, _) => id.startsWith('telegram:'));
     bookmarks.removeWhere((id, _) => id.startsWith('telegram:'));
     skipSegments.removeWhere((id, _) => id.startsWith('telegram:'));
@@ -310,20 +389,41 @@ class VideoPlaybackData {
   factory VideoPlaybackData.fromJson(Object? json) {
     final data = VideoPlaybackData();
     if (json is! Map) return data;
-    final seek = json['seekSeconds'];
-    if (seek is int) data.seekSeconds = math.max(1, math.min(60, seek));
-    if (json['folders'] case final Map folders) {
-      for (final entry in folders.entries.take(30)) {
-        if (entry.key case final String uri when uri.length <= 4096) {
-          if (entry.value case final String label when label.length <= 512) {
-            data.folders[uri] = label;
+    data.snapshotSubtitles = json['snapshotSubtitles'] != false;
+    if (json['ambientMode'] case final String mode when mode.length <= 32) {
+      data.ambientMode = mode;
+    }
+    if (json['subtitleStyle'] case final Map style) {
+      for (final entry in style.entries.take(16)) {
+        if (entry.key is String && entry.value is String &&
+            isSubtitleStyle(entry.key as String, entry.value as String)) {
+          data.subtitleStyle[entry.key as String] = entry.value as String;
+        }
+      }
+    }
+    if (json['playlists'] case final Map lists) {
+      for (final entry in lists.entries.take(100)) {
+        if (entry.key case final String name
+            when name.trim().isNotEmpty && name.length <= 80) {
+          if (entry.value case final List items) {
+            data.putPlaylist(name, items.take(1000).map(VideoSource.restore)
+                .whereType<VideoSource>());
           }
         }
       }
     }
-    if (json['lastLocalVideo'] case final String id when id.length <= 100) {
-      data.lastLocalVideo = id;
+    if (json['history'] case final List entries) {
+      for (final entry in entries.whereType<Map>().take(_limit)) {
+        final source = VideoSource.restore(entry['source']);
+        final at = entry['at'];
+        if (source != null && at is String) {
+          final date = DateTime.tryParse(at);
+          if (date != null) data.recordVideo(source, at: date);
+        }
+      }
     }
+    final seek = json['seekSeconds'];
+    if (seek is int) data.seekSeconds = math.max(1, math.min(60, seek));
     data
       ..gestures = json['gestures'] != false
       ..strictDoubleTap = json['strictDoubleTap'] == true
@@ -333,7 +433,6 @@ class VideoPlaybackData {
       ..autoPip = json['autoPip'] == true
       ..volumeBoost = json['volumeBoost'] == true
       ..autoSkip = json['autoSkip'] == true
-      ..webOptions = VideoWebOptions.fromJson(json['webOptions'])
       ..gpuNext = json['gpuNext'] == true
       ..matchRefreshRate = json['matchRefreshRate'] == true
       ..hdrProfile = VideoHdrProfile.values.firstWhere(
@@ -431,9 +530,17 @@ class VideoPlaybackData {
       value is String && value.length <= 32768 ? value : '';
 
   Map<String, dynamic> toJson() => {
-    'folders': folders,
-    'lastLocalVideo': lastLocalVideo,
-    'webOptions': webOptions.toJson(),
+    'ambientMode': ambientMode,
+    'snapshotSubtitles': snapshotSubtitles,
+    'subtitleStyle': subtitleStyle,
+    'playlists': {
+      for (final entry in playlists.entries)
+        entry.key: [for (final item in entry.value) item.toJson()],
+    },
+    'history': [
+      for (final entry in history.values)
+        {'source': entry.source.toJson(), 'at': entry.playedAt.toIso8601String()},
+    ],
     'seekSeconds': seekSeconds,
     'gestures': gestures,
     'strictDoubleTap': strictDoubleTap,
