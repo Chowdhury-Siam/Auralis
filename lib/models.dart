@@ -63,6 +63,10 @@ class Track {
   // Video sources use the same byte-range proxy as music. They never enter
   // the music library or the listening history.
   static Track? fromVideoMessage(Map<String, dynamic> message, String source) {
+    if (message['sending_state'] != null ||
+        message['scheduling_state'] != null) {
+      return null;
+    }
     final content = message['content'];
     if (content is! Map<String, dynamic>) return null;
     final key = switch (content['@type']) {
@@ -73,7 +77,9 @@ class Track {
     final media = content[key];
     if (key == null || media is! Map<String, dynamic>) return null;
     final name = (media['file_name'] as String? ?? '').trim();
+    final mime = media['mime_type'] as String? ?? 'application/octet-stream';
     if (key == 'document' &&
+        !mime.toLowerCase().startsWith('video/') &&
         !_videoExtensions.contains(p.extension(name).toLowerCase())) {
       return null;
     }
@@ -100,7 +106,7 @@ class Track {
       size: file['size'] as int,
       duration: Duration(seconds: media['duration'] as int? ?? 0),
       date: message['date'] as int? ?? 0,
-      mime: media['mime_type'] as String? ?? 'application/octet-stream',
+      mime: mime,
       coverPreview: decodePreview(media['minithumbnail']?['data']),
       coverFileId: media['thumbnail']?['file']?['id'] as int?,
     );
