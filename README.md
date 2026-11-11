@@ -248,7 +248,7 @@ API credentials and the TDLib database key are encrypted with **Windows DPAPI** 
 
 Current audio uses temporary playback buffering. Extracted artwork and lyrics remain in the device cache; artwork is kept automatically. Logout does not promise secure erasure of cached media or backups.
 
-Artwork uses Telegram or embedded metadata. Automatic lookup contacts the selected lyric sources during playback if saved/embedded lyrics are unavailable; only the displayed song title, artist and duration are sent, with no Telegram credentials or message/file IDs. Automatic in-app translation sends original lyric text to the selected translators. Android media controls receive the current cover and use the monochrome Auralis logo. Optional multi-device sync shares collection/listening metadata and can include your linked Telegram account. Its application connection values are encrypted in your private Worker; new devices require Telegram device approval. Telegram auth keys, session databases and music stay on their own devices. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
+Artwork uses Telegram or embedded metadata. Automatic lookup contacts the selected lyric sources during playback if saved/embedded lyrics are unavailable; only the displayed song title, artist and duration are sent, with no Telegram credentials or message/file IDs. Automatic in-app translation sends original lyric text to the selected translators. Android media controls receive the current cover and use the monochrome Auralis logo. Optional multi-device sync shares collection/listening metadata and can include your linked Telegram account. Its application connection values are encrypted in your private Worker; A password sign-in on a new device can connect the linked Telegram account automatically while Auralis is open on an already connected device. Telegram auth keys, session databases and music stay on their own devices. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
 
 ---
 
@@ -316,7 +316,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.135+136**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive's source version is **0.1.137+138**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
