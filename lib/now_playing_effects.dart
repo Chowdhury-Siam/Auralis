@@ -172,16 +172,35 @@ class _ArtworkPagerState extends State<ArtworkPager> {
     keepPage: false,
   );
   int? _swipedPage;
+  bool _jumping = false;
 
   @override
   void didUpdateWidget(ArtworkPager oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.index == oldWidget.index || widget.index == _swipedPage) return;
+    if (widget.index == oldWidget.index) return;
+    if (widget.index == _swipedPage) {
+      _swipedPage = null;
+      return;
+    }
     // Transport controls and automatic track changes also update the cover.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_pages.hasClients) return;
+      _jumping = true;
       _pages.jumpToPage(widget.index);
+      _jumping = false;
     });
+  }
+
+  bool _scroll(ScrollNotification notification) {
+    if (_jumping || notification.depth != 0) return false;
+    if (notification is ScrollEndNotification && widget.onSelected != null) {
+      final index = _pages.page?.round();
+      if (index != null && index != widget.index && index < widget.itemCount) {
+        _swipedPage = index;
+        widget.onSelected?.call(index);
+      }
+    }
+    return false;
   }
 
   @override
@@ -191,21 +210,20 @@ class _ArtworkPagerState extends State<ArtworkPager> {
   }
 
   @override
-  Widget build(BuildContext context) => PageView.builder(
-    key: const ValueKey('artwork-pages'),
-    controller: _pages,
-    itemCount: widget.itemCount,
-    itemBuilder: widget.itemBuilder,
-    physics: widget.onSelected == null
-        ? const NeverScrollableScrollPhysics()
-        : const ClampingScrollPhysics(),
-    onPageChanged: (index) {
-      _swipedPage = index;
-      if (index != widget.index) {
-        widget.onSelected?.call(index);
-      }
-    },
-  );
+  Widget build(BuildContext context) =>
+      NotificationListener<ScrollNotification>(
+        onNotification: _scroll,
+        child: PageView.builder(
+          key: const ValueKey('artwork-pages'),
+          controller: _pages,
+          itemCount: widget.itemCount,
+          itemBuilder: widget.itemBuilder,
+          allowImplicitScrolling: true,
+          physics: widget.onSelected == null
+              ? const NeverScrollableScrollPhysics()
+              : const ClampingScrollPhysics(),
+        ),
+      );
 }
 
 /// A decorative music pulse; only its small canvas repaints, never the backdrop.
@@ -415,25 +433,29 @@ class _NowPlayingBackdropState extends State<NowPlayingBackdrop> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              ImageFiltered(
-                imageFilter: ui.ImageFilter.blur(
-                  sigmaX: 48,
-                  sigmaY: 48,
-                  tileMode: ui.TileMode.clamp,
+              AnimatedSwitcher(
+                duration: Duration(
+                  milliseconds:
+                      widget.reducedMotion ||
+                          MediaQuery.disableAnimationsOf(context)
+                      ? 0
+                      : 420,
                 ),
-                child: Transform.scale(
-                  scale: 1.16,
-                  child: AnimatedSwitcher(
-                    duration: Duration(
-                      milliseconds:
-                          widget.reducedMotion ||
-                              MediaQuery.disableAnimationsOf(context)
-                          ? 0
-                          : 420,
+                // Fade already-blurred covers so the filter does not need to
+                // process the composite again on every crossfade frame.
+                child: RepaintBoundary(
+                  key: ValueKey(widget.identity),
+                  child: ImageFiltered(
+                    imageFilter: ui.ImageFilter.blur(
+                      sigmaX: 48,
+                      sigmaY: 48,
+                      tileMode: ui.TileMode.clamp,
                     ),
                     child: SizedBox.expand(
-                      key: ValueKey(widget.identity),
-                      child: widget.artwork,
+                      child: Transform.scale(
+                        scale: 1.16,
+                        child: widget.artwork,
+                      ),
                     ),
                   ),
                 ),
