@@ -74,7 +74,7 @@ void _message(BuildContext context, String text) =>
 
 Future<bool> _confirm(BuildContext context, String title, String message) async =>
     await confirmAuralisAction(
-      context: context,
+      context,
       title: title,
       message: message,
       confirmLabel: 'Remove',
@@ -142,8 +142,14 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
   }
 
   Future<void> _removePlaylist(String name) async {
-    if (!await _confirm(context, 'Remove “$name”?', 'The video files will stay on your device.') ||
-        !mounted) return;
+    if (!await _confirm(
+          context,
+          'Remove “$name”?',
+          'The video files will stay on your device.',
+        ) ||
+        !mounted) {
+      return;
+    }
     await _change(() {
       _data.playlists.remove(name);
       if (_selected == name) _selected = null;
@@ -341,8 +347,14 @@ class _VideoSnapshotsPageState extends State<VideoSnapshotsPage> {
   );
 
   Future<void> _delete(File file) async {
-    if (!await _confirm(context, 'Delete this snapshot?',
-        'The saved frame will be removed from the snapshot library.') || !mounted) return;
+    if (!await _confirm(
+          context,
+          'Delete this snapshot?',
+          'The saved frame will be removed from the snapshot library.',
+        ) ||
+        !mounted) {
+      return;
+    }
     try {
       await file.delete();
       if (mounted) setState(() => _files = _snapshots());
