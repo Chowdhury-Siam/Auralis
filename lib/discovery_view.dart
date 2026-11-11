@@ -425,14 +425,9 @@ extension _DiscoveryPages on _PlayerShellState {
                 MediaQuery.textScalerOf(context).scale(20) > 30
                     ? 'Browse'
                     : 'Browse your library',
-                action: IconButton.filledTonal(
-                  tooltip: _browseAsList ? 'Show grid' : 'Show list',
+                action: discoveryLayoutButton(
+                  list: _browseAsList,
                   onPressed: _toggleBrowseLayout,
-                  icon: Icon(
-                    _browseAsList
-                        ? Icons.grid_view_rounded
-                        : Icons.view_list_rounded,
-                  ),
                 ),
               ),
               Wrap(
@@ -511,19 +506,7 @@ extension _DiscoveryPages on _PlayerShellState {
                   : GridView.builder(
                       key: const PageStorageKey('browse-grid'),
                       padding: EdgeInsets.only(bottom: _dockPadding),
-                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 220,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        mainAxisExtent:
-                            108 +
-                            math.max(
-                                  0,
-                                  MediaQuery.textScalerOf(context).scale(18) -
-                                      18,
-                                ) *
-                                3,
-                      ),
+                      gridDelegate: discoveryGridDelegate(context),
                       itemCount: entries.length,
                       itemBuilder: (context, index) =>
                           _browseTile(entries[index], index),
