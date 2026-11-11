@@ -323,7 +323,9 @@ void main() {
         expect(repository.cached(song)!.plain, '今日は晴れです。\n明日も歩きます。');
         expect(find.text('今日は晴れです。'), findsOneWidget);
         await chooseTranslation(tester, 'Translate with DeepL');
-        await tester.tap(find.byType(DropdownButtonFormField<String>));
+        await tester.tap(
+          find.byTooltip('Translation direction: Japanese → English'),
+        );
         await tester.pumpAndSettle();
         await tester.tap(find.text('English → Japanese').last);
         await tester.pumpAndSettle();
