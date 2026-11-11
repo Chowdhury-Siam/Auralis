@@ -550,7 +550,7 @@ void main() {
         expect(audio.position, greaterThan(beforeKey));
         expect(
           tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
-          'Library',
+          'All songs',
         );
         await tester.tap(find.byKey(const ValueKey('open-current-track')));
         await tester.pumpAndSettle();
