@@ -58,7 +58,7 @@ void main() {
     // cancels ColorScheme's image-load timeout synchronously.
     await tester.runAsync(
       () => ColorScheme.fromImageProvider(
-        provider: MemoryImage(cover),
+        provider: ResizeImage(MemoryImage(cover), width: 96),
         brightness: Brightness.dark,
       ),
     );
@@ -116,7 +116,7 @@ void main() {
       final bytes = File('test/fixtures/cover.png').readAsBytesSync();
       await tester.runAsync(
         () => ColorScheme.fromImageProvider(
-          provider: MemoryImage(bytes),
+          provider: ResizeImage(MemoryImage(bytes), width: 96),
           brightness: Brightness.dark,
         ),
       );
@@ -160,7 +160,8 @@ void main() {
       expect(telegram.requested, List.generate(11, (i) => '$i'));
       player.index = 1;
       player.notifyListeners();
-      await finish(22);
+      await finish(12);
+      expect(telegram.requested.last, '11');
       expect(telegram.warmed, contains('11'));
       expect(telegram.warmed, isNot(contains('12')));
       final dock = find.byKey(const ValueKey('player-bar'));
@@ -176,8 +177,8 @@ void main() {
       player.index = 15;
       settings.repeatMode = PlaybackRepeat.all;
       player.refreshSettings();
-      await finish(11);
-      expect(telegram.requested, ['15', ...List.generate(10, (i) => '$i')]);
+      await finish(2);
+      expect(telegram.requested, ['15', '14']);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
@@ -355,6 +356,7 @@ void main() {
     await gesture.moveBy(const Offset(-120, 0));
     await tester.pump();
     final next = tester.getRect(find.byKey(const ValueKey('test-cover-1')));
+    expect(selected, 0, reason: 'Playback changes after the cover settles');
     expect(next.size, viewport.size);
     expect(
       next.intersect(viewport).width,
@@ -1294,7 +1296,10 @@ void main() {
         final scale = find.byKey(const ValueKey('artwork-hover-scale'));
         final tilt = find.byKey(const ValueKey('artwork-hover-tilt'));
         final frame = find
-            .ancestor(of: artwork, matching: find.byType(DecoratedBox))
+            .descendant(
+              of: find.byKey(const ValueKey(('artwork-page', 'first', 0))),
+              matching: find.byType(DecoratedBox),
+            )
             .first;
         final originalFrame = tester.getRect(frame);
         final originalTilt = tester.widget<Transform>(tilt).transform.clone();
