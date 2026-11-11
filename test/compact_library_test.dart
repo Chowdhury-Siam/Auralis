@@ -21,7 +21,6 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetViewInsets);
     final settings = MemorySettings()
-      ..compactLibrary = true
       ..navigationStyle = AppNavigationStyle.expressive
       ..recentIds = ['saved'];
     final player = PlayerController(
@@ -50,6 +49,7 @@ void main() {
       expect(tester.takeException(), isNull);
       final menu = find.byKey(const ValueKey('library-collection-menu'));
       final search = find.byType(TextField);
+      expect(find.byType(ChoiceChip), findsNothing);
       expect(search, findsOneWidget);
       expect(find.descendant(of: search, matching: menu), findsNothing);
       expect(
