@@ -37,8 +37,8 @@ void main() {
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = const Size(390, 844);
-        tester.view.padding = const FakeViewPadding(top: 32, bottom: 24);
-        tester.view.viewPadding = const FakeViewPadding(top: 32, bottom: 24);
+        tester.view.padding = const FakeViewPadding(top: 32, bottom: 34);
+        tester.view.viewPadding = const FakeViewPadding(top: 32, bottom: 34);
         addTearDown(tester.view.resetDevicePixelRatio);
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetPadding);
@@ -49,7 +49,14 @@ void main() {
             ? {
                 'messages':
                     request['filter']?['@type'] == 'searchMessagesFilterVideo'
-                    ? [post(30, 'Full movie.mp4')]
+                    ? [
+                        post(30, 'Full movie.mp4'),
+                        for (var index = 1; index <= 18; index++)
+                          post(
+                            100 + index,
+                            'Video ${index.toString().padLeft(2, '0')}.mp4',
+                          ),
+                      ]
                     : [],
                 'next_from_message_id': 0,
               }
@@ -80,15 +87,22 @@ void main() {
         final navigation = find.byKey(const ValueKey('video-navigation'));
         expect(tester.widget<AppNavigation>(navigation).style, style);
         expect(tester.widget<AppNavigation>(navigation).radius, 18);
-        if (style == AppNavigationStyle.fullWidth) {
-          expect(find.byType(NavigationBar), findsOneWidget);
-        } else {
-          expect(find.byType(NavigationBar), findsNothing);
-          expect(
-            tester.widget<Scaffold>(find.byType(Scaffold).first).extendBody,
-            isTrue,
-          );
+        final floating = style != AppNavigationStyle.fullWidth;
+        expect(
+          find.byType(NavigationBar),
+          floating ? findsNothing : findsOneWidget,
+        );
+        final scaffold = find.byType(Scaffold).first;
+        expect(tester.widget<Scaffold>(scaffold).extendBody, floating);
+
+        void expectVideoViewport() {
+          final viewport = find.byType(CustomScrollView);
+          final bottom = tester.getRect(viewport).bottom;
+          final navTop = tester.getRect(navigation).top;
+          expect(tester.widget<Scaffold>(scaffold).extendBody, floating);
+          expect(bottom, floating ? tester.view.physicalSize.height : navTop);
         }
+
         await tester.tap(
           find.descendant(
             of: navigation,
@@ -121,6 +135,7 @@ void main() {
         expect(settings.videoChannelId, channel.id);
         final videoRow = find.byKey(ValueKey('${channel.id}:30'));
         final searchRowSize = tester.getSize(videoRow);
+        expectVideoViewport();
 
         await tester.tap(
           find.descendant(
@@ -132,6 +147,21 @@ void main() {
         expect(find.byTooltip('Choose video channel'), findsNothing);
         expect(find.text('Full movie'), findsOneWidget);
         expect(tester.getSize(videoRow), searchRowSize);
+        expectVideoViewport();
+        final list = find.descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        );
+        final lastVideo = find.byKey(ValueKey('${channel.id}:118'));
+        await tester.scrollUntilVisible(lastVideo, 420, scrollable: list);
+        final position = tester.state<ScrollableState>(list).position;
+        position.jumpTo(position.maxScrollExtent);
+        await tester.pumpAndSettle();
+        expect(lastVideo.hitTestable(), findsOneWidget);
+        expect(
+          tester.getRect(lastVideo).bottom,
+          lessThan(tester.getRect(navigation).top),
+        );
         expect(
           td.requests
               .where((r) => r['@type'] == 'searchChatMessages')
