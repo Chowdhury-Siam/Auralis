@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:auralis/app_theme.dart';
+import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/storage.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
@@ -38,6 +39,7 @@ class _NativeVideo implements mpv.NativePlayer {
   set state(mpv.PlayerState value) => _core.state = value;
 
   final opened = <mpv.Media>[];
+  Future<void> Function()? beforeDispose;
   final properties = <String, String>{
     'chapter-list/count': '2',
     'chapter-list/0/time': '0',
@@ -93,7 +95,10 @@ class _NativeVideo implements mpv.NativePlayer {
   }
 
   @override
-  Future<void> dispose({bool synchronized = true}) => _core.dispose();
+  Future<void> dispose({bool synchronized = true}) async {
+    await beforeDispose?.call();
+    await _core.dispose();
+  }
 
   @override
   Future<String> getProperty(
@@ -112,6 +117,18 @@ class _NativeVideo implements mpv.NativePlayer {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _RecordingVideoProxy extends TelegramStreamProxy {
+  _RecordingVideoProxy() : super((_) async => {});
+
+  VoidCallback? onStop;
+
+  @override
+  Future<void> stop() {
+    onStop?.call();
+    return super.stop();
+  }
 }
 
 class _TestSurface extends PlatformVideoController {
@@ -144,22 +161,52 @@ class _VideoController implements VideoController {
 }
 
 void main() {
-  test('M3U imports one source per video and keeps HLS as one stream', () {
-    final videos = parseVideoPlaylist(
-      '#EXTM3U\n#EXTINF:-1,First episode\nEpisode 1.mkv\n'
-      'https://example.com/episode-2.mp4\nhttps://example.com/episode-2.mp4\n'
-      'javascript:ignored\nhttps://name:pass@example.com/private\n',
-      base: Uri.file('/video/list.m3u'),
-    );
-    expect(videos.map((video) => video.title), [
-      'First episode',
-      'episode-2.mp4',
-    ]);
-    expect(videos.first.uri, Uri.file('/video/Episode 1.mkv'));
-    expect(
-      () => parseVideoPlaylist('#EXTM3U\n#EXT-X-TARGETDURATION:10\npart.ts'),
-      throwsFormatException,
-    );
+
+  test('playlist and history restore Telegram and local videos only', () {
+    final data = VideoPlaybackData();
+    final local = VideoSource.file(Uri.parse('content://provider/video/1'), 'Local');
+    final other = VideoSource.file(Uri.file('/movies/other.mp4'), 'Other');
+    final telegram = VideoSource.telegram(const Track(
+      id: '-1001:42', title: 'Telegram video', artist: '', source: 'Channel',
+      fileId: 7,
+    ));
+    data.putPlaylist('Queue', [telegram, local, other, local]);
+    data.recordVideo(local, at: DateTime.utc(2026, 10, 1));
+    data.recordVideo(telegram, at: DateTime.utc(2026, 10, 2));
+    data.recordVideo(local, at: DateTime.utc(2026, 10, 3));
+    data.remember(local.id, const Duration(seconds: 8), const Duration(minutes: 1));
+    data.subtitleStyle['sub-pos'] = '75';
+    data.subtitleStyle['sub-scale'] = 'Infinity';
+    final json = data.toJson();
+    final oldWeb = {'title': 'Website', 'uri': 'https://youtu.be/test', 'web': {'height': 720}};
+    (json['playlists']['Queue'] as List).add(oldWeb);
+    (json['history'] as List).add({'source': oldWeb, 'at': '2026-10-04T00:00:00Z'});
+    final restored = VideoPlaybackData.fromJson(json);
+    final list = restored.playlists['Queue']!;
+    expect(list.map((source) => source.id), [telegram.id, local.id, other.id]);
+    expect(list.first.telegram!.fileId, isNull);
+    expect(VideoSource.restore({'title': 'Playlist', 'uri': 'file:///tmp/play.m3u8'}), isNull);
+    expect(restored.history.keys, [telegram.id, local.id]);
+    expect(restored.history[local.id]!.playedAt, DateTime.utc(2026, 10, 3));
+    expect(restored.subtitleStyle, {'sub-pos': '75'});
+    restored.clearTelegram();
+    expect(restored.playlists['Queue']!.map((source) => source.id), [local.id, other.id]);
+    expect(restored.history.keys, [local.id]);
+    restored.removeHistory(local.id);
+    expect(restored.positions, isEmpty);
+    expect(restored.playlists['Queue']!.length, 2);
+  });
+
+
+  test('skip chapter import respects boundaries and known labels', () {
+    final segments = videoChapterSegments(const [
+      VideoBookmark(Duration.zero, 'Intro'),
+      VideoBookmark(Duration(seconds: 15), 'Story'),
+      VideoBookmark(Duration(seconds: 90), 'End Credits'),
+    ], const Duration(seconds: 100));
+    expect(segments.map((segment) => segment.label), ['Intro', 'End Credits']);
+    expect(segments.first.end, const Duration(seconds: 15));
+    expect(segments.last.end, const Duration(seconds: 100));
   });
 
   test('video progress and custom controls persist locally and clear on Telegram sign-out', () async {
@@ -242,7 +289,7 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final native = _NativeVideo();
       final surface = _VideoController(native);
-      final proxy = TelegramStreamProxy((_) async => {});
+      final proxy = _RecordingVideoProxy();
       final music = PlayerController(
         FakeAudio(),
         TelegramStreamProxy((_) async => {}),
@@ -380,7 +427,24 @@ void main() {
       expect(dock, findsNothing);
       expect(native.opened, hasLength(2));
       expect(tester.takeException(), isNull);
+
+      final events = <String>[];
+      final decoderReleased = Completer<void>();
+      native.beforeDispose = () async {
+        events.add('decoder');
+        await decoderReleased.future;
+      };
+      proxy.onStop = () => events.add('stream');
+      final release = music.releaseVideo!();
+      await tester.pumpAndSettle();
+      expect(find.byType(Video), findsNothing);
+      expect(events, ['decoder']);
       await tester.pumpWidget(const SizedBox.shrink());
+      decoderReleased.complete();
+      await release;
+      expect(events, ['decoder', 'stream']);
+      expect(music.releaseVideo, isNull);
+      expect(tester.takeException(), isNull);
     },
   );
 }
