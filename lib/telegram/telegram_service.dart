@@ -20,6 +20,8 @@ import 'td_transport.dart';
 import 'embedded_cover.dart';
 import 'phone_login.dart';
 
+typedef _Cover = ({Uint8List bytes, int shortEdge});
+
 class TelegramService extends ChangeNotifier {
   TelegramService(
     this.directory,
@@ -32,19 +34,27 @@ class TelegramService extends ChangeNotifier {
        _transport = transport ?? (createTransport ?? TdTransport.new)();
   final Directory directory;
   final SecretVault vault;
+  String? _mediaCacheKey;
+  MediaCache _mediaCache = MediaCache(null);
+
   MediaCache get mediaCache {
     final key = _secrets['databaseKey'];
-    return MediaCache(
-      key is String && key.isNotEmpty
-          ? Directory(
-              p.join(
-                directory.path,
-                'media-cache',
-                sha256.convert(utf8.encode(key)).toString(),
+    final databaseKey = key is String && key.isNotEmpty ? key : null;
+    if (databaseKey != _mediaCacheKey) {
+      _mediaCacheKey = databaseKey;
+      _mediaCache = MediaCache(
+        databaseKey == null
+            ? null
+            : Directory(
+                p.join(
+                  directory.path,
+                  'media-cache',
+                  sha256.convert(utf8.encode(databaseKey)).toString(),
+                ),
               ),
-            )
-          : null,
-    );
+      );
+    }
+    return _mediaCache;
   }
 
   final int applicationApiId;
@@ -102,6 +112,7 @@ class TelegramService extends ChangeNotifier {
   final Set<int> _coverSuccess = {}, _coverDirty = {};
   final Map<int, int> _coverPending = {};
   int _coverJobs = 0;
+  Completer<void>? _coverSlot;
   bool Function(int) isStreaming = (_) => false;
   bool Function() hasActiveStream = () => false;
   Future<void>? _audioSweep;
@@ -191,6 +202,7 @@ class TelegramService extends ChangeNotifier {
 
   void clearImageCache() {
     ++_imageGeneration;
+    _wakeCoverJobs();
     _images.clear();
     _covers.clear();
     _coverBytes.clear();
@@ -198,8 +210,13 @@ class TelegramService extends ChangeNotifier {
     _coverDirty.clear();
   }
 
-  Future<bool> _validCover(Uint8List bytes) async {
-    if (!isCoverImage(bytes)) return false;
+  void _wakeCoverJobs() {
+    _coverSlot?.complete();
+    _coverSlot = null;
+  }
+
+  Future<_Cover?> _inspectCover(Uint8List bytes) async {
+    if (!isCoverImage(bytes)) return null;
     try {
       final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
       try {
@@ -208,15 +225,18 @@ class TelegramService extends ChangeNotifier {
           if (descriptor.width <= 0 ||
               descriptor.height <= 0 ||
               descriptor.width * descriptor.height > 16777216) {
-            return false;
+            return null;
           }
           final codec = await descriptor.instantiateCodec(
-            targetWidth: min(640, descriptor.width),
+            targetWidth: min(96, descriptor.width),
           );
           try {
             final frame = await codec.getNextFrame();
             frame.image.dispose();
-            return true;
+            return (
+              bytes: bytes,
+              shortEdge: min(descriptor.width, descriptor.height),
+            );
           } finally {
             codec.dispose();
           }
@@ -227,56 +247,90 @@ class TelegramService extends ChangeNotifier {
         buffer.dispose();
       }
     } catch (_) {
-      return false;
+      return null;
     }
   }
 
-  Future<Uint8List?> _savedCover(Track track, MediaCache disk) async {
+  bool _sharpEnough(Track track, _Cover cover) =>
+      cover.shortEdge >= (track.coverFileId == null ? 256 : 384);
+
+  Future<({_Cover cover, bool checked})?> _savedCover(
+    Track track,
+    MediaCache disk,
+  ) async {
     final bytes = await disk.read(track, 'art', maxCoverBytes);
-    return bytes != null && await _validCover(bytes) ? bytes : null;
+    final cover = bytes == null ? null : await _inspectCover(bytes);
+    if (cover == null) return null;
+    final checked =
+        _sharpEnough(track, cover) ||
+        (track.size <= 0 && track.coverFileId == null) ||
+        listEquals(
+          await disk.read(track, 'art-checked', 32),
+          sha256.convert(cover.bytes).bytes,
+        );
+    return (cover: cover, checked: checked);
   }
 
   Future<bool> hasCachedCover(Track track) async {
     if (!ready) return false;
     final disk = mediaCache, generation = _imageGeneration;
-    final saved = await _savedCover(track, disk);
+    final bytes = await disk.read(track, 'art', maxCoverBytes);
+    final cover = bytes == null ? null : await _inspectCover(bytes);
     return ready &&
         generation == _imageGeneration &&
         mediaCache.directory?.path == disk.directory?.path &&
-        saved != null;
+        cover != null;
+  }
+
+  void _notifyCover(int generation) {
+    scheduleMicrotask(() {
+      if (ready && generation == _imageGeneration) notifyListeners();
+    });
   }
 
   Future<Uint8List?> savedCover(
     Track track, {
     required bool Function() active,
-  }) async {
-    if (!ready || !active() || track.fileId == null) return null;
+  }) async => (await _warmSavedCover(track, active))?.bytes;
+
+  Future<({Uint8List bytes, bool checked})?> _warmSavedCover(
+    Track track,
+    bool Function() active,
+  ) async {
+    final id = track.fileId;
+    if (!ready || !active() || id == null) return null;
     final disk = mediaCache, generation = _imageGeneration;
-    bool current() =>
-        ready &&
-        active() &&
-        generation == _imageGeneration &&
-        mediaCache.directory?.path == disk.directory?.path;
-    // Explicit warming must see disk entries added after a prior clean miss.
     final saved = await _savedCover(track, disk);
-    if (saved != null && current()) {
-      if (track.fileId case final id?) {
-        final changed = !_coverSuccess.contains(id);
+    if (saved == null ||
+        !ready ||
+        !active() ||
+        generation != _imageGeneration ||
+        mediaCache.directory?.path != disk.directory?.path) {
+      return null;
+    }
+
+    // A visible request may already be upgrading this disk entry.
+    final previous = _coverBytes[id];
+    final bytes = listEquals(previous, saved.cover.bytes)
+        ? previous!
+        : saved.cover.bytes;
+    final pending = _coverPending[id] == generation;
+    if (!_coverSuccess.contains(id)) {
+      if (!pending) {
         _covers.remove(id);
-        _trimCovers();
-        _covers[id] = Future.value(saved);
-        _coverBytes[id] = saved;
-        _coverSuccess.add(id);
-        _coverDirty.remove(id);
-        if (changed) {
-          scheduleMicrotask(() {
-            if (current()) notifyListeners();
-          });
+        if (saved.checked) {
+          _trimCovers();
+          _covers[id] = Future.value(bytes);
+          _coverSuccess.add(id);
+          _coverDirty.remove(id);
         }
       }
-      return saved;
+      if (_covers.containsKey(id) && previous == null) {
+        _coverBytes[id] = bytes;
+        _notifyCover(generation);
+      }
     }
-    return null;
+    return (bytes: bytes, checked: saved.checked);
   }
 
   Future<Uint8List?> cacheCover(
@@ -290,11 +344,11 @@ class TelegramService extends ChangeNotifier {
         active() &&
         generation == _imageGeneration &&
         mediaCache.directory?.path == disk.directory?.path;
-    final saved = await savedCover(track, active: active);
-    if (saved != null) return saved;
+    final saved = await _warmSavedCover(track, active);
     if (!current()) return null;
+    if (saved?.checked ?? false) return saved!.bytes;
     if (track.fileId case final id?) {
-      if (!_coverSuccess.contains(id) && !_coverPending.containsKey(id)) {
+      if (!_coverSuccess.contains(id) && _coverPending[id] != generation) {
         _covers.remove(id);
         // A visible row may have cached a transient thumbnail failure before
         // the explicit refresh reached this track.
@@ -315,7 +369,7 @@ class TelegramService extends ChangeNotifier {
     // Aliases of one Telegram file need their own key, but never rewrite saved art.
     if (current() &&
         bytes != null &&
-        await _savedCover(track, disk) == null &&
+        !listEquals(await disk.read(track, 'art', maxCoverBytes), bytes) &&
         current()) {
       await disk.write(track, 'art', bytes);
     }
@@ -344,78 +398,120 @@ class TelegramService extends ChangeNotifier {
 
   Future<Uint8List?> _loadCover(Track track, int generation) async {
     final id = track.fileId!;
-    Uint8List? result;
+    _Cover? result;
+    var checked = false;
     var metadataJob = false;
     bool active() => ready && generation == _imageGeneration;
     final disk = mediaCache;
     try {
       final saved = await _savedCover(track, disk);
-      if (saved != null && active()) {
-        result = saved;
-        return result;
+      if (!active()) return null;
+      result = saved?.cover;
+      if (result != null) {
+        checked = saved!.checked;
+        if (checked) return result.bytes;
+        if (_covers.containsKey(id) && _coverBytes[id] == null) {
+          _coverBytes[id] = result.bytes;
+          _notifyCover(generation);
+        }
       }
-      // Saved covers are independent of the bounded network/metadata work.
+      // Saved covers can display immediately while quality checks share
+      // the same bounded Telegram metadata workers.
       while (_coverJobs >= 2 && active()) {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await (_coverSlot ??= Completer<void>()).future;
       }
       if (!active()) return null;
       ++_coverJobs;
       metadataJob = true;
-      if (track.coverFileId case final thumbnail?) {
+
+      Future<_Cover?> thumbnail() async {
+        final fileId = track.coverFileId;
+        if (fileId == null) return null;
         try {
-          final path = await image(thumbnail);
-          if (path != null && active()) {
-            final file = File(path);
-            if (await file.length() <= maxCoverBytes) {
-              final bytes = await file.readAsBytes();
-              if (await _validCover(bytes)) result = bytes;
-            }
-          }
+          final path = await image(fileId);
+          if (path == null || !active()) return null;
+          final file = File(path);
+          if (await file.length() > maxCoverBytes) return null;
+          return await _inspectCover(await file.readAsBytes());
         } catch (_) {
-          /* Try the original file's embedded picture. */
+          return null;
         }
       }
-      if (result == null && track.size > 0 && active()) {
+
+      final thumb = await thumbnail();
+      if (thumb != null &&
+          (result == null || thumb.shortEdge > result.shortEdge)) {
+        result = thumb;
+      }
+      var embeddedChecked = track.size <= 0;
+      if (track.size > 0 &&
+          active() &&
+          (result == null || !_sharpEnough(track, result))) {
         try {
-          final embedded = await _withAudioMetadata(
+          var complete = true;
+          final bytes = await _withAudioMetadata(
             id,
             generation,
-            (source) => readEmbeddedCover(source, track.size),
+            (source) => readEmbeddedCover((offset, count) async {
+              try {
+                final bytes = await source(offset, count);
+                if (bytes == null) complete = false;
+                return bytes;
+              } catch (_) {
+                complete = false;
+                rethrow;
+              }
+            }, track.size),
           );
-          if (embedded != null && await _validCover(embedded)) {
+          embeddedChecked = complete;
+          final embedded = bytes == null ? null : await _inspectCover(bytes);
+          if (embedded != null &&
+              (result == null || embedded.shortEdge > result.shortEdge)) {
             result = embedded;
           }
         } catch (_) {
-          /* Use the Telegram preview even when the audio tag is unreadable. */
+          // Keep the usable thumbnail if Telegram cannot read the audio tag.
         }
       }
-      if (result == null &&
-          track.coverPreview != null &&
-          await _validCover(track.coverPreview!)) {
-        result = track.coverPreview;
+      final preview = track.coverPreview;
+      if (result == null && preview != null) {
+        result = await _inspectCover(preview);
       }
-      if (active() && result != null) {
-        await disk.write(track, 'art', result);
+      if (!active()) return null;
+      if (result != null) {
+        checked =
+            _sharpEnough(track, result) ||
+            (embeddedChecked && (track.coverFileId == null || thumb != null));
+        if (!identical(result.bytes, saved?.cover.bytes)) {
+          await disk.write(track, 'art', result.bytes);
+        }
+        if (active() && checked && !_sharpEnough(track, result)) {
+          await disk.write(
+            track,
+            'art-checked',
+            sha256.convert(result.bytes).bytes,
+          );
+        }
       }
-      return active() ? result : null;
+      return active() ? result?.bytes : null;
     } catch (_) {
-      return null;
+      return active() ? result?.bytes : null;
     } finally {
-      if (metadataJob) --_coverJobs;
+      if (metadataJob) {
+        --_coverJobs;
+        _wakeCoverJobs();
+      }
       if (_coverPending[id] == generation) _coverPending.remove(id);
       if (active()) {
         if (result != null && _covers.containsKey(id)) {
-          _coverBytes[id] = result;
-          _coverSuccess.add(id);
-          _coverDirty.remove(id);
-        } else if (_coverDirty.remove(id) && isStreaming(id)) {
+          _coverBytes[id] = result.bytes;
+          if (checked) _coverSuccess.add(id);
+        }
+        if (_coverDirty.remove(id) && !checked && isStreaming(id)) {
           _covers.remove(id);
         }
+        _notifyCover(generation);
       }
-      // A size-less cover can finish synchronously while Artwork is building.
-      scheduleMicrotask(() {
-        if (ready) notifyListeners();
-      });
     }
   }
 
@@ -760,7 +856,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.132',
+          'application_version': '0.1.133',
         }));
       } on TdException catch (e) {
         throw FormatException(
