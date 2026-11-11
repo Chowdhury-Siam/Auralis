@@ -35,7 +35,7 @@ Json post(int id, String name, {bool document = false}) {
 
 void main() {
   test(
-    'video browsing and message links use TDLib and exclude other files',
+    'video browsing and saved video references use TDLib and exclude other files',
     () async {
       final td = FakeTd();
       final telegram = TelegramService(
@@ -54,8 +54,10 @@ void main() {
             'next_from_message_id': 10,
           };
         }
-        if (request['@type'] == 'getMessageLinkInfo') {
-          return {'message': post(12, 'Trailer.mp4')};
+        if (request['@type'] == 'getMessage') {
+          expect(request['chat_id'], channel.id);
+          expect(request['message_id'], 12);
+          return post(12, 'Trailer.mp4');
         }
         return null;
       };
@@ -75,15 +77,13 @@ void main() {
       expect(td.requests.single['from_message_id'], 40);
       expect(td.requests.single['query'], 'clip');
 
-      final video = await telegram.videoLink('https://t.me/c/123/12');
+      final video = await telegram.restoreVideo(Track(
+        id: '${channel.id}:12', title: 'Trailer', artist: '', source: channel.title,
+      ));
       expect(video!.fileId, 12);
       expect(video.title, 'Trailer');
       expect(video.duration, const Duration(seconds: 90));
       expect(Track.fromMessage(post(12, 'Trailer.mp4'), channel.title), isNull);
-      await expectLater(
-        telegram.videoLink('https://t.me.example.org/chan/12'),
-        throwsFormatException,
-      );
       expect(td.requests, hasLength(2));
     },
   );
@@ -165,7 +165,9 @@ void main() {
       await tester.tap(find.text(channel.title));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('New episode'), findsOneWidget);
+      expect(find.text('Browse channels'), findsOneWidget);
+      expect(find.text('Selected in Library'), findsOneWidget);
+      expect(find.text('New episode'), findsNothing);
       expect(find.text('Music'), findsNothing);
       expect(delayedIndex.isCompleted, isFalse);
 
@@ -178,7 +180,7 @@ void main() {
       td.events.add({'@type': 'updateNewMessage', 'message': incoming});
       delayedIndex.complete();
       await tester.pumpAndSettle();
-      expect(find.text('Next episode'), findsOneWidget);
+      expect(find.text('Next episode'), findsNothing);
       await tester.tap(
         find.descendant(
           of: navigation,
@@ -188,6 +190,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Next episode'), findsOneWidget);
       expect(find.text('New episode'), findsOneWidget);
+      final episode = find.byKey(ValueKey('${channel.id}:40'));
+      final watch = find.descendant(
+        of: episode, matching: find.byTooltip('Mark as watched'),
+      );
+      await tester.tap(watch);
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: episode, matching: find.textContaining('Watched')), findsOneWidget);
       expect(find.text('Could not load videos'), findsNothing);
       final distance =
           tester.getCenter(find.text('Next episode')).dy -
