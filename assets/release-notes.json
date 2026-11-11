@@ -1,6 +1,12 @@
 {
-  "current": "0.1.138",
+  "current": "0.1.139",
   "releases": [
+    {
+      "version": "0.1.139",
+      "changes": [
+        "Give Music Library a split collection selector and a themed toolbar for shuffle, refresh, and sorting. Keep search in its own field and retain the optional collection tabs."
+      ]
+    },
     {
       "version": "0.1.138",
       "changes": [
