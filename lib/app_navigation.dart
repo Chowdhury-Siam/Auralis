@@ -206,16 +206,6 @@ class AppearancePreferences extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Compact library navigation'),
-        subtitle: const Text('Choose collections from a single menu.'),
-        value: settings.compactLibrary,
-        onChanged: (v) {
-          settings.compactLibrary = v;
-          onChanged();
-        },
-      ),
       PreferenceChoice<AppNavigationStyle>(
         title: 'App navigation',
         value: settings.navigationStyle,
