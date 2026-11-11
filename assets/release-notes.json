@@ -1,6 +1,12 @@
 {
-  "current": "0.1.125",
+  "current": "0.1.126",
   "releases": [
+    {
+      "version": "0.1.126",
+      "changes": [
+        "Add Music and Video interfaces with separate navigation, a startup choice in setup and General settings, and Home hold to switch between modes."
+      ]
+    },
     {
       "version": "0.1.125",
       "changes": [
