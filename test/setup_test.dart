@@ -489,6 +489,8 @@ void main() {
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = size;
+        tester.platformDispatcher.textScaleFactorTestValue = textScale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
         final settings = MemorySettings();
@@ -504,33 +506,14 @@ void main() {
         );
         addTearDown(player.shutdown);
         addTearDown(telegram.shutdown);
-        final colors = ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.dark,
-        );
         final boundary = GlobalKey();
         await tester.pumpWidget(
           RepaintBoundary(
             key: boundary,
-            child: MaterialApp(
-              debugShowCheckedModeBanner: false,
-              theme: ThemeData(
-                colorScheme: colors,
-                platform: platform,
-                fontFamily: 'Segoe UI',
-              ),
-              builder: (context, child) => MediaQuery(
-                data: MediaQuery.of(context)
-                    .copyWith(textScaler: TextScaler.linear(textScale)),
-                child: child!,
-              ),
-              home: SetupView(
-                player: player,
-                telegram: telegram,
-                version: '0.1.104',
-                connectBuilder: (_) => const SizedBox(),
-                onFinished: () {},
-              ),
+            child: AuralisApp(
+              player: player,
+              telegram: telegram,
+              showSetup: true,
             ),
           ),
         );
@@ -552,10 +535,13 @@ void main() {
               .ancestor(of: items.first, matching: find.byType(Material))
               .first;
           final menu = tester.widget<Material>(material);
-          expect(menu.color, colors.surfaceContainerHigh);
+          final theme = Theme.of(tester.element(items.first));
+          expect(menu.color, theme.colorScheme.surfaceContainerHigh);
+          expect(menu.color, theme.dialogTheme.backgroundColor);
+          expect(menu.shape, theme.dialogTheme.shape);
           expect(
             (menu.shape! as RoundedRectangleBorder).borderRadius,
-            BorderRadius.circular(20),
+            BorderRadius.circular(24),
           );
           expect(menu.clipBehavior, Clip.antiAlias);
           expect(find.byIcon(Icons.check_rounded), findsOneWidget);
@@ -629,6 +615,7 @@ void main() {
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
       },
+      variant: TargetPlatformVariant({platform}),
     );
   }
 }
