@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'app_popups.dart';
+
 import 'app_navigation.dart';
 import 'data_files.dart';
 import 'models.dart';
@@ -168,7 +170,7 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
   }
 
   Future<void> _backup() => _run(() async {
-    await showDialog<void>(
+    await showAuralisDialog<void>(
       context: context,
       builder: (_) => StatsDataDialog(
         player: widget.player,
