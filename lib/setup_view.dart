@@ -23,7 +23,6 @@ enum _Step {
   backup,
   lyrics,
   artwork,
-  library,
   navigation,
   playback,
   battery,
@@ -57,7 +56,6 @@ class SetupView extends StatefulWidget {
 class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
   int _index = 0;
   int _previewDestination = 0;
-  String _previewCollection = 'All songs';
   bool _busy = false, _checked = false, _restored = false;
   bool? _notifications, _battery;
   String? _error, _permissionError;
@@ -360,11 +358,6 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
       'Auralis caches covers automatically. Use Library Refresh to save available artwork and lyrics ahead of time.',
       Icons.album_rounded,
     ),
-    _Step.library => (
-      'Library layout',
-      'Choose how you move between songs, favorites, playlists and recent music.',
-      Icons.library_music_rounded,
-    ),
     _Step.navigation => (
       'Make it feel yours',
       'Try a compact navigation style. Wider windows use a sidebar.',
@@ -512,61 +505,6 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
     _Step.artwork => const Text(
       'Streamed music stays in temporary storage.',
       textAlign: TextAlign.center,
-    ),
-    _Step.library => Column(
-      children: [
-        Card.filled(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Library',
-                  style: Theme.of(context).textTheme.headlineMedium
-                      ?.copyWith(color: colors.primary),
-                ),
-                const SizedBox(height: 16),
-                prefs.compactLibrary
-                    ? ChoiceMenu<String>(
-                        title: 'Preview collection',
-                        value: _previewCollection,
-                        values: const ['All songs', 'Favorites', 'Playlists'],
-                        label: (value) => value,
-                        enabled: !_busy,
-                        onSelected: (value) =>
-                            setState(() => _previewCollection = value),
-                      )
-                    : Wrap(
-                        spacing: 8,
-                        children: [
-                          for (final label in [
-                            'All songs',
-                            'Favorites',
-                            'Playlists',
-                          ])
-                            ChoiceChip(
-                              label: Text(label),
-                              selected: _previewCollection == label,
-                              onSelected: _busy
-                                  ? null
-                                  : (_) => setState(
-                                      () => _previewCollection = label,
-                                    ),
-                            ),
-                        ],
-                      ),
-              ],
-            ),
-          ),
-        ),
-        _switch(
-          'Compact mode',
-          'Use a single collection menu.',
-          prefs.compactLibrary,
-          (v) => _change(() => prefs.compactLibrary = v),
-        ),
-      ],
     ),
     _Step.navigation => Column(
       children: [
