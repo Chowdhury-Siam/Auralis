@@ -1,6 +1,12 @@
 {
-  "current": "0.1.155",
+  "current": "0.1.156",
   "releases": [
+    {
+      "version": "0.1.156",
+      "changes": [
+        "Verify the Telegram backup switch by toggling it on phone and desktop layouts."
+      ]
+    },
     {
       "version": "0.1.155",
       "changes": [
