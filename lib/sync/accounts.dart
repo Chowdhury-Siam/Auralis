@@ -184,7 +184,7 @@ extension AccountSync on SyncController {
     'recentIds': <String>[],
     'selectedChannels': <dynamic>[],
     'listening': {'tracks': <String, dynamic>{}, 'days': <String, dynamic>{}},
-    'librarySort': 'newest',
+    'librarySort': AppSettings.defaultLibrarySort.name,
     'repeatMode': 'off',
   };
   void _applyLibrary(Map<String, dynamic> source) {
