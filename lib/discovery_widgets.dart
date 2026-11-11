@@ -151,89 +151,144 @@ class DiscoveryHero extends StatelessWidget {
   }
 }
 
+SliverGridDelegateWithMaxCrossAxisExtent discoveryGridDelegate(
+  BuildContext context,
+) => SliverGridDelegateWithMaxCrossAxisExtent(
+  maxCrossAxisExtent: 220,
+  mainAxisSpacing: 10,
+  crossAxisSpacing: 10,
+  mainAxisExtent:
+      108 + math.max(0, MediaQuery.textScalerOf(context).scale(18) - 18) * 3,
+);
+
+Widget discoveryLayoutButton({
+  required bool list,
+  required VoidCallback onPressed,
+}) => IconButton.filledTonal(
+  tooltip: list ? 'Show grid' : 'Show list',
+  onPressed: onPressed,
+  icon: Icon(list ? Icons.grid_view_rounded : Icons.view_list_rounded),
+);
+
 class DiscoveryTile extends StatelessWidget {
   const DiscoveryTile({
     super.key,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.icon,
     required this.index,
     required this.onTap,
     this.list = false,
+    this.selected = false,
   });
-  final String title, subtitle;
+  final String title;
+  final String? subtitle;
   final IconData icon;
   final int index;
   final VoidCallback onTap;
-  final bool list;
+  final bool list, selected;
   @override
   Widget build(BuildContext context) {
     final (background, foreground) = discoveryColors(
       index,
       Theme.of(context).colorScheme,
     );
-    final open = onTap;
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(list ? 16 : 22),
-      clipBehavior: Clip.antiAlias,
-      child: list
-          ? ListTile(
-              leading: Icon(icon, color: foreground),
-              title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle: Text(subtitle),
-              textColor: foreground,
-              trailing: Icon(Icons.chevron_right_rounded, color: foreground),
-              onTap: open,
-            )
-          : InkWell(
-              onTap: open,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Positioned(
-                    right: -10,
-                    bottom: -20,
-                    child: ExcludeSemantics(
-                      child: Transform.rotate(
-                        angle: -.18,
-                        child: Icon(
-                          icon,
-                          size: 98,
-                          color: foreground.withValues(alpha: .2),
+    final detail = subtitle;
+    return Semantics(
+      selected: selected ? true : null,
+      child: Material(
+        color: background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(list ? 16 : 22),
+          side: selected ? BorderSide(color: foreground) : BorderSide.none,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: list
+            ? ListTile(
+                leading: Icon(icon, color: foreground),
+                title: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: detail == null ? null : Text(detail),
+                textColor: foreground,
+                trailing: Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.chevron_right_rounded,
+                  color: foreground,
+                ),
+                onTap: onTap,
+              )
+            : InkWell(
+                onTap: onTap,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned(
+                      right: -10,
+                      bottom: -20,
+                      child: ExcludeSemantics(
+                        child: Transform.rotate(
+                          angle: -.18,
+                          child: Icon(
+                            icon,
+                            size: 98,
+                            color: foreground.withValues(alpha: .2),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: foreground,
-                              fontSize: 17,
-                              height: 1.12,
-                              fontWeight: FontWeight.w800,
+                    if (selected)
+                      PositionedDirectional(
+                        top: 10,
+                        end: 10,
+                        child: Icon(
+                          Icons.check_circle_rounded,
+                          size: 18,
+                          color: foreground,
+                        ),
+                      ),
+                    Padding(
+                      padding: EdgeInsetsDirectional.fromSTEB(
+                        12,
+                        12,
+                        selected ? 34 : 12,
+                        12,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: foreground,
+                                fontSize: 17,
+                                height: 1.12,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          subtitle,
-                          style: TextStyle(color: foreground, fontSize: 12),
-                        ),
-                      ],
+                          if (detail != null) ...[
+                            const SizedBox(height: 5),
+                            Text(
+                              detail,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: foreground, fontSize: 12),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 }
