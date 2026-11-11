@@ -254,7 +254,7 @@ void main() {
   }
 
   testWidgets(
-    'desktop Home opens channel Search and Library keeps loaded videos',
+    'desktop channel selection stays in Search and Library keeps loaded videos',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1100, 750);
@@ -319,9 +319,22 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text(channel.title));
       await tester.pumpAndSettle();
-      expect(find.text('New release'), findsOneWidget);
+      expect(find.text('Browse channels'), findsOneWidget);
+      expect(find.text('Selected in Library'), findsOneWidget);
+      expect(find.text('New release'), findsNothing);
 
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
+      expect(find.text('New release'), findsOneWidget);
+      expect(find.text('Older film'), findsOneWidget);
       expect(find.text('Load older videos'), findsNothing);
+
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      expect(find.text('Selected in Library'), findsOneWidget);
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
+      expect(find.text('Older film'), findsOneWidget);
       expect(
         td.requests.where(
           (r) =>
@@ -329,10 +342,6 @@ void main() {
         ),
         hasLength(1),
       );
-      expect(find.text('Older film'), findsOneWidget);
-      await tester.tap(find.byTooltip('Library'));
-      await tester.pumpAndSettle();
-      expect(find.text('Older film'), findsOneWidget);
       await tester.tap(find.byTooltip('Switch to Music'));
       await tester.pumpAndSettle();
       expect(find.text('Auralis Video'), findsNothing);
