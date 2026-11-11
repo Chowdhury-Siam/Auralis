@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.156
+
+- Verify the Telegram backup switch by toggling it on phone and desktop layouts.
+
 ## 0.1.155
 
 - Keep the backup selection summary and options reachable when resizing at large text sizes.
