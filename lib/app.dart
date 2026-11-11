@@ -299,6 +299,7 @@ class _PlayerShellState extends State<PlayerShell>
   final _transitionBlur = SnapshotController(allowSnapshotting: true);
   final _dockKey = GlobalKey();
   final _surfaceKey = GlobalKey();
+  static const _miniPlayerRadius = 24.0;
   final _dockArtworkKey = GlobalKey();
   final _playerArtworkKey = GlobalKey();
   final _playerContentKey = GlobalKey();
@@ -532,8 +533,8 @@ class _PlayerShellState extends State<PlayerShell>
             ? 72
             : 0);
     return navigation +
-        (size.height < 560 || width >= 1020 ? 96 : 128) +
-        math.max(0, MediaQuery.textScalerOf(context).scale(1) - 1) * 48;
+        (width >= 600 ? 92 : 108) +
+        math.max(0, MediaQuery.textScalerOf(context).scale(1) - 1) * 40;
   }
 
   String _syncedChannels = '';
@@ -789,11 +790,7 @@ class _PlayerShellState extends State<PlayerShell>
               left: 0,
               right: 0,
               bottom: compact ? 80 + MediaQuery.paddingOf(context).bottom : 0,
-              child: _transport(
-                viewport.width < 600,
-                short: short,
-                transitionCopy: transitionCopy,
-              ),
+              child: _transport(transitionCopy: transitionCopy),
             ),
         ],
       );
@@ -1044,7 +1041,7 @@ class _PlayerShellState extends State<PlayerShell>
                       child: ClipRRect(
                         key: const ValueKey('now-playing-container'),
                         borderRadius: BorderRadius.circular(
-                          28 * (1 - progress),
+                          _miniPlayerRadius * (1 - progress),
                         ),
                         child: ColoredBox(
                           color: _colors.surfaceContainerLow,
@@ -1092,7 +1089,7 @@ class _PlayerShellState extends State<PlayerShell>
                           player.current,
                           key: const ValueKey('player-artwork-flight'),
                           radius: ui.lerpDouble(
-                            10,
+                            22,
                             _playerArtworkRadius,
                             progress,
                           )!,
@@ -1711,42 +1708,30 @@ class _PlayerShellState extends State<PlayerShell>
       style: TextStyle(color: _colors.onErrorContainer, fontSize: 12),
     ),
   );
-  Widget _search(String hint, {Widget? trailing, bool discover = false}) =>
-      TextField(
-        controller: search,
-        focusNode: discover ? _discoveryFocus : null,
-        textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: hint,
-          enabledBorder: discover ? auralisFieldBorder(radius: 28) : null,
-          focusedBorder: discover
-              ? auralisFieldBorder(
-                  radius: 28,
-                  side: BorderSide(color: _colors.primary),
-                )
-              : null,
-          prefixIcon: const Icon(Icons.search_rounded, size: 20),
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-          suffixIcon: search.text.isEmpty && trailing == null
-              ? null
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (search.text.isNotEmpty)
-                      IconButton(
-                        onPressed: search.clear,
-                        tooltip: 'Clear search',
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                      ),
-                    if (trailing != null)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: trailing,
-                      ),
-                  ],
-                ),
-        ),
-      );
+  Widget _search(String hint, {bool discover = false}) => TextField(
+    controller: search,
+    focusNode: discover ? _discoveryFocus : null,
+    textInputAction: TextInputAction.search,
+    decoration: InputDecoration(
+      hintText: hint,
+      enabledBorder: discover ? auralisFieldBorder(radius: 28) : null,
+      focusedBorder: discover
+          ? auralisFieldBorder(
+              radius: 28,
+              side: BorderSide(color: _colors.primary),
+            )
+          : null,
+      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      suffixIcon: search.text.isEmpty
+          ? null
+          : IconButton(
+              onPressed: search.clear,
+              tooltip: 'Clear search',
+              icon: const Icon(Icons.close_rounded, size: 18),
+            ),
+    ),
+  );
 
   Future<String?> _editPlaylist({String? previous}) =>
       showAuralisDialog<String>(
@@ -2188,35 +2173,42 @@ class _PlayerShellState extends State<PlayerShell>
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _search(
-            collection == 'Playlists' && selectedPlaylist == null
-                ? 'Search playlists'
-                : 'Search your music',
-            trailing: player.settings.compactLibrary
-                ? ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: math.min(220, box.maxWidth * .45),
-                    ),
-                    child: ChoiceMenu<String>(
-                      key: const ValueKey('library-collection-menu'),
-                      title: 'Library collection',
-                      tonal: true,
-                      value: collection,
-                      values: const [
-                        'All songs',
-                        'Favorites',
-                        'Playlists',
-                        'Recently played',
-                      ],
-                      label: (value) => value,
-                      onSelected: (value) => setState(() {
-                        collection = value;
-                        selectedPlaylist = null;
-                        search.clear();
-                      }),
-                    ),
-                  )
-                : null,
+          Row(
+            children: [
+              Expanded(
+                child: _search(
+                  collection == 'Playlists' && selectedPlaylist == null
+                      ? 'Search playlists'
+                      : 'Search your music',
+                ),
+              ),
+              if (player.settings.compactLibrary) ...[
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: math.min(220, box.maxWidth * .42),
+                  ),
+                  child: ChoiceMenu<String>(
+                    key: const ValueKey('library-collection-menu'),
+                    title: 'Library collection',
+                    tonal: true,
+                    value: collection,
+                    values: const [
+                      'All songs',
+                      'Favorites',
+                      'Playlists',
+                      'Recently played',
+                    ],
+                    label: (value) => value,
+                    onSelected: (value) => setState(() {
+                      collection = value;
+                      selectedPlaylist = null;
+                      search.clear();
+                    }),
+                  ),
+                ),
+              ],
+            ],
           ),
           if (!player.settings.compactLibrary &&
               (!compact || selectedPlaylist == null)) ...[
@@ -3320,136 +3312,167 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _transport(
-    bool narrow, {
-    bool short = false,
-    bool transitionCopy = false,
-  }) {
-    final audio = player.audio, duration = player.audio.duration.inMilliseconds;
+  Widget _transport({required bool transitionCopy}) {
+    final audio = player.audio;
+    final track = player.current!;
+    final duration = audio.duration.inMilliseconds;
     final progress = duration <= 0
         ? 0.0
         : (audio.position.inMilliseconds / duration).clamp(0.0, 1.0);
-    final transportButtons = Row(
+    final colors = _colors;
+    final titleColor = colors.onPrimaryContainer;
+    final detailColor = titleColor.withValues(alpha: .80);
+    final buttonSurface = Color.alphaBlend(
+      colors.shadow.withValues(alpha: .25),
+      colors.primaryContainer,
+    );
+    final waiting = player.loading || audio.buffering;
+
+    Widget skip({
+      required String label,
+      required IconData icon,
+      required VoidCallback onPressed,
+    }) => IconButton.filledTonal(
+      onPressed: onPressed,
+      tooltip: label,
+      style: IconButton.styleFrom(
+        backgroundColor: buttonSurface,
+        foregroundColor: titleColor,
+      ),
+      icon: Icon(icon),
+    );
+
+    final controls = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (player.loading || audio.buffering)
-          const Padding(
-            padding: EdgeInsets.only(right: 8),
-            child: SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        IconButton(
-          onPressed: player.current == null ? null : player.previous,
-          tooltip: 'Previous track',
-          icon: const Icon(Icons.skip_previous_rounded),
+        skip(
+          label: 'Previous track',
+          icon: Icons.skip_previous_rounded,
+          onPressed: player.previous,
         ),
-        const SizedBox(width: 2),
+        const SizedBox(width: 3),
         IconButton.filled(
-          onPressed: player.current == null || player.loading
-              ? null
-              : audio.toggle,
+          onPressed: player.loading ? null : audio.toggle,
           tooltip: audio.playing ? 'Pause' : 'Play',
           style: IconButton.styleFrom(
-            backgroundColor: _colors.primary,
-            foregroundColor: _colors.onPrimary,
+            backgroundColor: colors.primary,
+            foregroundColor: colors.onPrimary,
           ),
-          icon: Icon(
-            audio.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-          ),
-        ),
-        const SizedBox(width: 2),
-        IconButton(
-          onPressed: player.current == null ? null : player.next,
-          tooltip: 'Next track',
-          icon: const Icon(Icons.skip_next_rounded),
-        ),
-      ],
-    );
-
-    final progressBar = Row(
-      children: [
-        SizedBox(
-          width: 34,
-          child: Text(
-            clockText(audio.position),
-            style: TextStyle(fontSize: 10, color: _colors.onSurfaceVariant),
-          ),
-        ),
-        Expanded(
-          child: WaveSeekBar(
-            value: progress,
-            playing:
-                audio.playing && !audio.buffering && player.current != null,
-            reducedMotion: player.settings.reducedMotion,
-            format: (v) =>
-                clockText(Duration(milliseconds: (v * duration).round())),
-            onChanged: duration <= 0
-                ? null
-                : (v) => player.seek(
-                    Duration(milliseconds: (v * duration).round()),
+          icon: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              Icon(
+                audio.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              ),
+              if (waiting)
+                Positioned(
+                  top: -5,
+                  bottom: -5,
+                  left: -5,
+                  right: -5,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: player.loading ? titleColor : colors.onPrimary,
+                    semanticsLabel: player.loading
+                        ? 'Loading track'
+                        : 'Buffering',
                   ),
+                ),
+            ],
           ),
         ),
-        SizedBox(
-          width: 34,
-          child: Text(
-            clockText(audio.duration),
-            textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 10, color: _colors.onSurfaceVariant),
-          ),
+        const SizedBox(width: 3),
+        skip(
+          label: 'Next track',
+          icon: Icons.skip_next_rounded,
+          onPressed: player.next,
         ),
       ],
     );
 
-    final compactPreview = Material(
+    Widget timeline({required bool showTimes}) => Row(
+      children: [
+        if (showTimes)
+          Text(
+            clockText(audio.position),
+            style: TextStyle(fontSize: 11, color: detailColor),
+          ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: titleColor,
+              inactiveTrackColor: titleColor.withValues(alpha: .24),
+              thumbColor: titleColor,
+              overlayColor: titleColor.withValues(alpha: .12),
+            ),
+            child: SizedBox(
+              height: showTimes ? 44 : 22,
+              child: WaveSeekBar(
+                value: progress,
+                playing: audio.playing && !audio.buffering,
+                reducedMotion: player.settings.reducedMotion,
+                format: (value) => clockText(
+                  Duration(milliseconds: (value * duration).round()),
+                ),
+                onChanged: duration <= 0
+                    ? null
+                    : (value) => player.seek(
+                        Duration(milliseconds: (value * duration).round()),
+                      ),
+              ),
+            ),
+          ),
+        ),
+        if (showTimes)
+          Text(
+            clockText(audio.duration),
+            style: TextStyle(fontSize: 11, color: detailColor),
+          ),
+      ],
+    );
+
+    final preview = Material(
       color: Colors.transparent,
       child: InkWell(
         key: transitionCopy ? null : const ValueKey('open-current-track'),
-        borderRadius: BorderRadius.circular(14),
-        onTap: player.current == null
-            ? null
-            : () => _navigate(_Page.nowPlaying),
+        borderRadius: BorderRadius.circular(22),
+        onTap: () => _navigate(_Page.nowPlaying),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+            ClipOval(
               child: SizedBox.square(
                 key: transitionCopy ? null : _dockArtworkKey,
-                dimension: 36,
+                dimension: 44,
                 child: Artwork(
-                  seed: player.current?.title ?? 'Auralis',
+                  seed: track.title,
                   small: true,
                   telegram: telegram,
-                  track: player.current,
+                  track: track,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    player.current?.title ?? 'Nothing playing',
+                    track.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
+                    style: TextStyle(
+                      color: titleColor,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   Text(
-                    player.current?.artist ?? 'Choose a track',
+                    track.artist,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: _colors.onSurfaceVariant,
-                    ),
+                    style: TextStyle(fontSize: 12, color: detailColor),
                   ),
                 ],
               ),
@@ -3458,14 +3481,12 @@ class _PlayerShellState extends State<PlayerShell>
         ),
       ),
     );
-    final reduced =
-        player.settings.reducedMotion ||
-        MediaQuery.disableAnimationsOf(context);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: PlayerDockMotion(
         key: transitionCopy ? null : _dockKey,
-        reducedMotion: reduced,
+        reducedMotion: _reducedPlayerMotion,
         enabled: !player.restoringData,
         onExpandStart: (_) => _navigate(_Page.nowPlaying, draggingDock: true),
         onExpandUpdate: _dragPlayer,
@@ -3477,77 +3498,39 @@ class _PlayerShellState extends State<PlayerShell>
         },
         child: Material(
           key: transitionCopy ? null : const ValueKey('player-bar'),
-          color: _colors.surfaceContainerLow,
+          color: colors.primaryContainer,
           elevation: 4,
-          shadowColor: _colors.shadow.withValues(alpha: .38),
-          borderRadius: BorderRadius.circular(28),
+          shadowColor: colors.shadow.withValues(alpha: .38),
+          borderRadius: BorderRadius.circular(_miniPlayerRadius),
           clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              narrow ? 12 : 18,
-              narrow ? 4 : 10,
-              narrow ? 12 : 18,
-              narrow ? 8 : 12,
-            ),
-            child: narrow
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      progressBar,
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(child: compactPreview),
-                          const SizedBox(width: 4),
-                          transportButtons,
-                        ],
-                      ),
-                    ],
-                  )
-                : LayoutBuilder(
-                    builder: (context, box) {
-                      if (short) {
-                        return Row(
-                          children: [
-                            Expanded(child: compactPreview),
-                            const SizedBox(width: 12),
-                            Expanded(child: progressBar),
-                            const SizedBox(width: 12),
-                            transportButtons,
-                          ],
-                        );
-                      }
-                      if (box.maxWidth < 960) {
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(child: compactPreview),
-                                transportButtons,
-                              ],
-                            ),
-                            progressBar,
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          SizedBox(width: 220, child: compactPreview),
-                          const SizedBox(width: 12),
-                          transportButtons,
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 5,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [progressBar],
-                            ),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final inline = box.maxWidth >= 576;
+              return Padding(
+                padding: EdgeInsets.fromLTRB(10, 6, 10, inline ? 6 : 2),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        if (inline) ...[
+                          SizedBox(
+                            width: math.min(252, box.maxWidth * .30),
+                            child: preview,
                           ),
-                        ],
-                      );
-                    },
-                  ),
+                          const SizedBox(width: 16),
+                          Expanded(child: timeline(showTimes: true)),
+                        ] else
+                          Expanded(child: preview),
+                        const SizedBox(width: 8),
+                        controls,
+                      ],
+                    ),
+                    if (!inline) timeline(showTimes: false),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),
