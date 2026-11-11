@@ -163,6 +163,25 @@ class HomeHold extends StatelessWidget {
   );
 }
 
+class DefaultInterfacePreference extends StatelessWidget {
+  const DefaultInterfacePreference({
+    super.key,
+    required this.value,
+    required this.onSelected,
+  });
+  final AppInterface value;
+  final ValueChanged<AppInterface> onSelected;
+
+  @override
+  Widget build(BuildContext context) => PreferenceChoice<AppInterface>(
+    title: 'Open on startup',
+    value: value,
+    values: AppInterface.values,
+    label: (mode) => mode.label,
+    onSelected: onSelected,
+  );
+}
+
 class AppearancePreferences extends StatelessWidget {
   const AppearancePreferences({
     super.key,
