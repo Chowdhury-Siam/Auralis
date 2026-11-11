@@ -75,6 +75,20 @@ class TelegramService extends ChangeNotifier {
   bool busy = false;
   bool credentialRecoveryRequired = false;
   final Map<int, MusicChat> _channels = {};
+  final _videoPosts = StreamController<({int chatId, Track video})>.broadcast(
+    sync: true,
+  );
+  Stream<({int chatId, Track video})> get videoPosts => _videoPosts.stream;
+
+  void _publishVideo(Object? message) {
+    if (!ready || !_videoPosts.hasListener || message is! Json) return;
+    final id = message['chat_id'];
+    final channel = _channels[id];
+    if (channel == null) return;
+    final video = Track.fromVideoMessage(message, channel.title);
+    if (video != null) _videoPosts.add((chatId: channel.id, video: video));
+  }
+
   List<MusicChat> get channels => _channels.values.toList()
     ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
   bool get ready => state == 'authorizationStateReady';
@@ -618,10 +632,16 @@ class TelegramService extends ChangeNotifier {
         final channel = MusicChat.fromChat(chat);
         if (channel != null) {
           _channels[id] = channel;
+          _publishVideo(chat['last_message']);
         } else {
           _channels.remove(id);
         }
         notifyListeners();
+      case 'updateNewMessage':
+      case 'updateMessageSendSucceeded':
+        _publishVideo(json['message']);
+      case 'updateChatLastMessage':
+        _publishVideo(json['last_message']);
       case 'updateChatTitle':
         final id = json['chat_id'] as int;
         if (_channels.containsKey(id)) {
@@ -740,7 +760,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.127',
+          'application_version': '0.1.129',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -748,8 +768,7 @@ class TelegramService extends ChangeNotifier {
         );
       }
     } else if (ready) {
-      await _audioSweep;
-      await refreshChats();
+      await Future.wait([refreshChats(), ?_audioSweep]);
     }
   }
 
@@ -816,17 +835,20 @@ class TelegramService extends ChangeNotifier {
     await _sendLoginPhoneNumber(number);
   });
 
-  Future<void> refreshChats() async {
-    for (final type in ['chatListMain', 'chatListArchive']) {
-      try {
-        await transport.request({
-          '@type': 'loadChats',
-          'chat_list': {'@type': type},
-          'limit': 100,
-        });
-      } on TdException catch (e) {
-        if (e.code != 404) rethrow;
-      }
+  Future<void>? _chatRefresh;
+  Future<void> refreshChats() => _chatRefresh ??= Future.wait([
+    for (final type in ['chatListMain', 'chatListArchive']) _loadChatList(type),
+  ]).then<void>((_) {}).whenComplete(() => _chatRefresh = null);
+
+  Future<void> _loadChatList(String type) async {
+    try {
+      await transport.request({
+        '@type': 'loadChats',
+        'chat_list': {'@type': type},
+        'limit': 100,
+      });
+    } on TdException catch (e) {
+      if (e.code != 404) rethrow;
     }
   }
 
@@ -873,6 +895,25 @@ class TelegramService extends ChangeNotifier {
         : 'searchMessagesFilterVideo',
     parse: (message) => Track.fromVideoMessage(message, channel.title),
   );
+
+  Future<List<Track>> recentVideos(MusicChat channel) async {
+    final client = transport;
+    final response = await client.request({
+      '@type': 'getChatHistory',
+      'chat_id': channel.id,
+      'from_message_id': 0,
+      'offset': 0,
+      'limit': 40,
+      'only_local': false,
+    });
+    if (!ready || !identical(client, transport)) return const [];
+    final messages = response['messages'] as List;
+    return messages
+        .whereType<Json>()
+        .map((message) => Track.fromVideoMessage(message, channel.title))
+        .whereType<Track>()
+        .toList();
+  }
 
   Future<Track?> videoLink(String value) async {
     final uri = Uri.tryParse(value.trim());
@@ -1177,6 +1218,12 @@ class TelegramService extends ChangeNotifier {
       busy = false;
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_videoPosts.close());
+    super.dispose();
   }
 
   Future<void> shutdown() async {
