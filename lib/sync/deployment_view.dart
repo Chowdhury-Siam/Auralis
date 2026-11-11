@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../app_popups.dart';
+
 import '../external_links.dart';
 import 'controller.dart';
 import 'deployment.dart';
@@ -179,24 +181,12 @@ class _SyncDeploymentPageState extends State<SyncDeploymentPage> {
   }
 
   Future<void> _forget() async {
-    final yes = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Forget deployment credentials?'),
-        content: const Text(
-          'Remove deployment values from this device and, when signed in as owner, from its recovery vault. Automatic updates will need these values again. Your account and library are kept.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(c, true),
-            child: const Text('Forget credentials'),
-          ),
-        ],
-      ),
+    final yes = await confirmAuralisAction(
+      context,
+      title: 'Forget deployment credentials?',
+      message: 'Remove deployment values from this device and, when signed in as owner, from its recovery vault. Automatic updates will need these values again. Your account and library are kept.',
+      confirmLabel: 'Forget credentials',
+      destructive: true,
     );
     if (yes != true || !mounted || !_begin()) return;
     setState(() => _busy = true);
@@ -288,7 +278,6 @@ class _SyncDeploymentPageState extends State<SyncDeploymentPage> {
   );
   Widget _step(String title, List<Widget> children) => Card(
     margin: const EdgeInsets.only(bottom: 12),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
     child: Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
