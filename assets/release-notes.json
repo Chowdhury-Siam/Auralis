@@ -1,6 +1,19 @@
 {
-  "current": "0.1.135",
+  "current": "0.1.137",
   "releases": [
+    {
+      "version": "0.1.137",
+      "changes": [
+        "Give the Library search field and collection selector their own cards, with a gap between them on phones and desktops."
+      ]
+    },
+    {
+      "version": "0.1.136",
+      "changes": [
+        "Redesign the Android and Windows mini-player with round artwork, a compact tinted layout, and circular playback controls. Keep seeking available below the Android controls and inline on Windows.",
+        "Connect the linked Telegram account automatically after an Auralis password sign-in when an updated, already connected device is online. Keep Telegram two-step verification when Telegram requires it."
+      ]
+    },
     {
       "version": "0.1.135",
       "changes": [
