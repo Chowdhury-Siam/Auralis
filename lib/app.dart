@@ -19,6 +19,8 @@ import 'telegram/telegram_service.dart';
 import 'telegram/phone_login.dart';
 import 'telegram/channel_library.dart';
 import 'telegram_video_view.dart';
+import 'video_folder_browser.dart';
+import 'video_playback_data.dart';
 import 'updater.dart';
 import 'update_widgets.dart';
 import 'wave_seek_bar.dart';
@@ -256,6 +258,7 @@ class _PlayerShellState extends State<PlayerShell>
   _BrowseBy _browseBy = _BrowseBy.channel;
   bool _browseAsList = false, _mixExpanded = false;
   late bool _videoMode;
+  List<VideoSource>? _incomingVideos;
   void _toggleMixExpanded() => setState(() => _mixExpanded = !_mixExpanded);
   void _openRecent() {
     _navigate(_Page.library);
@@ -325,6 +328,12 @@ class _PlayerShellState extends State<PlayerShell>
     _videoMode =
         widget.startOnHome &&
         player.settings.defaultInterface == AppInterface.video;
+    if (Platform.isAndroid && widget.startOnHome) {
+      videoIntentChannel.setMethodCallHandler((call) async {
+        if (call.method == 'incomingVideos') await _takeIncomingVideos();
+      });
+      unawaited(_takeIncomingVideos());
+    }
     _dismissPlayer = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 440),
@@ -641,6 +650,9 @@ class _PlayerShellState extends State<PlayerShell>
 
   @override
   void dispose() {
+    if (Platform.isAndroid && widget.startOnHome) {
+      videoIntentChannel.setMethodCallHandler(null);
+    }
     ++_cacheGeneration;
     ++_artworkGeneration;
     ++_lyricGeneration;
@@ -1334,6 +1346,12 @@ class _PlayerShellState extends State<PlayerShell>
             onMusic: _openVideos,
             onSettings: () => _navigate(_Page.settings),
             onConnect: () => _navigate(_Page.telegram),
+            incoming: _incomingVideos,
+            onIncomingConsumed: (sources) {
+              if (identical(_incomingVideos, sources)) {
+                setState(() => _incomingVideos = null);
+              }
+            },
           );
         }
         final immersiveLyrics = destination == _Page.nowPlaying && showLyrics;
@@ -1481,6 +1499,24 @@ class _PlayerShellState extends State<PlayerShell>
     destination = _Page.home;
     _primaryPage = _Page.home;
   });
+
+  Future<void> _takeIncomingVideos() async {
+    try {
+      final rows = await videoIntentChannel
+          .invokeListMethod<Map<Object?, Object?>>('takeIncomingVideos');
+      final sources = videosFromAndroid(rows);
+      if (!mounted || sources.isEmpty) return;
+      setState(() {
+        _incomingVideos = sources;
+        _videoMode = true;
+        destination = _primaryPage = _Page.home;
+      });
+    } on PlatformException {
+      // The sender can revoke access before the app reads its video.
+    } on MissingPluginException {
+      // No external Android video intents in this runtime.
+    }
+  }
 
   Widget _navigation(bool narrow, {bool short = false}) => AppSidebar(
     narrow: narrow,
@@ -3908,6 +3944,7 @@ class _PlayerShellState extends State<PlayerShell>
                   }
                   if (!telegram.ready) {
                     player.settings.selectedChannels = [];
+                    player.settings.videoPlayback.clearTelegram();
                     try {
                       await player.settings.save();
                     } catch (_) {
