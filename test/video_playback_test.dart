@@ -301,7 +301,6 @@ void main() {
         transport: FakeTd(),
       );
       addTearDown(proxy.close);
-      addTearDown(music.shutdown);
       addTearDown(telegram.shutdown);
       final first = VideoSource.file(
         Uri.file('/movies/first.mp4'),
@@ -321,6 +320,19 @@ void main() {
       final events = <String>[];
       final decoderReleased = Completer<void>();
       var releaseFinished = false;
+      var shutdownFinished = false;
+      bool? surfacePresentAtDispose;
+
+      Future<bool> pumpUntil(bool Function() ready) async {
+        for (var frame = 0; frame < 20 && !ready(); frame++) {
+          // Service real-zone futures and the frame awaited by player shutdown.
+          await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+          tester.binding.scheduleFrame();
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        return ready();
+      }
+
       try {
         await tester.pumpWidget(
           MaterialApp(
@@ -433,6 +445,7 @@ void main() {
         expect(tester.takeException(), isNull);
 
         native.beforeDispose = () async {
+          surfacePresentAtDispose = find.byType(Video).evaluate().isNotEmpty;
           events.add('decoder');
           await decoderReleased.future;
         };
@@ -440,8 +453,12 @@ void main() {
         unawaited(music.releaseVideo!().then((_) {
           releaseFinished = true;
         }));
-        await tester.pumpAndSettle();
-        expect(find.byType(Video), findsNothing);
+        expect(
+          await pumpUntil(() => events.isNotEmpty),
+          isTrue,
+          reason: 'Decoder disposal did not start after removing the surface.',
+        );
+        expect(surfacePresentAtDispose, isFalse);
         expect(events, ['decoder']);
         expect(releaseFinished, isFalse);
       } finally {
@@ -449,10 +466,13 @@ void main() {
           await tester.pumpWidget(const SizedBox.shrink());
         } finally {
           decoderReleased.complete();
-          // Drain shutdown microtasks before the test's fake clock stops.
-          await tester.pump();
+          unawaited(music.shutdown().then((_) {
+            shutdownFinished = true;
+          }));
+          await pumpUntil(() => shutdownFinished);
         }
       }
+      expect(shutdownFinished, isTrue, reason: 'Player shutdown did not finish.');
       expect(releaseFinished, isTrue);
       expect(events, ['decoder', 'stream']);
       expect(music.releaseVideo, isNull);
