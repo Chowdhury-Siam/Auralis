@@ -1,6 +1,12 @@
 {
-  "current": "0.1.152",
+  "current": "0.1.153",
   "releases": [
+    {
+      "version": "0.1.153",
+      "changes": [
+        "Remove the unused Telegram Video field flagged by static analysis."
+      ]
+    },
     {
       "version": "0.1.152",
       "changes": [
