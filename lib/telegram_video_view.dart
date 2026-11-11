@@ -7,6 +7,7 @@ import 'package:media_kit/media_kit.dart' as mpv;
 import 'package:media_kit_video/media_kit_video.dart';
 
 import 'models.dart';
+import 'app_navigation.dart';
 import 'player.dart';
 import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
@@ -16,10 +17,14 @@ class TelegramVideoView extends StatefulWidget {
     super.key,
     required this.telegram,
     required this.music,
+    this.onMusic,
+    this.onSettings,
+    this.onConnect,
   });
 
   final TelegramService telegram;
   final PlayerController music;
+  final VoidCallback? onMusic, onSettings, onConnect;
 
   @override
   State<TelegramVideoView> createState() => _TelegramVideoViewState();
@@ -36,6 +41,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   late bool _ready;
   MusicChat? _channel;
   String _query = '';
+  int _tab = 0;
+  final _recent = <Track>[];
   int _generation = 0;
   bool _loading = false,
       _failed = false,
@@ -64,8 +71,11 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     _ready = _telegram.ready;
     _telegram.addListener(_authorizationChanged);
     final channels = _channels;
-    if (_ready && channels.isNotEmpty) {
-      _channel = channels.first;
+    final saved = channels.where(
+      (channel) => channel.id == widget.music.settings.videoChannelId,
+    );
+    if (_ready && saved.isNotEmpty) {
+      _channel = saved.first;
       unawaited(_load());
     }
   }
@@ -79,6 +89,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
       _search.clear();
       _query = '';
       _videos.clear();
+      _recent.clear();
       _loading = false;
       _failed = false;
     });
@@ -94,6 +105,12 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
         ..clear()
         ..addAll({false: 0, true: 0});
     });
+    widget.music.settings.videoChannelId = channel.id;
+    unawaited(
+      widget.music.settings.save().catchError((Object _) {
+        if (mounted) _notice('Could not save the video channel.');
+      }),
+    );
     unawaited(_load());
   }
 
@@ -138,6 +155,11 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   Future<void> _play(Track video) async {
     if (!_ready || _playingVideo) return;
     _playingVideo = true;
+    setState(() {
+      _recent.removeWhere((item) => item.id == video.id);
+      _recent.insert(0, video);
+      if (_recent.length > 12) _recent.removeLast();
+    });
     try {
       final route = MaterialPageRoute<void>(
         builder: (context) => _VideoPlayback(
@@ -238,37 +260,176 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Telegram Video'),
-      actions: [
-        if (_ready) ...[
-          IconButton(
-            tooltip: 'Open Telegram link',
-            onPressed: _openingLink ? null : _openLink,
-            icon: const Icon(Icons.link_rounded),
-          ),
-          IconButton(
-            tooltip: 'Refresh videos',
-            onPressed: _loading ? null : _refresh,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ],
-    ),
-    body: SafeArea(
+  Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final content = SafeArea(
       top: false,
       child: !_ready
           ? Center(
               child: FilledButton.icon(
-                onPressed: () => Navigator.pop(context, true),
+                onPressed:
+                    widget.onConnect ?? () => Navigator.pop(context, true),
                 icon: const Icon(Icons.send_rounded),
                 label: const Text('Connect Telegram'),
               ),
             )
-          : ListenableBuilder(listenable: _telegram, builder: _browser),
-    ),
-  );
+          : ListenableBuilder(
+              listenable: _telegram,
+              builder: (context, child) =>
+                  _tab == 0 ? _home(context) : _browser(context, child),
+            ),
+    );
+    return PopScope(
+      canPop: _tab == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _tab = 0);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: const Text('Auralis Video'),
+          actions: [
+            IconButton(
+              tooltip: 'Switch to Music',
+              onPressed: widget.onMusic ?? () => Navigator.pop(context),
+              icon: const Icon(Icons.music_note_rounded),
+            ),
+            if (widget.onSettings != null)
+              IconButton(
+                tooltip: 'Settings',
+                onPressed: widget.onSettings,
+                icon: const Icon(Icons.settings_outlined),
+              ),
+            if (_ready) ...[
+              IconButton(
+                tooltip: 'Open Telegram link',
+                onPressed: _openingLink ? null : _openLink,
+                icon: const Icon(Icons.link_rounded),
+              ),
+              IconButton(
+                tooltip: 'Refresh videos',
+                onPressed: _loading ? null : _refresh,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
+          ],
+        ),
+        bottomNavigationBar: wide
+            ? null
+            : NavigationBar(
+                selectedIndex: _tab,
+                onDestinationSelected: (tab) => setState(() => _tab = tab),
+                destinations: [
+                  HomeHold(
+                    onHold: widget.onMusic ?? () => Navigator.pop(context),
+                    child: const NavigationDestination(
+                      icon: Icon(Icons.home_rounded),
+                      label: 'Home',
+                      tooltip: '',
+                    ),
+                  ),
+                  const NavigationDestination(
+                    icon: Icon(Icons.search_rounded),
+                    label: 'Search',
+                  ),
+                  const NavigationDestination(
+                    icon: Icon(Icons.video_library_outlined),
+                    label: 'Library',
+                  ),
+                ],
+              ),
+        body: wide
+            ? Row(
+                children: [
+                  NavigationRail(
+                    extended: MediaQuery.sizeOf(context).width >= 1180,
+                    selectedIndex: _tab,
+                    onDestinationSelected: (tab) => setState(() => _tab = tab),
+                    destinations: [
+                      NavigationRailDestination(
+                        icon: HomeHold(
+                          onHold:
+                              widget.onMusic ?? () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Icon(Icons.home_rounded),
+                          ),
+                        ),
+                        label: HomeHold(
+                          onHold:
+                              widget.onMusic ?? () => Navigator.pop(context),
+                          child: const Text('Home'),
+                        ),
+                      ),
+                      const NavigationRailDestination(
+                        icon: Icon(Icons.search_rounded),
+                        label: Text('Search'),
+                      ),
+                      const NavigationRailDestination(
+                        icon: Icon(Icons.video_library_outlined),
+                        label: Text('Library'),
+                      ),
+                    ],
+                  ),
+                  Expanded(child: content),
+                ],
+              )
+            : content,
+      ),
+    );
+  }
+
+  Widget _home(BuildContext context) {
+    final channels = _channels;
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text('Your cinema', style: Theme.of(context).textTheme.headlineLarge),
+        const SizedBox(height: 8),
+        const Text('Videos from your Telegram channels'),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed: () => setState(() => _tab = 2),
+          icon: const Icon(Icons.video_library_outlined),
+          label: const Text('Browse videos'),
+        ),
+        const SizedBox(height: 24),
+        Text('Channels', style: Theme.of(context).textTheme.titleLarge),
+        if (channels.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text('Open a Telegram video link or refresh your channels.'),
+          ),
+        for (final channel in channels)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.live_tv_rounded),
+              title: Text(channel.title),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                _search.clear();
+                _restart(channel, '');
+                setState(() => _tab = 2);
+              },
+            ),
+          ),
+        if (_recent.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text(
+            'Recently opened',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          for (final video in _recent)
+            ListTile(
+              leading: const Icon(Icons.play_circle_outline_rounded),
+              title: Text(video.title),
+              subtitle: Text(video.source),
+              onTap: () => unawaited(_play(video)),
+            ),
+        ],
+      ],
+    );
+  }
 
   Widget _browser(BuildContext context, Widget? child) {
     final colors = Theme.of(context).colorScheme;
