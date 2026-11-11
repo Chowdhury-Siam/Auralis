@@ -19,6 +19,7 @@ void main() {
     tester.view.physicalSize = const Size(320, 568);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
     final settings = MemorySettings()
       ..compactLibrary = true
       ..navigationStyle = AppNavigationStyle.expressive
@@ -70,11 +71,13 @@ void main() {
         expect(rect.left, greaterThanOrEqualTo(0));
         expect(rect.right, lessThanOrEqualTo(size.width));
         final searchBounds = tester.getRect(search);
-        expect(rect.left - searchBounds.right, closeTo(8, 1));
-        expect(rect.center.dy, closeTo(searchBounds.center.dy, 1));
-        if (size.width >= 900) {
-          expect(rect.right, closeTo(size.width - 26, 1));
-        }
+        final toolbar = tester.getRect(find.byTooltip('Shuffle collection'));
+        expect(rect.bottom, lessThan(toolbar.top));
+        expect(toolbar.bottom, lessThan(searchBounds.top));
+        expect(
+          tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
+          collection,
+        );
         if (collection == 'Recently played') {
           await tester.tap(find.text('Clear history'));
           await tester.pumpAndSettle();
@@ -84,6 +87,17 @@ void main() {
       }
       await tester.enterText(search, 'song');
       await tester.pumpAndSettle();
+      if (size.width == 320) {
+        tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+        await tester.pumpAndSettle();
+        expect(menu, findsNothing);
+        expect(tester.testTextInput.isVisible, isTrue);
+        expect(tester.widget<TextField>(search).controller!.text, 'song');
+        expect(tester.takeException(), isNull);
+        tester.view.resetViewInsets();
+        await tester.pumpAndSettle();
+        expect(menu, findsOneWidget);
+      }
       expect(find.byTooltip('Clear search').hitTestable(), findsOneWidget);
       await tester.tap(find.byTooltip('Clear search'));
       await tester.pumpAndSettle();
