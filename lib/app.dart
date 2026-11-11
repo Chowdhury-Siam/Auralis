@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
@@ -112,13 +113,14 @@ class _AuralisAppState extends State<AuralisApp> {
     if (identity == _artworkIdentity) return;
     _artworkIdentity = identity;
     final generation = ++_generation;
-    unawaited(_loadPalette(track?.coverPreview, cover, generation));
+    final cached = track == null ? null : widget.telegram.cachedCover(track);
+    unawaited(_loadPalette(cached ?? track?.coverPreview, cover, generation));
   }
 
   Future<ColorScheme?> _extract(Uint8List bytes) async {
     try {
       return await ColorScheme.fromImageProvider(
-        provider: MemoryImage(bytes),
+        provider: ResizeImage(MemoryImage(bytes), width: 96),
         brightness: Brightness.dark,
       );
     } catch (_) {
@@ -146,7 +148,10 @@ class _AuralisAppState extends State<AuralisApp> {
 
     var hasPalette = await apply(preview);
     try {
-      hasPalette = await apply(await cover) || hasPalette;
+      final full = await cover;
+      if (!identical(preview, full)) {
+        hasPalette = await apply(full) || hasPalette;
+      }
     } catch (_) {
       // A failed full-size cover must not discard a usable preview palette.
     }
@@ -165,6 +170,12 @@ class _AuralisAppState extends State<AuralisApp> {
     widget.telegram.removeListener(_artworkChanged);
     super.dispose();
   }
+
+  RoundedRectangleBorder _popupShape(ColorScheme colors) =>
+      RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: colors.outlineVariant.withValues(alpha: .55)),
+      );
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -194,6 +205,32 @@ class _AuralisAppState extends State<AuralisApp> {
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: _scheme.surfaceContainerHigh,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: _scheme.shadow.withValues(alpha: .42),
+        barrierColor: _scheme.scrim.withValues(alpha: .64),
+        elevation: 6,
+        insetPadding: const EdgeInsets.all(20),
+        constraints: const BoxConstraints(maxWidth: 560),
+        shape: _popupShape(_scheme),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: _scheme.surfaceContainerHigh,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: _scheme.shadow.withValues(alpha: .42),
+        elevation: 6,
+        menuPadding: const EdgeInsets.all(6),
+        position: PopupMenuPosition.under,
+        shape: _popupShape(_scheme),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: _scheme.inverseSurface,
+        contentTextStyle: TextStyle(color: _scheme.onInverseSurface),
+        actionTextColor: _scheme.inversePrimary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       dividerColor: _scheme.outlineVariant,
     ),
@@ -317,7 +354,8 @@ class _PlayerShellState extends State<PlayerShell>
   bool _closingPlayer = false;
   Timer? _volumeTimer;
   bool _showVolume = false;
-  Object? _artworkWindow, _lyricRequest;
+  List<Track> _artworkWindow = const [];
+  Object? _artworkContext, _lyricRequest;
   Track? _metadataTrack;
   bool _metadataPlaybackStarted = false;
   int _artworkGeneration = 0, _lyricGeneration = 0;
@@ -414,24 +452,30 @@ class _PlayerShellState extends State<PlayerShell>
     final start = math.max(0, player.index);
     final count = track == null ? 0 : math.min(source.length, 11);
     final window = <Track>[
-      for (var offset = 0; offset < count; offset++)
+      if (count > 0) source[start],
+      if (count > 1 && (start + 1 < source.length || player.repeat))
+        source[(start + 1) % source.length],
+      if (count > 0 && start > 0 && (!player.repeat || source.length > count))
+        source[start - 1],
+      for (var offset = 2; offset < count; offset++)
         if (start + offset < source.length || player.repeat)
           source[(start + offset) % source.length],
     ];
-    final artworkKey = (
-      telegram.ready,
-      scope,
-      window.map((t) => (t.id, t.fileId, t.coverFileId, t.size)).join('|'),
-    );
-    if (artworkKey != _artworkWindow) {
-      _artworkWindow = artworkKey;
+    final view = View.maybeOf(context);
+    final devicePixelRatio = view?.devicePixelRatio ?? 1;
+    final artworkKey = (telegram.ready, scope, devicePixelRatio);
+    if (artworkKey != _artworkContext || !listEquals(window, _artworkWindow)) {
+      _artworkContext = artworkKey;
+      _artworkWindow = window;
       final generation = ++_artworkGeneration;
       bool active() =>
           mounted &&
           generation == _artworkGeneration &&
           telegram.ready &&
           scope == telegram.mediaCache.directory?.path;
-      if (active()) unawaited(_warmArtwork(window, active));
+      if (active()) {
+        unawaited(_warmArtwork(window, devicePixelRatio, active));
+      }
     }
     final lyricKey = (
       telegram.ready,
@@ -472,20 +516,41 @@ class _PlayerShellState extends State<PlayerShell>
     }
   }
 
-  Future<void> _warmArtwork(List<Track> tracks, bool Function() active) async {
-    for (final track in tracks) {
+  Future<void> _warmArtwork(
+    List<Track> tracks,
+    double devicePixelRatio,
+    bool Function() active,
+  ) async {
+    for (var index = 0; index < tracks.length; index++) {
       if (!active()) return;
-      final bytes = await telegram.savedCover(track, active: active);
+      final track = tracks[index];
+      final bytes =
+          telegram.cachedCover(track) ??
+          await telegram.savedCover(track, active: active);
       if (!mounted || !active()) return;
       if (bytes == null) continue;
-      for (final width in [96, 640]) {
+      final neighboring =
+          index < 2 ||
+          (player.index > 0 &&
+              identical(track, player.queue[player.index - 1]));
+      final widths = {
+        96,
+        640,
+        if (neighboring) ...[
+          _playerDecodeWidth(380, devicePixelRatio),
+          _playerDecodeWidth(410, devicePixelRatio),
+        ],
+      };
+      for (final width in widths) {
         if (!mounted || !active()) return;
-        await precacheImage(
-          ResizeImage(MemoryImage(bytes), width: width),
-          context,
-          onError: (_, _) {},
-        );
-        if (!active()) return;
+        final image = ResizeImage(MemoryImage(bytes), width: width);
+        if (PaintingBinding.instance.imageCache.containsKey(
+          await image.obtainKey(ImageConfiguration.empty),
+        )) {
+          continue;
+        }
+        if (!mounted || !active()) return;
+        await precacheImage(image, context, onError: (_, _) {});
       }
     }
   }
@@ -837,6 +902,7 @@ class _PlayerShellState extends State<PlayerShell>
     key: _surfaceKey,
     builder: (context, box) {
       final expanded = destination == _Page.nowPlaying;
+      final track = player.current;
       final full = Offset.zero & box.biggest;
       final viewport = MediaQuery.sizeOf(context);
       final previousViewport = _dockViewport ?? viewport;
@@ -891,19 +957,19 @@ class _PlayerShellState extends State<PlayerShell>
                     NowPlayingBackdrop(
                       key: const ValueKey('now-playing-backdrop'),
                       identity: (
-                        player.current?.id,
-                        player.current?.fileId,
-                        player.current?.coverFileId,
-                        player.current?.coverPreview,
-                        player.current?.title,
-                        player.current?.size,
+                        track?.id,
+                        track?.fileId,
+                        track?.coverFileId,
+                        track?.coverPreview,
+                        track?.title,
+                        track?.size,
+                        track == null ? null : telegram.cachedCover(track),
                       ),
-                      artworkUpdates: telegram,
                       reducedMotion: player.settings.reducedMotion,
                       artwork: Artwork(
-                        seed: player.current?.title ?? 'Auralis',
+                        seed: track?.title ?? 'Auralis',
                         telegram: telegram,
-                        track: player.current,
+                        track: track,
                         small: true,
                       ),
                     ),
@@ -1651,14 +1717,6 @@ class _PlayerShellState extends State<PlayerShell>
                     icon: const Icon(Icons.sort_rounded),
                     position: PopupMenuPosition.under,
                     offset: const Offset(0, 6),
-                    color: _colors.surfaceContainerLow,
-                    surfaceTintColor: Colors.transparent,
-                    elevation: 4,
-                    shadowColor: const Color(0x40000000),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: _colors.outlineVariant),
-                    ),
                     clipBehavior: Clip.antiAlias,
                     itemBuilder: (context) => [
                       for (final sort in LibrarySort.values)
@@ -2658,11 +2716,21 @@ class _PlayerShellState extends State<PlayerShell>
         child: child,
       );
 
+  static int _playerDecodeWidth(double logicalWidth, double pixelRatio) {
+    final pixels = logicalWidth * pixelRatio * 1.025;
+    return pixels <= 640
+        ? 640
+        : pixels <= 1024
+        ? 1024
+        : 1280;
+  }
+
   Widget _playerCover(
     Track? track, {
     Key? key,
     Key? artworkKey,
     required double radius,
+    int? decodeWidth,
     double inset = 5,
     Widget? artwork,
   }) => RepaintBoundary(
@@ -2684,6 +2752,7 @@ class _PlayerShellState extends State<PlayerShell>
                 seed: track?.title ?? 'Auralis',
                 telegram: telegram,
                 track: track,
+                decodeWidth: decodeWidth,
               ),
         ),
       ),
@@ -2771,10 +2840,15 @@ class _PlayerShellState extends State<PlayerShell>
                 ),
               );
               _playerArtworkRadius = tight ? 26 : 34;
+              final decodeWidth = _playerDecodeWidth(
+                size,
+                MediaQuery.devicePixelRatioOf(context),
+              );
               Widget cover(Track? item, {Key? key}) => _playerCover(
                 item,
-                artworkKey: key,
+                key: key,
                 radius: _playerArtworkRadius,
+                decodeWidth: decodeWidth,
               );
               return Center(
                 child: SizedBox.square(
@@ -2792,12 +2866,10 @@ class _PlayerShellState extends State<PlayerShell>
                       child: child,
                     ),
                     child: ArtworkMotion(
+                      key: const ValueKey('now-playing-artwork'),
                       reducedMotion: player.settings.reducedMotion,
                       child: track == null
-                          ? cover(
-                              null,
-                              key: const ValueKey('now-playing-artwork'),
-                            )
+                          ? cover(null)
                           : _artworkSwitcher(
                               paged: true,
                               child: ArtworkPager(
@@ -2816,9 +2888,13 @@ class _PlayerShellState extends State<PlayerShell>
                                       ),
                                 itemBuilder: (context, index) => cover(
                                   player.queue[index % player.queue.length],
-                                  key: index == player.index
-                                      ? const ValueKey('now-playing-artwork')
-                                      : ValueKey(('artwork-page', index)),
+                                  key: ValueKey((
+                                    'artwork-page',
+                                    player
+                                        .queue[index % player.queue.length]
+                                        .id,
+                                    index,
+                                  )),
                                 ),
                               ),
                             ),
@@ -3456,7 +3532,7 @@ class _PlayerShellState extends State<PlayerShell>
           key: transitionCopy ? null : const ValueKey('player-bar'),
           color: _colors.surfaceContainerLow,
           elevation: 4,
-          shadowColor: Colors.black38,
+          shadowColor: _colors.shadow.withValues(alpha: .38),
           borderRadius: BorderRadius.circular(28),
           clipBehavior: Clip.antiAlias,
           child: Padding(
@@ -4148,6 +4224,7 @@ class Artwork extends StatelessWidget {
     super.key,
     required this.seed,
     this.small = false,
+    this.decodeWidth,
     this.telegram,
     this.fileId,
     this.track,
@@ -4155,6 +4232,7 @@ class Artwork extends StatelessWidget {
   });
   final String seed;
   final bool small;
+  final int? decodeWidth;
   final TelegramService? telegram;
   final int? fileId;
   final Track? track;
@@ -4165,12 +4243,13 @@ class Artwork extends StatelessWidget {
     final placeholder = Tooltip(
       message: 'Artwork not loaded yet',
       child: CustomPaint(
-        painter: _RecordPainter(seed),
+        painter: _RecordPainter(seed, Theme.of(context).colorScheme),
         child: const SizedBox.expand(),
       ),
     );
     Widget image(ImageProvider provider, Widget fallback) => Image(
-      image: ResizeImage(provider, width: small ? 96 : 640),
+      image: ResizeImage(provider, width: decodeWidth ?? (small ? 96 : 640)),
+      gaplessPlayback: true,
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
@@ -4185,12 +4264,13 @@ class Artwork extends StatelessWidget {
     Widget child = fallback;
     if (telegram != null && track != null) {
       child = FutureBuilder<Uint8List?>(
-        key: ValueKey((track!.fileId, track!.coverFileId)),
+        key: ValueKey((track!.id, track!.fileId, track!.coverFileId)),
         future: telegram!.cover(track!),
         initialData: telegram!.cachedCover(track!),
-        builder: (context, snapshot) => snapshot.data != null
-            ? image(MemoryImage(snapshot.data!), fallback)
-            : fallback,
+        builder: (context, snapshot) {
+          final bytes = snapshot.data ?? telegram!.cachedCover(track!);
+          return bytes == null ? fallback : image(MemoryImage(bytes), fallback);
+        },
       );
     } else if (telegram != null && fileId != null) {
       child = FutureBuilder<String?>(
@@ -4211,14 +4291,16 @@ class Artwork extends StatelessWidget {
 }
 
 class _RecordPainter extends CustomPainter {
-  _RecordPainter(this.seed);
+  _RecordPainter(this.seed, this.colors);
   final String seed;
+  final ColorScheme colors;
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    final hue = 240.0 + seed.codeUnits.fold(0, (a, b) => a + b) % 80;
-    final dark = HSLColor.fromAHSL(1, hue, .25, .2).toColor(),
-        light = HSLColor.fromAHSL(1, hue, .5, .72).toColor();
+    final dark = colors.surfaceContainerHighest;
+    final light = seed.hashCode.isEven
+        ? colors.primaryContainer
+        : colors.tertiaryContainer;
     canvas.drawRect(
       rect,
       Paint()
@@ -4234,7 +4316,7 @@ class _RecordPainter extends CustomPainter {
         center,
         size.width * (.08 + i * .034),
         Paint()
-          ..color = Colors.black.withValues(alpha: .13)
+          ..color = colors.shadow.withValues(alpha: .13)
           ..style = PaintingStyle.stroke
           ..strokeWidth = size.width * .012,
       );
@@ -4242,7 +4324,7 @@ class _RecordPainter extends CustomPainter {
     canvas.drawCircle(
       center,
       size.width * .085,
-      Paint()..color = const Color(0xFFDAD0E9),
+      Paint()..color = colors.onPrimaryContainer,
     );
     canvas.drawCircle(center, size.width * .018, Paint()..color = dark);
     final path = Path()
@@ -4258,12 +4340,13 @@ class _RecordPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = Colors.white.withValues(alpha: .12)
+        ..color = colors.onSurface.withValues(alpha: .12)
         ..style = PaintingStyle.stroke
         ..strokeWidth = size.width * .11,
     );
   }
 
   @override
-  bool shouldRepaint(_RecordPainter oldDelegate) => seed != oldDelegate.seed;
+  bool shouldRepaint(_RecordPainter oldDelegate) =>
+      seed != oldDelegate.seed || colors != oldDelegate.colors;
 }
