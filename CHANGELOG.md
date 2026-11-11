@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.126
+
+- Add Music and Video interfaces with separate navigation, a startup choice in setup and General settings, and Home hold to switch between modes.
+
 ## 0.1.125
 
 - Hold Home to open Telegram Video. Browse a channel or paste a message link, then stream with fullscreen, seek gestures, speed, and audio and subtitle track controls.
