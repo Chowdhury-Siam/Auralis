@@ -235,6 +235,22 @@ void main() {
 
       await tester.tap(find.byTooltip('Sort Library'));
       await tester.pumpAndSettle();
+      final dialog = find.byType(Dialog);
+      final theme = Theme.of(tester.element(dialog));
+      final material = find.descendant(
+        of: dialog,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is Material && widget.type == MaterialType.card,
+        ),
+      );
+      expect(
+        tester.widget<Material>(material.first).color,
+        theme.colorScheme.surfaceContainerHigh,
+      );
+      expect(
+        tester.widget<Material>(material.first).shape,
+        theme.dialogTheme.shape,
+      );
       expect(
         tester
             .widget<ListTile>(find.widgetWithText(ListTile, 'Title (A–Z)'))
@@ -250,6 +266,13 @@ void main() {
       );
 
       await openTab(Icons.search_rounded);
+      Finder channelRow(MusicChat chat) => find.byKey(ValueKey(chat.id));
+      Finder selectedIn(MusicChat chat) => find.descendant(
+        of: channelRow(chat),
+        matching: find.text('Selected in Library'),
+      );
+      expect(selectedIn(channel), findsOneWidget);
+      expect(selectedIn(archive), findsNothing);
       final searchesBefore = td.requests.length;
       await tester.enterText(
         find.widgetWithText(TextField, 'Search channels'),
@@ -268,6 +291,7 @@ void main() {
       await tester.tap(find.byTooltip('Back to channels'));
       await tester.pumpAndSettle();
       final searchField = find.widgetWithText(TextField, 'Search channels');
+      expect(selectedIn(archive), findsOneWidget);
       expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
       await tester.enterText(searchField, 'cine');
       await tester.pumpAndSettle();
