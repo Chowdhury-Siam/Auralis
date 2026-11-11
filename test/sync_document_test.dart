@@ -4,10 +4,47 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:auralis/data_backup.dart';
 import 'package:auralis/storage.dart';
 import 'package:auralis/sync/document.dart';
+import 'package:auralis/models.dart';
+import 'package:auralis/video_playback_data.dart';
 
 void main() {
   Map<String,dynamic> snapshot() => AppSettings(File('unused')).toJson();
   SyncDocument doc(String actor,Map<String,dynamic> snapshot) => SyncDocument({'device':actor*32})..capture(snapshot);
+  test('Telegram recent history and watched marks merge across devices', () {
+    const episode = VideoSource.telegram(Track(
+      id: '-100123:19', title: 'Episode 19', artist: '', source: 'TV',
+    ));
+    final aSettings = AppSettings(File('device-a'));
+    final bSettings = AppSettings(File('device-b'));
+    final a = doc('a', aSettings.toJson()), b = doc('b', bSettings.toJson());
+    aSettings.videoPlayback.recordVideo(episode, at: DateTime.utc(2026));
+    aSettings.videoPlayback.remember(
+      episode.id, const Duration(seconds: 23), const Duration(minutes: 20),
+    );
+    final local = VideoSource.file(Uri.file('/movies/private.mp4'), 'Local video');
+    aSettings.videoPlayback.recordVideo(local);
+    a.capture(aSettings.toJson());
+    b.merge(a.records);
+    bSettings.applyJson(b.project(bSettings.toJson()));
+    expect(bSettings.videoPlayback.history.keys, [episode.id]);
+    expect(bSettings.videoPlayback.history[episode.id]!.source.title, episode.title);
+    expect(bSettings.videoPlayback.positions[episode.id], const Duration(seconds: 23));
+    bSettings.videoPlayback.setWatched(episode, true);
+    b.capture(bSettings.toJson());
+    a.merge(b.records);
+    aSettings.applyJson(a.project(aSettings.toJson()));
+    expect(aSettings.videoPlayback.isWatched(episode), isTrue);
+    expect(aSettings.videoPlayback.positions[episode.id], isNull);
+    expect(aSettings.videoPlayback.history, contains(local.id));
+    aSettings.videoPlayback.setWatched(episode, false);
+    aSettings.videoPlayback.removeHistory(episode.id);
+    a.capture(aSettings.toJson());
+    b.merge(a.records);
+    bSettings.applyJson(b.project(bSettings.toJson()));
+    expect(bSettings.videoPlayback.isWatched(episode), isFalse);
+    expect(bSettings.videoPlayback.history, isEmpty);
+    DataBackup.validateSnapshot(bSettings.toJson());
+  });
   test('concurrent edits, deletions and duplicate playlist names converge without losing unrelated entries',() {
     final initial=snapshot();initial['favoriteIds']=['old'];initial['playlists']={'Mix':['old']};
     final a=doc('a',initial),b=doc('b',initial);
