@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.154
+
+- Update CI widget tests for channel selection and make the Telegram account backup setup deterministic.
+
 ## 0.1.153
 
 - Remove the unused Telegram Video field flagged by static analysis.
