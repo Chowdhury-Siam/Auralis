@@ -20,9 +20,8 @@ import 'player.dart';
 import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
 import 'video_playback_data.dart';
-import 'video_syncplay.dart';
-import 'video_folder_browser.dart';
-import 'video_web_streams.dart';
+import 'video_library.dart';
+import 'video_export.dart';
 
 part 'video_playback_controls.dart';
 part 'video_playback_panels.dart';
@@ -31,7 +30,6 @@ part 'video_playback_tools.dart';
 part 'video_playback_lookup.dart';
 part 'video_playback_config.dart';
 part 'video_playback_hdr.dart';
-part 'video_playback_web_dialog.dart';
 
 const _videoWindow = MethodChannel('app.auralis/video');
 
@@ -59,40 +57,6 @@ Future<({Uint8List bytes, String? path})?> _pickVideoDocument(
   return (bytes: await file.readAsBytes(), path: file.path);
 }
 
-Future<List<VideoSource>?> pickVideoPlaylist() async {
-  final file = await _pickVideoDocument('M3U playlist', ['m3u', 'm3u8']);
-  if (file == null) return null;
-  final sources = parseVideoPlaylist(
-    utf8.decode(file.bytes, allowMalformed: true),
-    base: file.path == null ? null : File(file.path!).absolute.uri,
-  );
-  if (sources.isEmpty) {
-    throw const FormatException(
-      'This playlist has no supported video entries.',
-    );
-  }
-  return sources;
-}
-
-Future<List<VideoSource>> pickVideoFiles() async {
-  if (Platform.isAndroid) {
-    final files = await _videoWindow.invokeListMethod<Map<Object?, Object?>>(
-      'openFiles',
-    );
-    return videosFromAndroid(files);
-  }
-  final files = await openFiles(
-    acceptedTypeGroups: const [
-      XTypeGroup(
-        label: 'Video files',
-        extensions: [...videoFileExtensions, 'm3u8'],
-      ),
-    ],
-  );
-  return [
-    for (final file in files) VideoSource.file(File(file.path).uri, file.name),
-  ];
-}
 
 class VideoPlayback extends StatefulWidget {
   const VideoPlayback({
@@ -166,27 +130,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
   final _subscriptions = <StreamSubscription<dynamic>>[];
   final _changes = ValueNotifier(0);
   final _log = <String>[];
-  late final _room = VideoSyncplay(
-    localPosition: () => (
-      position: _position.inMilliseconds / 1000,
-      paused: _player?.state.playing != true,
-    ),
-    fileInfo: () => {
-      'name': _source.title,
-      'duration': _duration.inMilliseconds / 1000,
-      if (_source.telegram?.size case final int size) 'size': size,
-    },
-    applyRemote: (position, paused) async {
-      if (!_canPlay || _opening || _player == null) return;
-      if (position != null) await _seek(position);
-      if (!_canPlay || paused == null) return;
-      if (paused) {
-        await _player!.pause();
-      } else {
-        await _player!.play();
-      }
-    },
-  );
+  late final Future<void> Function() _releaseForExit =
+      () => _beginRelease(detachSurface: true);
+  Future<void>? _openingTask, _releaseTask;
   late final _queue = List<VideoSource>.of(widget.sources);
   late int _index = widget.initialIndex;
   VideoSource get _source => _queue[_index];
@@ -208,6 +154,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
       _repeatVideo = false,
       _resumeSeek = false;
   bool _appInBackground = false, _selectingFile = false;
+  bool _immersive = false;
+  bool _hasHistoryRecord = false;
   bool _probingCrop = false, _cropped = false;
   String _decoder = 'auto-safe';
   String _secondarySubtitle = 'no';
@@ -223,7 +171,10 @@ class _VideoPlaybackState extends State<VideoPlayback>
   _VideoFit _fit = _VideoFit.fit;
   _Upscale _upscale = _Upscale.off;
   _ShaderQuality _quality = _ShaderQuality.balanced;
-  _Ambient _ambient = _Ambient.off;
+  late _Ambient _ambient = _Ambient.values.firstWhere(
+    (mode) => mode.name == _data.ambientMode,
+    orElse: () => _Ambient.off,
+  );
   List<String> _activeShaders = const [];
   final _previousHdrOptions = <String, String>{};
   VideoHdrProfile _activeHdr = VideoHdrProfile.off;
@@ -261,6 +212,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     WidgetsBinding.instance.addObserver(this);
     widget.telegram.addListener(_authorizationChanged);
     widget.music.audio.addListener(_musicChanged);
+    widget.music.releaseVideo = _releaseForExit;
     if (Platform.isAndroid) _videoWindow.setMethodCallHandler(_windowEvent);
     _checkpoint = Timer.periodic(
       const Duration(seconds: 15),
@@ -314,7 +266,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
     }
     _saveProgress();
     _invalidated = true;
-    _room.disconnect();
     unawaited(_player?.stop());
     unawaited(widget.proxy.stop());
     _error = 'The Telegram session changed. Return to the video browser.';
@@ -372,8 +323,12 @@ class _VideoPlaybackState extends State<VideoPlayback>
     );
   }
 
-  Future<void> _open({bool resume = true}) async {
-    if (_opening || !_canPlay) return;
+  Future<void> _open({bool resume = true}) {
+    if (_opening || !_canPlay) return Future<void>.value();
+    return _openingTask = _openVideo(resume: resume);
+  }
+
+  Future<void> _openVideo({required bool resume}) async {
     _opening = _loading = true;
     _positionReady = false;
     _resumeSeek = resume && _data.positions[_source.id] != null;
@@ -384,6 +339,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
     _secondarySubtitle = 'no';
     _changed();
     try {
+      if (!_source.canPlay) {
+        throw const FormatException('Choose a Telegram or local video.');
+      }
       if (_player == null) {
         final video = _video =
             widget.createController?.call() ?? _createController();
@@ -446,6 +404,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
             }
           }),
           player.stream.playing.listen((playing) {
+            if (_closed) return;
             if (playing && widget.music.audio.playing) {
               unawaited(widget.music.audio.toggle());
             }
@@ -456,6 +415,10 @@ class _VideoPlaybackState extends State<VideoPlayback>
         if (!_canPlay) return;
         await _native.setProperty('network-timeout', '60');
         await _applySavedConfigurations();
+        for (final entry in _data.subtitleStyle.entries.toList()) {
+          if (!_canPlay) return;
+          await _setOption(entry.key, entry.value);
+        }
       } else {
         await _player!.stop();
         if (_cropped) {
@@ -481,24 +444,18 @@ class _VideoPlaybackState extends State<VideoPlayback>
         );
       }
       var source = _source;
+      if (source.telegram case final Track reference when reference.fileId == null) {
+        final restored = await widget.telegram.restoreVideo(reference);
+        if (!_canPlay) return;
+        if (restored == null) {
+          throw const FormatException('This Telegram video is unavailable.');
+        }
+        _queue[_index] = source = VideoSource.telegram(restored);
+      }
       final track = source.telegram;
       if (track == null) await widget.proxy.stop();
       final uri = track == null ? source.uri! : await widget.proxy.uri(track);
       if (!_canPlay) return;
-      VideoWebMedia? web;
-      if (source.webOptions case final VideoWebOptions options) {
-        web = await resolveVideoWebsite(
-          uri,
-          options,
-          androidResolver: Platform.isAndroid ? _resolveAndroidVideo : null,
-        );
-        if (!_canPlay) return;
-        _queue[_index] = source = VideoSource.file(
-          uri,
-          web.title,
-          webOptions: options,
-        );
-      }
       if (await _session?.setActive(true) == false) {
         throw StateError('Audio focus unavailable');
       }
@@ -518,15 +475,12 @@ class _VideoPlaybackState extends State<VideoPlayback>
       }
       if (!_canPlay) return;
       await _player!.open(
-        mpv.Media(
-          web?.resource ?? uri.toString(),
-          start: start,
-          httpHeaders: web?.headers,
-        ),
+        mpv.Media(uri.toString(), start: start),
         play: _data.autoplay,
       );
-      if (!_canPlay) return;
+      if (!_canPlay || _error != null) return;
       widget.onOpened(source);
+      _hasHistoryRecord = _data.history.containsKey(source.id);
       await _applyOrientation();
       unawaited(_updateRefreshRate());
     } catch (failure) {
@@ -540,28 +494,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
       }
     } finally {
       _opening = _loading = false;
-      if (_canPlay && _error == null) _room.updateFile();
       if (mounted && !_closed) setState(() {});
       _changed();
     }
   }
 
-  Future<String?> _resolveAndroidVideo(String url, String format) async {
-    try {
-      return await _videoWindow.invokeMethod<String>('resolveWebVideo', {
-        'url': url,
-        'format': format,
-      });
-    } on PlatformException catch (error) {
-      throw FormatException(
-        error.message ?? 'The website could not be opened.',
-      );
-    } on MissingPluginException {
-      throw const FormatException(
-        'This Android build does not include yt-dlp.',
-      );
-    }
-  }
 
   Future<void> _readChapters() async {
     if (!_canPlay || _player == null) return;
@@ -610,6 +547,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
       return;
     }
     final id = _source.id;
+    if (_hasHistoryRecord && !_data.history.containsKey(id)) return;
     final old = _data.positions[id];
     if (old == _position) return;
     _data.remember(id, _position, _duration);
@@ -649,16 +587,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
     final position = Duration(
       milliseconds: target.inMilliseconds.clamp(0, _duration.inMilliseconds),
     );
-    final id = _source.id;
     await _player!.seek(position);
-    if (_canPlay && !_opening && _source.id == id) {
-      _room.sendState(seek: true, target: position.inMilliseconds / 1000);
-    }
   }
 
   Future<void> _togglePlayback() async {
     if (!_canPlay || _opening || _player == null) return;
-    final paused = _player!.state.playing;
     if (_player!.state.completed) {
       await _seek(Duration.zero);
       if (!_canPlay) return;
@@ -666,7 +599,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
     } else {
       await _player!.playOrPause();
     }
-    if (_canPlay && !_opening) _room.sendState(seek: false, paused: paused);
   }
 
   Future<void> _setZoom(double zoom, {double? x, double? y}) async {
@@ -755,19 +687,50 @@ class _VideoPlaybackState extends State<VideoPlayback>
       ..showSnackBar(SnackBar(content: Text(text)));
   }
 
-  Future<void> _release() async {
-    for (final subscription in _subscriptions) {
-      await subscription.cancel();
-    }
+  Future<void> _releaseStep(Future<void> Function() action, String step) async {
     try {
-      await _player?.dispose();
-    } finally {
-      await _scripts
-          ?.delete(recursive: true)
-          .catchError((Object _) => _scripts!);
-      if (!widget.music.audio.playing && !widget.proxy.hasActiveSource) {
-        await _session?.setActive(false);
+      await action();
+    } catch (_) {
+      debugPrint('Video shutdown: could not $step.');
+    }
+  }
+
+  Future<void> _release(
+    VideoPlayback playback, {
+    required bool detachSurface,
+  }) async {
+    if (detachSurface && mounted && _video != null) {
+      // App exit can run before Flutter unmounts the player.
+      setState(() => _video = null);
+      if (WidgetsBinding.instance.framesEnabled) {
+        await WidgetsBinding.instance.endOfFrame;
       }
+    }
+    await _releaseStep(() async {
+      await _openingTask;
+    }, 'finish opening media');
+    for (final subscription in _subscriptions) {
+      await _releaseStep(subscription.cancel, 'detach playback listener');
+    }
+    await _releaseStep(() => _shaderUpdates, 'finish video filter changes');
+    await _releaseStep(() async {
+      await _player?.dispose();
+    }, 'release the decoder');
+    // The decoder may still be reading the proxy while it stops.
+    await _releaseStep(playback.proxy.stop, 'close the Telegram video stream');
+    if (_scripts case final Directory scripts) {
+      await _releaseStep(() async {
+        await scripts.delete(recursive: true);
+      }, 'remove script cache');
+    }
+    await _releaseStep(() async {
+      if (!playback.music.audio.playing) await _session?.setActive(false);
+    }, 'release audio focus');
+    if (Platform.isAndroid) {
+      await _releaseStep(_resetAndroidWindow, 'reset the Android video window');
+    }
+    if (identical(playback.music.releaseVideo, _releaseForExit)) {
+      playback.music.releaseVideo = null;
     }
   }
 
@@ -782,6 +745,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
       }
       await _videoWindow.invokeMethod<void>('matchRefreshRate');
       await SystemChrome.setPreferredOrientations([]);
+      if (_immersive) {
+        await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      }
     } on PlatformException {
       // Window may have closed before the route.
     } on MissingPluginException {
@@ -789,11 +755,10 @@ class _VideoPlaybackState extends State<VideoPlayback>
     }
   }
 
-  @override
-  void dispose() {
+  Future<void> _beginRelease({required bool detachSurface}) {
+    if (_releaseTask case final Future<void> release) return release;
     _saveProgress();
     _closed = true;
-    _room.dispose();
     _checkpoint?.cancel();
     _sleepTimer?.cancel();
     _thermalTimer?.cancel();
@@ -803,19 +768,24 @@ class _VideoPlaybackState extends State<VideoPlayback>
     if (Platform.isAndroid) {
       _videoWindow.setMethodCallHandler(null);
     }
-    final release = Future.wait<void>([
-      widget.proxy.stop(),
-      _release(),
-      if (Platform.isAndroid) _resetAndroidWindow(),
-    ]).then<void>((_) {}, onError: (Object _) {});
+    final playback = widget;
+    final release = _releaseTask = Future<void>.microtask(
+      () => _release(playback, detachSurface: detachSurface),
+    );
     widget.onRelease?.call(release);
-    unawaited(release);
+    return release;
+  }
+
+  @override
+  void dispose() {
+    unawaited(_beginRelease(detachSurface: false));
     _changes.dispose();
     super.dispose();
   }
 
   Future<void> _enterFullscreen() async {
     if (Platform.isAndroid) {
+      _immersive = true;
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       await _applyOrientation(fullscreen: true);
     } else {
@@ -825,11 +795,13 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   Future<void> _exitFullscreen() async {
     await defaultExitNativeFullscreen();
+    _immersive = false;
     if (!_closed) await _applyOrientation();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_closed) return const SizedBox.shrink();
     final video = _video;
     final surface = Scaffold(
       backgroundColor: Colors.black,
