@@ -1,6 +1,12 @@
 {
-  "current": "0.1.148",
+  "current": "0.1.149",
   "releases": [
+    {
+      "version": "0.1.149",
+      "changes": [
+        "Accept either startup order for concurrent artwork requests in CI."
+      ]
+    },
     {
       "version": "0.1.148",
       "changes": [
