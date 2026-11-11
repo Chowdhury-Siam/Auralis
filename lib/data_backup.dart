@@ -14,6 +14,8 @@ enum BackupSection {
     'App preferences',
     'Playback, navigation, lyrics and other app settings.',
     {
+      'defaultInterface',
+      'videoChannelId',
       'compactLibrary',
       'navigationStyle',
       'navigationRadius',
@@ -124,6 +126,15 @@ class DataBackup {
   }
 
   static void _validatePreferences(Map<String, dynamic> data) {
+    if (data.containsKey('defaultInterface') &&
+        !AppInterface.values.any(
+          (mode) => mode.name == data['defaultInterface'],
+        )) {
+      throw const FormatException('Invalid default interface.');
+    }
+    if (data['videoChannelId'] != null && data['videoChannelId'] is! int) {
+      throw const FormatException('Invalid video channel.');
+    }
     if (data['reducedMotion'] is! bool || data['automaticUpdates'] is! bool) {
       throw const FormatException('Invalid preferences.');
     }
