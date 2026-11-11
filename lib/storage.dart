@@ -129,7 +129,6 @@ class AppSettings {
   bool automaticUpdates = true;
   double volume = 70;
   bool automaticLyrics = true, automaticTranslation = true;
-  bool compactLibrary = false;
   AppNavigationStyle navigationStyle = AppNavigationStyle.fullWidth;
   double navigationRadius = 28;
   LyricsSource lyricsFirst = LyricsSource.lrclib;
@@ -195,7 +194,6 @@ class AppSettings {
     videoChannelId = json['videoChannelId'] is int
         ? json['videoChannelId'] as int
         : null;
-    compactLibrary = json['compactLibrary'] == true;
     navigationStyle = AppNavigationStyle.values.firstWhere(
       (v) => v.name == json['navigationStyle'],
       orElse: () => AppNavigationStyle.fullWidth,
@@ -278,7 +276,6 @@ class AppSettings {
     'translationDirection': translationDirection.name,
     'defaultInterface': defaultInterface.name,
     'videoChannelId': videoChannelId,
-    'compactLibrary': compactLibrary,
     'navigationStyle': navigationStyle.name,
     'navigationRadius': navigationRadius,
     'librarySort': librarySort.name,
