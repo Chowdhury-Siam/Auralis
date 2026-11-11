@@ -464,7 +464,9 @@ extension _DiscoveryPages on _PlayerShellState {
               ),
             Expanded(
               child: results
-                  ? _trackList(group.isEmpty ? library.tracks : group)
+                  ? _trackList(
+                      _visibleTracks(group.isEmpty ? library.tracks : group),
+                    )
                   : groups.isEmpty
                   ? ListView(
                       padding: EdgeInsets.only(bottom: _dockPadding),
