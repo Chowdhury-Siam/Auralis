@@ -60,8 +60,6 @@ kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget
 flutter { source = "../.." }
 dependencies {
     implementation("androidx.core:core:1.17.0")
-    implementation("androidx.media3:media3-effect:1.8.1")
-    implementation("androidx.media3:media3-transformer:1.8.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
 }
