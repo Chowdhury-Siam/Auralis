@@ -350,6 +350,18 @@ void main() {
         await tester.tap(find.byTooltip('Library').first);
         await tester.pumpAndSettle();
       }
+      await tester.enterText(find.byType(TextField), 'Song -2');
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('Shuffle collection'));
+        for (var attempt = 0; attempt < 100 && player.loading; attempt++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+      expect(player.loading, isFalse);
+      await tester.pumpAndSettle();
+      expect(player.queue.map((track) => track.title), ['Song -2']);
+      expect(player.current?.title, 'Song -2');
       await tester.tap(find.byTooltip('Telegram').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Channel -1').first);
