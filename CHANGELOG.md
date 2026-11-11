@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.130
+
+- Find Telegram channels by name in Video Search and open them in Library. Filter the channel picker to switch channels from either tab.
+- Use square thumbnails in Video Library and apply the shared Library sort order. Title (A–Z) is the default when no order is saved.
+
 ## 0.1.129
 
 - Refresh Telegram channels on entering Video, returning to the app, or tapping Refresh. The open channel picker updates when a new channel arrives.
