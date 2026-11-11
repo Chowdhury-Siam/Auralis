@@ -4,12 +4,16 @@ import 'dart:typed_data';
 
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
+
+import 'app_popups.dart';
+
 import 'package:media_kit/media_kit.dart' as mpv;
 import 'package:media_kit_video/media_kit_video.dart';
 
 import 'models.dart';
 import 'discovery_widgets.dart';
 import 'app_navigation.dart';
+import 'app_theme.dart';
 import 'player.dart';
 import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
@@ -38,48 +42,30 @@ Future<T?> _showVideoChoices<T>(
   required List<({T value, String label, bool selected})> choices,
 }) {
   FocusManager.instance.primaryFocus?.unfocus();
-  return showDialog<T>(
+  return showAuralisDialog<T>(
     context: context,
-    builder: (context) {
-      final colors = Theme.of(context).colorScheme;
-      return AlertDialog(
-        title: Text(title),
-        scrollable: true,
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (choices.isEmpty) const Text('No options available.'),
-              for (final choice in choices)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    selected: choice.selected,
-                    selectedTileColor: colors.primaryContainer,
-                    selectedColor: colors.onPrimaryContainer,
-                    title: Text(choice.label),
-                    trailing: choice.selected
-                        ? const Icon(Icons.check_rounded)
-                        : null,
-                    onTap: () => Navigator.pop(context, choice.value),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
+    builder: (context) => AuralisDialog(
+      title: Text(title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (choices.isEmpty) const Text('No options available.'),
+          for (final choice in choices)
+            AuralisChoiceTile(
+              selected: choice.selected,
+              title: Text(choice.label),
+              onTap: () => Navigator.pop(context, choice.value),
+            ),
         ],
-      );
-    },
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ],
+    ),
   );
 }
 
@@ -310,11 +296,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     setState(() => _openingLink = true);
     String value = '';
     try {
-      final link = await showDialog<String>(
+      final link = await showAuralisDialog<String>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => AuralisDialog(
           title: const Text('Open Telegram link'),
-          scrollable: true,
           content: TextField(
             autofocus: true,
             keyboardType: TextInputType.url,
@@ -489,10 +474,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         }
       },
       child: Scaffold(
-        // Floating navigation leaves its gaps open to the page, just as in Music.
         extendBody:
-            (_tab == 0 || (_tab == 1 && !_showSearchChannel)) &&
-            settings.navigationStyle != AppNavigationStyle.fullWidth,
+            !wide && settings.navigationStyle != AppNavigationStyle.fullWidth,
         bottomNavigationBar: wide
             ? null
             : AppNavigation(
@@ -535,12 +518,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     );
   }
 
-  double get _bottomPadding =>
-      (_tab == 0 || (_tab == 1 && !_showSearchChannel)) &&
-          MediaQuery.sizeOf(context).width < 900 &&
-          widget.music.settings.navigationStyle != AppNavigationStyle.fullWidth
-      ? 100
-      : 20;
+  // Scaffold reports the floating bar's height in the body padding.
+  double _bottomPadding(BuildContext context) =>
+      MediaQuery.paddingOf(context).bottom + 20;
 
   Widget _openLinkButton() => IconButton(
     tooltip: 'Open Telegram link',
@@ -594,7 +574,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     final videos = _library?.videos.values.take(4).toList() ?? const <Track>[];
     return ListView(
       key: const PageStorageKey('video-home-scroll'),
-      padding: EdgeInsets.only(bottom: _bottomPadding),
+      padding: EdgeInsets.only(bottom: _bottomPadding(context)),
       children: [
         Wrap(
           alignment: WrapAlignment.spaceBetween,
@@ -787,9 +767,12 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                 },
                 decoration: InputDecoration(
                   hintText: 'Search channels',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(28),
-                    borderSide: BorderSide.none,
+                  enabledBorder: auralisFieldBorder(radius: 28),
+                  focusedBorder: auralisFieldBorder(
+                    radius: 28,
+                    side: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                   prefixIcon: const Icon(Icons.search_rounded, size: 20),
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -821,7 +804,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
           child: ListView.separated(
             key: ValueKey(query),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.only(bottom: _bottomPadding),
+            padding: EdgeInsets.only(bottom: _bottomPadding(context)),
             itemCount: channels.isEmpty ? 1 : channels.length,
             separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
@@ -988,7 +971,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                     ),
                   ),
                 ),
-              SliverToBoxAdapter(child: SizedBox(height: _bottomPadding)),
+              SliverToBoxAdapter(
+                child: SizedBox(height: _bottomPadding(context)),
+              ),
             ],
           ),
         ),
@@ -1027,7 +1012,7 @@ class _VideoListRow extends StatelessWidget {
           color: selected
               ? colors.primaryContainer
               : colors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(18),
+          shape: auralisSurfaceShape(colors, radius: 18, borderOpacity: .35),
           clipBehavior: Clip.antiAlias,
           child: Semantics(
             selected: selected,
