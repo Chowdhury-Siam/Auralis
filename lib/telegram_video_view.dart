@@ -15,7 +15,9 @@ import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
 import 'video_playback.dart';
 import 'video_playback_data.dart';
-import 'video_folder_browser.dart';
+import 'video_files.dart';
+import 'video_library.dart';
+import 'video_export.dart';
 
 class TelegramVideoView extends StatefulWidget {
   const TelegramVideoView({
@@ -293,11 +295,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
 
   void _recordVideo(VideoSource source) {
     final video = source.telegram;
-    if (video == null &&
-        const {'file', 'content'}.contains(source.uri?.scheme)) {
-      widget.music.settings.videoPlayback.lastLocalVideo = source.id;
-      unawaited(widget.music.settings.save().catchError((Object _) {}));
-    }
+    final settings = widget.music.settings;
+    settings.videoPlayback.recordVideo(source);
+    unawaited(settings.save().catchError((Object _) {}));
     if (!mounted || !_ready || video == null) return;
     setState(() {
       _recent.removeWhere((item) => item.id == video.id);
@@ -325,6 +325,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       if (_playbackSources != null) _closePlayer();
       await WidgetsBinding.instance.endOfFrame;
       await _playbackRelease;
+      if (!mounted) return;
+      await widget.music.releaseVideo?.call();
       if (!mounted || (videos[index].telegram != null && !_ready)) return;
       FocusManager.instance.primaryFocus?.unfocus();
       setState(() {
@@ -344,44 +346,37 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
 
   void _minimizePlayer() => setState(() => _videoMinimized = true);
 
-  Future<void> _openVideoFiles() async {
+
+  Future<void> _compressVideoFiles() async {
     try {
-      await _launchPlayer(await pickVideoFiles(), 0);
+      final sources = await pickVideoFiles();
+      if (mounted && sources.isNotEmpty) await showVideoExport(context, sources);
     } catch (_) {
       if (mounted) _notice('Could not open the selected files.');
     }
   }
 
-  Future<void> _browseVideoFolders() async {
-    final chosen = await Navigator.of(context).push<(List<VideoSource>, int)>(
+  Future<void> _openVideoLibrary({required bool playlists}) async {
+    final settings = widget.music.settings;
+    final selected = await Navigator.of(context).push<VideoSelection>(
       MaterialPageRoute(
-        builder: (context) => VideoFolderBrowser(
-          data: widget.music.settings.videoPlayback,
-          save: widget.music.settings.save,
+        builder: (_) => VideoLibraryPage(
+          data: settings.videoPlayback,
+          save: settings.save,
+          pickFiles: pickVideoFiles,
+          playlists: playlists,
         ),
       ),
     );
-    if (chosen != null) await _launchPlayer(chosen.$1, chosen.$2);
-  }
-
-  Future<void> _openVideoStream() async {
-    final settings = widget.music.settings;
-    final source = await showVideoStreamDialog(context, settings.videoPlayback);
-    if (source == null || !mounted) return;
-    if (source.webOptions != null) {
-      unawaited(settings.save().catchError((Object _) {}));
-    }
-    await _launchPlayer([source], 0);
-  }
-
-  Future<void> _openVideoPlaylist() async {
-    try {
-      final sources = await pickVideoPlaylist();
-      if (sources != null) await _launchPlayer(sources, 0);
-    } on FormatException catch (error) {
-      if (mounted) _notice(error.message);
-    } catch (_) {
-      if (mounted) _notice('Could not open the selected playlist.');
+    if (!mounted) return;
+    setState(() => _recent.removeWhere((track) =>
+        !settings.videoPlayback.history.containsKey(VideoSource.telegram(track).id)));
+    if (selected != null) {
+      if (selected.$1[selected.$2].telegram != null && !_ready) {
+        _notice('Reconnect Telegram to play this video.');
+      } else {
+        await _launchPlayer(selected.$1, selected.$2);
+      }
     }
   }
 
@@ -476,7 +471,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     if (identical(_telegram.hasActiveStream, _hasActiveStream)) {
       _telegram.hasActiveStream = _previousActive;
     }
-    unawaited(_proxy.close());
+    unawaited(_playbackRelease.whenComplete(_proxy.close));
     _search.dispose();
     super.dispose();
   }
@@ -739,24 +734,26 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
           runSpacing: 6,
           children: [
             FilledButton.tonalIcon(
-              onPressed: _openVideoFiles,
-              icon: const Icon(Icons.video_file_outlined),
-              label: const Text('Open files'),
+              onPressed: _compressVideoFiles,
+              icon: const Icon(Icons.compress_rounded),
+              label: const Text('Compress'),
             ),
             FilledButton.tonalIcon(
-              onPressed: _browseVideoFolders,
-              icon: const Icon(Icons.folder_open_rounded),
-              label: const Text('Browse folders'),
+              onPressed: () => _openVideoLibrary(playlists: true),
+              icon: const Icon(Icons.video_library_outlined),
+              label: const Text('Playlists'),
             ),
             FilledButton.tonalIcon(
-              onPressed: _openVideoStream,
-              icon: const Icon(Icons.link_rounded),
-              label: const Text('Open stream'),
+              onPressed: () => _openVideoLibrary(playlists: false),
+              icon: const Icon(Icons.history_rounded),
+              label: const Text('History'),
             ),
             FilledButton.tonalIcon(
-              onPressed: _openVideoPlaylist,
-              icon: const Icon(Icons.playlist_play_rounded),
-              label: const Text('Open playlist'),
+              onPressed: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(builder: (_) => const VideoSnapshotsPage()),
+              ),
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Snapshots'),
             ),
           ],
         ),
