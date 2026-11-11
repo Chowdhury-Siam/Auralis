@@ -461,7 +461,7 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
       contentPadding: EdgeInsets.zero,
       title: const Text('Include Telegram account'),
       subtitle: const Text(
-        'Connect the same Telegram account on your other devices with device approval.',
+        'Connect the same Telegram account on your other devices when you sign in to Auralis.',
       ),
       value: sync.telegramIncluded,
       onChanged: disabled
@@ -565,7 +565,7 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
     ),
     if (sync.telegramIncluded)
       const Text(
-        'Keep Auralis open on a connected device to approve a new sign-in, or use phone sign-in.',
+        'Keep Auralis open on a device already connected to Telegram, or use phone sign-in.',
       ),
   ]);
   @override
