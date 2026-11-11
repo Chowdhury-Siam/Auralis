@@ -334,14 +334,19 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Recently played'));
-      await tester.pumpAndSettle();
+      Future<void> selectCollection(String name) async {
+        await tester.tap(find.byKey(const ValueKey('library-collection-menu')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(PopupMenuItem<int>, name));
+        await tester.pumpAndSettle();
+      }
+
+      await selectCollection('Recently played');
       expect(
         tester.getTopLeft(find.text(b.title)).dy,
         lessThan(tester.getTopLeft(find.text(a.title)).dy),
       );
-      await tester.tap(find.text('All songs'));
-      await tester.pumpAndSettle();
+      await selectCollection('All songs');
       await tester.tap(find.byTooltip('Track actions for ${a.title}'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Add to favorites'));
@@ -353,8 +358,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(player.queue.single.id, a.id);
       expect(player.index, -1);
-      await tester.tap(find.text('Favorites'));
-      await tester.pumpAndSettle();
+      await selectCollection('Favorites');
       expect(find.byKey(ValueKey('track-title-${a.id}')), findsOneWidget);
       expect(find.text(b.title), findsNothing);
       await tester.tap(find.byTooltip('Track actions for ${a.title}'));
@@ -369,8 +373,7 @@ void main() {
       expect(settings.playlists, {
         'Night drive': [a.id],
       });
-      await tester.tap(find.text('Playlists'));
-      await tester.pumpAndSettle();
+      await selectCollection('Playlists');
       await tester.tap(find.text('Night drive'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Rename playlist'));
