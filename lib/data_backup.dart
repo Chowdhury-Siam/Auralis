@@ -16,7 +16,6 @@ enum BackupSection {
     {
       'defaultInterface',
       'videoChannelId',
-      'compactLibrary',
       'navigationStyle',
       'navigationRadius',
       'reducedMotion',
@@ -121,6 +120,7 @@ class DataBackup {
         'Backup integrity check failed. The file may be damaged.',
       );
     }
+    snapshot.remove(_retiredLibraryPreference);
     _validate(snapshot, partial: version == 2);
     return DataBackup._(snapshot, created, version);
   }
@@ -150,7 +150,6 @@ class DataBackup {
       'automaticLyrics',
       'automaticTranslation',
       'keepArtwork',
-      'compactLibrary',
     ]) {
       if (data.containsKey(name) && data[name] is! bool) {
         throw const FormatException('Invalid media preference.');
@@ -201,7 +200,10 @@ class DataBackup {
 
   static final _allowed = {
     for (final section in BackupSection.values) ...section.keys,
+    _retiredLibraryPreference,
   };
+  // Legacy account snapshots can still contain this preference.
+  static const _retiredLibraryPreference = 'compactLibrary';
 
   static void _validate(Map<String, dynamic> data, {bool partial = false}) {
     if (data.keys.any((key) => !_allowed.contains(key))) {
