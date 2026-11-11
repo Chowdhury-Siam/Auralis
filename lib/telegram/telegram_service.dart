@@ -856,7 +856,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.149',
+          'application_version': '0.1.152',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -1026,30 +1026,6 @@ class TelegramService extends ChangeNotifier {
     return Track.fromVideoMessage(message, reference.source);
   }
 
-  Future<Track?> videoLink(String value) async {
-    final uri = Uri.tryParse(value.trim());
-    if (uri == null ||
-        uri.scheme != 'https' ||
-        !const {'t.me', 'telegram.me'}.contains(uri.host) ||
-        uri.userInfo.isNotEmpty ||
-        uri.hasPort ||
-        uri.pathSegments.length < 2 ||
-        uri.pathSegments.length > 4 ||
-        int.tryParse(uri.pathSegments.last) == null) {
-      throw const FormatException('Enter a Telegram video message link.');
-    }
-    final client = transport;
-    final result = await client.request({
-      '@type': 'getMessageLinkInfo',
-      'url': uri.toString(),
-    });
-    final message = result['message'];
-    if (!ready || !identical(client, transport) || message is! Json) {
-      return null;
-    }
-    final source = _channels[message['chat_id']]?.title ?? 'Telegram';
-    return Track.fromVideoMessage(message, source);
-  }
 
   Future<({List<Track> tracks, int nextMessageId})> _searchMedia(
     int chatId, {
