@@ -102,12 +102,12 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(
-          find.widgetWithText(TextField, 'Search your videos'),
+          find.widgetWithText(TextField, 'Search videos or channels'),
           findsOneWidget,
         );
         expect(find.byType(DiscoveryTile), findsNothing);
         expect(find.text('Music only'), findsNothing);
-        expect(find.text('Find a video by title'), findsOneWidget);
+        expect(find.text('Find videos or channels'), findsOneWidget);
         await tester.tap(find.byTooltip('Choose video channel'));
         await tester.pumpAndSettle();
         final dialog = find.byType(AlertDialog);
@@ -182,6 +182,125 @@ void main() {
     );
   }
 
+  testWidgets(
+    'find and switch video channels, sort videos and use square thumbnails',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      const archive = MusicChat(-100456, 'Series archive');
+      final td = FakeTd();
+      td.onRequest = (request) async {
+        if (request['@type'] != 'searchChatMessages') return null;
+        return {
+          'messages': request['filter']?['@type'] == 'searchMessagesFilterVideo'
+              ? [
+                  if (request['chat_id'] == archive.id)
+                    {...post(55, 'Archive episode.mp4'), 'chat_id': archive.id}
+                  else ...[
+                    post(40, 'Zebra.mp4'),
+                    post(30, 'Alpha.mp4'),
+                  ],
+                ]
+              : [],
+          'next_from_message_id': 0,
+        };
+      };
+      final telegram = TelegramService(
+        Directory('unused'),
+        MemoryVault(),
+        transport: td,
+      )..state = 'authorizationStateReady';
+      final settings = MemorySettings()
+        ..defaultInterface = AppInterface.video
+        ..selectedChannels = [channel, archive]
+        ..videoChannelId = channel.id;
+      final player = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy(telegram.request),
+        settings,
+      );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        await player.shutdown();
+        await telegram.shutdown();
+      });
+      await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+      await tester.pumpAndSettle();
+      final navigation = find.byKey(const ValueKey('video-navigation'));
+      Future<void> openTab(IconData icon) async {
+        await tester.tap(
+          find.descendant(of: navigation, matching: find.byIcon(icon)),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await openTab(Icons.video_library_rounded);
+      final alpha = find.text('Alpha'), zebra = find.text('Zebra');
+      expect(settings.librarySort, LibrarySort.title);
+      expect(
+        tester.getTopLeft(alpha).dy,
+        lessThan(tester.getTopLeft(zebra).dy),
+      );
+      final thumbnail = find.descendant(
+        of: find.byKey(ValueKey('${channel.id}:30')),
+        matching: find.byType(ClipRRect),
+      );
+      expect(thumbnail, findsOneWidget);
+      final dimensions = tester.getSize(thumbnail);
+      expect(dimensions.width, dimensions.height);
+
+      await tester.tap(find.byTooltip('Sort Library'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ListTile>(find.widgetWithText(ListTile, 'Title (A–Z)'))
+            .selected,
+        isTrue,
+      );
+      await tester.tap(find.widgetWithText(ListTile, 'Newest first'));
+      await tester.pumpAndSettle();
+      expect(settings.librarySort, LibrarySort.newest);
+      expect(
+        tester.getTopLeft(zebra).dy,
+        lessThan(tester.getTopLeft(alpha).dy),
+      );
+
+      await openTab(Icons.search_rounded);
+      final searchesBefore = td.requests.length;
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search videos or channels'),
+        'ARCHI',
+      );
+      await tester.pumpAndSettle();
+      expect(td.requests, hasLength(searchesBefore));
+      await tester.tap(find.widgetWithText(ListTile, archive.title));
+      await tester.pumpAndSettle();
+      expect(tester.widget<AppNavigation>(navigation).selected, 2);
+      expect(find.text('Archive episode'), findsOneWidget);
+      expect(alpha, findsNothing);
+      expect(settings.videoChannelId, archive.id);
+
+      await tester.tap(find.byTooltip('Choose video channel'));
+      await tester.pumpAndSettle();
+      final pickerSearch = find.widgetWithText(TextField, 'Search channels');
+      await tester.enterText(pickerSearch, 'cine');
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(ListTile, archive.title), findsNothing);
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(settings.videoChannelId, channel.id);
+      expect(find.text('Archive episode'), findsNothing);
+      expect(
+        tester.getTopLeft(zebra).dy,
+        lessThan(tester.getTopLeft(alpha).dy),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final size in [
     const Size(320, 568),
     const Size(844, 390),
@@ -235,7 +354,7 @@ void main() {
       if (size.width >= 900) expect(find.byType(AppSidebar), findsOneWidget);
       await tester.tap(find.byIcon(Icons.search_rounded).last);
       await tester.pumpAndSettle();
-      expect(find.text('Find a video by title'), findsOneWidget);
+      expect(find.text('Find videos or channels'), findsOneWidget);
       expect(find.text('Trailer'), findsNothing);
       await tester.tap(find.byTooltip('Choose video channel'));
       await tester.pumpAndSettle();
