@@ -79,11 +79,12 @@ class MediaCache {
   Future<Uint8List?> _read(Track track, String kind, int limit) async {
     if (directory == null) return null;
     try {
-      for (final candidate in [key(track), _legacyKey(track)]) {
+      final current = key(track);
+      for (final candidate in [current, _legacyKey(track)]) {
         final file = File('${directory!.path}/$candidate.$kind');
         if (!await file.exists() || await file.length() > limit) continue;
         final bytes = await file.readAsBytes();
-        if (candidate != key(track)) await _write(track, kind, bytes);
+        if (candidate != current) await _write(track, kind, bytes);
         return bytes;
       }
       return null;
@@ -96,7 +97,8 @@ class MediaCache {
     if (directory == null || !await directory!.exists()) return;
     await for (final entry in directory!.list(followLinks: false)) {
       if (entry is File &&
-          RegExp(r'^[a-f0-9]{64}\.art$').hasMatch(p.basename(entry.path))) {
+          RegExp(r'^[a-f0-9]{64}\.art(?:-checked)?$')
+              .hasMatch(p.basename(entry.path))) {
         try {
           await entry.delete();
         } on FileSystemException {
