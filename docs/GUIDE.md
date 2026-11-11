@@ -102,7 +102,7 @@ Before the first timed lyric and during blank timestamped gaps, lyrics stay full
 
 ## Telegram Video
 
-Choose **Music** or **Video** under **Open on startup** in setup or **Settings → General**. Hold **Home** on Android or Windows to switch interfaces. In Video Search, find and select a Telegram channel, or use the Telegram link button for an accessible video message. Video Library sorts channel videos by Title (A–Z) by default.
+Choose **Music** or **Video** under **Open on startup** in setup or **Settings → General**. Hold **Home** on Android or Windows to switch interfaces. Choose a channel under **Video Search → Browse channels**, then open **Library** to view its episodes. Video Library sorts channel videos by Title (A–Z) by default.
 
 The player uses libmpv and an [mpvRx](https://github.com/Riteshp2001/mpvRx)-style overlay. Tap the video to show or hide controls. Double-tap the sides to seek or the center to play and pause. Swipe horizontally to scrub, swipe vertically to change volume or Android brightness, hold for a temporary speed boost, and pinch to zoom. On Windows, Space plays or pauses, the arrows seek or adjust volume, and F toggles fullscreen.
 
@@ -110,7 +110,8 @@ The top controls open decoder, audio, subtitle, and **More** panels. Use **Now p
 
 **More → Minimize video** keeps the current video session active while you browse Video mode. Tap the dock to expand the player, pause or resume, or close the session. With background playback enabled, **Back** also minimizes the player. Video playback pauses music while preserving its queue and position. Video resume points and bookmarks are saved on this device.
 
-- Use **Playlists** to manage local and Telegram video playlists, **Compress** to export local video, and **Snapshots** to preview saved frames. Android accepts local videos through **Open with** and **Share**.
+- Use **Playlists** to manage local and Telegram video playlists, and **Snapshots** to preview saved frames. Android accepts local videos through **Open with** and **Share**.
+- Telegram episodes are marked watched when playback finishes. Use the check control beside an episode to mark it watched or unwatched. **Recently opened**, resume positions, and watched status sync when both devices use the same Auralis account and an updated sync Worker. Local video files and their paths stay on this device.
 - **More → HDR processing** includes BT.2100 PQ, BT.2100 HLG, BT.2020 gamut mapping, and Linear HDR when libmpv reports GPU-next. On Android, enable **GPU-next renderer** under **Player settings** and reopen playback. These profiles change color processing in the player. Native HDR display output depends on the renderer and display path. **Match video frame rate** requests a compatible refresh mode on Android.
 
 - Use **Subtitles → Search subtitles with Wyzie** with a TMDB or IMDb ID and a Wyzie API key. **More → Skip segments** lets you mark start and end times or look up AniSkip segments by MyAnimeList ID and episode. The seekbar shows saved segment boundaries.
@@ -130,7 +131,7 @@ Use **Windows x64**, Flutter **3.47.1** / Dart **3.13.1**, Git, PowerShell **7.4
 
 Windows build requirements are listed above. Android uses its separate workflow; see [docs/ANDROID.md](ANDROID.md).
 
-Pinned Dart dependencies and their transitive versions are in `pubspec.yaml` and `pubspec.lock`: Flutter, media_kit 1.2.6+auralis.2 (vendored MIT runtime with Windows COM/shutdown patches), media_kit_video 2.0.1, media_kit_libs_windows_video 1.0.11, ffi 2.2.0, path 1.9.1, path_provider 2.1.6, package_info_plus 10.2.1, crypto 3.0.7, and file_selector 1.1.0 for desktop save/open dialogs, media_kit_libs_android_video 1.3.8, audio_service 0.18.19 and audio_session 0.2.4. Android file export/restore uses the Storage Access Framework. TDLib is built separately; no third-party Dart Telegram wrapper is used. Keep `third_party/media_kit` in Git with the app; its patch and original license are included there.
+Pinned Dart dependencies and their transitive versions are in `pubspec.yaml` and `pubspec.lock`: Flutter, media_kit 1.2.6+auralis.2 (vendored MIT runtime with Windows COM/shutdown patches), media_kit_video 2.0.1+auralis.1 (vendored MIT plugin with Windows renderer shutdown fix), media_kit_libs_windows_video 1.0.11, ffi 2.2.0, path 1.9.1, path_provider 2.1.6, package_info_plus 10.2.1, crypto 3.0.7, and file_selector 1.1.0 for desktop save/open dialogs, media_kit_libs_android_video 1.3.8, audio_service 0.18.19 and audio_session 0.2.4. Android file export/restore uses the Storage Access Framework. TDLib is built separately; no third-party Dart Telegram wrapper is used. Keep `third_party/media_kit` and `third_party/media_kit_video` in Git with the app. Each directory includes its patch notes and original license.
 
 From this directory:
 
