@@ -1,6 +1,6 @@
 # Third-party notices and native provenance
 
-Auralis's original source is AGPL-3.0-or-later. Third-party components retain their own terms. This source delivery contains no PixelPlayer or mpvRx app source/assets and contains no native DLLs.
+Auralis's original source is AGPL-3.0-or-later. Third-party components retain their own terms. This source delivery contains Auralis's Flutter video player and the shader assets described below.
 
 | Component | Terms / source |
 |---|---|
@@ -47,4 +47,13 @@ CI builds TDLib from its pinned public source instead. Preserve its generated `n
 
 `tool/build-tdlib-android.sh` builds the same TDLib revision as Windows (`a94b83d67ab4c8397c6245e541b31a4131ea2f79`) and OpenSSL 3.5.4 (`c1eeb9406b6142148f267594197d853403d10208`) with NDK 28.2.13676358, Android API 24, static OpenSSL/C++ and 16 KiB ELF alignment. Android supplies system zlib. The script retains TDLib/OpenSSL licenses and a build manifest under `native/android/`; the workflow includes them with the APK artifact. Binary inputs and signing files are excluded from this source ZIP.
 
-The Android media_kit plugin downloads v1.1.7 native archives from [libmpv-android-video-build](https://github.com/media-kit/libmpv-android-video-build/releases/tag/v1.1.7), verifies the upstream package's checksums and packages libmpv/FFmpeg/helper libraries. Its MIT wrapper does not relicense native codec libraries. As with the Windows milestone above, a complete native corresponding-source/security/license audit is still required before public binary distribution; this task does not claim a Play Store-ready or audited codec distribution. The workflow checks all packaged ELF libraries for the requested ABI and 16 KiB load alignment before retaining APK artifacts. No mpvRx/PixelPlayer source or assets are included.
+The Android media_kit plugin downloads v1.1.7 native archives from [libmpv-android-video-build](https://github.com/media-kit/libmpv-android-video-build/releases/tag/v1.1.7), verifies the upstream package's checksums and packages libmpv/FFmpeg/helper libraries. Its MIT wrapper does not relicense native codec libraries. As with the Windows milestone above, a complete native corresponding-source/security/license audit is still required before public binary distribution; this task does not claim a Play Store-ready or audited codec distribution. The workflow checks all packaged ELF libraries for the requested ABI and 16 KiB load alignment before retaining APK artifacts.
+
+## Video player references and bundled assets
+
+- mpvRx (Ritesh Prajapati and contributors) provided the Android player design and Anime4K preset reference. Its project is available under AGPL-3.0. Auralis implements the player in Flutter on its existing libmpv backend.
+- The Syncplay protocol implementation follows the playback messages used by mpvRx and the [Syncplay project](https://syncplay.pl/). Wyzie and AniSkip are optional services contacted from their player controls.
+- The Anime4K shader files in `assets/shaders/anime4k/` are from the supplied mpvRx archive. The original bloc97 MIT notices and the public-domain notice in the downscale shader are retained in the files.
+- HDR Toys shaders in `assets/shaders/hdr-toys/` follow the supplied mpvRx profiles and retain the [HDR Toys](https://github.com/natural-harmonia-gropius/hdr-toys) MIT license.
+- Android builds package [Chaquopy 17.2](https://chaquo.com/chaquopy/), Python 3.13, [yt-dlp 2026.10.26](https://github.com/yt-dlp/yt-dlp), [yt-dlp-ejs 0.8.0](https://github.com/yt-dlp/ejs), and [QuickJS-NG 0.18.0](https://github.com/quickjs-ng/quickjs). Python packages retain their included distribution notices. QuickJS is built from a checksum-pinned source archive, with its MIT notice in `docs/QUICKJS-LICENSE.txt`.
+- DejaVu Sans is bundled as the Android subtitle fallback. See `assets/fonts/LICENSE-DejaVu.txt`.
