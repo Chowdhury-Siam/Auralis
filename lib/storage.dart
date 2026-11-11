@@ -136,7 +136,8 @@ class AppSettings {
   TranslationSource? translationFallback = TranslationSource.myMemory;
   TranslationDirection translationDirection =
       TranslationDirection.japaneseEnglish;
-  LibrarySort librarySort = LibrarySort.newest;
+  static const defaultLibrarySort = LibrarySort.title;
+  LibrarySort librarySort = defaultLibrarySort;
   List<MusicChat> selectedChannels = [];
   Set<String> favoriteIds = {};
   Map<String, List<String>> playlists = {};
@@ -230,7 +231,7 @@ class AppSettings {
     );
     librarySort = LibrarySort.values.firstWhere(
       (value) => value.name == json['librarySort'],
-      orElse: () => LibrarySort.newest,
+      orElse: () => defaultLibrarySort,
     );
     favoriteIds = _ids(json['favoriteIds'], 10000).toSet();
     recentIds = _ids(json['recentIds'], 100);
