@@ -75,6 +75,7 @@ class SyncController extends ChangeNotifier {
       _telegramIncluded = true,
       _telegramPolling = false,
       _telegramOperating = false;
+  ({String token, int expires})? _telegramLoginGrant;
   Map<String, dynamic>? _telegramProfile;
   List<Map<String, dynamic>> _telegramRequests = [];
   Timer? _telegramTimer, _telegramDebounce;
