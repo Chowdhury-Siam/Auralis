@@ -1,5 +1,16 @@
 # Auralis changes
 
+## 0.1.129
+
+- Refresh Telegram channels on entering Video, returning to the app, or tapping Refresh. The open channel picker updates when a new channel arrives.
+- Load recent videos from channel history while Telegram search catches up, and add newly posted videos to the open Library.
+- Use compact rows with smaller thumbnails in Video Library.
+
+## 0.1.128
+
+- Center and style Video dialogs for choosing channels, opening Telegram links, and changing playback speed, audio tracks, or subtitles.
+- Keep Video Search results separate from the Library's channel videos. List channels on Video Home once a playable video is found.
+
 ## 0.1.127
 
 - Match Video to Music with shared Home cards, channel browsing tiles, desktop sidebar and all three navigation styles; use the same saved appearance settings in both interfaces.
