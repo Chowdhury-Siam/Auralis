@@ -6,7 +6,7 @@ Auralis's original source is AGPL-3.0-or-later. Third-party components retain th
 |---|---|
 | Flutter and generated Windows host | BSD-3-Clause; [Flutter](https://github.com/flutter/flutter), retained text in `docs/FLUTTER-LICENSE.txt`. |
 | Dart SDK | BSD-style SDK notices; distributed by Flutter. |
-| media_kit 1.2.6+auralis.2, media_kit_video 2.0.1, and media_kit_libs_windows_video 1.0.11 | MIT; [media-kit](https://github.com/media-kit/media-kit), retained text in `docs/MEDIA-KIT-LICENSE.txt` and `third_party/media_kit/LICENSE`. The vendored runtime includes Windows COM/shutdown fixes documented in `third_party/media_kit/AURALIS_PATCH.md`; upstream copyright headers are retained. Native libraries have separate terms. |
+| media_kit 1.2.6+auralis.2, media_kit_video 2.0.1+auralis.1, and media_kit_libs_windows_video 1.0.11 | MIT; [media-kit](https://github.com/media-kit/media-kit), retained text in `docs/MEDIA-KIT-LICENSE.txt` and `third_party/media_kit/LICENSE`. The vendored runtime includes Windows COM/shutdown fixes documented in `third_party/media_kit/AURALIS_PATCH.md`; the video plugin includes a Windows renderer shutdown patch documented in `third_party/media_kit_video/AURALIS_PATCH.md`. Both retain upstream copyright headers. Native libraries have separate terms. |
 | ffi 2.2.0, path 1.9.1, path_provider 2.1.6 | BSD-3-Clause; [Dart native packages](https://github.com/dart-lang/native), [Dart core packages](https://github.com/dart-lang/core), [Flutter packages](https://github.com/flutter/packages). Dart/Flutter include package notices in the generated Flutter license asset. |
 | package_info_plus 10.2.1, crypto 3.0.7 | BSD-3-Clause; [plus_plugins](https://github.com/fluttercommunity/plus_plugins), [Dart core](https://github.com/dart-lang/core/tree/main/pkgs/crypto). Used for installed-version metadata and update integrity. Transitive package notices are included by Flutter. |
 | cryptography 2.9.0 | Apache-2.0; [cryptography](https://github.com/dint-dev/cryptography). AES-GCM and PBKDF2 for password-protected account backups. Flutter includes its license in the generated notices asset. |
@@ -16,7 +16,6 @@ Auralis's original source is AGPL-3.0-or-later. Third-party components retain th
 | TDLib 1.8.68 | Boost Software License 1.0; full text in `docs/TDLIB-LICENSE.txt`. Build revision: `a94b83d67ab4c8397c6245e541b31a4131ea2f79`. |
 | OpenSSL and zlib | Dependency-specific licenses copied by `tool/build-tdlib.ps1` into `native/licenses/`; versions/build inputs follow vcpkg revision `664933b8d385dfc01f4e0cdff4c7c74e71f6a740`. |
 | libmpv and FFmpeg native playback | Build-dependent GPL/LGPL and dependency terms. Do not infer native binary licensing from the MIT wrapper. See below. |
-| AndroidX Media3 Effect and Transformer 1.8.1 | Apache-2.0. Resolved by Gradle from Google Maven for local MP4 export. Windows export invokes a separately installed FFmpeg executable. |
 
 ## Playback binary selected by the pinned plugin
 
