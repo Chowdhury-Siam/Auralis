@@ -52,9 +52,8 @@ jobs:
           python-version: '3.13'
       - name: Install Android and host build tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build gperf libssl-dev zlib1g-dev
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+          echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
       - name: Prepare Telegram build credentials
         env:
           TELEGRAM_API_ID: ${{ github.event_name != 'pull_request' && secrets.TELEGRAM_API_ID || '' }}
@@ -84,6 +83,20 @@ jobs:
           path: |
             android/app/src/main/jniLibs/
             native/android/
+      - name: Set up gperf for Android TDLib
+        if: steps.tdlib.outputs.cache-hit != 'true'
+        run: |
+          if command -v gperf >/dev/null; then exit 0; fi
+          cd "$RUNNER_TEMP"
+          curl --fail --silent --show-error --location --retry 3 --connect-timeout 10 --max-time 60 \
+            --output gperf-3.1.tar.gz https://ftp.gnu.org/gnu/gperf/gperf-3.1.tar.gz
+          printf '%s  %s\n' 588546b945bba4b70b6a3a616e80b4ab466e3f33024a352fc2198112cdbb3ae2 gperf-3.1.tar.gz | sha256sum --check
+          tar -xzf gperf-3.1.tar.gz
+          cd gperf-3.1
+          ./configure --prefix="$RUNNER_TEMP/auralis-gperf"
+          make -j"$JOBS"
+          make install
+          echo "$RUNNER_TEMP/auralis-gperf/bin" >> "$GITHUB_PATH"
       - name: Build Android TDLib from pinned sources
         if: steps.tdlib.outputs.cache-hit != 'true'
         run: bash tool/build-tdlib-android.sh "$ABI"
