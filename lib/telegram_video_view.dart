@@ -2,13 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
 
 import 'app_popups.dart';
-
-import 'package:media_kit/media_kit.dart' as mpv;
-import 'package:media_kit_video/media_kit_video.dart';
 
 import 'models.dart';
 import 'discovery_widgets.dart';
@@ -17,6 +13,9 @@ import 'app_theme.dart';
 import 'player.dart';
 import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
+import 'video_playback.dart';
+import 'video_playback_data.dart';
+import 'video_folder_browser.dart';
 
 class TelegramVideoView extends StatefulWidget {
   const TelegramVideoView({
@@ -26,11 +25,15 @@ class TelegramVideoView extends StatefulWidget {
     this.onMusic,
     this.onSettings,
     this.onConnect,
+    this.incoming,
+    this.onIncomingConsumed,
   });
 
   final TelegramService telegram;
   final PlayerController music;
   final VoidCallback? onMusic, onSettings, onConnect;
+  final List<VideoSource>? incoming;
+  final ValueChanged<List<VideoSource>>? onIncomingConsumed;
 
   @override
   State<TelegramVideoView> createState() => _TelegramVideoViewState();
@@ -107,7 +110,12 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   int _tab = 0;
   final _recent = <Track>[];
   int _generation = 0;
-  bool _openingLink = false, _playingVideo = false;
+  bool _openingLink = false, _openingPlayer = false, _videoMinimized = false;
+  List<VideoSource>? _playbackSources;
+  int _playbackIndex = 0;
+  Future<void> _playbackRelease = Future<void>.value();
+
+  bool get _showingPlayer => _playbackSources != null && !_videoMinimized;
 
   List<MusicChat> get _channels => {
     for (final channel in widget.music.settings.selectedChannels)
@@ -134,6 +142,23 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     WidgetsBinding.instance.addObserver(this);
     _restoreLibraryChannel();
     if (_ready) unawaited(_refreshChannels());
+    _acceptIncoming();
+  }
+
+  @override
+  void didUpdateWidget(covariant TelegramVideoView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(widget.incoming, oldWidget.incoming)) _acceptIncoming();
+  }
+
+  void _acceptIncoming() {
+    final sources = widget.incoming;
+    if (sources == null || sources.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !identical(widget.incoming, sources)) return;
+      widget.onIncomingConsumed?.call(sources);
+      await _launchPlayer(sources, 0);
+    });
   }
 
   void _restoreLibraryChannel() {
@@ -164,7 +189,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_playingVideo) {
+    if (state == AppLifecycleState.resumed && !_showingPlayer) {
       unawaited(_refresh(silent: true));
     }
   }
@@ -266,27 +291,97 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     }
   }
 
-  Future<void> _play(Track video) async {
-    if (!_ready || _playingVideo) return;
-    _playingVideo = true;
+  void _recordVideo(VideoSource source) {
+    final video = source.telegram;
+    if (video == null &&
+        const {'file', 'content'}.contains(source.uri?.scheme)) {
+      widget.music.settings.videoPlayback.lastLocalVideo = source.id;
+      unawaited(widget.music.settings.save().catchError((Object _) {}));
+    }
+    if (!mounted || !_ready || video == null) return;
     setState(() {
       _recent.removeWhere((item) => item.id == video.id);
       _recent.insert(0, video);
       if (_recent.length > 12) _recent.removeLast();
     });
+  }
+
+  Future<void> _play(Track video) async {
+    if (!_ready) return;
+    final library = _library;
+    final videos = library != null && library.videos.containsKey(video.id)
+        ? library.sortedVideos(widget.music.settings.librarySort)
+        : [video];
+    await _launchPlayer(
+      videos.map(VideoSource.telegram).toList(),
+      videos.indexWhere((item) => item.id == video.id),
+    );
+  }
+
+  Future<void> _launchPlayer(List<VideoSource> videos, int index) async {
+    if (!mounted || _openingPlayer || videos.isEmpty || index < 0) return;
+    _openingPlayer = true;
     try {
-      final route = MaterialPageRoute<void>(
-        builder: (context) => _VideoPlayback(
-          video: video,
-          telegram: _telegram,
-          music: widget.music,
-          proxy: _proxy,
-        ),
-      );
-      await Navigator.of(context).push(route);
-      await route.completed;
+      if (_playbackSources != null) _closePlayer();
+      await WidgetsBinding.instance.endOfFrame;
+      await _playbackRelease;
+      if (!mounted || (videos[index].telegram != null && !_ready)) return;
+      FocusManager.instance.primaryFocus?.unfocus();
+      setState(() {
+        _playbackSources = videos;
+        _playbackIndex = index;
+        _videoMinimized = false;
+      });
     } finally {
-      _playingVideo = false;
+      _openingPlayer = false;
+    }
+  }
+
+  void _closePlayer() => setState(() {
+    _playbackSources = null;
+    _videoMinimized = false;
+  });
+
+  void _minimizePlayer() => setState(() => _videoMinimized = true);
+
+  Future<void> _openVideoFiles() async {
+    try {
+      await _launchPlayer(await pickVideoFiles(), 0);
+    } catch (_) {
+      if (mounted) _notice('Could not open the selected files.');
+    }
+  }
+
+  Future<void> _browseVideoFolders() async {
+    final chosen = await Navigator.of(context).push<(List<VideoSource>, int)>(
+      MaterialPageRoute(
+        builder: (context) => VideoFolderBrowser(
+          data: widget.music.settings.videoPlayback,
+          save: widget.music.settings.save,
+        ),
+      ),
+    );
+    if (chosen != null) await _launchPlayer(chosen.$1, chosen.$2);
+  }
+
+  Future<void> _openVideoStream() async {
+    final settings = widget.music.settings;
+    final source = await showVideoStreamDialog(context, settings.videoPlayback);
+    if (source == null || !mounted) return;
+    if (source.webOptions != null) {
+      unawaited(settings.save().catchError((Object _) {}));
+    }
+    await _launchPlayer([source], 0);
+  }
+
+  Future<void> _openVideoPlaylist() async {
+    try {
+      final sources = await pickVideoPlaylist();
+      if (sources != null) await _launchPlayer(sources, 0);
+    } on FormatException catch (error) {
+      if (mounted) _notice(error.message);
+    } catch (_) {
+      if (mounted) _notice('Could not open the selected playlist.');
     }
   }
 
@@ -463,10 +558,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         ),
       ),
     );
-    return PopScope(
+    final browser = PopScope(
       canPop: _tab == 0,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+        if (didPop || _showingPlayer) return;
         if (_tab == 1 && _showSearchChannel) {
           _showChannelSearch();
         } else {
@@ -516,11 +611,49 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             : content,
       ),
     );
+    final sources = _playbackSources;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ExcludeFocus(
+          excluding: _showingPlayer,
+          child: ExcludeSemantics(
+            excluding: _showingPlayer,
+            child: IgnorePointer(ignoring: _showingPlayer, child: browser),
+          ),
+        ),
+        if (sources != null)
+          VideoPlayback(
+            sources: sources,
+            initialIndex: _playbackIndex,
+            telegram: _telegram,
+            music: widget.music,
+            proxy: _proxy,
+            onOpened: _recordVideo,
+            minimized: _videoMinimized,
+            miniBottomInset: wide ? 0 : 80,
+            onBack: () {
+              if (settings.videoPlayback.background) {
+                _minimizePlayer();
+              } else {
+                _closePlayer();
+              }
+            },
+            onMinimize: _minimizePlayer,
+            onExpand: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              setState(() => _videoMinimized = false);
+            },
+            onClose: _closePlayer,
+            onRelease: (release) => _playbackRelease = release,
+          ),
+      ],
+    );
   }
 
   // Scaffold reports the floating bar's height in the body padding.
   double _bottomPadding(BuildContext context) =>
-      MediaQuery.paddingOf(context).bottom + 20;
+      MediaQuery.paddingOf(context).bottom + (_videoMinimized ? 92 : 20);
 
   Widget _openLinkButton() => IconButton(
     tooltip: 'Open Telegram link',
@@ -572,6 +705,15 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         .where((channel) => _videoSources.contains(channel.id))
         .toList();
     final videos = _library?.videos.values.take(4).toList() ?? const <Track>[];
+    final positions = widget.music.settings.videoPlayback.positions;
+    final recent = {
+      for (final item in _recent) item.id: item,
+      for (final id in positions.keys.toList().reversed)
+        if (_library?.videos[id.replaceFirst('telegram:', '')]
+            case final Track item)
+          item.id: item,
+    };
+
     return ListView(
       key: const PageStorageKey('video-home-scroll'),
       padding: EdgeInsets.only(bottom: _bottomPadding(context)),
@@ -592,6 +734,33 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
           ],
         ),
         const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: _openVideoFiles,
+              icon: const Icon(Icons.video_file_outlined),
+              label: const Text('Open files'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: _browseVideoFolders,
+              icon: const Icon(Icons.folder_open_rounded),
+              label: const Text('Browse folders'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: _openVideoStream,
+              icon: const Icon(Icons.link_rounded),
+              label: const Text('Open stream'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: _openVideoPlaylist,
+              icon: const Icon(Icons.playlist_play_rounded),
+              label: const Text('Open playlist'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         DiscoveryHero(
           title: 'Your Cinema',
           emptyIcon: Icons.movie_rounded,
@@ -677,12 +846,12 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         const SizedBox(height: 18),
         _heading('Recently opened'),
         const SizedBox(height: 8),
-        if (_recent.isEmpty)
+        if (recent.isEmpty)
           Text(
             'Your recent videos will appear here.',
             style: TextStyle(color: colors.onSurfaceVariant),
           ),
-        for (final video in _recent)
+        for (final video in recent.values.take(12))
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: ClipRRect(
@@ -699,7 +868,11 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
               overflow: TextOverflow.ellipsis,
             ),
             subtitle: Text(
-              video.source,
+              switch (positions[VideoSource.telegram(video).id]) {
+                final Duration position =>
+                  'Resume at ${clockText(position)} · ${video.source}',
+                _ => video.source,
+              },
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1163,330 +1336,5 @@ class _VideoArtwork extends StatelessWidget {
                     errorBuilder: (_, _, _) => fallback,
                   ),
           );
-  }
-}
-
-enum _PlaybackOption {
-  speed('Playback speed'),
-  audio('Audio track'),
-  subtitles('Subtitles');
-
-  const _PlaybackOption(this.label);
-  final String label;
-}
-
-class _VideoPlayback extends StatefulWidget {
-  const _VideoPlayback({
-    required this.video,
-    required this.telegram,
-    required this.music,
-    required this.proxy,
-  });
-
-  final Track video;
-  final TelegramService telegram;
-  final PlayerController music;
-  final TelegramStreamProxy proxy;
-
-  @override
-  State<_VideoPlayback> createState() => _VideoPlaybackState();
-}
-
-class _VideoPlaybackState extends State<_VideoPlayback>
-    with WidgetsBindingObserver {
-  final _error = ValueNotifier<String?>(null);
-  final _subscriptions = <StreamSubscription<dynamic>>[];
-  mpv.Player? _player;
-  VideoController? _video;
-  AudioSession? _session;
-  bool _loading = false, _invalidated = false;
-  bool get _canPlay => mounted && !_invalidated && widget.telegram.ready;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    widget.telegram.addListener(_authorizationChanged);
-    widget.music.audio.addListener(_musicChanged);
-    unawaited(_open());
-  }
-
-  void _authorizationChanged() {
-    if (!widget.telegram.ready && !_invalidated) {
-      _invalidated = true;
-      unawaited(_player?.stop());
-      unawaited(widget.proxy.stop());
-      _error.value =
-          'The Telegram session changed. Return to the video browser.';
-    }
-  }
-
-  void _musicChanged() {
-    if (widget.music.audio.playing && _player?.state.playing == true) {
-      unawaited(_player?.pause());
-    }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) unawaited(_player?.pause());
-  }
-
-  Future<void> _open() async {
-    if (_loading || !_canPlay) return;
-    _loading = true;
-    _error.value = null;
-    try {
-      if (_player == null) {
-        mpv.MediaKit.ensureInitialized();
-        final player = _player = mpv.Player(
-          configuration: const mpv.PlayerConfiguration(
-            title: 'Auralis Video',
-            bufferSize: 16 * 1024 * 1024,
-          ),
-        );
-        _video = VideoController(player);
-        _subscriptions.addAll([
-          player.stream.error.listen((_) {
-            if (_canPlay) {
-              _error.value = 'The video could not be played. Try again.';
-            }
-          }),
-          widget.proxy.errors.listen((_) {
-            if (_canPlay) {
-              _error.value = 'Telegram could not load the video. Try again.';
-            }
-          }),
-        ]);
-      } else {
-        await _player!.stop();
-      }
-      if (!_canPlay) return;
-      final player = _player!;
-      final platform = player.platform as mpv.NativePlayer;
-      await _video!.platform.future;
-      if (!_canPlay) return;
-      await platform.setProperty('network-timeout', '60');
-      if (!_canPlay) return;
-      if (widget.music.audio.playing) await widget.music.audio.toggle();
-      if (!_canPlay) return;
-      if (Platform.isAndroid && _session == null) {
-        final session = await AudioSession.instance;
-        if (!_canPlay) return;
-        _session = session;
-        _subscriptions.add(
-          session.interruptionEventStream.listen((event) {
-            if (event.begin) unawaited(player.pause());
-          }),
-        );
-      }
-      final uri = await widget.proxy.uri(widget.video);
-      if (!_canPlay) return;
-      if (await _session?.setActive(true) == false) {
-        throw StateError('Audio focus unavailable');
-      }
-      if (!_canPlay) return;
-      await player.open(mpv.Media(uri.toString()));
-    } catch (_) {
-      if (_canPlay) {
-        unawaited(widget.proxy.stop());
-        _error.value = 'Could not start the video. Try again.';
-      }
-    } finally {
-      _loading = false;
-    }
-  }
-
-  Future<void> _release() async {
-    for (final subscription in _subscriptions) {
-      await subscription.cancel();
-    }
-    try {
-      await _player?.dispose();
-    } finally {
-      if (!widget.music.audio.playing && !widget.proxy.hasActiveSource) {
-        await _session?.setActive(false);
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.music.audio.removeListener(_musicChanged);
-    widget.telegram.removeListener(_authorizationChanged);
-    WidgetsBinding.instance.removeObserver(this);
-    unawaited(widget.proxy.stop());
-    unawaited(_release());
-    _error.dispose();
-    super.dispose();
-  }
-
-  Widget _status(Widget child) => ValueListenableBuilder(
-    valueListenable: _error,
-    child: child,
-    builder: (context, error, child) {
-      if (error == null) return child!;
-      return ColoredBox(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: .92),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  error,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              if (_canPlay)
-                FilledButton(onPressed: _open, child: const Text('Retry')),
-              if (isFullscreen(context))
-                TextButton(
-                  onPressed: () => unawaited(exitFullscreen(context)),
-                  child: const Text('Exit fullscreen'),
-                ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-
-  String _trackName(String id, String? title, String? language) {
-    if (id == 'auto') return 'Automatic';
-    if (id == 'no') return 'Off';
-    final parts = [
-      title,
-      language,
-    ].whereType<String>().where((part) => part.isNotEmpty);
-    return parts.isEmpty ? 'Track $id' : parts.join(' · ');
-  }
-
-  Future<void> _options(BuildContext context, _PlaybackOption option) async {
-    final player = _player!;
-    final options = switch (option) {
-      _PlaybackOption.speed => [
-        for (final rate in const [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0])
-          (
-            label: '${rate.toString().replaceFirst(RegExp(r'\.0$'), '')}×',
-            selected: rate == player.state.rate,
-            apply: () => player.setRate(rate),
-          ),
-      ],
-      _PlaybackOption.audio => [
-        for (final track in player.state.tracks.audio)
-          (
-            label: _trackName(track.id, track.title, track.language),
-            selected: track == player.state.track.audio,
-            apply: () => player.setAudioTrack(track),
-          ),
-      ],
-      _PlaybackOption.subtitles => [
-        for (final track in player.state.tracks.subtitle)
-          (
-            label: _trackName(track.id, track.title, track.language),
-            selected: track == player.state.track.subtitle,
-            apply: () => player.setSubtitleTrack(track),
-          ),
-      ],
-    };
-    final apply = await _showVideoChoices<Future<void> Function()>(
-      context,
-      title: option.label,
-      choices: [
-        for (final choice in options)
-          (value: choice.apply, label: choice.label, selected: choice.selected),
-      ],
-    );
-    if (_canPlay && apply != null) await apply();
-  }
-
-  Future<void> _openOptions(BuildContext context) async {
-    final option = await _showVideoChoices<_PlaybackOption>(
-      context,
-      title: 'Video playback options',
-      choices: [
-        for (final option in _PlaybackOption.values)
-          (value: option, label: option.label, selected: false),
-      ],
-    );
-    if (_canPlay && context.mounted && option != null) {
-      await _options(context, option);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final desktop = theme.platform == TargetPlatform.windows;
-    final menu = Builder(
-      builder: (context) => IconButton(
-        tooltip: 'Video playback options',
-        icon: Icon(Icons.tune_rounded, color: colors.onSurface),
-        onPressed: () => unawaited(_openOptions(context)),
-      ),
-    );
-    final mobileTheme = MaterialVideoControlsThemeData(
-      visibleOnMount: true,
-      seekOnDoubleTap: true,
-      seekGesture: true,
-      speedUpOnLongPress: true,
-      backdropColor: colors.scrim.withValues(alpha: .50),
-      buttonBarButtonColor: colors.onSurface,
-      seekBarColor: colors.onSurface.withValues(alpha: .24),
-      seekBarBufferColor: colors.primary.withValues(alpha: .42),
-      seekBarPositionColor: colors.primary,
-      seekBarThumbColor: colors.primary,
-      topButtonBar: [const Spacer(), menu],
-    );
-    final desktopTheme = MaterialDesktopVideoControlsThemeData(
-      visibleOnMount: true,
-      buttonBarButtonColor: colors.onSurface,
-      seekBarColor: colors.onSurface.withValues(alpha: .24),
-      seekBarBufferColor: colors.primary.withValues(alpha: .42),
-      seekBarPositionColor: colors.primary,
-      seekBarThumbColor: colors.primary,
-      volumeBarColor: colors.onSurface.withValues(alpha: .24),
-      volumeBarActiveColor: colors.primary,
-      volumeBarThumbColor: colors.primary,
-      topButtonBar: [const Spacer(), menu],
-    );
-    final controller = _video;
-    return Scaffold(
-      backgroundColor: colors.scrim,
-      appBar: AppBar(
-        title: Text(
-          widget.video.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: controller == null
-            ? _status(const Center(child: CircularProgressIndicator()))
-            : MaterialVideoControlsTheme(
-                normal: mobileTheme,
-                fullscreen: mobileTheme,
-                child: MaterialDesktopVideoControlsTheme(
-                  normal: desktopTheme,
-                  fullscreen: desktopTheme,
-                  child: Video(
-                    controller: controller,
-                    controls: (state) => _status(
-                      desktop
-                          ? MaterialDesktopVideoControls(state)
-                          : MaterialVideoControls(state),
-                    ),
-                  ),
-                ),
-              ),
-      ),
-    );
   }
 }
