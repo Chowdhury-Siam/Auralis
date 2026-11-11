@@ -61,43 +61,68 @@ Future<T?> _showVideoChoices<T>(
   Function()
   choices,
   Listenable? updates,
+  String? searchHint,
 }) {
   FocusManager.instance.primaryFocus?.unfocus();
-  Widget dialog(BuildContext context) {
-    final options = choices();
+  var query = '';
+  Widget dialog(BuildContext context, StateSetter update) {
+    final options = choices()
+        .where((choice) => choice.label.toLowerCase().contains(query))
+        .toList();
     final colors = Theme.of(context).colorScheme;
     return _videoDialog(
       context,
       title: title,
       content: SizedBox(
         width: 360,
-        child: options.isEmpty
-            ? const Text('No options available.')
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final choice in options)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: ListTile(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        selected: choice.selected,
-                        selectedTileColor: colors.primaryContainer,
-                        selectedColor: colors.onPrimaryContainer,
-                        title: Text(choice.label),
-                        subtitle: choice.detail == null
-                            ? null
-                            : Text(choice.detail!),
-                        trailing: choice.selected
-                            ? const Icon(Icons.check_rounded)
-                            : null,
-                        onTap: () => Navigator.pop(context, choice.value),
-                      ),
-                    ),
-                ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (searchHint != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: TextField(
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: searchHint,
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  ),
+                  onChanged: (value) =>
+                      update(() => query = value.trim().toLowerCase()),
+                  onSubmitted: (_) {
+                    if (options.length == 1) {
+                      Navigator.pop(context, options.single.value);
+                    }
+                  },
+                ),
               ),
+            if (options.isEmpty)
+              Text(
+                query.isEmpty
+                    ? 'No options available.'
+                    : 'No matching channels.',
+              ),
+            for (final choice in options)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  selected: choice.selected,
+                  selectedTileColor: colors.primaryContainer,
+                  selectedColor: colors.onPrimaryContainer,
+                  title: Text(choice.label),
+                  subtitle: choice.detail == null ? null : Text(choice.detail!),
+                  trailing: choice.selected
+                      ? const Icon(Icons.check_rounded)
+                      : null,
+                  onTap: () => Navigator.pop(context, choice.value),
+                ),
+              ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
@@ -110,12 +135,14 @@ Future<T?> _showVideoChoices<T>(
 
   return showDialog<T>(
     context: context,
-    builder: (context) => updates == null
-        ? dialog(context)
-        : ListenableBuilder(
-            listenable: updates,
-            builder: (context, _) => dialog(context),
-          ),
+    builder: (context) => StatefulBuilder(
+      builder: (context, update) => updates == null
+          ? dialog(context, update)
+          : ListenableBuilder(
+              listenable: updates,
+              builder: (context, _) => dialog(context, update),
+            ),
+    ),
   );
 }
 
@@ -429,6 +456,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     final id = await _showVideoChoices<int>(
       context,
       title: 'Choose video channel',
+      searchHint: 'Search channels',
       updates: _telegram,
       choices: () => [
         for (final channel in _channels)
@@ -444,6 +472,41 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       return null;
     }
     return _channels.where((channel) => channel.id == id).firstOrNull;
+  }
+
+  void _openChannelFromSearch(MusicChat channel) {
+    _search.clear();
+    setState(() {
+      _searchChannel = channel;
+      _searchResults = null;
+    });
+    _browseChannel(channel);
+    _selectTab(2);
+  }
+
+  Future<void> _chooseSort() async {
+    final settings = widget.music.settings;
+    final sort = await _showVideoChoices<LibrarySort>(
+      context,
+      title: 'Library sort order',
+      choices: () => [
+        for (final option in LibrarySort.values)
+          (
+            value: option,
+            label: option.label,
+            selected: settings.librarySort == option,
+            detail: null,
+          ),
+      ],
+    );
+    if (!mounted || sort == null || sort == settings.librarySort) return;
+    setState(() => settings.librarySort = sort);
+    widget.music.refreshSettings();
+    try {
+      await settings.save();
+    } catch (_) {
+      if (mounted) _notice('Could not save the Library sort order.');
+    }
   }
 
   Future<void> _submitSearch(String text, {MusicChat? channel}) async {
@@ -753,12 +816,23 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         ? _searchChannel ?? _library?.channel
         : _library?.channel;
     final videos = results?.videos.values.toList() ?? <Track>[];
-    videos.sort((a, b) {
-      final dateOrder = b.date.compareTo(a.date);
-      return dateOrder != 0
-          ? dateOrder
-          : _messageId(b).compareTo(_messageId(a));
-    });
+    final sort = widget.music.settings.librarySort;
+    if (searching) {
+      videos.sort((a, b) {
+        final dateOrder = b.date.compareTo(a.date);
+        return dateOrder != 0
+            ? dateOrder
+            : _messageId(b).compareTo(_messageId(a));
+      });
+    } else {
+      videos.sort(sort.compare);
+    }
+    final query = _search.text.trim().toLowerCase();
+    final matchingChannels = searching && _ready && query.isNotEmpty
+        ? _channels
+              .where((channel) => channel.title.toLowerCase().contains(query))
+              .toList()
+        : const <MusicChat>[];
     final scale = MediaQuery.textScalerOf(context);
     final loading = results?.loading ?? false;
     final hasMore = results?.hasMore ?? false;
@@ -777,7 +851,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                   onChanged: (_) => setState(() {}),
                   onSubmitted: _submitSearch,
                   decoration: InputDecoration(
-                    hintText: 'Search your videos',
+                    hintText: 'Search videos or channels',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(28),
                       borderSide: BorderSide.none,
@@ -822,31 +896,40 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             ],
           ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        Row(
           children: [
-            _channelButton(
-              channel,
-              onPressed: () async {
-                final chosen = await _chooseChannel(channel);
-                if (!mounted || chosen == null) return;
-                if (!searching) {
-                  _browseChannel(chosen);
-                } else {
-                  setState(() {
-                    _searchChannel = chosen;
-                    _searchResults = null;
-                  });
-                  await _submitSearch(_search.text, channel: chosen);
-                }
-              },
+            Flexible(
+              child: _channelButton(
+                channel,
+                onPressed: () async {
+                  final chosen = await _chooseChannel(channel);
+                  if (!mounted || chosen == null) return;
+                  if (!searching) {
+                    if (chosen.id != _library?.channel.id) {
+                      _browseChannel(chosen);
+                    }
+                  } else {
+                    setState(() {
+                      _searchChannel = chosen;
+                      _searchResults = null;
+                    });
+                    await _submitSearch(_search.text, channel: chosen);
+                  }
+                },
+              ),
             ),
+            const SizedBox(width: 8),
             if (searching)
               IconButton(
                 tooltip: 'Open Telegram link',
                 onPressed: _ready && !_openingLink ? _openLink : null,
                 icon: const Icon(Icons.link_rounded, size: 20),
+              )
+            else
+              IconButton.filledTonal(
+                tooltip: 'Sort Library',
+                onPressed: _chooseSort,
+                icon: const Icon(Icons.sort_rounded, size: 20),
               ),
           ],
         ),
@@ -867,7 +950,28 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             key: ValueKey((searching, results)),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
-              if (videos.isEmpty && !loading)
+              if (matchingChannels.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: _heading('Channels'),
+                  ),
+                ),
+                SliverList.builder(
+                  itemCount: matchingChannels.length,
+                  itemBuilder: (context, index) {
+                    final match = matchingChannels[index];
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      leading: const Icon(Icons.video_library_outlined),
+                      title: Text(match.title),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => _openChannelFromSearch(match),
+                    );
+                  },
+                ),
+              ],
+              if (videos.isEmpty && !loading && matchingChannels.isEmpty)
                 SliverToBoxAdapter(
                   child: DiscoveryCard(
                     child: Column(
@@ -882,7 +986,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                               ? 'Could not load videos'
                               : results == null
                               ? (searching
-                                    ? 'Find a video by title'
+                                    ? 'Find videos or channels'
                                     : 'Browse channel videos')
                               : hasMore
                               ? 'No videos on this page'
@@ -899,7 +1003,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                               ? 'Refresh your Telegram channels or open a video link.'
                               : results == null
                               ? (searching
-                                    ? 'Choose a channel and submit a title to search its videos.'
+                                    ? 'Type a channel name to open it, or submit a video title to search the selected channel.'
                                     : 'Choose a channel to see its playable videos.')
                               : failed
                               ? 'Check your Telegram connection and try again.'
@@ -1009,9 +1113,8 @@ class _VideoRow extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(
-                      width: 104,
-                      height: 58,
+                    child: SizedBox.square(
+                      dimension: 64,
                       child: _VideoArtwork(video: video, telegram: telegram),
                     ),
                   ),
