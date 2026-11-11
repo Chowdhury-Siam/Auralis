@@ -160,8 +160,8 @@ class AppSettings {
   Future<void> load() async {
     if (!await file.exists()) return;
     final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-    applyJson(json);
     videoPlayback = VideoPlaybackData.fromJson(json['_videoPlayback']);
+    applyJson(json);
     syncState = json['_sync'] is Map<String, dynamic>
         ? json['_sync'] as Map<String, dynamic>
         : {};
@@ -179,6 +179,7 @@ class AppSettings {
   };
 
   void applyJson(Map<String, dynamic> json) {
+    videoPlayback.applyTelegramActivity(json[TelegramVideoActivity.key]);
     listening = ListeningStats.fromJson(json['listening']);
     // Retire the app-specific toggle, including settings restored from old backups.
     // The platform accessibility preference is still respected by the UI.
@@ -282,6 +283,7 @@ class AppSettings {
     'favoriteIds': favoriteIds.toList(),
     'playlists': playlists,
     'recentIds': recentIds,
+    TelegramVideoActivity.key: videoPlayback.telegramActivity(),
     'repeatMode': repeatMode.name,
     'listening': listening.toJson(),
     'selectedChannels': [
