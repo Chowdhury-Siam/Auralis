@@ -85,6 +85,22 @@ class MainActivity : AudioServiceActivity() {
                         output.toByteArray()
                     }
                 }
+                "writeVideoDocument" -> work(result) {
+                    val uri = Uri.parse(call.argument<String>("uri"))
+                    require(uri == selectedWrite) { "Choose the destination first" }
+                    val video = VideoExporter.outputFile(this, call.argument<String>("path"))
+                    try {
+                        contentResolver.openOutputStream(uri, "wt")!!.use { output ->
+                            video.inputStream().use { it.copyTo(output) }
+                        }
+                    } catch (failure: Exception) {
+                        runCatching { android.provider.DocumentsContract.deleteDocument(contentResolver, uri) }
+                        throw failure
+                    } finally {
+                        selectedWrite = null
+                    }
+                    null
+                }
                 "writeDocument" -> work(result) {
                     val uri = Uri.parse(call.argument<String>("uri"))
                     require(uri == selectedWrite) { "Choose the destination first" }
