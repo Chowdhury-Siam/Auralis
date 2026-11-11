@@ -39,6 +39,7 @@ class _NativeVideo implements mpv.NativePlayer {
   set state(mpv.PlayerState value) => _core.state = value;
 
   final opened = <mpv.Media>[];
+  VoidCallback? beforeStop;
   Future<void> Function()? beforeDispose;
   final properties = <String, String>{
     'chapter-list/count': '2',
@@ -90,6 +91,7 @@ class _NativeVideo implements mpv.NativePlayer {
     bool notify = true,
     bool synchronized = true,
   }) async {
+    beforeStop?.call();
     state = const mpv.PlayerState();
     _core.opened(false, Duration.zero);
   }
@@ -321,6 +323,7 @@ void main() {
       final decoderReleased = Completer<void>();
       var releaseFinished = false;
       var shutdownFinished = false;
+      bool? surfacePresentAtStop;
       bool? surfacePresentAtDispose;
 
       Future<bool> pumpUntil(bool Function() ready) async {
@@ -413,12 +416,15 @@ void main() {
 
         await tester.tap(find.byTooltip('Chapters and bookmarks'));
         await tester.pumpAndSettle();
+        expect(find.text('No bookmarks yet.'), findsOneWidget);
         await tester.tap(find.text('Part two'));
         await tester.pumpAndSettle();
         expect(native.state.position, const Duration(seconds: 45));
 
         await tester.tap(find.byTooltip('Now playing queue'));
         await tester.pumpAndSettle();
+        expect(find.text('Current video'), findsOneWidget);
+        expect(find.text('Save as playlist'), findsOneWidget);
         await tester.tap(find.text('Second video'));
         await tester.pumpAndSettle();
         expect(native.opened.last.start, const Duration(seconds: 21));
@@ -427,6 +433,16 @@ void main() {
           music.settings.videoPlayback.positions[first.id],
           const Duration(seconds: 45),
         );
+        await tester.tap(find.byTooltip('More player controls'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Playback'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Playback speed'));
+        await tester.pumpAndSettle();
+        expect(find.text('Normal'), findsOneWidget);
+        expect(find.widgetWithText(ChoiceChip, '1×'), findsOneWidget);
+        await tester.tap(find.byTooltip('Close panel'));
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('More player controls'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Minimize video'));
@@ -444,6 +460,10 @@ void main() {
         expect(native.opened, hasLength(2));
         expect(tester.takeException(), isNull);
 
+        native.beforeStop = () {
+          surfacePresentAtStop = find.byType(Video).evaluate().isNotEmpty;
+          events.add('stop');
+        };
         native.beforeDispose = () async {
           surfacePresentAtDispose = find.byType(Video).evaluate().isNotEmpty;
           events.add('decoder');
@@ -454,12 +474,13 @@ void main() {
           releaseFinished = true;
         }));
         expect(
-          await pumpUntil(() => events.isNotEmpty),
+          await pumpUntil(() => surfacePresentAtDispose != null),
           isTrue,
           reason: 'Decoder disposal did not start after removing the surface.',
         );
+        expect(surfacePresentAtStop, Platform.isWindows ? isTrue : isNull);
         expect(surfacePresentAtDispose, isFalse);
-        expect(events, ['decoder']);
+        expect(events, [if (Platform.isWindows) 'stop', 'decoder']);
         expect(releaseFinished, isFalse);
       } finally {
         try {
@@ -474,7 +495,7 @@ void main() {
       }
       expect(shutdownFinished, isTrue, reason: 'Player shutdown did not finish.');
       expect(releaseFinished, isTrue);
-      expect(events, ['decoder', 'stream']);
+      expect(events, [if (Platform.isWindows) 'stop', 'decoder', 'stream']);
       expect(music.releaseVideo, isNull);
       expect(tester.takeException(), isNull);
     },
