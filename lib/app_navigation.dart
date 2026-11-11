@@ -14,6 +14,8 @@ class AppNavigation extends StatelessWidget {
     this.reducedMotion = false,
     required this.onSelected,
     this.onHomeHold,
+    this.libraryIcon = Icons.library_music_rounded,
+    this.homeHoldHint = 'Open Telegram Video',
   });
   final AppNavigationStyle style;
   final double radius;
@@ -21,6 +23,8 @@ class AppNavigation extends StatelessWidget {
   final bool reducedMotion;
   final ValueChanged<int> onSelected;
   final VoidCallback? onHomeHold;
+  final IconData libraryIcon;
+  final String homeHoldHint;
   static const labels = ['Home', 'Search', 'Library'];
   static const icons = [
     Icons.home_rounded,
@@ -30,7 +34,7 @@ class AppNavigation extends StatelessWidget {
 
   Widget _destination(int index, Widget child) =>
       index == 0 && onHomeHold != null
-      ? HomeHold(onHold: onHomeHold!, child: child)
+      ? HomeHold(onHold: onHomeHold!, hint: homeHoldHint, child: child)
       : child;
 
   @override
@@ -48,7 +52,7 @@ class AppNavigation extends StatelessWidget {
             _destination(
               i,
               NavigationDestination(
-                icon: Icon(icons[i]),
+                icon: Icon(i == 2 ? libraryIcon : icons[i]),
                 label: labels[i],
                 tooltip: i == 0 && onHomeHold != null ? '' : labels[i],
               ),
@@ -88,7 +92,10 @@ class AppNavigation extends StatelessWidget {
                               children: [
                                 AnimatedContainer(
                                   duration:
-                                      MediaQuery.disableAnimationsOf(context)
+                                      (reducedMotion ||
+                                          MediaQuery.disableAnimationsOf(
+                                            context,
+                                          ))
                                       ? Duration.zero
                                       : const Duration(milliseconds: 200),
                                   width: selected == i ? 56 : 42,
@@ -100,7 +107,7 @@ class AppNavigation extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Icon(
-                                    icons[i],
+                                    i == 2 ? libraryIcon : icons[i],
                                     size: 21,
                                     color: selected == i
                                         ? colors.onPrimaryContainer
@@ -138,15 +145,21 @@ class AppNavigation extends StatelessWidget {
 }
 
 class HomeHold extends StatelessWidget {
-  const HomeHold({super.key, required this.onHold, required this.child});
+  const HomeHold({
+    super.key,
+    required this.onHold,
+    required this.child,
+    this.hint = 'Open Telegram Video',
+  });
 
   final VoidCallback onHold;
+  final String hint;
   final Widget child;
 
   @override
   Widget build(BuildContext context) => Semantics(
     onLongPress: onHold,
-    onLongPressHint: 'Open Telegram Video',
+    onLongPressHint: hint,
     child: RawGestureDetector(
       excludeFromSemantics: true,
       gestures: {
@@ -240,4 +253,200 @@ class AppearancePreferences extends StatelessWidget {
       ],
     ],
   );
+}
+
+/// Shared desktop navigation for the Music and Video interfaces.
+class AppSidebar extends StatelessWidget {
+  const AppSidebar({
+    super.key,
+    required this.narrow,
+    required this.short,
+    required this.selected,
+    required this.onSelected,
+    required this.onHomeHold,
+    this.homeHoldHint = 'Open Telegram Video',
+    this.libraryIcon = Icons.library_music_rounded,
+    this.icon = Icons.graphic_eq_rounded,
+    this.tagline = 'A LITTLE CLOSER TO MUSIC',
+    this.caption = 'YOUR MUSIC. YOUR SPACE.\n\nIndependent. Open source.',
+    this.onTelegram,
+    this.onSettings,
+    this.telegramSelected = false,
+    this.settingsSelected = false,
+  });
+  final bool narrow, short, telegramSelected, settingsSelected;
+  final int selected;
+  final ValueChanged<int> onSelected;
+  final VoidCallback onHomeHold;
+  final VoidCallback? onTelegram, onSettings;
+  final IconData libraryIcon, icon;
+  final String tagline, caption, homeHoldHint;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    Widget item(
+      int index,
+      IconData icon,
+      String label,
+      VoidCallback open,
+      bool active,
+    ) {
+      Widget child = Tooltip(
+        message: label,
+        triggerMode: index == 0 ? TooltipTriggerMode.manual : null,
+        child: Material(
+          color: active ? colors.primaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: open,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: short ? 10 : 16,
+              ),
+              child: Row(
+                mainAxisAlignment: narrow
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                children: [
+                  Icon(
+                    icon,
+                    size: 23,
+                    color: active ? colors.primary : colors.onSurfaceVariant,
+                  ),
+                  if (!narrow) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: active
+                              ? colors.primary
+                              : colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      if (index == 0) {
+        child = HomeHold(onHold: onHomeHold, hint: homeHoldHint, child: child);
+      }
+      return Padding(padding: const EdgeInsets.only(bottom: 8), child: child);
+    }
+
+    return Container(
+      width: narrow ? 72 : 202,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        border: Border(right: BorderSide(color: colors.surfaceContainerHigh)),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: narrow ? 8 : 14,
+        vertical: short ? 8 : 16,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!short)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: colors.primary, size: 30),
+                if (!narrow) ...[
+                  const SizedBox(width: 10),
+                  const Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Auralis',
+                        style: TextStyle(
+                          fontSize: 27,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -1.3,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          if (!short) const SizedBox(height: 8),
+          if (!narrow && !short)
+            Text(
+              tagline,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colors.onSurfaceVariant,
+                fontSize: 8,
+                letterSpacing: 1.4,
+              ),
+            ),
+          SizedBox(
+            height: short
+                ? 0
+                : narrow
+                ? 20
+                : 32,
+          ),
+          Flexible(
+            fit: FlexFit.tight,
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                for (var i = 0; i < AppNavigation.labels.length; i++)
+                  item(
+                    i,
+                    i == 2 ? libraryIcon : AppNavigation.icons[i],
+                    AppNavigation.labels[i],
+                    () => onSelected(i),
+                    selected == i,
+                  ),
+                if (onTelegram != null)
+                  item(
+                    3,
+                    Icons.send_rounded,
+                    'Telegram',
+                    onTelegram!,
+                    telegramSelected,
+                  ),
+              ],
+            ),
+          ),
+          if (!narrow && !short)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                caption,
+                style: TextStyle(
+                  color: colors.onSurfaceVariant,
+                  fontSize: 10,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          if (onSettings != null)
+            IconButton(
+              tooltip: 'Settings',
+              onPressed: onSettings,
+              style: IconButton.styleFrom(
+                backgroundColor: settingsSelected
+                    ? colors.primaryContainer
+                    : Colors.transparent,
+              ),
+              icon: const Icon(Icons.tune_rounded),
+            ),
+        ],
+      ),
+    );
+  }
 }
