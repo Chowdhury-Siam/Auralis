@@ -5,6 +5,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
+
+import 'app_popups.dart';
+
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
@@ -27,6 +30,7 @@ import 'sync/controller.dart';
 import 'sync/settings_view.dart';
 import 'release_notes.dart';
 import 'app_navigation.dart';
+import 'app_theme.dart';
 import 'setup_view.dart';
 import 'settings_view.dart';
 import 'preference_widgets.dart';
@@ -171,12 +175,6 @@ class _AuralisAppState extends State<AuralisApp> {
     super.dispose();
   }
 
-  RoundedRectangleBorder _popupShape(ColorScheme colors) =>
-      RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: colors.outlineVariant.withValues(alpha: .55)),
-      );
-
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
@@ -192,48 +190,7 @@ class _AuralisAppState extends State<AuralisApp> {
           ? 0
           : 350,
     ),
-    theme: ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      fontFamily: 'Segoe UI',
-      scaffoldBackgroundColor: _scheme.surface,
-      colorScheme: _scheme,
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: _scheme.surfaceContainerHigh,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-      ),
-      dialogTheme: DialogThemeData(
-        backgroundColor: _scheme.surfaceContainerHigh,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: _scheme.shadow.withValues(alpha: .42),
-        barrierColor: _scheme.scrim.withValues(alpha: .64),
-        elevation: 6,
-        insetPadding: const EdgeInsets.all(20),
-        constraints: const BoxConstraints(maxWidth: 560),
-        shape: _popupShape(_scheme),
-      ),
-      popupMenuTheme: PopupMenuThemeData(
-        color: _scheme.surfaceContainerHigh,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: _scheme.shadow.withValues(alpha: .42),
-        elevation: 6,
-        menuPadding: const EdgeInsets.all(6),
-        position: PopupMenuPosition.under,
-        shape: _popupShape(_scheme),
-      ),
-      snackBarTheme: SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: _scheme.inverseSurface,
-        contentTextStyle: TextStyle(color: _scheme.onInverseSurface),
-        actionTextColor: _scheme.inversePrimary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-      dividerColor: _scheme.outlineVariant,
-    ),
+    theme: auralisTheme(_scheme),
     home: _settingUp
         ? SetupView(
             player: widget.player,
@@ -1288,7 +1245,7 @@ class _PlayerShellState extends State<PlayerShell>
       },
     );
     if (backup) {
-      await showDialog<void>(context: context, builder: buildStats);
+      await showAuralisDialog<void>(context: context, builder: buildStats);
     } else {
       await Navigator.of(context)
           .push<void>(MaterialPageRoute(builder: buildStats));
@@ -1712,25 +1669,17 @@ class _PlayerShellState extends State<PlayerShell>
                           },
                     icon: const Icon(Icons.refresh_rounded, size: 20),
                   ),
-                  PopupMenuButton<LibrarySort>(
+                  AuralisPopupMenu<LibrarySort>(
                     tooltip: 'Sort Library',
                     icon: const Icon(Icons.sort_rounded),
-                    position: PopupMenuPosition.under,
-                    offset: const Offset(0, 6),
-                    clipBehavior: Clip.antiAlias,
                     itemBuilder: (context) => [
                       for (final sort in LibrarySort.values)
-                        CheckedPopupMenuItem(
+                        PopupMenuItem<LibrarySort>(
                           value: sort,
-                          checked: player.settings.librarySort == sort,
-                          child: Text(
-                            sort.label,
-                            style: TextStyle(
-                              color: player.settings.librarySort == sort
-                                  ? _colors.primary
-                                  : null,
-                              fontSize: 13,
-                            ),
+                          padding: EdgeInsets.zero,
+                          child: AuralisMenuRow(
+                            title: sort.label,
+                            selected: player.settings.librarySort == sort,
                           ),
                         ),
                     ],
@@ -1769,10 +1718,11 @@ class _PlayerShellState extends State<PlayerShell>
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: hint,
-          border: discover
-              ? OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                  borderSide: BorderSide.none,
+          enabledBorder: discover ? auralisFieldBorder(radius: 28) : null,
+          focusedBorder: discover
+              ? auralisFieldBorder(
+                  radius: 28,
+                  side: BorderSide(color: _colors.primary),
                 )
               : null,
           prefixIcon: const Icon(Icons.search_rounded, size: 20),
@@ -1798,95 +1748,109 @@ class _PlayerShellState extends State<PlayerShell>
         ),
       );
 
-  Future<String?> _editPlaylist({String? previous}) => showDialog<String>(
-    context: context,
-    builder: (dialogContext) {
-      var name = previous ?? '';
-      String? error;
-      var busy = false;
-      return StatefulBuilder(
-        builder: (context, update) {
-          Future<void> submit() async {
-            if (busy) return;
-            update(() {
-              busy = true;
-              error = null;
-            });
-            try {
-              final saved = previous == null
-                  ? await player.createPlaylist(name)
-                  : await player.renamePlaylist(previous, name);
-              if (dialogContext.mounted) Navigator.pop(dialogContext, saved);
-            } catch (e) {
-              if (dialogContext.mounted) {
+  Future<String?> _editPlaylist({String? previous}) =>
+      showAuralisDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          var name = previous ?? '';
+          String? error;
+          var busy = false;
+          return StatefulBuilder(
+            builder: (context, update) {
+              Future<void> submit() async {
+                if (busy) return;
                 update(() {
-                  busy = false;
-                  error = e is ArgumentError
-                      ? '${e.message}'
-                      : e is StateError
-                      ? e.message
-                      : 'Could not save this playlist.';
+                  busy = true;
+                  error = null;
                 });
+                try {
+                  final saved = previous == null
+                      ? await player.createPlaylist(name)
+                      : await player.renamePlaylist(previous, name);
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext, saved);
+                  }
+                } catch (e) {
+                  if (dialogContext.mounted) {
+                    update(() {
+                      busy = false;
+                      error = e is ArgumentError
+                          ? '${e.message}'
+                          : e is StateError
+                          ? e.message
+                          : 'Could not save this playlist.';
+                    });
+                  }
+                }
               }
-            }
-          }
 
-          return AlertDialog(
-            title: Text(
-              previous == null ? 'Create playlist' : 'Rename playlist',
-            ),
-            content: SizedBox(
-              width: 360,
-              child: TextFormField(
-                initialValue: previous,
-                autofocus: true,
-                maxLength: 60,
-                enabled: !busy,
-                onChanged: (value) => name = value,
-                onFieldSubmitted: (_) => unawaited(submit()),
-                decoration: InputDecoration(
-                  labelText: 'Playlist name',
-                  errorText: error,
+              return AuralisDialog(
+                title: Text(
+                  previous == null ? 'Create playlist' : 'Rename playlist',
                 ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: busy ? null : () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: busy ? null : submit,
-                child: Text(previous == null ? 'Create' : 'Rename'),
-              ),
-            ],
+                content: SizedBox(
+                  width: 360,
+                  child: TextFormField(
+                    initialValue: previous,
+                    autofocus: true,
+                    maxLength: 60,
+                    enabled: !busy,
+                    onChanged: (value) => name = value,
+                    onFieldSubmitted: (_) => unawaited(submit()),
+                    decoration: InputDecoration(
+                      labelText: 'Playlist name',
+                      errorText: error,
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: busy ? null : () => Navigator.pop(dialogContext),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: busy ? null : submit,
+                    child: Text(previous == null ? 'Create' : 'Rename'),
+                  ),
+                ],
+              );
+            },
           );
         },
       );
-    },
-  );
 
   Future<void> _choosePlaylist(Track track) async {
-    final selected = await showDialog<String>(
+    final selected = await showAuralisDialog<String>(
       context: context,
-      builder: (context) => SimpleDialog(
+      builder: (context) => AuralisDialog(
         title: const Text('Add to playlist'),
-        children: [
-          for (final entry in player.settings.playlists.entries)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, entry.key),
-              child: Text(
-                '${entry.key} · ${entry.value.length}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final entry in player.settings.playlists.entries)
+              AuralisChoiceTile(
+                leading: const Icon(Icons.queue_music_rounded),
+                title: Text(
+                  entry.key,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text('${entry.value.length} tracks'),
+                onTap: () => Navigator.pop(context, entry.key),
               ),
-            ),
-          SimpleDialogOption(
+            if (player.settings.playlists.isEmpty)
+              const Text('Create a playlist to save this track.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
             onPressed: () => Navigator.pop(context, ''),
-            child: Text(
-              'Create playlist',
-              style: TextStyle(color: _colors.primary),
-            ),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Create playlist'),
           ),
         ],
       ),
@@ -1903,24 +1867,13 @@ class _PlayerShellState extends State<PlayerShell>
   }
 
   Future<void> _deletePlaylist(String name) async {
-    final remove = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete playlist?'),
-        content: Text(
+    final remove = await confirmAuralisAction(
+      context,
+      title: 'Delete playlist?',
+      message:
           'Remove “$name” from this device? The music in Telegram is kept.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Delete',
+      destructive: true,
     );
     if (remove != true || !mounted) return;
     await player.deletePlaylist(name);
@@ -1937,51 +1890,49 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Future<void> _sleepTimer() => showDialog<void>(
+  Future<void> _sleepTimer() => showAuralisDialog<void>(
     context: context,
     builder: (context) => ListenableBuilder(
       listenable: player,
-      builder: (context, _) => AlertDialog(
+      builder: (context, _) => AuralisDialog(
         title: const Text('Sleep timer'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                player.sleepAfterTrack
-                    ? 'Pauses at the end of the current track.'
-                    : player.sleepUntil != null
-                    ? 'Pauses at ${TimeOfDay.fromDateTime(player.sleepUntil!).format(context)}.'
-                    : 'Pause playback after a duration or when the track ends.',
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final minutes in [15, 30, 45, 60, 90])
-                    ActionChip(
-                      label: Text('$minutes min'),
-                      onPressed: () {
-                        player.setSleepTimer(Duration(minutes: minutes));
-                        Navigator.pop(context);
-                      },
-                    ),
-                ],
-              ),
-              TextButton.icon(
-                onPressed: player.current == null
-                    ? null
-                    : () {
-                        player.sleepAtTrackEnd();
-                        Navigator.pop(context);
-                      },
-                icon: const Icon(Icons.music_note_rounded),
-                label: const Text('End of current track'),
-              ),
-            ],
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              player.sleepAfterTrack
+                  ? 'Pauses at the end of the current track.'
+                  : player.sleepUntil != null
+                  ? 'Pauses at ${TimeOfDay.fromDateTime(player.sleepUntil!).format(context)}.'
+                  : 'Pause playback after a duration or when the track ends.',
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final minutes in [15, 30, 45, 60, 90])
+                  ActionChip(
+                    label: Text('$minutes min'),
+                    onPressed: () {
+                      player.setSleepTimer(Duration(minutes: minutes));
+                      Navigator.pop(context);
+                    },
+                  ),
+              ],
+            ),
+            TextButton.icon(
+              onPressed: player.current == null
+                  ? null
+                  : () {
+                      player.sleepAtTrackEnd();
+                      Navigator.pop(context);
+                    },
+              icon: const Icon(Icons.music_note_rounded),
+              label: const Text('End of current track'),
+            ),
+          ],
         ),
         actions: [
           if (player.sleepActive)
@@ -1992,7 +1943,7 @@ class _PlayerShellState extends State<PlayerShell>
               },
               child: const Text('Cancel timer'),
             ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Done'),
           ),
@@ -2001,7 +1952,7 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _trackActions(Track track) => PopupMenuButton<String>(
+  Widget _trackActions(Track track) => AuralisPopupMenu<String>(
     tooltip: 'Track actions for ${track.title}',
     icon: const Icon(Icons.playlist_play_rounded, size: 22),
     onSelected: (value) async {
@@ -2042,15 +1993,10 @@ class _PlayerShellState extends State<PlayerShell>
             'Remove from playlist',
           ),
       ])
-        PopupMenuItem(
+        PopupMenuItem<String>(
           value: value,
-          child: Row(
-            children: [
-              Icon(icon, size: 20),
-              const SizedBox(width: 12),
-              Flexible(child: Text(label)),
-            ],
-          ),
+          padding: EdgeInsets.zero,
+          child: AuralisMenuRow(icon: icon, title: label),
         ),
     ],
   );
@@ -2178,10 +2124,11 @@ class _PlayerShellState extends State<PlayerShell>
     final issues = report.issues;
     return InkWell(
       onTap: () => unawaited(
-        showDialog<void>(
+        showAuralisDialog<void>(
           context: context,
-          builder: (context) => AlertDialog(
+          builder: (context) => AuralisDialog(
             title: const Text('Library cache'),
+            scrollable: issues.isEmpty,
             content: issues.isEmpty
                 ? Text(
                     '$summary\nAll artwork and lyrics are saved on this device.',
@@ -4161,26 +4108,12 @@ class _AuthFormState extends State<AuthForm> {
               onPressed: td.busy
                   ? null
                   : () async {
-                      final accepted = await showDialog<bool>(
-                        context: context,
-                        builder: (dialogContext) => AlertDialog(
-                          title: const Text('Start a new Telegram sign-in?'),
-                          content: Text(
+                      final accepted = await confirmAuralisAction(
+                        context,
+                        title: 'Start a new Telegram sign-in?',
+                        message:
                             'Your music and app settings stay. The unreadable local Telegram files will be set aside. ${td.hasApplicationCredentials ? 'You will need Telegram verification to sign in again.' : 'You will need your API details and Telegram verification to sign in again.'} To keep the old sign-in, restore a password-protected account backup instead.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(dialogContext, false),
-                              child: const Text('Cancel'),
-                            ),
-                            FilledButton(
-                              onPressed: () =>
-                                  Navigator.pop(dialogContext, true),
-                              child: const Text('Sign in again'),
-                            ),
-                          ],
-                        ),
+                        confirmLabel: 'Sign in again',
                       );
                       if (accepted == true) {
                         await td.recoverLocalSession();
