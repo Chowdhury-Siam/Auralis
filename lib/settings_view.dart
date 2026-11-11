@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart';
+
 import 'preference_widgets.dart';
 
 enum SettingsSection {
@@ -102,17 +104,10 @@ class SettingsDirectory extends StatelessWidget {
                   horizontal: 16,
                   vertical: 12,
                 ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: colors.primary),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
+                enabledBorder: auralisFieldBorder(radius: 28),
+                focusedBorder: auralisFieldBorder(
+                  radius: 28,
+                  side: BorderSide(color: colors.primary),
                 ),
               ),
             ),
