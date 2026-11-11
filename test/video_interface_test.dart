@@ -418,12 +418,7 @@ void main() {
       final lastChannel = find.text('Long Telegram channel title number 18');
       expect(lastChannel.hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('Open Telegram link'));
-      await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
+      expect(find.byTooltip('Open Telegram link'), findsNothing);
       await tester.tap(find.byIcon(Icons.video_library_rounded).last);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
