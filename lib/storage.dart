@@ -119,6 +119,8 @@ class AppSettings {
   Map<String, dynamic> syncState = {};
   String? lastSeenRelease;
   bool setupComplete = false;
+  AppInterface defaultInterface = AppInterface.music;
+  int? videoChannelId;
   void Function(Map<String, dynamic>)? captureSync;
   void Function()? onSaved;
   bool reducedMotion = false;
@@ -181,6 +183,13 @@ class AppSettings {
     volume = (json['volume'] as num? ?? 70).toDouble().clamp(0, 100);
     automaticLyrics = json['automaticLyrics'] != false;
     automaticTranslation = json['automaticTranslation'] != false;
+    defaultInterface = AppInterface.values.firstWhere(
+      (mode) => mode.name == json['defaultInterface'],
+      orElse: () => AppInterface.music,
+    );
+    videoChannelId = json['videoChannelId'] is int
+        ? json['videoChannelId'] as int
+        : null;
     compactLibrary = json['compactLibrary'] == true;
     navigationStyle = AppNavigationStyle.values.firstWhere(
       (v) => v.name == json['navigationStyle'],
@@ -262,6 +271,8 @@ class AppSettings {
     'translationFirst': translationFirst.name,
     'translationFallback': translationFallback?.name,
     'translationDirection': translationDirection.name,
+    'defaultInterface': defaultInterface.name,
+    'videoChannelId': videoChannelId,
     'compactLibrary': compactLibrary,
     'navigationStyle': navigationStyle.name,
     'navigationRadius': navigationRadius,
