@@ -259,7 +259,7 @@ class _PlayerShellState extends State<PlayerShell>
   late _Page _primaryPage = _rootPage;
   _BrowseBy _browseBy = _BrowseBy.channel;
   bool _browseAsList = false, _mixExpanded = false;
-  bool _videosOpen = false;
+  late bool _videoMode;
   void _toggleMixExpanded() => setState(() => _mixExpanded = !_mixExpanded);
   void _openRecent() {
     _navigate(_Page.library);
@@ -324,6 +324,9 @@ class _PlayerShellState extends State<PlayerShell>
   @override
   void initState() {
     super.initState();
+    _videoMode =
+        widget.startOnHome &&
+        player.settings.defaultInterface == AppInterface.video;
     _dismissPlayer = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 440),
@@ -1258,13 +1261,15 @@ class _PlayerShellState extends State<PlayerShell>
     listenable: _shellUpdates,
     builder: (context, _) => LayoutBuilder(
       builder: (context, box) {
-        if (widget.setupMode) {
+        if (widget.setupMode || (_videoMode && destination == _Page.telegram)) {
           return Scaffold(
             appBar: AppBar(
               title: const Text('Connect Telegram'),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: widget.setupMode
+                      ? () => Navigator.of(context).pop()
+                      : _back,
                   child: const Text('Done'),
                 ),
               ],
@@ -1275,6 +1280,37 @@ class _PlayerShellState extends State<PlayerShell>
                 child: _telegram(),
               ),
             ),
+          );
+        }
+        if (_videoMode && destination == _Page.settings) {
+          return PopScope(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop) _back();
+            },
+            child: Scaffold(
+              appBar: AppBar(
+                leading: BackButton(onPressed: _back),
+                title: Text(_settingsSection?.title ?? 'Settings'),
+              ),
+              body: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _settingsPage(),
+                ),
+              ),
+            ),
+          );
+        }
+        if (_videoMode &&
+            destination != _Page.settings &&
+            destination != _Page.telegram) {
+          return TelegramVideoView(
+            telegram: telegram,
+            music: player,
+            onMusic: _openVideos,
+            onSettings: () => _navigate(_Page.settings),
+            onConnect: () => _navigate(_Page.telegram),
           );
         }
         final immersiveLyrics = destination == _Page.nowPlaying && showLyrics;
@@ -1417,21 +1453,11 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Future<void> _openVideos() async {
-    if (_videosOpen) return;
-    _videosOpen = true;
-    try {
-      final route = MaterialPageRoute<bool>(
-        builder: (context) =>
-            TelegramVideoView(telegram: telegram, music: player),
-      );
-      final connect = await Navigator.of(context).push(route);
-      await route.completed;
-      if (connect == true && mounted) _navigate(_Page.telegram);
-    } finally {
-      _videosOpen = false;
-    }
-  }
+  void _openVideos() => setState(() {
+    _videoMode = !_videoMode;
+    destination = _Page.home;
+    _primaryPage = _Page.home;
+  });
 
   Widget _navigation(bool narrow, {bool short = false}) => Container(
     width: narrow ? 72 : 202,
@@ -3764,6 +3790,16 @@ class _PlayerShellState extends State<PlayerShell>
 
   List<Widget> _settingsContent(SettingsSection section) => switch (section) {
     SettingsSection.general => [
+      DefaultInterfacePreference(
+        value: player.settings.defaultInterface,
+        onSelected: (mode) =>
+            _savePreferences(() => player.settings.defaultInterface = mode),
+      ),
+      TextButton.icon(
+        onPressed: _openVideos,
+        icon: Icon(_videoMode ? Icons.music_note_rounded : Icons.movie_rounded),
+        label: Text(_videoMode ? 'Switch to Music' : 'Switch to Video'),
+      ),
       PreferenceChoice<PlaybackRepeat>(
         title: 'Playback repeat',
         value: player.repeatMode,
