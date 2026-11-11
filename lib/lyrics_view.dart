@@ -552,6 +552,8 @@ class _LyricsViewState extends State<LyricsView> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
+                dropdownColor: _colors.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(24),
                 initialValue: direction,
                 isExpanded: true,
                 decoration: const InputDecoration(
@@ -699,84 +701,62 @@ class _LyricsViewState extends State<LyricsView> {
     ),
   ];
 
-  Widget _menuSurface(Widget child) {
-    final theme = Theme.of(context);
-    return Theme(
-      data: theme.copyWith(
-        popupMenuTheme: PopupMenuThemeData(
-          color: _colors.surfaceContainerHigh,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.black.withValues(alpha: .42),
-          elevation: 6,
-          menuPadding: const EdgeInsets.all(6),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: _colors.outlineVariant),
-          ),
-        ),
+  Widget _options() => PopupMenuButton<String>(
+    tooltip: 'Lyrics options',
+    position: PopupMenuPosition.under,
+    constraints: const BoxConstraints(minWidth: 280, maxWidth: 300),
+    offset: const Offset(0, 10),
+    icon: const Icon(Icons.more_horiz_rounded),
+    onSelected: (value) {
+      if (value == 'import') {
+        unawaited(_import());
+      } else if (value == 'translate') {
+        unawaited(_translateInApp());
+      } else if (value == 'deepl') {
+        unawaited(_openDeepL());
+      } else if (value == 'embedded') {
+        unawaited(_load(embedded: true, online: false));
+      } else if (value == 'find-by') {
+        unawaited(_searchOnline());
+      } else {
+        unawaited(value == 'paste' ? _paste() : _load());
+      }
+    },
+    itemBuilder: (_) => [
+      ..._translationActions(),
+      _menuAction(
+        value: 'import',
+        enabled: _track != null && !_importing,
+        icon: Icons.file_open_rounded,
+        title: 'Import .lrc file',
+        subtitle: 'Use a local synced-lyrics file.',
       ),
-      child: child,
-    );
-  }
-
-  Widget _options() => _menuSurface(
-    PopupMenuButton<String>(
-      tooltip: 'Lyrics options',
-      position: PopupMenuPosition.under,
-      constraints: const BoxConstraints(minWidth: 280, maxWidth: 300),
-      offset: const Offset(0, 10),
-      icon: const Icon(Icons.more_horiz_rounded),
-      onSelected: (value) {
-        if (value == 'import') {
-          unawaited(_import());
-        } else if (value == 'translate') {
-          unawaited(_translateInApp());
-        } else if (value == 'deepl') {
-          unawaited(_openDeepL());
-        } else if (value == 'embedded') {
-          unawaited(_load(embedded: true, online: false));
-        } else if (value == 'find-by') {
-          unawaited(_searchOnline());
-        } else {
-          unawaited(value == 'paste' ? _paste() : _load());
-        }
-      },
-      itemBuilder: (_) => [
-        ..._translationActions(),
+      if (widget.loadEmbedded != null)
         _menuAction(
-          value: 'import',
-          enabled: _track != null && !_importing,
-          icon: Icons.file_open_rounded,
-          title: 'Import .lrc file',
-          subtitle: 'Use a local synced-lyrics file.',
-        ),
-        if (widget.loadEmbedded != null)
-          _menuAction(
-            value: 'embedded',
-            enabled: _track != null && !_loading,
-            icon: Icons.music_note_rounded,
-            title: 'Read lyrics from music file',
-            subtitle: 'Try embedded lyrics from this track.',
-          ),
-        _menuAction(
-          value: 'find',
-          alternateValue: 'find-by',
+          value: 'embedded',
           enabled: _track != null && !_loading,
-          icon: Icons.search_rounded,
-          title: 'Find lyrics online',
-          subtitle: _lyrics?.provider == null
-              ? 'Hold for search options.'
-              : 'Current: ${_lyrics!.provider}\nHold for search options.',
+          icon: Icons.music_note_rounded,
+          title: 'Read lyrics from music file',
+          subtitle: 'Try embedded lyrics from this track.',
         ),
-        _menuAction(
-          value: 'paste',
-          enabled: _track != null,
-          icon: Icons.content_paste_rounded,
-          title: 'Paste lyrics',
-          subtitle: 'Enter plain text or timestamped LRC.',
-        ),
-      ],
-    ),
+      _menuAction(
+        value: 'find',
+        alternateValue: 'find-by',
+        enabled: _track != null && !_loading,
+        icon: Icons.search_rounded,
+        title: 'Find lyrics online',
+        subtitle: _lyrics?.provider == null
+            ? 'Hold for search options.'
+            : 'Current: ${_lyrics!.provider}\nHold for search options.',
+      ),
+      _menuAction(
+        value: 'paste',
+        enabled: _track != null,
+        icon: Icons.content_paste_rounded,
+        title: 'Paste lyrics',
+        subtitle: 'Enter plain text or timestamped LRC.',
+      ),
+    ],
   );
 
   Widget _body() {
@@ -974,28 +954,25 @@ class _LyricsViewState extends State<LyricsView> {
         if (_lyrics != null &&
             !_lyrics!.instrumental &&
             _lyrics!.plain.trim().isNotEmpty)
-          _menuSurface(
-            PopupMenuButton<String>(
-              key: const ValueKey('lyrics-translate'),
-              tooltip: 'Translate lyrics',
-              enabled: !_loading && !_openingDeepL && !_translating,
-              position: PopupMenuPosition.under,
-              offset: const Offset(0, 8),
-              constraints: const BoxConstraints(minWidth: 260, maxWidth: 300),
-              icon: _translating
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(
-                      Icons.translate_rounded,
-                      color: _showTranslation ? _colors.primary : null,
-                    ),
-              itemBuilder: (_) => _translationActions(),
-              onSelected: (value) => unawaited(
-                value == 'deepl' ? _openDeepL() : _translateInApp(),
-              ),
-            ),
+          PopupMenuButton<String>(
+            key: const ValueKey('lyrics-translate'),
+            tooltip: 'Translate lyrics',
+            enabled: !_loading && !_openingDeepL && !_translating,
+            position: PopupMenuPosition.under,
+            offset: const Offset(0, 8),
+            constraints: const BoxConstraints(minWidth: 260, maxWidth: 300),
+            icon: _translating
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    Icons.translate_rounded,
+                    color: _showTranslation ? _colors.primary : null,
+                  ),
+            itemBuilder: (_) => _translationActions(),
+            onSelected: (value) =>
+                unawaited(value == 'deepl' ? _openDeepL() : _translateInApp()),
           ),
         _options(),
       ],
@@ -1243,7 +1220,7 @@ class _LyricsMenuEntry extends StatelessWidget {
             decoration: BoxDecoration(
               color: enabled
                   ? colors.primary.withValues(alpha: .14)
-                  : Colors.white.withValues(alpha: .05),
+                  : colors.onSurface.withValues(alpha: .05),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(icon, color: foreground, size: 20),
