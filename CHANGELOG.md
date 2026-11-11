@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.133
+
+- Mark the selected channel in Video Search and automatically load all playable videos as Telegram pages arrive.
+- Upgrade cached low-resolution previews when sharper artwork is available. Preload neighboring covers, use sharper artwork on high-density displays, and keep blur, swipe, and player transitions.
+- Use the active artwork theme across app dialogs, menus, notifications, and video controls.
+
 ## 0.1.132
 
 - Remove the channel dropdowns from Video Library and Search. Find channels by name in Video Search.
