@@ -33,7 +33,6 @@ internal class VideoWindow(
 
     private val channel = MethodChannel(messenger, "app.auralis/video")
     private val documents = VideoDocuments(activity, messenger, io)
-    private val exporter = VideoExporter(activity, io)
     private val toggleAction = "${activity.packageName}.VIDEO_PIP_TOGGLE"
     private var picker: MethodChannel.Result? = null
     private var autoPip = false
@@ -66,9 +65,6 @@ internal class VideoWindow(
             try {
                 when (call.method) {
                     "openFiles" -> openFiles(result)
-                    "exportVideo" -> exporter.start(call, result)
-                    "exportProgress" -> result.success(exporter.progress())
-                    "cancelExport" -> { exporter.cancel(); result.success(null) }
                     "matchRefreshRate" -> {
                         matchRefreshRate((call.arguments as? Number)?.toDouble())
                         result.success(null)
@@ -233,7 +229,6 @@ internal class VideoWindow(
     fun close() {
         closed = true
         documents.close()
-        exporter.cancel()
         if (supported) activity.unregisterReceiver(receiver)
         picker?.success(null)
         picker = null
