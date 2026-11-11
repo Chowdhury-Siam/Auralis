@@ -237,7 +237,7 @@ See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for val
 | Setting or action | Purpose |
 | --- | --- |
 | **General** | Choose playback repeat and library sort order |
-| **Appearance** | Choose compact library navigation, phone navigation style and corner radius |
+| **Appearance** | Choose phone navigation style and corner radius |
 | **Lyrics & artwork → Lyrics & translation** | Automatic lookup/translation, direction, and primary/fallback providers |
 | **Data & sync → Listening stats** | Review listening activity and rankings |
 | **Data & sync → Backup & Restore** | Save and recover your Telegram account, collections, stats, and preferences |
@@ -316,7 +316,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive's source version is **0.1.142+143**, including [multi-device sync](docs/SYNC.md), [separate build/publish/cleanup actions](docs/RELEASE_PIPELINE.md), and matching in-app/GitHub release notes; that is not a claim about the latest published release.
+Auralis is under active development. This archive contains source version **0.1.145+146**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
