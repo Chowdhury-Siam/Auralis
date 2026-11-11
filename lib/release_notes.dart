@@ -1,25 +1,28 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import 'app_popups.dart';
+
 import 'package:flutter/services.dart';
 
 import 'storage.dart';
 
-const currentReleaseVersion = '0.1.133';
+const currentReleaseVersion = '0.1.135';
 Future<void> showReleaseChanges(
   BuildContext context,
   String version,
   String notes,
-) => showDialog<void>(
+) => showAuralisDialog<void>(
   context: context,
-  builder: (c) => AlertDialog(
+  builder: (c) => AuralisDialog(
     title: Text('What’s new in $version'),
-    content: SizedBox(
-      width: 540,
-      child: SingleChildScrollView(child: SelectableText(notes)),
-    ),
+    content: SelectableText(notes),
     actions: [
-      TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close')),
+      FilledButton(
+        onPressed: () => Navigator.pop(c),
+        child: const Text('Close'),
+      ),
     ],
   ),
 );
