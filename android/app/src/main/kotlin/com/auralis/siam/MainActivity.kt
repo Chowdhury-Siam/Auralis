@@ -2,7 +2,9 @@ package com.auralis.siam
 
 import android.app.Activity
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
+import android.os.Build
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -14,11 +16,15 @@ class MainActivity : AudioServiceActivity() {
     private val updates by lazy { AndroidUpdateInstaller(this, io) }
     private val setup by lazy { DeviceSetup(this) }
     private var pending: MethodChannel.Result? = null
+    private var videoWindow: VideoWindow? = null
     private var selectedRead: Uri? = null
     private var selectedWrite: Uri? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        videoWindow?.close()
+        videoWindow = VideoWindow(this, flutterEngine.dartExecutor.binaryMessenger, io)
+        intent?.let { videoWindow?.onIntent(it) }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.auralis/platform").setMethodCallHandler { call, result ->
             when (call.method) {
                 "setupStatus" -> {
@@ -120,13 +126,34 @@ class MainActivity : AudioServiceActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (updates.onActivityResult(requestCode)) return
+        if (videoWindow?.onActivityResult(requestCode, resultCode, data) == true) return
         if (requestCode != 4101 && requestCode != 4102) return
         val uri = if (resultCode == Activity.RESULT_OK) data?.data else null
         if (requestCode == 4101) selectedWrite = uri else selectedRead = uri
         pending?.success(uri?.toString())
         pending = null
     }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        videoWindow?.onIntent(intent)
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        videoWindow?.onUserLeave()
+    }
+
+    override fun onPictureInPictureModeChanged(enabled: Boolean, configuration: Configuration) {
+        if (Build.VERSION.SDK_INT >= 26) {
+            super.onPictureInPictureModeChanged(enabled, configuration)
+        }
+        videoWindow?.onPipChanged(enabled)
+    }
+
     override fun onDestroy() {
+        videoWindow?.close()
+        videoWindow = null
         pending?.success(null)
         pending = null
         updates.close()
