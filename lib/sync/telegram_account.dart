@@ -1,8 +1,8 @@
 part of 'controller.dart';
 
 // These fields live with the protected Auralis account journal. Telegram auth
-// keys and databases remain on their own devices; only short-lived login links
-// pass through the authenticated Worker and require a code entered by the user.
+// keys and databases remain on their own devices. A recent password sign-in
+// can authorize the Worker to relay an independent TDLib login automatically.
 extension TelegramAccountSync on SyncController {
   bool get telegramSyncAvailable => telegram != null && signedIn;
   bool get telegramIncluded => _telegramIncluded;
@@ -25,6 +25,7 @@ extension TelegramAccountSync on SyncController {
     _telegramEpoch++;
     _telegramPhoneFallback = false;
     _telegramProfile = null;
+    _telegramLoginGrant = null;
     _telegramIncluded = true;
     _telegramRequests = [];
     _telegramCode = null;
@@ -99,6 +100,7 @@ extension TelegramAccountSync on SyncController {
       if (!current()) return;
       _telegramIncluded = result['enabled'] != false;
       _telegramProfile = _checkedTelegramProfile(result['profile']);
+      final automaticLinking = result['automaticLinking'] == true;
       _telegramError = null;
       if (!_telegramIncluded) {
         _telegramStatus =
@@ -138,6 +140,7 @@ extension TelegramAccountSync on SyncController {
           _telegramRequests = [];
           return;
         }
+        _telegramLoginGrant = null;
         if (_telegramOwner != user.identity) {
           _telegramOwner = user.identity;
           await _saveAccounts();
@@ -145,9 +148,12 @@ extension TelegramAccountSync on SyncController {
         _telegramCode = null;
         _telegramRequestId = null;
         _telegramPublishedLink = null;
-        final pending = await _telegramRequest(user, '/requests');
+        final pending = await _telegramRequest(
+          user,
+          automaticLinking ? '/requests/automatic' : '/requests',
+        );
         if (!current()) return;
-        _telegramRequests = [
+        final requests = [
           for (final item in pending['requests'] as List? ?? [])
             if (item is Map &&
                 item['id'] is String &&
@@ -155,9 +161,32 @@ extension TelegramAccountSync on SyncController {
                 item['expires'] is int)
               Map<String, dynamic>.from(item),
         ];
+        _telegramRequests = requests
+            .where((request) => request['automatic'] != true)
+            .toList();
         _telegramStatus = _telegramRequests.isEmpty
             ? 'Telegram account linked. Each device keeps its own sign-in.'
             : 'A new device is waiting for your approval.';
+        final automatic = requests
+            .where((request) => request['automatic'] == true)
+            .firstOrNull;
+        if (automatic != null && !busy && !paused()) {
+          accountBusy = true;
+          try {
+            await _completeTelegramDevice(
+              user,
+              td,
+              _telegramProfile!['userId'] as int,
+              automatic['id'] as String,
+              active: current,
+            );
+            if (current()) {
+              _telegramStatus = 'Telegram sign-in approved for the new device.';
+            }
+          } finally {
+            accountBusy = false;
+          }
+        }
       } else if (_telegramProfile == null) {
         _telegramStatus =
             'Connect Telegram on this device to include your account.';
@@ -208,36 +237,46 @@ extension TelegramAccountSync on SyncController {
         if (td.state == 'authorizationStateWaitOtherDeviceConfirmation' &&
             link != null) {
           if (link != _telegramPublishedLink) {
+            final grant = automaticLinking ? _telegramLoginGrant : null;
+            final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+            if (grant != null && grant.expires <= now) {
+              _telegramStatus = 'Sign in to Auralis again to connect Telegram automatically, or use phone sign-in.';
+              return;
+            }
             final request = await _telegramRequest(
               user,
               '/requests',
               method: 'POST',
-              data: {'link': link},
+              data: {'link': link, if (grant != null) 'grant': grant.token},
             );
             if (!current()) return;
-            if (request['id'] is! String ||
-                !RegExp(r'^[a-f0-9]{64}$').hasMatch(request['id'] as String) ||
-                request['code'] is! String ||
-                !RegExp(r'^\d{6}$').hasMatch(request['code'] as String)) {
+            final id = request['id'];
+            final code = request['code'];
+            if (id is! String ||
+                !RegExp(r'^[a-f0-9]{64}$').hasMatch(id) ||
+                (grant != null
+                    ? request['automatic'] != true
+                    : code is! String || !RegExp(r'^\d{6}$').hasMatch(code))) {
               throw const FormatException('Invalid device sign-in response.');
             }
-            _telegramRequestId = request['id'] as String;
-            _telegramCode = request['code'] as String;
+            _telegramRequestId = id;
+            _telegramCode = grant == null ? code as String : null;
             _telegramPublishedLink = link;
           }
-          if (_telegramRequestId != null) {
-            final state = await _telegramRequest(
-              user,
-              '/requests/$_telegramRequestId',
-            );
-            if (!current()) return;
-            if (state['state'] == 'failed') {
-              _telegramStatus =
-                  'Telegram approval failed. Retry sign-in on this device.';
-              return;
-            }
+          final state = await _telegramRequest(
+            user,
+            '/requests/$_telegramRequestId',
+          );
+          if (!current()) return;
+          if (state['state'] == 'failed') {
+            _telegramStatus = 'Telegram could not connect. Waiting for a fresh sign-in request.';
+          } else if (_telegramCode == null) {
+            _telegramStatus = state['state'] == 'approved'
+                ? 'Finishing Telegram sign-in…'
+                : 'Waiting for Auralis on an already connected device. Telegram will connect automatically.';
+          } else {
+            _telegramStatus = 'Open Account & sync on an already connected device, tap Approve and enter this device’s six-digit code.';
           }
-          _telegramStatus = 'Open Account & sync on an already connected device, tap Approve and enter this device’s six-digit code.';
         } else if (td.error != null) {
           _telegramStatus =
               'Finish Telegram sign-in in the Telegram tab. ${td.error}';
@@ -275,8 +314,7 @@ extension TelegramAccountSync on SyncController {
         await _saveAccounts();
         _telegramProfile = profile;
         _telegramIncluded = true;
-        _telegramStatus =
-            'Telegram account included. Approve new devices from this page.';
+        _telegramStatus = 'Telegram account included on your devices.';
       } else {
         await _telegramRequest(user, '', method: 'DELETE');
         _resetTelegramSync();
@@ -311,37 +349,72 @@ extension TelegramAccountSync on SyncController {
     accountBusy = true;
     _telegramOperating = true;
     _changed();
-    var claimed = false;
+    final epoch = _telegramEpoch;
     try {
-      final current = await td.cloudIdentity();
-      if (current['userId'] != profile['userId']) {
+      final userId = profile['userId'] as int;
+      final local = await td.cloudIdentity();
+      if (local['userId'] != userId) {
         throw const FormatException(
           'Use the device signed in to the linked Telegram account.',
         );
       }
+      await _completeTelegramDevice(
+        user,
+        td,
+        userId,
+        id,
+        code: code,
+        active: () => _sameTelegramScope(user) && epoch == _telegramEpoch,
+      );
+      _telegramRequests.removeWhere((r) => r['id'] == id);
+      _telegramStatus = 'New device approved. Telegram may still request its two-step password.';
+      _telegramError = null;
+    } finally {
+      accountBusy = false;
+      _telegramOperating = false;
+      _changed();
+    }
+  }
+
+  Future<void> _completeTelegramDevice(
+    SyncAccount user,
+    TelegramService td,
+    int userId,
+    String id, {
+    String? code,
+    required bool Function() active,
+  }) async {
+    void checkScope() {
+      if (!active() || !td.ready) {
+        throw const FormatException(
+          'The linked account changed. Retry on the new device.',
+        );
+      }
+    }
+
+    var claimed = false;
+    try {
+      checkScope();
       final result = await _telegramRequest(
         user,
         '/requests/$id/claim',
         method: 'POST',
-        data: {'code': code},
+        data: code == null
+            ? {'automatic': true, 'userId': userId}
+            : {'code': code},
       );
       claimed = true;
-      if (result['link'] is! String || result['userId'] != profile['userId']) {
+      checkScope();
+      if (result['link'] is! String || result['userId'] != userId) {
         throw const FormatException('Invalid Telegram device request.');
       }
-      await td.confirmCloudLogin(
-        result['link'] as String,
-        profile['userId'] as int,
-      );
+      await td.confirmCloudLogin(result['link'] as String, userId);
       await _telegramRequest(
         user,
         '/requests/$id/complete',
         method: 'POST',
         data: {'ok': true},
       );
-      _telegramRequests.removeWhere((r) => r['id'] == id);
-      _telegramStatus = 'New device approved. Telegram may still request its two-step password.';
-      _telegramError = null;
     } catch (_) {
       if (claimed) {
         try {
@@ -354,10 +427,6 @@ extension TelegramAccountSync on SyncController {
         } catch (_) {}
       }
       rethrow;
-    } finally {
-      accountBusy = false;
-      _telegramOperating = false;
-      _changed();
     }
   }
 
@@ -384,6 +453,7 @@ extension TelegramAccountSync on SyncController {
         } catch (_) {}
       }
       _telegramPhoneFallback = true;
+      _telegramLoginGrant = null;
       _telegramCode = null;
       _telegramRequestId = null;
       await td.cancelCloudLogin();
