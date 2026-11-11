@@ -61,16 +61,16 @@ class AndroidToolsTest(unittest.TestCase):
             with zipfile.ZipFile(apk, 'w') as archive:
                 for name in ('AndroidManifest.xml', 'classes.dex'):
                     archive.writestr(name, b'fixture')
-                for name in ('tdjson', 'mpv', 'mediakitandroidhelper', 'flutter'):
+                for name in ('tdjson', 'mpv', 'mediakitandroidhelper', 'flutter', 'qjs', 'python3.13'):
                     archive.writestr('lib/arm64-v8a/lib' + name + '.so', elf())
             verify.verify_apk(apk, 'arm64-v8a')
             with self.assertRaises(ValueError):
                 verify.verify_apk(apk, 'x86_64')
 
-    def test_github_workflow_builds_single_abi_split_apk(self):
+    def test_github_workflow_builds_single_abi_apk(self):
         workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/android.yml').read_text()
-        self.assertIn('flutter build apk --release --no-pub --split-per-abi --target-platform "$target"', workflow)
-        self.assertIn('source_apk="build/app/outputs/flutter-apk/app-$ABI-release.apk"', workflow)
+        self.assertIn('flutter build apk --release --no-pub --target-platform "$target"', workflow)
+        self.assertIn('source_apk="build/app/outputs/flutter-apk/app-release.apk"', workflow)
         self.assertIn('cp "$source_apk" "dist/android/auralis-$version-android-$ABI-$flavor.apk"', workflow)
         self.assertIn('manifest debuggable', workflow)
         self.assertNotIn('mode=debug', workflow)
@@ -82,7 +82,7 @@ class AndroidToolsTest(unittest.TestCase):
             with zipfile.ZipFile(apk, 'w') as archive:
                 for name in ('AndroidManifest.xml', 'classes.dex'):
                     archive.writestr(name, b'fixture')
-                for lib in ('tdjson', 'mpv', 'mediakitandroidhelper', 'flutter'):
+                for lib in ('tdjson', 'mpv', 'mediakitandroidhelper', 'flutter', 'qjs', 'python3.13'):
                     archive.writestr(f'lib/arm64-v8a/lib{lib}.so', elf())
                 archive.writestr('lib/x86_64/libmpv.so', elf(machine=62))
             with self.assertRaisesRegex(ValueError, 'Unexpected ABI'):
