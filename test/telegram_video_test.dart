@@ -89,7 +89,7 @@ void main() {
   );
 
   testWidgets(
-    'open picker discovers a new channel and Library shows history and live videos before search catches up',
+    'Search discovers a new channel and Library shows history and live videos before indexing catches up',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(390, 844);
@@ -147,13 +147,12 @@ void main() {
       await tester.tap(
         find.descendant(
           of: navigation,
-          matching: find.byIcon(Icons.video_library_rounded),
+          matching: find.byIcon(Icons.search_rounded),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Choose video channel'));
-      await tester.pumpAndSettle();
-      expect(find.widgetWithText(ListTile, channel.title), findsNothing);
+      expect(find.text('No Telegram channels available'), findsOneWidget);
+      expect(find.text(channel.title), findsNothing);
       td.events.add({
         '@type': 'updateNewChat',
         'chat': {
@@ -163,7 +162,7 @@ void main() {
         },
       });
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ListTile, channel.title));
+      await tester.tap(find.text(channel.title));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('New episode'), findsOneWidget);
@@ -178,6 +177,14 @@ void main() {
       });
       td.events.add({'@type': 'updateNewMessage', 'message': incoming});
       delayedIndex.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Next episode'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: navigation,
+          matching: find.byIcon(Icons.video_library_rounded),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Next episode'), findsOneWidget);
       expect(find.text('New episode'), findsOneWidget);
@@ -238,7 +245,7 @@ void main() {
   }
 
   testWidgets(
-    'desktop Home opens the video library and can load older results',
+    'desktop Home opens channel Search and Library keeps loaded videos',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1100, 750);
@@ -301,15 +308,16 @@ void main() {
       expect(find.text('Auralis Video'), findsOneWidget);
       await tester.tap(find.text('Browse videos'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Choose video channel'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ListTile, channel.title));
+      await tester.tap(find.text(channel.title));
       await tester.pumpAndSettle();
       expect(find.text('New release'), findsOneWidget);
 
       await tester.tap(find.text('Load older videos'));
       await tester.pumpAndSettle();
       expect(find.text('New release'), findsOneWidget);
+      expect(find.text('Older film'), findsOneWidget);
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
       expect(find.text('Older film'), findsOneWidget);
       await tester.tap(find.byTooltip('Switch to Music'));
       await tester.pumpAndSettle();
