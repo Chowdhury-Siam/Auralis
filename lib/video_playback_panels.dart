@@ -10,69 +10,158 @@ extension _PlaybackPanels on _VideoPlaybackState {
     Iterable<_VideoChoice<T>> choices,
   ) => showAuralisDialog<T>(
     context: context,
-    builder: (dialog) => AuralisDialog(
-      title: Text(title),
+    builder: (dialog) => _VideoPanel(
+      title: title,
+      icon: Icons.tune_rounded,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (choices.isEmpty) const Text('No options available.'),
           for (final choice in choices)
-            AuralisChoiceTile(
-              title: Text(choice.label),
-              selected: choice.selected,
+            _VideoMenuRow(
+              label: choice.label,
+              icon: Icons.tune_rounded,
+              selected: choice.selected ? true : null,
               onTap: () => Navigator.pop(dialog, choice.value),
             ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialog),
-          child: const Text('Done'),
-        ),
-      ],
     ),
   );
 
-  String _trackLabel(String id, String? title, String? language) {
-    if (id == 'auto') return 'Automatic';
-    if (id == 'no') return 'Off';
-    final names = [
-      title,
-      language,
-    ].whereType<String>().where((part) => part.isNotEmpty);
-    return names.isEmpty ? 'Track $id' : names.join(' · ');
+  _VideoOption<T> _trackOption<T>(
+    T value,
+    String id,
+    String? title,
+    String? language, {
+    required IconData icon,
+    required bool selected,
+    required String offHint,
+  }) {
+    if (id == 'auto') {
+      return _VideoOption(value, 'Automatic', Icons.auto_awesome_rounded,
+          detail: 'Use the default track', selected: selected);
+    }
+    if (id == 'no') {
+      return _VideoOption(value, 'Off', Icons.block_rounded,
+          detail: offHint, selected: selected);
+    }
+    final tag = language?.trim().toLowerCase().split(RegExp('[-_]')).first ?? '';
+    final languageName = switch (tag) {
+      'en' || 'eng' => 'English',
+      'ja' || 'jpn' => 'Japanese',
+      'de' || 'deu' || 'ger' => 'German',
+      'es' || 'spa' => 'Spanish',
+      'fr' || 'fra' || 'fre' => 'French',
+      'pt' || 'por' => 'Portuguese',
+      'it' || 'ita' => 'Italian',
+      'zh' || 'zho' || 'chi' => 'Chinese',
+      'ko' || 'kor' => 'Korean',
+      'ar' || 'ara' => 'Arabic',
+      'hi' || 'hin' => 'Hindi',
+      'bn' || 'ben' => 'Bengali',
+      'ru' || 'rus' => 'Russian',
+      'id' || 'ind' => 'Indonesian',
+      'th' || 'tha' => 'Thai',
+      'vi' || 'vie' => 'Vietnamese',
+      '' || 'und' => null,
+      _ => tag.toUpperCase(),
+    };
+    final name = title?.trim();
+    final label = name != null && name.isNotEmpty ? name : languageName ?? 'Track $id';
+    return _VideoOption(value, label, icon,
+        detail: languageName?.toLowerCase() == label.toLowerCase() ? null : languageName,
+        selected: selected);
+  }
+
+  Widget _trackChoices<T>(
+    List<_VideoOption<T>> options,
+    ValueChanged<T> select,
+  ) {
+    bool isMode(_VideoOption<T> option) =>
+        option.icon == Icons.auto_awesome_rounded || option.icon == Icons.block_rounded;
+    final tracks = options.where((option) => !isMode(option));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final option in options)
+          if (isMode(option)) option.row(select),
+        if (tracks.isNotEmpty) ...[
+          const _VideoSectionLabel('Available tracks'),
+          for (final track in tracks) track.row(select),
+        ] else
+          const Padding(
+            padding: EdgeInsets.all(10),
+            child: Text('No tracks available.'),
+          ),
+      ],
+    );
   }
 
   Future<void> _speedPanel(BuildContext context) async {
     final player = _player!;
-    final rate = await _choose<double>(context, 'Playback speed', [
-      for (final speed in const [
-        .25,
-        .5,
-        .75,
-        1.0,
-        1.25,
-        1.5,
-        1.75,
-        2.0,
-        2.5,
-        3.0,
-      ])
-        (value: speed, label: '$speed×', selected: speed == player.state.rate),
-    ]);
+    final rate = await showAuralisDialog<double>(
+      context: context,
+      builder: (dialog) => _VideoPanel(
+        title: 'Playback speed',
+        detail: 'Choose how fast the video plays.',
+        icon: Icons.speed_rounded,
+        width: 420,
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (label, speeds) in const [
+              ('Slower', [.25, .5, .75]),
+              ('Normal', [1.0]),
+              ('Faster', [1.25, 1.5, 1.75, 2.0, 2.5, 3.0]),
+            ]) ...[
+              _VideoSectionLabel(label),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final speed in speeds)
+                    ChoiceChip(
+                      label: Text('${speed % 1 == 0 ? speed.toInt() : speed}×'),
+                      selected: speed == player.state.rate,
+                      onSelected: (_) => Navigator.pop(dialog, speed),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
     if (_canPlay && rate != null) await player.setRate(rate);
   }
 
   Future<void> _decoderPanel(BuildContext context) async {
-    final mode = await _choose<String>(context, 'Video decoder', [
-      for (final (id, label) in const [
-        ('auto-safe', 'HW · Automatic'),
-        ('auto-copy', 'HW+ · Hardware copy-back'),
-        ('no', 'SW · Software'),
-      ])
-        (value: id, label: label, selected: id == _decoder),
-    ]);
+    final mode = await showAuralisDialog<String>(
+      context: context,
+      builder: (dialog) => _VideoPanel(
+        title: 'Video decoder',
+        detail: 'Choose how the video is decoded.',
+        icon: Icons.memory_rounded,
+        content: Column(
+          children: [
+            for (final (id, label, detail, icon) in const [
+              ('auto-safe', 'Automatic', 'Recommended. Uses hardware when supported.', Icons.auto_awesome_rounded),
+              ('auto-copy', 'Hardware copy-back', 'Try this if automatic mode has display issues.', Icons.layers_outlined),
+              ('no', 'Software', 'Uses the CPU. Can help with hardware decoding issues.', Icons.memory_rounded),
+            ])
+              _VideoMenuRow(
+                label: label,
+                detail: detail,
+                icon: icon,
+                selected: id == _decoder,
+                onTap: () => Navigator.pop(dialog, id),
+              ),
+          ],
+        ),
+      ),
+    );
     if (_canPlay && mode != null) {
       await _native.setProperty('hwdec', mode);
       _decoder = mode;
@@ -82,22 +171,34 @@ extension _PlaybackPanels on _VideoPlaybackState {
 
   Future<void> _audioPanel(BuildContext context) async {
     final player = _player!;
-    final selected = await _choose<_PanelAction>(context, 'Audio tracks', [
-      for (final track in player.state.tracks.audio)
-        (
-          value: () => player.setAudioTrack(track),
-          label: _trackLabel(track.id, track.title, track.language),
-          selected: track.id == player.state.track.audio.id,
-        ),
-      (
-        value: () => _sliderPanel(context, 'Audio controls', const [
-          ('audio-delay', 'Delay (seconds)', -5, 5, 0),
-          ('balance', 'Left / right balance', -1, 1, 0),
-        ]),
-        label: 'Delay and balance',
-        selected: false,
-      ),
+    Future<void> audioControls() => _sliderPanel(context, 'Audio controls', const [
+      ('audio-delay', 'Delay (seconds)', -5, 5, 0),
+      ('balance', 'Left / right balance', -1, 1, 0),
     ]);
+    final selected = await showAuralisDialog<_PanelAction>(
+      context: context,
+      builder: (dialog) => _VideoPanel(
+        title: 'Audio tracks',
+        detail: 'Choose the soundtrack for this video.',
+        icon: Icons.headphones_rounded,
+        content: _trackChoices<_PanelAction>([
+          for (final track in player.state.tracks.audio)
+            _trackOption<_PanelAction>(
+              () => player.setAudioTrack(track), track.id, track.title, track.language,
+              icon: Icons.audiotrack_rounded,
+              selected: track.id == player.state.track.audio.id,
+              offHint: 'Mute the soundtrack',
+            ),
+        ], (action) => Navigator.pop(dialog, action)),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.pop(dialog, audioControls),
+            icon: const Icon(Icons.tune_rounded),
+            label: const Text('Delay and balance'),
+          ),
+        ],
+      ),
+    );
     if (_canPlay && context.mounted && selected != null) await selected();
   }
 
@@ -143,45 +244,85 @@ extension _PlaybackPanels on _VideoPlaybackState {
 
   Future<void> _subtitlesPanel(BuildContext context) async {
     final player = _player!;
-    final selected = await _choose<_PanelAction>(context, 'Subtitles', [
-      for (final track in player.state.tracks.subtitle)
-        (
-          value: () => player.setSubtitleTrack(track),
-          label: _trackLabel(track.id, track.title, track.language),
-          selected: track.id == player.state.track.subtitle.id,
-        ),
-      (
-        value: () => _secondarySubtitlePanel(context),
-        label: 'Secondary subtitles',
-        selected: false,
+    final playerContext = context;
+    var showOptions = false;
+    final selected = await showAuralisDialog<_PanelAction>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (context, update) {
+          void select(_PanelAction action) => Navigator.pop(dialog, action);
+          return _VideoPanel(
+            title: showOptions ? 'Subtitle options' : 'Subtitles',
+            detail: showOptions ? null : 'Choose a subtitle track for this video.',
+            icon: Icons.subtitles_outlined,
+            onBack: showOptions ? () => update(() => showOptions = false) : null,
+            content: showOptions
+                ? Column(
+                    children: [
+                      _VideoOption<_PanelAction>(
+                        () => _secondarySubtitlePanel(playerContext),
+                        'Secondary subtitles', Icons.closed_caption_outlined,
+                        detail: 'Show a second track alongside the main subtitles.',
+                      ).row(select),
+                      _VideoOption<_PanelAction>(
+                        _subtitleFile, 'Open subtitle file', Icons.upload_file_outlined,
+                      ).row(select),
+                      _VideoOption<_PanelAction>(
+                        () => _findWyzieSubtitles(playerContext),
+                        'Search subtitles with Wyzie', Icons.search_rounded,
+                      ).row(select),
+                      _VideoOption<_PanelAction>(
+                        () => _subtitleStylePanel(playerContext),
+                        'Style, position and delay', Icons.text_fields_rounded,
+                      ).row(select),
+                    ],
+                  )
+                : _trackChoices<_PanelAction>([
+                    for (final track in player.state.tracks.subtitle)
+                      _trackOption<_PanelAction>(
+                        () => player.setSubtitleTrack(track), track.id, track.title, track.language,
+                        icon: Icons.subtitles_outlined,
+                        selected: track.id == player.state.track.subtitle.id,
+                        offHint: 'Hide subtitles',
+                      ),
+                  ], select),
+            actions: [
+              if (!showOptions)
+                TextButton.icon(
+                  onPressed: () => update(() => showOptions = true),
+                  icon: const Icon(Icons.tune_rounded),
+                  label: const Text('Subtitle options'),
+                ),
+            ],
+          );
+        },
       ),
-      (value: _subtitleFile, label: 'Open subtitle file', selected: false),
-      (
-        value: () => _findWyzieSubtitles(context),
-        label: 'Search subtitles with Wyzie',
-        selected: false,
-      ),
-      (
-        value: () => _subtitleStylePanel(context),
-        label: 'Style, position and delay',
-        selected: false,
-      ),
-    ]);
+    );
     if (_canPlay && context.mounted && selected != null) await selected();
   }
 
   Future<void> _secondarySubtitlePanel(BuildContext context) async {
-    final track = await _choose<String>(context, 'Secondary subtitles', [
-      (value: 'no', label: 'Off', selected: _secondarySubtitle == 'no'),
-      for (final track in _player!.state.tracks.subtitle)
-        if (int.tryParse(track.id) != null &&
-            track.id != _player!.state.track.subtitle.id)
-          (
-            value: track.id,
-            label: _trackLabel(track.id, track.title, track.language),
-            selected: track.id == _secondarySubtitle,
-          ),
-    ]);
+    final player = _player!;
+    final track = await showAuralisDialog<String>(
+      context: context,
+      builder: (dialog) => _VideoPanel(
+        title: 'Secondary subtitles',
+        detail: 'Choose a second track to display.',
+        icon: Icons.closed_caption_outlined,
+        content: _trackChoices<String>([
+          _trackOption('no', 'no', null, null,
+              icon: Icons.subtitles_outlined,
+              selected: _secondarySubtitle == 'no',
+              offHint: 'Hide the second track'),
+          for (final track in player.state.tracks.subtitle)
+            if (int.tryParse(track.id) != null && track.id != player.state.track.subtitle.id)
+              _trackOption(track.id, track.id, track.title, track.language,
+                  icon: Icons.subtitles_outlined,
+                  selected: track.id == _secondarySubtitle,
+                  offHint: 'Hide the second track'),
+        ], (id) => Navigator.pop(dialog, id)),
+      ),
+    );
     if (_canPlay && track != null) {
       await _native.setProperty('secondary-sid', track);
       _secondarySubtitle = track;
@@ -296,93 +437,87 @@ extension _PlaybackPanels on _VideoPlaybackState {
       context: context,
       builder: (dialog) => ListenableBuilder(
         listenable: _changes,
-        builder: (context, _) => AuralisDialog(
-          title: AuralisDialogTitle(
-            'Now playing · ${_queue.length}',
-            actions: [
-              IconButton(
-                tooltip: 'Save queue as video playlist',
-                onPressed: () => saveVideoPlaylist(dialog, _data,
-                    widget.music.settings.save, List<VideoSource>.of(_queue)),
-                icon: const Icon(Icons.save_outlined),
-              ),
-            ],
-          ),
+        builder: (context, _) => _VideoPanel(
+          title: 'Now playing queue',
+          icon: Icons.queue_play_next_rounded,
+          detail: '${_index + 1} of ${_queue.length} · Drag to reorder',
           width: 560,
-          maxWidth: 660,
           scrollable: false,
-          content: SizedBox(
-            height: math.min(420, MediaQuery.sizeOf(context).height * .55),
-            child: ReorderableListView.builder(
-              buildDefaultDragHandles: false,
-              itemCount: _queue.length,
-              onReorderItem: (oldIndex, newIndex) {
-                final current = _source;
-                _queue.insert(newIndex, _queue.removeAt(oldIndex));
-                _index = _queue.indexOf(current);
-                _changed();
-              },
-              itemBuilder: (context, index) {
-                final entry = _queue[index];
-                final current = index == _index;
-                final preview = entry.telegram?.coverPreview;
-                return AuralisChoiceTile(
-                  key: ValueKey(entry.id),
-                  selected: current,
-                  leading: preview == null
-                      ? Icon(
-                          current
-                              ? Icons.equalizer_rounded
-                              : Icons.video_file_outlined,
-                        )
-                      : ClipRRect(
-                          borderRadius: BorderRadius.circular(9),
-                          child: Image.memory(
-                            preview,
-                            width: 52,
-                            height: 38,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                const Icon(Icons.movie_outlined),
-                          ),
-                        ),
-                  title: Text(
-                    entry.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+          content: ReorderableListView.builder(
+            shrinkWrap: true,
+            primary: false,
+            padding: EdgeInsets.zero,
+            buildDefaultDragHandles: false,
+            itemCount: _queue.length,
+            onReorderItem: (oldIndex, newIndex) {
+              final current = _source;
+              _queue.insert(newIndex, _queue.removeAt(oldIndex));
+              _index = _queue.indexOf(current);
+              _changed();
+            },
+            itemBuilder: (context, index) {
+              final entry = _queue[index];
+              final current = index == _index;
+              final time = entry.duration > Duration.zero
+                  ? clockText(entry.duration)
+                  : null;
+              return AuralisChoiceTile(
+                key: ValueKey(entry.id),
+                selected: current,
+                leading: SizedBox(
+                  width: 26,
+                  child: Center(
+                    child: current
+                        ? const Icon(Icons.equalizer_rounded, size: 20)
+                        : Text('${index + 1}'),
                   ),
-                  subtitle: entry.duration > Duration.zero
-                      ? Text(clockText(entry.duration))
-                      : null,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!current)
-                        IconButton(
-                          tooltip: 'Remove from queue',
-                          onPressed: () {
-                            final currentEntry = _source;
-                            _queue.remove(entry);
-                            _index = _queue.indexOf(currentEntry);
-                            _changed();
-                          },
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                        ),
-                      ReorderableDragStartListener(
-                        index: index,
-                        child: const Padding(
+                ),
+                title: Text(
+                  entry.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: current
+                    ? Text(time == null ? 'Current video' : 'Current video · $time')
+                    : time == null ? null : Text(time),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!current)
+                      IconButton(
+                        tooltip: 'Remove from queue',
+                        onPressed: () {
+                          final currentEntry = _source;
+                          _queue.remove(entry);
+                          _index = _queue.indexOf(currentEntry);
+                          _changed();
+                        },
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                      ),
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: const Tooltip(
+                        message: 'Drag to reorder',
+                        child: Padding(
                           padding: EdgeInsets.all(8),
                           child: Icon(Icons.drag_handle_rounded),
                         ),
                       ),
-                    ],
-                  ),
-                  onTap: () => Navigator.pop(dialog, entry),
-                );
-              },
-            ),
+                    ),
+                  ],
+                ),
+                onTap: () => Navigator.pop(dialog, entry),
+              );
+            },
           ),
           actions: [
+            TextButton.icon(
+              onPressed: () => saveVideoPlaylist(
+                dialog, _data, widget.music.settings.save, List<VideoSource>.of(_queue),
+              ),
+              icon: const Icon(Icons.playlist_add_rounded),
+              label: const Text('Save as playlist'),
+            ),
             TextButton.icon(
               onPressed: () {
                 _shuffle = !_shuffle;
@@ -392,10 +527,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
                 _shuffle ? Icons.shuffle_on_rounded : Icons.shuffle_rounded,
               ),
               label: Text(_shuffle ? 'Shuffle on' : 'Shuffle'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialog),
-              child: const Text('Done'),
             ),
           ],
         ),
@@ -428,75 +559,78 @@ extension _PlaybackPanels on _VideoPlaybackState {
           final current = _chapters
               .where((point) => point.position <= at)
               .lastOrNull;
-          return AuralisDialog(
-            title: const Text('Chapters and bookmarks'),
-            scrollable: false,
-            content: SizedBox(
-              height: math.min(380, MediaQuery.sizeOf(context).height * .50),
-              child: ListView(
-                children: [
-                  if (_chapters.isEmpty && _bookmarks.isEmpty)
-                    const Text('This video has no chapters or bookmarks.'),
-                  for (final chapter in _chapters)
-                    AuralisChoiceTile(
-                      title: Text(chapter.name),
-                      trailing: Text(clockText(chapter.position)),
-                      selected: identical(current, chapter),
-                      onTap: () => Navigator.pop(dialog, chapter.position),
-                    ),
-                  if (_bookmarks.isNotEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('Bookmarks'),
-                    ),
-                  for (final point in _bookmarks)
-                    AuralisChoiceTile(
-                      leading: const Icon(Icons.bookmark_rounded),
-                      title: Text(point.name),
-                      subtitle: Text(clockText(point.position)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Rename bookmark',
-                            onPressed: () => unawaited(
-                              _editBookmark(dialog, existing: point),
-                            ),
-                            icon: const Icon(Icons.edit_outlined, size: 18),
+          return _VideoPanel(
+            title: 'Chapters and bookmarks',
+            icon: Icons.bookmarks_outlined,
+            detail: 'Choose a point to jump to.',
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _VideoSectionLabel('Chapters'),
+                if (_chapters.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Text('No chapters in this video.'),
+                  ),
+                for (final chapter in _chapters)
+                  _VideoMenuRow(
+                    label: chapter.name,
+                    icon: identical(current, chapter)
+                        ? Icons.play_circle_outline_rounded
+                        : Icons.flag_outlined,
+                    trailing: Text(clockText(chapter.position)),
+                    selected: identical(current, chapter),
+                    onTap: () => Navigator.pop(dialog, chapter.position),
+                  ),
+                const _VideoSectionLabel('Bookmarks'),
+                if (_bookmarks.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Text('No bookmarks yet.'),
+                  ),
+                for (final point in _bookmarks)
+                  AuralisChoiceTile(
+                    leading: const Icon(Icons.bookmark_rounded),
+                    title: Text(point.name),
+                    subtitle: Text(clockText(point.position)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Rename bookmark',
+                          onPressed: () => unawaited(
+                            _editBookmark(dialog, existing: point),
                           ),
-                          IconButton(
-                            tooltip: 'Delete bookmark',
-                            onPressed: () {
-                              _data.setBookmarks(
-                                id,
-                                _bookmarks
-                                    .where((bookmark) => bookmark != point)
-                                    .toList(),
-                              );
-                              _saveSettings();
-                              _changed();
-                            },
-                            icon: const Icon(
-                              Icons.delete_outline_rounded,
-                              size: 18,
-                            ),
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                        ),
+                        IconButton(
+                          tooltip: 'Delete bookmark',
+                          onPressed: () {
+                            _data.setBookmarks(
+                              id,
+                              _bookmarks
+                                  .where((bookmark) => bookmark != point)
+                                  .toList(),
+                            );
+                            _saveSettings();
+                            _changed();
+                          },
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
                           ),
-                        ],
-                      ),
-                      onTap: () => Navigator.pop(dialog, point.position),
+                        ),
+                      ],
                     ),
-                ],
-              ),
+                    onTap: () => Navigator.pop(dialog, point.position),
+                  ),
+              ],
             ),
             actions: [
               TextButton.icon(
                 onPressed: () => unawaited(_editBookmark(dialog)),
                 icon: const Icon(Icons.bookmark_add_outlined),
                 label: const Text('Add bookmark'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialog),
-                child: const Text('Done'),
               ),
             ],
           );
@@ -1099,194 +1233,128 @@ extension _PlaybackPanels on _VideoPlaybackState {
   }
 
   Future<void> _morePanel(BuildContext context, VideoState video) async {
-    final action = await _choose<_PanelAction>(
-      context,
-      'More player controls',
-      [
-        if (widget.onMinimize case final VoidCallback minimize)
-          (
-            value: () async {
-              if (isFullscreen(context)) await exitFullscreen(context);
-              if (_canPlay) minimize();
-            },
-            label: 'Minimize video',
-            selected: false,
-          ),
-        (
-          value: () => _settingsPanel(context),
-          label: 'Player settings',
-          selected: false,
-        ),
-        (
-          value: () => _layoutPanel(context),
-          label: 'Player control layout',
-          selected: false,
-        ),
-        (
-          value: () => _customControlsPanel(context),
-          label: 'Custom buttons',
-          selected: false,
-        ),
-        (
-          value: () => _speedPanel(context),
-          label: 'Playback speed',
-          selected: false,
-        ),
-        (
-          value: () => _audioPanel(context),
-          label: 'Audio tracks',
-          selected: false,
-        ),
-        (
-          value: () => _subtitlesPanel(context),
-          label: 'Subtitles',
-          selected: false,
-        ),
-        (
-          value: () => _decoderPanel(context),
-          label: 'Video decoder',
-          selected: false,
-        ),
-        (
-          value: () => _zoomPanel(context, video),
-          label: 'Video size and zoom',
-          selected: false,
-        ),
-        (
-          value: () => toggleFullscreen(context),
-          label: 'Toggle fullscreen',
-          selected: false,
-        ),
-        (
-          value: () => _ambientPanel(context),
-          label: 'Ambient lighting',
-          selected: _ambient != _Ambient.off,
-        ),
-        (
-          value: () => _upscalePanel(context),
-          label: 'Anime4K',
-          selected: _upscale != _Upscale.off,
-        ),
-        (
-          value: () => _hdrPanel(context),
-          label: 'HDR processing',
-          selected: _activeHdr != VideoHdrProfile.off,
-        ),
-        (
-          value: () => _toneMappingPanel(context),
-          label: 'HDR tone mapping',
-          selected: false,
-        ),
-
-        (
-          value: () => _queuePanel(context),
-          label: 'Now playing queue',
-          selected: false,
-        ),
-        (
-          value: () => _chaptersPanel(context),
-          label: 'Chapters and bookmarks',
-          selected: false,
-        ),
-        (
-          value: () => _skipSegmentsPanel(context),
-          label: 'Skip segments',
-          selected: _skipStart != null,
-        ),
-        (
-          value: () => _chapterStep(-1),
-          label: 'Previous chapter',
-          selected: false,
-        ),
-        (value: () => _chapterStep(1), label: 'Next chapter', selected: false),
-        (
-          value: () => _sleepPanel(context),
-          label: 'Sleep timer',
-          selected: _sleepAt != null,
-        ),
-        (
-          value: () => _framePanel(context),
-          label: 'Frame navigation',
-          selected: false,
-        ),
+    final playerContext = context;
+    final groups = <_VideoMenuGroup>[
+      _VideoMenuGroup('Playback', 'Speed, queue, chapters and repeat', Icons.play_circle_outline_rounded, [
+        _VideoOption(() => _speedPanel(context), 'Playback speed', Icons.speed_rounded),
+        _VideoOption(() => _queuePanel(context), 'Now playing queue', Icons.queue_play_next_rounded),
+        _VideoOption(() => _chaptersPanel(context), 'Chapters and bookmarks', Icons.bookmarks_outlined),
+        _VideoOption(() => _chapterStep(-1), 'Previous chapter', Icons.skip_previous_rounded),
+        _VideoOption(() => _chapterStep(1), 'Next chapter', Icons.skip_next_rounded),
+        _VideoOption(() => _skipSegmentsPanel(context), 'Skip segments', Icons.fast_forward_rounded),
+        _VideoOption(_setLoopPoint, 'A–B loop', Icons.repeat_rounded, selected: _loopA != null),
+        _VideoOption(() async {
+          _repeatVideo = !_repeatVideo;
+          await _setOption('loop-file', _repeatVideo ? 'inf' : 'no');
+        }, 'Repeat video', Icons.repeat_one_rounded, selected: _repeatVideo),
+        _VideoOption(() => _sleepPanel(context), 'Sleep timer', Icons.timer_outlined, selected: _sleepAt != null),
+        _VideoOption(() => _open(resume: false), 'Restart video', Icons.restart_alt_rounded),
+      ]),
+      _VideoMenuGroup('Audio & subtitles', 'Soundtrack, captions and timing', Icons.headphones_rounded, [
+        _VideoOption(() => _audioPanel(context), 'Audio tracks', Icons.audiotrack_rounded),
+        _VideoOption(() => _subtitlesPanel(context), 'Subtitles', Icons.subtitles_outlined),
+      ]),
+      _VideoMenuGroup('Picture & display', 'Size, lighting and video quality', Icons.aspect_ratio_rounded, [
+        _VideoOption(() => _zoomPanel(context, video), 'Video size and zoom', Icons.zoom_in_rounded),
         if (Platform.isAndroid) ...[
-          (
-            value: _pictureInPicture,
-            label: 'Picture in picture',
-            selected: false,
-          ),
-          (
-            value: () =>
-                _orientationPanel(context, fullscreen: isFullscreen(context)),
-            label: 'Orientation',
-            selected: false,
+          _VideoOption(_pictureInPicture, 'Picture in picture', Icons.picture_in_picture_alt_outlined),
+          _VideoOption(
+            () => _orientationPanel(context, fullscreen: isFullscreen(context)),
+            'Orientation', Icons.screen_rotation_rounded,
           ),
         ],
-        (value: _setLoopPoint, label: 'A–B loop', selected: _loopA != null),
-        (
-          value: () async {
-            _repeatVideo = !_repeatVideo;
-            await _setOption('loop-file', _repeatVideo ? 'inf' : 'no');
-          },
-          label: 'Repeat video',
-          selected: _repeatVideo,
-        ),
-        (
-          value: _toggleTransform,
-          label: 'Mirror horizontally',
-          selected: _mirror,
-        ),
-        (
-          value: () => _toggleTransform(horizontal: false),
-          label: 'Flip vertically',
-          selected: _flip,
-        ),
-        (
-          value: () => _videoFilterPanel(context),
-          label: 'Video processing',
-          selected: false,
-        ),
-        (
-          value: _detectBlackBars,
-          label: _cropped
-              ? 'Restore original video frame'
-              : 'Detect and crop black bars',
+        _VideoOption(() => _ambientPanel(context), 'Ambient lighting', Icons.light_mode_outlined, selected: _ambient != _Ambient.off),
+        _VideoOption(() => _upscalePanel(context), 'Anime4K', Icons.auto_awesome_rounded, selected: _upscale != _Upscale.off),
+        _VideoOption(() => _hdrPanel(context), 'HDR processing', Icons.hdr_on_rounded, selected: _activeHdr != VideoHdrProfile.off),
+        _VideoOption(() => _toneMappingPanel(context), 'HDR tone mapping', Icons.tonality_rounded),
+        _VideoOption(_toggleTransform, 'Mirror horizontally', Icons.flip_rounded, selected: _mirror),
+        _VideoOption(() => _toggleTransform(horizontal: false), 'Flip vertically', Icons.swap_vert_rounded, selected: _flip),
+        _VideoOption(() => _videoFilterPanel(context), 'Video processing', Icons.tune_rounded),
+        _VideoOption(
+          _detectBlackBars,
+          _cropped ? 'Restore original video frame' : 'Detect and crop black bars',
+          Icons.crop_rounded,
           selected: _cropped,
         ),
-        (
-          value: () => _infoPanel(context),
-          label: 'Playback information',
-          selected: false,
-        ),
-        (value: _saveFrame, label: 'Save video frame', selected: false),
-        if (isEditableVideo(_source) && _duration > Duration.zero)
-          (
-            value: () => _withFilePicker(() => showVideoExport(context, [_source],
-                duration: _duration, position: _position)),
-            label: 'Trim or compress video',
-            selected: false,
-          ),
-        (
-          value: () => _open(resume: false),
-          label: 'Restart video',
-          selected: false,
-        ),
-        (
-          value: () => _consolePanel(context),
-          label: 'mpv console',
-          selected: false,
-        ),
-        (
-          value: () => _loadVideoScript(context),
-          label: 'Load a player script',
-          selected: false,
-        ),
-        (
-          value: () => _configurationPanel(context),
-          label: 'mpv configuration',
-          selected: false,
-        ),
-      ],
+      ]),
+      _VideoMenuGroup('Capture & edit', 'Snapshots, frame stepping and clips', Icons.photo_camera_outlined, [
+        _VideoOption(_saveFrame, 'Save video frame', Icons.photo_camera_outlined),
+        _VideoOption(() => _framePanel(context), 'Frame navigation', Icons.movie_outlined),
+      ]),
+      _VideoMenuGroup('Settings & diagnostics', 'Controls, decoder and advanced tools', Icons.settings_outlined, [
+        _VideoOption(() => _settingsPanel(context), 'Player settings', Icons.settings_outlined),
+        _VideoOption(() => _layoutPanel(context), 'Player control layout', Icons.dashboard_customize_outlined),
+        _VideoOption(() => _customControlsPanel(context), 'Custom buttons', Icons.extension_outlined),
+        _VideoOption(() => _decoderPanel(context), 'Video decoder', Icons.memory_rounded),
+        _VideoOption(() => _infoPanel(context), 'Playback information', Icons.info_outline_rounded),
+        _VideoOption(() => _consolePanel(context), 'mpv console', Icons.terminal_rounded),
+        _VideoOption(() => _loadVideoScript(context), 'Load a player script', Icons.code_rounded),
+        _VideoOption(() => _configurationPanel(context), 'mpv configuration', Icons.build_outlined),
+      ]),
+    ];
+    final fullscreen = isFullscreen(context);
+    _VideoMenuGroup? page;
+    final action = await showAuralisDialog<_PanelAction>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (context, update) {
+          final group = page;
+          void select(_PanelAction action) => Navigator.pop(dialog, action);
+          return _VideoPanel(
+            title: group?.title ?? 'Player controls',
+            icon: group?.icon ?? Icons.tune_rounded,
+            detail: group?.detail,
+            width: 540,
+            onBack: group == null ? null : () => update(() => page = null),
+            content: Column(
+              key: ValueKey(group?.title),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (group == null) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (widget.onMinimize case final VoidCallback minimize)
+                        OutlinedButton.icon(
+                          onPressed: () => select(() async {
+                            if (fullscreen) await exitFullscreen(playerContext);
+                            if (_canPlay) minimize();
+                          }),
+                          icon: const Icon(Icons.picture_in_picture_alt_outlined),
+                          label: const Text('Minimize video'),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: () => select(() => toggleFullscreen(playerContext)),
+                        icon: Icon(fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded),
+                        label: Text(fullscreen ? 'Exit fullscreen' : 'Fullscreen'),
+                      ),
+                      if (widget.onClose case final VoidCallback close)
+                        TextButton.icon(
+                          onPressed: () => select(() async {
+                            if (fullscreen) await exitFullscreen(playerContext);
+                            if (mounted && !_closed) close();
+                          }),
+                          icon: const Icon(Icons.close_rounded),
+                          label: const Text('Close video'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  for (final section in groups)
+                    _VideoMenuRow(
+                      label: section.title,
+                      detail: section.detail,
+                      icon: section.icon,
+                      onTap: () => update(() => page = section),
+                    ),
+                ] else
+                  for (final item in group.items) item.row(select),
+              ],
+            ),
+          );
+        },
+      ),
     );
     if (_canPlay && context.mounted && action != null) {
       await action();
