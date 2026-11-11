@@ -16,6 +16,7 @@ Auralis's original source is AGPL-3.0-or-later. Third-party components retain th
 | TDLib 1.8.68 | Boost Software License 1.0; full text in `docs/TDLIB-LICENSE.txt`. Build revision: `a94b83d67ab4c8397c6245e541b31a4131ea2f79`. |
 | OpenSSL and zlib | Dependency-specific licenses copied by `tool/build-tdlib.ps1` into `native/licenses/`; versions/build inputs follow vcpkg revision `664933b8d385dfc01f4e0cdff4c7c74e71f6a740`. |
 | libmpv and FFmpeg native playback | Build-dependent GPL/LGPL and dependency terms. Do not infer native binary licensing from the MIT wrapper. See below. |
+| AndroidX Media3 Effect and Transformer 1.8.1 | Apache-2.0. Resolved by Gradle from Google Maven for local MP4 export. Windows export invokes a separately installed FFmpeg executable. |
 
 ## Playback binary selected by the pinned plugin
 
@@ -52,8 +53,7 @@ The Android media_kit plugin downloads v1.1.7 native archives from [libmpv-andro
 ## Video player references and bundled assets
 
 - mpvRx (Ritesh Prajapati and contributors) provided the Android player design and Anime4K preset reference. Its project is available under AGPL-3.0. Auralis implements the player in Flutter on its existing libmpv backend.
-- The Syncplay protocol implementation follows the playback messages used by mpvRx and the [Syncplay project](https://syncplay.pl/). Wyzie and AniSkip are optional services contacted from their player controls.
+- Wyzie and AniSkip are optional services contacted from their player controls.
 - The Anime4K shader files in `assets/shaders/anime4k/` are from the supplied mpvRx archive. The original bloc97 MIT notices and the public-domain notice in the downscale shader are retained in the files.
 - HDR Toys shaders in `assets/shaders/hdr-toys/` follow the supplied mpvRx profiles and retain the [HDR Toys](https://github.com/natural-harmonia-gropius/hdr-toys) MIT license.
-- Android builds package [Chaquopy 17.2](https://chaquo.com/chaquopy/), Python 3.13, [yt-dlp 2026.10.26](https://github.com/yt-dlp/yt-dlp), [yt-dlp-ejs 0.8.0](https://github.com/yt-dlp/ejs), and [QuickJS-NG 0.18.0](https://github.com/quickjs-ng/quickjs). Python packages retain their included distribution notices. QuickJS is built from a checksum-pinned source archive, with its MIT notice in `docs/QUICKJS-LICENSE.txt`.
 - DejaVu Sans is bundled as the Android subtitle fallback. See `assets/fonts/LICENSE-DejaVu.txt`.
