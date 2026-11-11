@@ -130,8 +130,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
   final _subscriptions = <StreamSubscription<dynamic>>[];
   final _changes = ValueNotifier(0);
   final _log = <String>[];
-  late final Future<void> Function() _releaseForExit =
-      () => _beginRelease(detachSurface: true);
   Future<void>? _openingTask, _releaseTask;
   late final _queue = List<VideoSource>.of(widget.sources);
   late int _index = widget.initialIndex;
@@ -729,7 +727,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     if (Platform.isAndroid) {
       await _releaseStep(_resetAndroidWindow, 'reset the Android video window');
     }
-    if (identical(playback.music.releaseVideo, _releaseForExit)) {
+    if (playback.music.releaseVideo == _releaseForExit) {
       playback.music.releaseVideo = null;
     }
   }
@@ -754,6 +752,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
       // Widget tests do not have an Android window.
     }
   }
+
+  Future<void> _releaseForExit() => _beginRelease(detachSurface: true);
 
   Future<void> _beginRelease({required bool detachSurface}) {
     if (_releaseTask case final Future<void> release) return release;
