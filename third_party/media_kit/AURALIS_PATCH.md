@@ -16,3 +16,5 @@ The fix applies to both the desktop app and standalone smoke tests via a path de
 Upstream: https://pub.dev/packages/media_kit/versions/1.2.6 and https://github.com/media-kit/media-kit. See also upstream issue https://github.com/media-kit/media-kit/issues/1443 for the callback-lifetime ordering problem (reported on Android; the local patch here is Windows-specific).
 
 Windows COM lifetime API: https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coincrementmtausage. The OS-managed usage cookie supports release from another thread, unlike balancing `CoInitializeEx`/`CoUninitialize` across Dart worker threads.
+
+Video player additions expose checked libmpv commands and local mpv configuration loading. The default command API retains its previous error-reporting behavior. Command arrays use the required null terminator and release native allocations after both immediate and asynchronous failures.
