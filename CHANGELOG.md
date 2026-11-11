@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.138
+
+- Match Video Search to Music’s browse layout with themed channel tiles and a list toggle. Highlight the active Library channel in both views.
+
 ## 0.1.137
 
 - Give the Library search field and collection selector their own cards, with a gap between them on phones and desktops.
