@@ -72,15 +72,23 @@ class Request implements HttpClientRequest {
 
 class Client implements HttpClient {
   Client(this.responses);
-  final List<Response> responses;
-  final requests = <Uri>[];
+  final List<Object> responses;
+  final requests = <Uri>[], headRequests = <Uri>[];
   bool closed = false;
   @override
   Duration? connectionTimeout;
   @override
   Future<HttpClientRequest> getUrl(Uri url) async {
     requests.add(url);
-    return Request(responses.removeAt(0));
+    final result = responses.removeAt(0);
+    if (result is! Response) throw result;
+    return Request(result);
+  }
+
+  @override
+  Future<HttpClientRequest> headUrl(Uri url) {
+    headRequests.add(url);
+    return getUrl(url);
   }
 
   @override
@@ -662,11 +670,104 @@ void main() {
     await absent.check();
     expect(absent.available, isNull);
     expect(absent.error, isNull);
-    final limited = updater(Client([Response([], statusCode: 403)]));
+    final limited = updater(
+      Client([
+        Response([], statusCode: 403)
+          ..headers.set('x-ratelimit-remaining', '0'),
+        Response([], statusCode: 503),
+      ]),
+    );
     await limited.check();
-    expect(limited.error, isNotNull);
+    expect(limited.error, contains('rate-limited'));
     expect(limited.checking, isFalse);
   });
+  test('Android falls back from a GitHub API timeout to the signed release download', () async {
+    const name = 'auralis-0.2.0-android-arm64-v8a-release.apk';
+    final digest = sha256.convert(installerBytes).toString();
+    final asset = Uri.https(
+      'github.com',
+      '/$repository/releases/download/v0.2.0/$name',
+    );
+    final client = Client([
+      TimeoutException('API unavailable'),
+      Response(
+        [],
+        statusCode: 302,
+        redirect: '/$repository/releases/tag/v0.2.0',
+      ),
+      Response(utf8.encode('$digest  $name\r\n')),
+      Response(
+        [],
+        statusCode: 302,
+        redirect: 'https://release-assets.githubusercontent.com/asset',
+      ),
+      Response([], size: installerBytes.length),
+      Response(installerBytes),
+    ]);
+    final updates = AppUpdater(
+      currentVersion: '0.1.0',
+      directory: dir,
+      settings: settings,
+      client: client,
+      target: UpdateTarget.android,
+      androidAbi: 'arm64-v8a',
+    );
+    addTearDown(updates.dispose);
+    await updates.check();
+    expect(updates.error, isNull);
+    expect(updates.available?.url, asset);
+    expect(updates.available?.sha256, digest);
+    expect(updates.available?.size, installerBytes.length);
+    expect(client.requests[1], updates.releasesPage);
+    expect(
+      client.requests[2].path,
+      endsWith('/SHA256SUMS-android-arm64-v8a.txt'),
+    );
+    expect(client.headRequests, [
+      asset,
+      Uri.https('release-assets.githubusercontent.com', '/asset'),
+    ]);
+
+    await updates.download();
+    expect(updates.error, isNull);
+    expect(await updates.downloaded!.readAsBytes(), installerBytes);
+  });
+
+  test(
+    'fallback rejects off-repository release links and ambiguous checksums',
+    () async {
+      const name = 'auralis-0.2.0-windows-x64-setup.exe';
+      final digest = sha256.convert(installerBytes).toString();
+      for (final responses in [
+        [
+          Response([], statusCode: 429),
+          Response(
+            [],
+            statusCode: 302,
+            redirect: '/other/auralis/releases/tag/v0.2.0',
+          ),
+        ],
+        [
+          Response([], statusCode: 503),
+          Response(
+            [],
+            statusCode: 302,
+            redirect: '/$repository/releases/tag/v0.2.0',
+          ),
+          Response(utf8.encode('$digest  $name\n$digest  $name\n')),
+        ],
+      ]) {
+        final client = Client(responses);
+        final updates = updater(client);
+        await updates.check();
+        expect(updates.available, isNull);
+        expect(updates.error, isNotNull);
+        expect(client.headRequests, isEmpty);
+        expect(client.responses, isEmpty);
+      }
+    },
+  );
+
   test(
     'launch and cleanup failures retain the verified installer for recovery',
     () async {
