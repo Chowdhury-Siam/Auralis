@@ -127,3 +127,66 @@ test('only one approving session can claim a Telegram login token concurrently',
  assert.equal(results.filter(r=>r.status===200).length,1);assert.equal(results.filter(r=>r.status===409).length,1);
  }finally{s.close();}
 });
+
+test('password login grants a short-lived, same-session automatic Telegram request', async()=>{
+ const s=service();try{
+   const linked=(await register(s)).data;
+   const foreign=(await register(s,'bob','')).data;
+   await s.call('/v1/account/telegram',{token:linked.token,method:'PUT',data:tgProfile});
+   await s.call('/v1/account/telegram',{token:foreign.token,method:'PUT',data:tgProfile});
+   const login=async()=> (await s.call('/v1/auth/login',{
+     data:{username:'alice',password:'test-password',automaticTelegram:true},
+   })).data;
+   const requester=await login(),another=await login();
+   const root='/v1/account/telegram',requests=root+'/requests';
+   const grant=requester.telegramGrant;
+   assert.ok(grant.expires<=Math.floor(Date.now()/1000)+600);
+   assert.equal((await s.call('/v1/account',{token:grant.token})).status,401);
+   assert.equal((await s.call(root,{token:linked.token})).data.automaticLinking,true);
+   for(const [token,proof] of [[requester.token,requester.token],[another.token,grant.token],[foreign.token,grant.token]]){
+     assert.equal((await s.call(requests,{token,data:{link:tgLink,grant:proof}})).status,403);
+   }
+   const created=await s.call(requests,{token:requester.token,data:{link:tgLink,grant:grant.token}});
+   assert.equal(created.status,200);
+   assert.equal(created.data.automatic,true);
+   assert.equal(created.data.code,undefined);
+   assert.deepEqual((await s.call(requests,{token:linked.token})).data.requests,[]);
+   const listing=(await s.call(requests+'/automatic',{token:linked.token})).data.requests;
+   assert.deepEqual(listing,[{id:created.data.id,expires:created.data.expires,automatic:true}]);
+   assert.deepEqual((await s.call(requests+'/automatic',{token:requester.token})).data.requests,[]);
+   assert.deepEqual((await s.call(requests+'/automatic',{token:foreign.token})).data.requests,[]);
+   const path=requests+'/'+created.data.id,proof={automatic:true,userId:tgProfile.userId};
+   assert.equal((await s.call(path+'/claim',{token:requester.token,data:proof})).status,409);
+   assert.equal((await s.call(path+'/claim',{token:foreign.token,data:proof})).status,404);
+   assert.equal((await s.call(path+'/claim',{token:linked.token,data:{automatic:true,userId:123}})).status,403);
+   const responses=await Promise.all([linked,another].map(device=>s.call(path+'/claim',{token:device.token,data:proof})));
+   assert.equal(responses.filter(r=>r.status===200).length,1);
+   const winner=[linked,another][responses.findIndex(r=>r.status===200)];
+   assert.equal(responses.find(r=>r.status===200).data.link,tgLink);
+   assert.equal((await s.call(path+'/complete',{token:winner.token,data:{ok:true}})).status,200);
+   assert.equal((await s.call(path,{token:requester.token})).data.state,'approved');
+   assert.equal(s.stores.get('account-registry').db.prepare('SELECT value FROM telegram_links WHERE id=?').get(created.data.id).value,'');
+ }finally{s.close();}
+});
+
+test('password recovery retains the Telegram profile and requires re-linking for automatic access', async()=>{
+ const s=service();try{
+   const a=(await register(s)).data,root='/v1/account/telegram';
+   await s.call(root,{token:a.token,method:'PUT',data:tgProfile});
+   const recovered=await s.call('/v1/auth/recover',{
+     data:{username:'alice',recoveryCode:a.recoveryCode,newPassword:'changed-password'},
+   });
+   assert.equal(recovered.status,200);
+   assert.equal(recovered.data.telegramGrant,undefined);
+   const login=(await s.call('/v1/auth/login',{
+     data:{username:'alice',password:'changed-password',automaticTelegram:true},
+   })).data;
+   const profile=await s.call(root,{token:login.token});
+   assert.deepEqual(profile.data.profile,tgProfile);
+   assert.equal(profile.data.automaticLinking,false);
+   assert.equal((await s.call(root+'/requests',{
+     token:login.token,data:{link:tgLink,grant:login.telegramGrant.token},
+   })).status,403);
+   assert.equal((await s.call(root+'/requests',{token:login.token,data:{link:tgLink}})).status,200);
+ }finally{s.close();}
+});
