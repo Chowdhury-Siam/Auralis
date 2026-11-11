@@ -46,13 +46,35 @@ class StableVersion implements Comparable<StableVersion> {
 
 enum UpdateTarget { windows, android }
 
+const _maxInstallerSize = 512 * 1024 * 1024;
+const _redirectCodes = {301, 302, 303, 307, 308};
+
+String _installerName(
+  StableVersion version,
+  UpdateTarget target,
+  String? androidAbi,
+) => target == UpdateTarget.android
+    ? 'auralis-$version-android-$androidAbi-release.apk'
+    : 'auralis-$version-windows-x64-setup.exe';
+
+class _UpdateCheckFailure implements Exception {
+  const _UpdateCheckFailure(this.message);
+  final String message;
+}
+
 class UpdateAssetUnavailable implements Exception {
   const UpdateAssetUnavailable(this.message);
   final String message;
 }
 
 class ReleaseUpdate {
-  const ReleaseUpdate(this.version, this.url, this.sha256, this.size, {this.notes = ''});
+  const ReleaseUpdate(
+    this.version,
+    this.url,
+    this.sha256,
+    this.size, {
+    this.notes = '',
+  });
   final StableVersion version;
   final Uri url;
   final String sha256;
@@ -72,9 +94,7 @@ class ReleaseUpdate {
         !const ['arm64-v8a', 'x86_64'].contains(androidAbi)) {
       throw const FormatException('Unsupported Android update architecture');
     }
-    final name = target == UpdateTarget.android
-        ? 'auralis-$version-android-$androidAbi-release.apk'
-        : 'auralis-$version-windows-x64-setup.exe';
+    final name = _installerName(version, target, androidAbi);
     final assets = (json['assets'] as List)
         .whereType<Map>()
         .where((a) => a['name'] == name)
@@ -93,7 +113,7 @@ class ReleaseUpdate {
       throw const FormatException('Installer has no GitHub SHA-256 digest');
     }
     final size = asset['size'] as int;
-    if (size <= 0 || size > 512 * 1024 * 1024) {
+    if (size <= 0 || size > _maxInstallerSize) {
       throw const FormatException('Invalid installer size');
     }
     final url = Uri.parse(asset['browser_download_url'] as String);
@@ -107,7 +127,13 @@ class ReleaseUpdate {
       );
     }
     final body = json['body'] is String ? json['body'] as String : '';
-    return ReleaseUpdate(version, url, digest.substring(7).toLowerCase(), size, notes: body.length > 12000 ? body.substring(0, 12000) : body);
+    return ReleaseUpdate(
+      version,
+      url,
+      digest.substring(7).toLowerCase(),
+      size,
+      notes: body.length > 12000 ? body.substring(0, 12000) : body,
+    );
   }
 }
 
@@ -142,6 +168,8 @@ class AppUpdater extends ChangeNotifier {
   final String? androidAbi;
   final Future<void> Function(File, String, String)? installAndroid;
   bool get isAndroid => target == UpdateTarget.android;
+  Uri get releasesPage =>
+      Uri.https('github.com', '/$repository/releases/latest');
   String get installLabel =>
       isAndroid ? 'Install update' : 'Install and restart';
   final Directory directory;
@@ -209,7 +237,11 @@ class AppUpdater extends ChangeNotifier {
     }
   }
 
-  Future<HttpClientResponse> _get(Uri uri) async {
+  Future<HttpClientResponse> _get(
+    Uri uri, {
+    bool head = false,
+    bool followRedirects = true,
+  }) async {
     // GitHub release downloads redirect to its asset CDN; never follow HTTP or arbitrary hosts.
     for (var i = 0; i < 6; i++) {
       if (uri.scheme != 'https' ||
@@ -223,8 +255,7 @@ class AppUpdater extends ChangeNotifier {
           }.contains(uri.host)) {
         throw const FormatException('Untrusted download address');
       }
-      final request = await _client
-          .getUrl(uri)
+      final request = await (head ? _client.headUrl(uri) : _client.getUrl(uri))
           .timeout(const Duration(seconds: 20));
       request.followRedirects = false;
       request.headers.set('User-Agent', 'Auralis/$currentVersion');
@@ -235,7 +266,7 @@ class AppUpdater extends ChangeNotifier {
       final response = await request.close().timeout(
         const Duration(seconds: 20),
       );
-      if ([301, 302, 303, 307, 308].contains(response.statusCode)) {
+      if (followRedirects && _redirectCodes.contains(response.statusCode)) {
         final location = response.headers.value('location');
         await response.drain<void>().timeout(const Duration(seconds: 20));
         if (location == null) {
@@ -249,6 +280,129 @@ class AppUpdater extends ChangeNotifier {
     throw const FormatException('Too many redirects');
   }
 
+  Future<String> _readText(HttpClientResponse response, int limit) async {
+    final bytes = <int>[];
+    await for (final chunk in response.timeout(const Duration(seconds: 30))) {
+      if (bytes.length + chunk.length > limit) {
+        throw const FormatException('Release response too large');
+      }
+      bytes.addAll(chunk);
+    }
+    return utf8.decode(bytes);
+  }
+
+  Future<ReleaseUpdate?> _releaseFromApi(StableVersion installed) async {
+    final response = await _get(
+      Uri.https('api.github.com', '/repos/$repository/releases/latest'),
+    );
+    final code = response.statusCode;
+    if (code != 200) {
+      final limited =
+          code == 429 ||
+          (code == 403 &&
+              (response.headers.value('x-ratelimit-remaining') == '0' ||
+                  response.headers.value('retry-after') != null));
+      await response.drain<void>().timeout(const Duration(seconds: 20));
+      if (code == 404) {
+        throw const UpdateAssetUnavailable(
+          'No public stable release is available yet.',
+        );
+      }
+      throw _UpdateCheckFailure(
+        limited
+            ? 'GitHub rate-limited the update check. Try again later or open GitHub Releases.'
+            : 'GitHub could not serve the update check (HTTP $code). Try again or open GitHub Releases.',
+      );
+    }
+    return ReleaseUpdate.fromJson(
+      jsonDecode(await _readText(response, 2 * 1024 * 1024))
+          as Map<String, dynamic>,
+      repository,
+      installed,
+      target: target,
+      androidAbi: androidAbi,
+    );
+  }
+
+  Future<ReleaseUpdate?> _releaseFromWebsite(StableVersion installed) async {
+    // The public latest-release redirect identifies the stable tag without REST.
+    final page = releasesPage;
+    final redirect = await _get(page, followRedirects: false);
+    final location = redirect.headers.value('location');
+    await redirect.drain<void>().timeout(const Duration(seconds: 20));
+    if (!_redirectCodes.contains(redirect.statusCode) || location == null) {
+      throw const FormatException('Missing stable release redirect');
+    }
+    final targetPage = page.resolve(location);
+    final tag = targetPage.pathSegments.lastOrNull;
+    if (tag == null ||
+        targetPage !=
+            Uri.https('github.com', '/$repository/releases/tag/$tag')) {
+      throw const FormatException('Unexpected stable release address');
+    }
+    final version = StableVersion.parse(tag);
+    if (version.compareTo(installed) <= 0) return null;
+
+    final name = _installerName(version, target, androidAbi);
+    final sumsName = isAndroid
+        ? 'SHA256SUMS-android-$androidAbi.txt'
+        : 'SHA256SUMS.txt';
+    final downloadPath = '/$repository/releases/download/$tag';
+    final sums = await _get(Uri.https('github.com', '$downloadPath/$sumsName'));
+    if (sums.statusCode != 200) {
+      await sums.drain<void>().timeout(const Duration(seconds: 20));
+      if (isAndroid && sums.statusCode == 404) {
+        throw UpdateAssetUnavailable(
+          'The signed Android $androidAbi update is not available in this release yet. Check again later.',
+        );
+      }
+      throw const FormatException('Release checksums unavailable');
+    }
+    final lines = const LineSplitter().convert(
+      await _readText(sums, 64 * 1024),
+    );
+    final checksumLine = RegExp(r'^([a-fA-F0-9]{64}) +(.+)$');
+    final hashes = lines
+        .map((line) => checksumLine.firstMatch(line))
+        .whereType<RegExpMatch>()
+        .where((match) => match[2] == name)
+        .map((match) => match[1]!.toLowerCase())
+        .toList();
+    if (hashes.length != 1) {
+      throw const FormatException('Missing or ambiguous installer checksum');
+    }
+
+    final url = Uri.https('github.com', '$downloadPath/$name');
+    final installer = await _get(url, head: true);
+    final size = installer.contentLength;
+    await installer.drain<void>().timeout(const Duration(seconds: 20));
+    if (installer.statusCode != 200 || size <= 0 || size > _maxInstallerSize) {
+      throw const FormatException('Installer size unavailable or invalid');
+    }
+    return ReleaseUpdate(version, url, hashes.single, size);
+  }
+
+  Future<ReleaseUpdate?> _findRelease(StableVersion installed) async {
+    final String failure;
+    try {
+      return await _releaseFromApi(installed);
+    } on _UpdateCheckFailure catch (error) {
+      failure = error.message;
+    } on TimeoutException {
+      failure =
+          'GitHub did not respond in time. Try again or open GitHub Releases.';
+    } on IOException {
+      failure = 'Auralis could not connect to GitHub. Check your connection or open GitHub Releases.';
+    }
+    try {
+      return await _releaseFromWebsite(installed);
+    } on UpdateAssetUnavailable {
+      rethrow;
+    } catch (_) {
+      throw _UpdateCheckFailure(failure);
+    }
+  }
+
   Future<void> check() async {
     if (checking || downloading || installing || _disposed) return;
     checking = true;
@@ -256,34 +410,7 @@ class AppUpdater extends ChangeNotifier {
     status = 'Checking GitHub Releases…';
     _changed();
     try {
-      final response = await _get(
-        Uri.https('api.github.com', '/repos/$repository/releases/latest'),
-      );
-      if (response.statusCode == 404) {
-        await response.drain<void>().timeout(const Duration(seconds: 20));
-        status = 'No public stable release is available yet.';
-        available = null;
-        downloaded = null;
-        return;
-      }
-      if (response.statusCode != 200) {
-        await response.drain<void>().timeout(const Duration(seconds: 20));
-        throw HttpException('GitHub HTTP ${response.statusCode}');
-      }
-      final bytes = <int>[];
-      await for (final chunk in response.timeout(const Duration(seconds: 30))) {
-        bytes.addAll(chunk);
-        if (bytes.length > 2 * 1024 * 1024) {
-          throw const FormatException('Release response too large');
-        }
-      }
-      final release = ReleaseUpdate.fromJson(
-        jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>,
-        repository,
-        StableVersion.parse(currentVersion),
-        target: target,
-        androidAbi: androidAbi,
-      );
+      final release = await _findRelease(StableVersion.parse(currentVersion));
       if (available?.version.toString() != release?.version.toString() ||
           available?.sha256 != release?.sha256) {
         downloaded = null;
@@ -296,9 +423,11 @@ class AppUpdater extends ChangeNotifier {
       available = null;
       downloaded = null;
       status = unavailable.message;
+    } on _UpdateCheckFailure catch (failure) {
+      error = failure.message;
+      status = 'Update check failed.';
     } catch (_) {
-      error =
-          'Could not check for updates. Check your connection and try again.';
+      error = 'Auralis could not verify the release information from GitHub. Open GitHub Releases to check for an update.';
       status = 'Update check failed.';
     } finally {
       checking = false;
