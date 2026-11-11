@@ -5,10 +5,12 @@ import 'app_theme.dart';
 Future<T?> showAuralisDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
+  bool barrierDismissible = true,
 }) {
   final theme = Theme.of(context);
   return showDialog<T>(
     context: context,
+    barrierDismissible: barrierDismissible,
     barrierColor:
         theme.dialogTheme.barrierColor ??
         auralisDialogTheme(theme.colorScheme).barrierColor,
