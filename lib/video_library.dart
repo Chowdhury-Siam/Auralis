@@ -81,6 +81,29 @@ Future<bool> _confirm(BuildContext context, String title, String message) async 
       destructive: true,
     ) == true;
 
+class VideoWatchButton extends StatelessWidget {
+  const VideoWatchButton({
+    super.key,
+    required this.watched,
+    required this.onPressed,
+  });
+
+  final bool watched;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: watched ? 'Mark as unwatched' : 'Mark as watched',
+    isSelected: watched,
+    icon: const Icon(Icons.radio_button_unchecked_rounded),
+    selectedIcon: Icon(
+      Icons.check_circle_rounded,
+      color: Theme.of(context).colorScheme.primary,
+    ),
+    onPressed: onPressed,
+  );
+}
+
 class VideoLibraryPage extends StatefulWidget {
   const VideoLibraryPage({
     super.key,
@@ -88,12 +111,14 @@ class VideoLibraryPage extends StatefulWidget {
     required this.save,
     required this.pickFiles,
     required this.playlists,
+    this.changes,
   });
 
   final VideoPlaybackData data;
   final Future<void> Function() save;
   final Future<List<VideoSource>> Function() pickFiles;
   final bool playlists;
+  final Listenable? changes;
 
   @override
   State<VideoLibraryPage> createState() => _VideoLibraryPageState();
@@ -161,9 +186,17 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final changes = widget.changes;
+    return changes == null
+        ? _build()
+        : ListenableBuilder(listenable: changes, builder: (_, _) => _build());
+  }
+
+  Widget _build() {
     final name = _selected;
     final list = _data.playlists[name] ?? const <VideoSource>[];
-    final history = _data.history.values.toList().reversed.toList();
+    final history = _data.history.values.toList()
+      ..sort((a, b) => b.playedAt.compareTo(a.playedAt));
     final inPlaylist = widget.playlists && name != null && _data.playlists.containsKey(name);
     return PopScope(
       canPop: !inPlaylist,
@@ -206,14 +239,26 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                           _change(() => list.insert(to, list.removeAt(from))),
                       itemBuilder: (_, index) {
                         final item = list[index];
+                        final watched = _data.isWatched(item);
                         return ListTile(
                           key: ValueKey(item.id),
                           title: Text(item.title),
+                          subtitle: watched ? const Text('Watched') : null,
                           onTap: () => _play(list, index),
-                          trailing: IconButton(
-                            tooltip: 'Remove video',
-                            icon: const Icon(Icons.close),
-                            onPressed: () => _change(() => list.remove(item)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (item.telegram != null)
+                                VideoWatchButton(
+                                  watched: watched,
+                                  onPressed: () => _change(() => _data.setWatched(item, !watched)),
+                                ),
+                              IconButton(
+                                tooltip: 'Remove video',
+                                icon: const Icon(Icons.close),
+                                onPressed: () => _change(() => list.remove(item)),
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -248,15 +293,28 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                     final date = MaterialLocalizations.of(context)
                         .formatCompactDate(entry.playedAt.toLocal());
                     final position = _data.positions[source.id];
+                    final watched = _data.isWatched(source);
                     return ListTile(
                       leading: const Icon(Icons.history),
                       title: Text(source.title),
-                      subtitle: Text(position == null ? date : '$date · Resume at ${clockText(position)}'),
+                      subtitle: Text(watched
+                          ? '$date · Watched'
+                          : position == null ? date : '$date · Resume at ${clockText(position)}'),
                       onTap: () => _play([source], 0),
-                      trailing: IconButton(
-                        tooltip: 'Remove from history',
-                        icon: const Icon(Icons.close),
-                        onPressed: () => _change(() => _data.removeHistory(source.id)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (source.telegram != null)
+                            VideoWatchButton(
+                              watched: watched,
+                              onPressed: () => _change(() => _data.setWatched(source, !watched)),
+                            ),
+                          IconButton(
+                            tooltip: 'Remove from history',
+                            icon: const Icon(Icons.close),
+                            onPressed: () => _change(() => _data.removeHistory(source.id)),
+                          ),
+                        ],
                       ),
                     );
                   },
