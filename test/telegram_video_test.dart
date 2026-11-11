@@ -183,8 +183,8 @@ void main() {
       expect(find.text('New episode'), findsOneWidget);
       expect(find.text('Could not load videos'), findsNothing);
       final distance =
-          tester.getCenter(find.text('New episode')).dy -
-          tester.getCenter(find.text('Next episode')).dy;
+          tester.getCenter(find.text('Next episode')).dy -
+          tester.getCenter(find.text('New episode')).dy;
       expect(distance, inExclusiveRange(0, 110));
       expect(
         tester.widget<Scaffold>(find.byType(Scaffold).first).extendBody,
