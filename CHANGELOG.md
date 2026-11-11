@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.127
+
+- Match Video to Music with shared Home cards, channel browsing tiles, desktop sidebar and all three navigation styles; use the same saved appearance settings in both interfaces.
+- Give Video Search a compact search field and channel grid, keep channel searches in Search, and adapt Home, Search and Library to narrow screens and large text.
+
 ## 0.1.126
 
 - Add Music and Video interfaces with separate navigation, a startup choice in setup and General settings, and Home hold to switch between modes.
