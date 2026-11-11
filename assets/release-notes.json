@@ -1,6 +1,13 @@
 {
-  "current": "0.1.130",
+  "current": "0.1.131",
   "releases": [
+    {
+      "version": "0.1.131",
+      "changes": [
+        "Fall back to the public GitHub release and its published checksums if the Releases API is unavailable. Keep platform, installer size, and SHA-256 checks.",
+        "Show a more specific update-check error and add a GitHub Releases button for manual downloads."
+      ]
+    },
     {
       "version": "0.1.130",
       "changes": [
