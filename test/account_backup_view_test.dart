@@ -83,6 +83,10 @@ void main() {
         SwitchListTile,
         'Include Telegram account',
       );
+      final accountSwitch = find.descendant(
+        of: account,
+        matching: find.byType(Switch),
+      );
       final launch = find.text('Export backup');
       await tester.tap(launch);
       await tester.pumpAndSettle();
@@ -145,10 +149,23 @@ void main() {
             image.dispose();
           });
         }
-        await tester.ensureVisible(account);
+        await tester.ensureVisible(accountSwitch);
         await tester.pumpAndSettle();
-        expect(account.hitTestable(), findsOneWidget);
         expect(tester.widget<SwitchListTile>(account).value, isTrue);
+        await tester.tapAt(tester.getCenter(accountSwitch));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<SwitchListTile>(account).value,
+          isFalse,
+          reason: 'Telegram account switch can be turned off at $size',
+        );
+        await tester.tapAt(tester.getCenter(accountSwitch));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<SwitchListTile>(account).value,
+          isTrue,
+          reason: 'Telegram account switch can be turned back on at $size',
+        );
         expect(tester.takeException(), isNull);
       }
       tester.view.physicalSize = const Size(360, 640);
