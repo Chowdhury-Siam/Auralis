@@ -131,14 +131,11 @@ void main() {
           find.byType(PopupMenuButton<LibrarySort>),
         );
         final first = tester.getRect(
-          find.widgetWithText(
-            CheckedPopupMenuItem<LibrarySort>,
-            'Newest first',
-          ),
+          find.widgetWithText(PopupMenuItem<LibrarySort>, 'Newest first'),
         );
         final last = tester.getRect(
           find.widgetWithText(
-            CheckedPopupMenuItem<LibrarySort>,
+            PopupMenuItem<LibrarySort>,
             'Duration (shortest first)',
           ),
         );
@@ -231,7 +228,7 @@ void main() {
       await tester.pumpAndSettle();
       expectSortPosition();
       await tester.tap(
-        find.widgetWithText(CheckedPopupMenuItem<LibrarySort>, 'Oldest first'),
+        find.widgetWithText(PopupMenuItem<LibrarySort>, 'Oldest first'),
       );
       await tester.pumpAndSettle();
       expect(player.settings.librarySort, LibrarySort.oldest);
@@ -242,7 +239,7 @@ void main() {
       await tester.tap(find.byTooltip('Sort Library'));
       await tester.pumpAndSettle();
       await tester.tap(
-        find.widgetWithText(CheckedPopupMenuItem<LibrarySort>, 'Title (A–Z)'),
+        find.widgetWithText(PopupMenuItem<LibrarySort>, 'Title (A–Z)'),
       );
       await tester.pumpAndSettle();
       expect(
@@ -280,7 +277,7 @@ void main() {
         image.dispose();
       });
       await tester.tap(
-        find.widgetWithText(CheckedPopupMenuItem<LibrarySort>, 'Artist (A–Z)'),
+        find.widgetWithText(PopupMenuItem<LibrarySort>, 'Artist (A–Z)'),
       );
       await tester.pumpAndSettle();
       expect(player.settings.librarySort, LibrarySort.artist);
@@ -341,7 +338,7 @@ void main() {
         expect(tester.takeException(), isNull);
         await tester.tap(
           find.widgetWithText(
-            CheckedPopupMenuItem<LibrarySort>,
+            PopupMenuItem<LibrarySort>,
             'Duration (shortest first)',
           ),
         );
