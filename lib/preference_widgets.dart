@@ -67,16 +67,7 @@ class ChoiceMenu<T> extends StatelessWidget {
       position: PopupMenuPosition.under,
       offset: const Offset(0, 6),
       constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
-      color: colors.surfaceContainerHigh,
-      surfaceTintColor: Colors.transparent,
-      elevation: 4,
-      shadowColor: const Color(0x40000000),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: colors.outlineVariant.withValues(alpha: .5)),
-      ),
       clipBehavior: Clip.antiAlias,
-      menuPadding: const EdgeInsets.all(6),
       onSelected: (index) => onSelected(values[index]),
       itemBuilder: (_) => [
         for (var i = 0; i < values.length; i++)
