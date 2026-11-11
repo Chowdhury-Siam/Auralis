@@ -1,7 +1,7 @@
 name: auralis
 description: Independent, compact Android and Windows music player with TDLib Telegram browsing.
 publish_to: none
-version: 0.1.139+140
+version: 0.1.142+143
 environment:
   sdk: ^3.13.1
 dependencies:
@@ -32,6 +32,13 @@ flutter:
   uses-material-design: true
   assets:
     - assets/release-notes.json
+    - assets/fonts/DejaVuSans.ttf
+    - assets/shaders/anime4k/
+    - assets/shaders/hdr-toys/
+    - assets/shaders/hdr-toys/utils/
+    - assets/shaders/hdr-toys/transfer-function/
+    - assets/shaders/hdr-toys/tone-mapping/
+    - assets/shaders/hdr-toys/gamut-mapping/
     - cloud/worker/worker.mjs
     - cloud/worker/turso.mjs
     - cloud/worker/accounts.mjs
