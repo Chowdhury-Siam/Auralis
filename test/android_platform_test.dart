@@ -59,82 +59,99 @@ void main() {
     await expectLater(vault.read(), throwsA(isA<PlatformException>()));
   });
 
-  test('Android vault owns writable copies of read-only platform replies', () async {
-    const codec = StandardMethodCodec();
-    messenger.setMockMessageHandler(channel.name, (message) async {
-      final call = codec.decodeMethodCall(message);
-      // Model immutable platform-message memory, not native cryptography.
-      final result = Uint8List.fromList(
-        (call.arguments as Uint8List).map((byte) => byte ^ 0xff).toList(),
+  test(
+    'Android vault owns writable copies of read-only platform replies',
+    () async {
+      const codec = StandardMethodCodec();
+      messenger.setMockMessageHandler(channel.name, (message) async {
+        final call = codec.decodeMethodCall(message);
+        // Model immutable platform-message memory, not native cryptography.
+        final result = Uint8List.fromList(
+          (call.arguments as Uint8List).map((byte) => byte ^ 0xff).toList(),
+        );
+        return codec.encodeSuccessEnvelope(result).asUnmodifiableView();
+      });
+      final native = (await channel.invokeMethod<Uint8List>(
+        'decrypt',
+        Uint8List.fromList([1, 2, 3]),
+      ))!;
+      expect(
+        () => native.fillRange(0, native.length, 0),
+        throwsUnsupportedError,
       );
-      return codec.encodeSuccessEnvelope(result).asUnmodifiableView();
-    });
-    final native = (await channel.invokeMethod<Uint8List>(
-      'decrypt', Uint8List.fromList([1, 2, 3]),
-    ))!;
-    expect(() => native.fillRange(0, native.length, 0), throwsUnsupportedError);
-    final dir = await Directory.systemTemp.createTemp('auralis-readonly-vault');
-    addTearDown(() => dir.delete(recursive: true));
-    final vault = AndroidSecretVault(File('${dir.path}/vault.aesgcm'));
-    final secrets = {'apiId': 123, 'apiHash': 'synthetic-secret'};
-    await vault.write(secrets);
-    expect(await vault.read(), secrets);
-    final owned = await vault.transform([1, 2, 3], encrypt: false);
-    owned.fillRange(0, owned.length, 0);
-    expect(owned, [0, 0, 0]);
-  });
-
-  test('portable Android restore and rollback work with read-only native buffers', () async {
-    const codec = StandardMethodCodec();
-    messenger.setMockMessageHandler(channel.name, (message) async {
-      final call = codec.decodeMethodCall(message);
-      final result = Uint8List.fromList(
-        (call.arguments as Uint8List).map((byte) => byte ^ 0xff).toList(),
+      final dir = await Directory.systemTemp.createTemp(
+        'auralis-readonly-vault',
       );
-      return codec.encodeSuccessEnvelope(result).asUnmodifiableView();
-    });
-    final credentials = <String, dynamic>{
-      'apiId': 12345,
-      'apiHash': 'abcdef0123456789abcdef0123456789',
-      'databaseKey': base64Encode(List.filled(32, 7)),
-    };
-    final account = TelegramAccount.fromJson({
-      'credentials': credentials,
-      'files': {'td.binlog': base64Encode(utf8.encode('portable session'))},
-    });
-    for (final fail in [true, false]) {
-      final dir = await Directory.systemTemp.createTemp('auralis-readonly-restore');
       addTearDown(() => dir.delete(recursive: true));
       final vault = AndroidSecretVault(File('${dir.path}/vault.aesgcm'));
-      final previous = {...credentials, 'apiId': 98765};
-      await vault.write(previous);
-      final protected = await vault.file.readAsBytes();
-      final database = File('${dir.path}/database/td.binlog');
-      await database.parent.create();
-      await database.writeAsString('previous session');
-      final service = TelegramService(
-        dir, vault, transport: FakeTd(), createTransport: FakeTd.new,
-      );
-      var restored = false;
-      Future<void> restore() => service.restoreAccount(account, () async {
-        expect(await vault.read(), credentials);
-        if (fail) throw const FileSystemException('settings write failed');
-        restored = true;
+      final secrets = {'apiId': 123, 'apiHash': 'synthetic-secret'};
+      await vault.write(secrets);
+      expect(await vault.read(), secrets);
+      final owned = await vault.transform([1, 2, 3], encrypt: false);
+      owned.fillRange(0, owned.length, 0);
+      expect(owned, [0, 0, 0]);
+    },
+  );
+
+  test(
+    'portable Android restore and rollback work with read-only native buffers',
+    () async {
+      const codec = StandardMethodCodec();
+      messenger.setMockMessageHandler(channel.name, (message) async {
+        final call = codec.decodeMethodCall(message);
+        final result = Uint8List.fromList(
+          (call.arguments as Uint8List).map((byte) => byte ^ 0xff).toList(),
+        );
+        return codec.encodeSuccessEnvelope(result).asUnmodifiableView();
       });
-      if (fail) {
-        await expectLater(restore(), throwsA(isA<FileSystemException>()));
-        expect(await vault.file.readAsBytes(), protected);
-        expect(await database.readAsString(), 'previous session');
-      } else {
-        await restore();
-        expect(restored, isTrue);
-        expect(await vault.read(), credentials);
-        expect(await database.readAsString(), 'portable session');
-        expect(service.error, isNull);
+      final credentials = <String, dynamic>{
+        'apiId': 12345,
+        'apiHash': 'abcdef0123456789abcdef0123456789',
+        'databaseKey': base64Encode(List.filled(32, 7)),
+      };
+      final account = TelegramAccount.fromJson({
+        'credentials': credentials,
+        'files': {'td.binlog': base64Encode(utf8.encode('portable session'))},
+      });
+      for (final fail in [true, false]) {
+        final dir = await Directory.systemTemp.createTemp(
+          'auralis-readonly-restore',
+        );
+        addTearDown(() => dir.delete(recursive: true));
+        final vault = AndroidSecretVault(File('${dir.path}/vault.aesgcm'));
+        final previous = {...credentials, 'apiId': 98765};
+        await vault.write(previous);
+        final protected = await vault.file.readAsBytes();
+        final database = File('${dir.path}/database/td.binlog');
+        await database.parent.create();
+        await database.writeAsString('previous session');
+        final service = TelegramService(
+          dir,
+          vault,
+          transport: FakeTd(),
+          createTransport: FakeTd.new,
+        );
+        var restored = false;
+        Future<void> restore() => service.restoreAccount(account, () async {
+          expect(await vault.read(), credentials);
+          if (fail) throw const FileSystemException('settings write failed');
+          restored = true;
+        });
+        if (fail) {
+          await expectLater(restore(), throwsA(isA<FileSystemException>()));
+          expect(await vault.file.readAsBytes(), protected);
+          expect(await database.readAsString(), 'previous session');
+        } else {
+          await restore();
+          expect(restored, isTrue);
+          expect(await vault.read(), credentials);
+          expect(await database.readAsString(), 'portable session');
+          expect(service.error, isNull);
+        }
+        await service.shutdown();
       }
-      await service.shutdown();
-    }
-  });
+    },
+  );
 
   test('Android update bridge sends only the verified APK handoff', () async {
     final calls = <MethodCall>[];
@@ -293,15 +310,37 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('auralis-media-art');
     final preview = File('test/fixtures/cover.png').readAsBytesSync();
     final full = File('test/fixtures/theme-teal.png').readAsBytesSync();
-    final a = Track(id: 'a', title: 'First', artist: 'Artist', source: 'Channel', coverPreview: preview);
-    const b = Track(id: 'b', title: 'Second', artist: 'Artist', source: 'Channel');
-    const c = Track(id: 'c', title: 'No art', artist: 'Artist', source: 'Channel');
+    final a = Track(
+      id: 'a',
+      title: 'First',
+      artist: 'Artist',
+      source: 'Channel',
+      coverPreview: preview,
+    );
+    const b = Track(
+      id: 'b',
+      title: 'Second',
+      artist: 'Artist',
+      source: 'Channel',
+    );
+    const c = Track(
+      id: 'c',
+      title: 'No art',
+      artist: 'Artist',
+      source: 'Channel',
+    );
     final audio = FakeAudio();
-    final player = PlayerController(audio, TelegramStreamProxy((_) async => {}), MemorySettings());
+    final player = PlayerController(
+      audio,
+      TelegramStreamProxy((_) async => {}),
+      MemorySettings(),
+    );
     final changes = ChangeNotifier();
-    final pendingA = Completer<Uint8List?>(), pendingB = Completer<Uint8List?>();
+    final pendingA = Completer<Uint8List?>(),
+        pendingB = Completer<Uint8List?>();
     Future<Uint8List?>? nextCover = pendingA.future;
-    final handler = AndroidAudioHandler(player,
+    final handler = AndroidAudioHandler(
+      player,
       artworkDirectory: dir,
       artworkChanges: changes,
       loadArtwork: (_) => nextCover,
@@ -312,9 +351,16 @@ void main() {
       changes.dispose();
       await dir.delete(recursive: true);
     });
-    Future<MediaItem> withArt(String id, {Uri? differentFrom}) => handler.mediaItem
-      .firstWhere((item) => item?.id == id && item?.artUri != null && item?.artUri != differentFrom)
-      .then((item) => item!).timeout(const Duration(seconds: 3));
+    Future<MediaItem> withArt(String id, {Uri? differentFrom}) => handler
+        .mediaItem
+        .firstWhere(
+          (item) =>
+              item?.id == id &&
+              item?.artUri != null &&
+              item?.artUri != differentFrom,
+        )
+        .then((item) => item!)
+        .timeout(const Duration(seconds: 3));
 
     await player.play(a, from: [a, b, c]);
     final first = await withArt(a.id);
@@ -334,12 +380,19 @@ void main() {
     changes.notifyListeners();
     nextCover = pendingB.future;
     await player.playAt(1);
-    expect(handler.mediaItem.value!.artUri, isNull, reason: 'Never carry the old cover into a new track');
+    expect(
+      handler.mediaItem.value!.artUri,
+      isNull,
+      reason: 'Never carry the old cover into a new track',
+    );
     stale.complete(preview);
     pendingB.complete(full);
     await withArt(b.id);
     expect(handler.mediaItem.value!.id, b.id);
-    expect(await File.fromUri(handler.mediaItem.value!.artUri!).readAsBytes(), full);
+    expect(
+      await File.fromUri(handler.mediaItem.value!.artUri!).readAsBytes(),
+      full,
+    );
 
     nextCover = null;
     await player.playAt(2);
@@ -370,11 +423,19 @@ void main() {
       expect(jobs['build']['needs'], isNull);
       expect(jobs['build']['runs-on'], 'ubuntu-24.04');
       expect(workflow['permissions']['contents'], 'read');
-      final releaseWorkflow = loadYaml(File('.github/workflows/publish-release.yml').readAsStringSync()) as YamlMap;
+      final releaseWorkflow = loadYaml(
+        File('.github/workflows/publish-release.yml').readAsStringSync(),
+      ) as YamlMap;
       final publishing = releaseWorkflow['jobs']['publish'];
       expect(publishing['permissions']['contents'], 'write');
-      expect(releaseWorkflow['concurrency']['group'], r'stable-release-${{ github.repository }}');
-      expect(publishing['if'], contains("head_repository.full_name == github.repository"));
+      expect(
+        releaseWorkflow['concurrency']['group'],
+        r'stable-release-${{ github.repository }}',
+      );
+      expect(
+        publishing['if'],
+        contains("head_repository.full_name == github.repository"),
+      );
       final steps = jobs['build']['steps'] as YamlList;
       final sdk = steps.singleWhere((s) => s['name'] == 'Set up Android SDK');
       expect(
@@ -396,11 +457,12 @@ void main() {
       final build = steps.singleWhere((s) => s['name'] == 'Build Android APK');
       expect(build['run'], contains('flutter build apk'));
       expect(build['run'], contains('android-arm64'));
-      // Third-party media libraries include multiple ABIs; only ship the
-      // split output matching the requested native TDLib architecture.
-      expect(build['run'], contains('--split-per-abi'));
+      // Gradle applies the same ABI to Flutter, TDLib and Python.
+      final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+      expect(gradle, contains('abiFilters'));
+      expect(gradle, contains('android-arm64'));
       expect(build['run'], contains('--target-platform "\$target"'));
-      expect(build['run'], contains('app-\$ABI-release.apk'));
+      expect(build['run'], contains('app-release.apk'));
       expect(build['run'], contains('flutter build apk --release'));
       expect(build['run'], contains('manifest debuggable'));
       expect(build['run'], isNot(contains('mode=debug')));
