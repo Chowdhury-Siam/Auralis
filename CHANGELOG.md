@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.153
+
+- Remove the unused Telegram Video field flagged by static analysis.
+
 ## 0.1.152
 
 - Wait for Windows video textures and the renderer to shut down before closing the player.
