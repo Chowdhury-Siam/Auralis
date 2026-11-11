@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart';
+
 import 'data_backup.dart';
 
 class BackupExportPage extends StatefulWidget {
@@ -64,26 +66,18 @@ class _BackupExportPageState extends State<BackupExportPage> {
   }) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(24),
-      side: BorderSide(
-        color: selected ? colors.primary : colors.outlineVariant,
-        width: selected ? 2 : 1,
-      ),
+    final shape = auralisSurfaceShape(colors);
+    final selectedShape = shape.copyWith(
+      side: BorderSide(color: colors.primary, width: 2),
     );
     return Material(
       color: colors.surfaceContainerLow,
-      shape: shape,
+      shape: selected ? selectedShape : shape,
       clipBehavior: Clip.antiAlias,
       child: SwitchListTile(
         value: selected,
         onChanged: _busy ? null : onChanged,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        thumbIcon: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? const Icon(Icons.check_rounded, size: 17)
-              : null,
-        ),
         secondary: Container(
           width: 46,
           height: 46,
@@ -150,9 +144,6 @@ class _BackupExportPageState extends State<BackupExportPage> {
                 children: [
                   Card.filled(
                     margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
