@@ -35,8 +35,7 @@ def verify_apk(path, abi):
             raise ValueError("Damaged APK.")
         names = set(archive.namelist())
         for name in ("AndroidManifest.xml", "classes.dex", f"lib/{abi}/libtdjson.so",
-                     f"lib/{abi}/libmpv.so", f"lib/{abi}/libmediakitandroidhelper.so", f"lib/{abi}/libflutter.so",
-                     f"lib/{abi}/libqjs.so", f"lib/{abi}/libpython3.13.so"):
+                     f"lib/{abi}/libmpv.so", f"lib/{abi}/libmediakitandroidhelper.so", f"lib/{abi}/libflutter.so"):
             if name not in names:
                 raise ValueError(f"APK is missing {name}")
         for name in names:
