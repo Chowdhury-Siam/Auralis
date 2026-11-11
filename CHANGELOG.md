@@ -1,5 +1,23 @@
 # Auralis changes
 
+## 0.1.142
+
+- Browse pinned local video folders with grid and list views, queue selection, sorting, and resume markers. Open videos shared to Auralis from Android.
+- Resolve video website URLs with yt-dlp and set resolution, frame rate, codec, container, audio bitrate, and HDR preferences.
+- Add HDR Toys processing presets for GPU-next, an optional Android GPU-next renderer, and Android display refresh-rate matching.
+
+## 0.1.141
+
+- Keep video playback running in a mini-player while browsing Video mode, and import M3U playlists into the video queue.
+- Add Syncplay rooms, Wyzie subtitle search, AniSkip lookups, and editable skip segments with seekbar markers and optional automatic skipping.
+- Add custom mpv command buttons, Lua and JavaScript script loading, mpv configuration editing, live playback statistics, and black-bar detection.
+
+## 0.1.140
+
+- Rework Video playback with mpvRx-style portrait and landscape controls, editable control layouts, playback gestures, chapters, bookmarks, and per-video resume.
+- Open Telegram videos, local files, and HTTP streams in a shared player with an editable queue, dual subtitles, frame controls, and Android picture in picture.
+- Add Anime4K presets, ambient lighting, decoder settings, and video processing controls.
+
 ## 0.1.139
 
 - Give Music Library a split collection selector and a themed toolbar for shuffle, refresh, and sorting. Keep search in its own field and retain the optional collection tabs.
