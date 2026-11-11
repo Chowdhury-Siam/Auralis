@@ -195,6 +195,8 @@ extension _PlaybackProcessing on _VideoPlaybackState {
     ]);
     if (_canPlay && choice != null) {
       _ambient = choice;
+      _data.ambientMode = choice.name;
+      _saveSettings();
       _changed();
     }
   }
