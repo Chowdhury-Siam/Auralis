@@ -8,9 +8,9 @@ import 'models.dart';
     switch (index % 5) {
       0 => (colors.primaryContainer, colors.onPrimaryContainer),
       1 => (colors.tertiaryContainer, colors.onTertiaryContainer),
-      2 => (const Color(0xFF17474A), const Color(0xFFB3F3EE)),
+      2 => (colors.tertiaryFixedDim, colors.onTertiaryFixed),
       3 => (colors.secondaryContainer, colors.onSecondaryContainer),
-      _ => (const Color(0xFF55354A), const Color(0xFFFFDBEE)),
+      _ => (colors.secondaryFixedDim, colors.onSecondaryFixed),
     };
 
 class DiscoveryCard extends StatelessWidget {
