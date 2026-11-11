@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'listening.dart';
 import 'models.dart';
 import 'storage.dart';
+import 'video_playback_data.dart';
 
 enum BackupSection {
   playlists('Playlists', 'Your custom playlists and track order.', {
@@ -35,7 +36,10 @@ enum BackupSection {
     },
   ),
   favorites('Favorites', 'Tracks you marked as favorites.', {'favoriteIds'}),
-  recent('Recently played', 'Your recent listening history.', {'recentIds'}),
+  recent('Recently played', 'Recent music and Telegram video activity.', {
+    'recentIds',
+    TelegramVideoActivity.key,
+  }),
   listening('Listening stats', 'Listening time, play counts and rankings.', {
     'listening',
   }),
@@ -208,6 +212,9 @@ class DataBackup {
   static void _validate(Map<String, dynamic> data, {bool partial = false}) {
     if (data.keys.any((key) => !_allowed.contains(key))) {
       throw const FormatException('Backup contains unsupported app data.');
+    }
+    if (data.containsKey(TelegramVideoActivity.key)) {
+      TelegramVideoActivity.validate(data[TelegramVideoActivity.key]);
     }
     if (!partial || BackupSection.preferences.isIn(data)) {
       _validatePreferences(data);
