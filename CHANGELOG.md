@@ -1,5 +1,14 @@
 # Auralis changes
 
+## 0.1.137
+
+- Give the Library search field and collection selector their own cards, with a gap between them on phones and desktops.
+
+## 0.1.136
+
+- Redesign the Android and Windows mini-player with round artwork, a compact tinted layout, and circular playback controls. Keep seeking available below the Android controls and inline on Windows.
+- Connect the linked Telegram account automatically after an Auralis password sign-in when an updated, already connected device is online. Keep Telegram two-step verification when Telegram requires it.
+
 ## 0.1.135
 
 - Let Video Library and channel results scroll behind the floating navigation bar, matching Music. Keep the last item above the bar when fully scrolled.
