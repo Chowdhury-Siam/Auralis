@@ -3923,7 +3923,9 @@ class _PlayerShellState extends State<PlayerShell>
                   }
                   if (!telegram.ready) {
                     player.settings.selectedChannels = [];
-                    player.settings.videoPlayback.clearTelegram();
+                    player.settings.videoPlayback.clearTelegram(
+                      keepActivity: widget.sync?.connected == true,
+                    );
                     try {
                       await player.settings.save();
                     } catch (_) {
