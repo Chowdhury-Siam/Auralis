@@ -493,7 +493,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _open(Track track) async {
-    await flushListeningStats();
+    final saving = flushListeningStats();
     _samplePlaying = false;
     _listeningTrack = null;
     var opened = false;
@@ -510,6 +510,8 @@ class PlayerController extends ChangeNotifier {
         _pauseAfterOpen = false;
         await audio.toggle();
       }
+      await saving;
+      if (generation != _generation || _closed) return;
       opened = true;
       settings.recentIds = [
         track.id,
