@@ -27,7 +27,10 @@ class VideoSource {
 
   Map<String, Object?> toJson() => {
     'title': title,
-    if (telegram case final Track track) 'message': track.id,
+    if (telegram case final Track track) ...{
+      'message': track.id,
+      'channel': track.source,
+    },
     if (uri case final Uri uri) 'uri': uri.toString(),
   };
 
@@ -37,7 +40,10 @@ class VideoSource {
     if (raw['message'] case final String id
         when RegExp(r'^-?\d+:\d+$').hasMatch(id)) {
       return VideoSource.telegram(
-        Track(id: id, title: title, artist: '', source: 'Telegram'),
+        Track(
+          id: id, title: title, artist: '',
+          source: raw['channel'] is String ? raw['channel'] as String : 'Telegram',
+        ),
       );
     }
     if (raw['uri'] case final String value when value.length <= 8192) {
@@ -68,6 +74,44 @@ class VideoHistoryEntry {
   const VideoHistoryEntry(this.source, this.playedAt);
   final VideoSource source;
   final DateTime playedAt;
+}
+
+class TelegramVideoActivity {
+  static const key = 'videoActivity';
+  static const recentLimit = 300;
+  static const watchedLimit = 50000;
+  static final _message = RegExp(r'^-?\d{1,19}:\d{1,19}$');
+
+  static bool isMessage(Object? id) => id is String && _message.hasMatch(id);
+
+  static bool isRecent(Object? value) =>
+      value is Map &&
+      value.length == 4 &&
+      value['title'] is String &&
+      (value['title'] as String).length <= 512 &&
+      value['channel'] is String &&
+      (value['channel'] as String).length <= 256 &&
+      value['openedAt'] is int &&
+      (value['openedAt'] as int) >= 0 &&
+      (value['openedAt'] as int) <= 8640000000000000 &&
+      value['position'] is int &&
+      (value['position'] as int) >= 0 &&
+      (value['position'] as int) <= 31536000000;
+
+  static void validate(Object? value) {
+    if (value is! Map || value.length != 2) {
+      throw const FormatException('Invalid video activity.');
+    }
+    final recent = value['recent'];
+    final watched = value['watched'];
+    if (recent is! Map || recent.length > recentLimit ||
+        recent.entries.any((entry) => !isMessage(entry.key) || !isRecent(entry.value)) ||
+        watched is! List || watched.length > watchedLimit ||
+        watched.any((id) => !isMessage(id)) ||
+        watched.toSet().length != watched.length) {
+      throw const FormatException('Invalid video activity.');
+    }
+  }
 }
 
 class VideoBookmark {
@@ -232,6 +276,7 @@ enum VideoHdrProfile {
 class VideoPlaybackData {
   final playlists = <String, List<VideoSource>>{};
   final history = <String, VideoHistoryEntry>{};
+  final _watched = <String>{};
   final subtitleStyle = <String, String>{};
   bool snapshotSubtitles = true;
   String ambientMode = 'off';
@@ -299,7 +344,76 @@ class VideoPlaybackData {
     if (!source.canPlay) return;
     history.remove(source.id);
     history[source.id] = VideoHistoryEntry(source, at ?? DateTime.now());
-    if (history.length > _limit) history.remove(history.keys.first);
+    final sameKind = history.values
+        .where((entry) => (entry.source.telegram != null) == (source.telegram != null));
+    if (sameKind.length > _limit) history.remove(sameKind.first.source.id);
+  }
+
+  bool isWatched(VideoSource source) => _watched.contains(source.telegram?.id);
+
+  void setWatched(VideoSource source, bool watched) {
+    final message = source.telegram?.id;
+    if (message == null || !TelegramVideoActivity.isMessage(message)) return;
+    if (watched) {
+      _watched.add(message);
+      positions.remove(source.id);
+    } else {
+      _watched.remove(message);
+    }
+  }
+
+  Map<String, dynamic> telegramActivity() => {
+    'recent': {
+      for (final entry in history.values)
+        if (entry.source.telegram case final Track track
+            when TelegramVideoActivity.isMessage(track.id))
+          track.id: {
+            'title': String.fromCharCodes(track.title.runes.take(256)),
+            'channel': String.fromCharCodes(track.source.runes.take(128)),
+            'openedAt': entry.playedAt.millisecondsSinceEpoch.clamp(0, 8640000000000000),
+            'position': (positions[entry.source.id]?.inMilliseconds ?? 0).clamp(0, 31536000000),
+          },
+    },
+    'watched': _watched.toList()..sort(),
+  };
+
+  void applyTelegramActivity(Object? value) {
+    if (value is! Map || value['recent'] is! Map || value['watched'] is! List) return;
+    final old = Map<String, VideoHistoryEntry>.of(history);
+    history.removeWhere((_, entry) => entry.source.telegram != null);
+    positions.removeWhere((id, _) => id.startsWith('telegram:') && old.containsKey(id));
+    _watched
+      ..clear()
+      ..addAll((value['watched'] as List)
+          .whereType<String>().where(TelegramVideoActivity.isMessage)
+          .take(TelegramVideoActivity.watchedLimit));
+    final entries = (value['recent'] as Map).entries
+        .where((entry) => TelegramVideoActivity.isMessage(entry.key) &&
+            TelegramVideoActivity.isRecent(entry.value))
+        .take(TelegramVideoActivity.recentLimit)
+        .toList()
+      ..sort((a, b) => ((a.value as Map)['openedAt'] as int)
+          .compareTo((b.value as Map)['openedAt'] as int));
+    for (final entry in entries) {
+      final id = entry.key as String;
+      final record = entry.value as Map;
+      final saved = old['telegram:$id']?.source;
+      final source = saved != null &&
+              String.fromCharCodes(saved.title.runes.take(256)) == record['title'] &&
+              String.fromCharCodes(saved.telegram!.source.runes.take(128)) == record['channel']
+          ? saved
+          : VideoSource.telegram(Track(
+              id: id, title: record['title'] as String, artist: '',
+              source: record['channel'] as String,
+            ));
+      recordVideo(source, at: DateTime.fromMillisecondsSinceEpoch(record['openedAt'] as int, isUtc: true));
+      final ms = record['position'] as int;
+      if (ms > 0 && !isWatched(source)) {
+        positions[source.id] = Duration(milliseconds: ms);
+      } else {
+        positions.remove(source.id);
+      }
+    }
   }
 
   void removeHistory(String id) {
@@ -346,12 +460,27 @@ class VideoPlaybackData {
     }
   }
 
-  void clearTelegram() {
-    history.removeWhere((_, entry) => entry.source.telegram != null);
+  void clearTelegram({bool keepActivity = false}) {
+    if (keepActivity) {
+      // TDLib file IDs and previews belong to the old Telegram session.
+      history.updateAll((_, entry) {
+        final track = entry.source.telegram;
+        if (track == null) return entry;
+        return VideoHistoryEntry(
+          VideoSource.telegram(Track(
+            id: track.id, title: track.title, artist: '', source: track.source,
+          )),
+          entry.playedAt,
+        );
+      });
+    } else {
+      _watched.clear();
+      history.removeWhere((_, entry) => entry.source.telegram != null);
+      positions.removeWhere((id, _) => id.startsWith('telegram:'));
+    }
     for (final list in playlists.values) {
       list.removeWhere((source) => source.telegram != null);
     }
-    positions.removeWhere((id, _) => id.startsWith('telegram:'));
     bookmarks.removeWhere((id, _) => id.startsWith('telegram:'));
     skipSegments.removeWhere((id, _) => id.startsWith('telegram:'));
     orientations.removeWhere((id, _) => id.startsWith('telegram:'));
@@ -389,6 +518,10 @@ class VideoPlaybackData {
   factory VideoPlaybackData.fromJson(Object? json) {
     final data = VideoPlaybackData();
     if (json is! Map) return data;
+    if (json['watched'] case final List watched) {
+      data._watched.addAll(watched.whereType<String>()
+          .where(TelegramVideoActivity.isMessage).take(TelegramVideoActivity.watchedLimit));
+    }
     data.snapshotSubtitles = json['snapshotSubtitles'] != false;
     if (json['ambientMode'] case final String mode when mode.length <= 32) {
       data.ambientMode = mode;
@@ -413,7 +546,7 @@ class VideoPlaybackData {
       }
     }
     if (json['history'] case final List entries) {
-      for (final entry in entries.whereType<Map>().take(_limit)) {
+      for (final entry in entries.whereType<Map>().take(_limit * 2)) {
         final source = VideoSource.restore(entry['source']);
         final at = entry['at'];
         if (source != null && at is String) {
@@ -465,7 +598,7 @@ class VideoPlaybackData {
       }
     }
     if (json['positions'] case final Map positions) {
-      for (final entry in positions.entries.take(_limit)) {
+      for (final entry in positions.entries.take(_limit * 2)) {
         if (entry.key is! String) continue;
         if (_duration(entry.value) case final Duration value) {
           data.positions[entry.key as String] = value;
@@ -530,6 +663,7 @@ class VideoPlaybackData {
       value is String && value.length <= 32768 ? value : '';
 
   Map<String, dynamic> toJson() => {
+    'watched': _watched.toList(),
     'ambientMode': ambientMode,
     'snapshotSubtitles': snapshotSubtitles,
     'subtitleStyle': subtitleStyle,
