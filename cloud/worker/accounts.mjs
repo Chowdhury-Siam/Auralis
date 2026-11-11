@@ -14,12 +14,12 @@ const username=v=>{if(typeof v!=='string'||!/^[a-z0-9][a-z0-9_.-]{2,31}$/.test(v
 const password=v=>{if(typeof v!=='string'||v.length<10||v.length>128)throw Error('Use a password of 10–128 characters');return v;};
 async function signingKey(env) {return crypto.subtle.importKey('raw',enc.encode(secret(env)),{name:'HMAC',hash:'SHA-256'},false,['sign','verify']);}
 async function tokenFor(claims,env) {const data=`${b64(enc.encode('{"alg":"HS256","typ":"JWT"}'))}.${b64(enc.encode(JSON.stringify(claims)))}`;return `${data}.${b64(await crypto.subtle.sign('HMAC',await signingKey(env),enc.encode(data)))}`;}
-async function claimsFor(token,env) {
+async function claimsFor(token,env,audience='auralis-sync') {
  if(typeof token!=='string'||token.length>2000)throw Error('Sign in again');
  const p=token.split('.');if(p.length!==3)throw Error('Sign in again');
  const h=JSON.parse(dec.decode(un64(p[0])));
  if(h.alg!=='HS256'||h.typ!=='JWT'||!await crypto.subtle.verify('HMAC',await signingKey(env),un64(p[2]),enc.encode(`${p[0]}.${p[1]}`)))throw Error('Sign in again');
- const c=JSON.parse(dec.decode(un64(p[1])));if(c.aud!=='auralis-sync'||!Number.isSafeInteger(c.exp)||c.exp<=Date.now()/1000||!/^[a-f0-9]{32}$/.test(c.sub)||!/^[a-f0-9]{64}$/.test(c.jti))throw Error('Sign in again');return c;
+ const c=JSON.parse(dec.decode(un64(p[1])));if(c.aud!==audience||!Number.isSafeInteger(c.exp)||c.exp<=Date.now()/1000||!/^[a-f0-9]{32}$/.test(c.sub)||!/^[a-f0-9]{64}$/.test(c.jti))throw Error('Sign in again');return c;
 }
 async function crypt(value,env,decrypt=false,context='auralis-deployment-v1') {
  const key=await crypto.subtle.importKey('raw',await crypto.subtle.digest('SHA-256',enc.encode(`${secret(env)}|auralis-owner-recovery`)),'AES-GCM',false,['encrypt','decrypt']);
@@ -48,54 +48,140 @@ export class AccountStore {
  this.sql.exec('INSERT INTO auth_limits VALUES(?,?,1) ON CONFLICT(key) DO UPDATE SET window=excluded.window,count=CASE WHEN auth_limits.window=excluded.window THEN auth_limits.count+1 ELSE 1 END',key,window);}}
  public(u){return {id:u.id,username:u.username,admin:Boolean(u.owner),room:u.room,scope:u.scope};}
  async identity(request){const claims=await claimsFor(request.headers.get('Authorization')?.replace(/^Bearer /,''),this.env),u=this.first('SELECT * FROM accounts WHERE id=?',claims.sub),s=this.first('SELECT * FROM sessions WHERE id=?',claims.jti);if(!u||!s||s.account!==u.id||s.version!==u.version||s.expires<=Date.now()/1000)throw Error('Sign in again');return {...u,jti:claims.jti,expires:s.expires};}
- async session(u,code){const now=Math.floor(Date.now()/1000),expires=now+30*86400,jti=random();this.sql.exec('DELETE FROM sessions WHERE expires<=?',now);if(this.first('SELECT count(*) AS n FROM sessions WHERE account=?',u.id).n>=32)throw Error('Sign out of an older device first');this.sql.exec('INSERT INTO sessions VALUES(?,?,?,?)',jti,u.id,expires,u.version);return {user:this.public(u),token:await tokenFor({aud:'auralis-sync',sub:u.id,jti,iat:now,exp:expires},this.env),expires,...(code?{recoveryCode:code}:{})};}
+ async session(u,code,{automaticTelegram=false}={}){
+   const now=Math.floor(Date.now()/1000),expires=now+30*86400,jti=random();
+   this.sql.exec('DELETE FROM sessions WHERE expires<=?',now);
+   if(this.first('SELECT count(*) AS n FROM sessions WHERE account=?',u.id).n>=32)throw Error('Sign out of an older device first');
+   this.sql.exec('INSERT INTO sessions VALUES(?,?,?,?)',jti,u.id,expires,u.version);
+   const result={user:this.public(u),token:await tokenFor({aud:'auralis-sync',sub:u.id,jti,iat:now,exp:expires},this.env),expires};
+   if(code)result.recoveryCode=code;
+   if(automaticTelegram){
+     const exp=now+600;
+     result.telegramGrant={
+       token:await tokenFor({aud:'auralis-telegram-login',sub:u.id,jti,exp},this.env),
+       expires:exp,
+     };
+   }
+   return result;
+ }
  async revoke(u,jti=''){await this.env.ROOM.get(this.env.ROOM.idFromName(u.room)).fetch(new Request('https://internal/_account/revoke',{method:'POST',headers:{'X-Auralis-Session':jti,'X-Auralis-Scope':u.scope}}));}
  async saveDeployment(data){const keys=['worker','account','cloudflareToken','database','databaseToken','key'];if(keys.some(k=>typeof data[k]!=='string'||!data[k]||data[k].length>4096)||!await equal(data.key,secret(this.env)))throw Error('Deployment credentials must match this Worker');this.sql.exec("INSERT INTO account_meta VALUES('deployment',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",JSON.stringify(await crypt({...Object.fromEntries(keys.map(k=>[k,data[k]])),automatic:data.automatic!==false},this.env)));}
  async telegramProfile(u){const r=this.first('SELECT value FROM telegram_accounts WHERE account=?',u.id);return r?await crypt(JSON.parse(r.value),this.env,true,'auralis-telegram:'+u.id):null;}
  active(u){if(!this.first('SELECT id FROM accounts WHERE id=?',u.id)||!this.first('SELECT id FROM sessions WHERE id=? AND account=? AND version=? AND expires>?',u.jti,u.id,u.version,Math.floor(Date.now()/1000)))throw Error('Sign in again');}
  async telegram(request,u,path){
- const now=Math.floor(Date.now()/1000);this.sql.exec('DELETE FROM telegram_links WHERE expires<=?',now);
- if(path==='/v1/account/telegram'){
- if(request.method==='GET'){const profile=await this.telegramProfile(u);return json({enabled:profile?.disabled!==true,profile:profile?.disabled?null:profile});}
- if(request.method==='PUT'){
- const data=await body(request);
- if(!Number.isSafeInteger(data.userId)||data.userId<=0||!Number.isSafeInteger(data.apiId)||data.apiId<=0||typeof data.apiHash!=='string'||!/^[a-fA-F0-9]{32}$/.test(data.apiHash)||typeof data.name!=='string'||!data.name.trim()||data.name.length>160)throw Error('Invalid Telegram account');
- const initial=this.first('SELECT value FROM telegram_accounts WHERE account=?',u.id)?.value??null;
- const previous=initial?await crypt(JSON.parse(initial),this.env,true,'auralis-telegram:'+u.id):null;
- if(data.automatic===true && previous?.disabled)throw Error('Telegram account sync is disabled');
- if(previous&&!previous.disabled&&previous.userId!==data.userId)throw Error('Disable the current Telegram link before linking another account');
- const profile={userId:data.userId,name:data.name.trim(),apiId:data.apiId,apiHash:data.apiHash};
- const encrypted=JSON.stringify(await crypt(profile,this.env,false,'auralis-telegram:'+u.id));this.active(u);
- this.state.storage.transactionSync(()=>{if((this.first('SELECT value FROM telegram_accounts WHERE account=?',u.id)?.value??null)!==initial)throw Error('Telegram link changed. Retry sync');this.sql.exec('INSERT INTO telegram_accounts VALUES(?,?) ON CONFLICT(account) DO UPDATE SET value=excluded.value',u.id,encrypted);});return json({enabled:true,profile});}
- if(request.method==='DELETE'){
- const encrypted=JSON.stringify(await crypt({disabled:true},this.env,false,'auralis-telegram:'+u.id));this.active(u);
- this.state.storage.transactionSync(()=>{this.sql.exec('INSERT INTO telegram_accounts VALUES(?,?) ON CONFLICT(account) DO UPDATE SET value=excluded.value',u.id,encrypted);this.sql.exec('DELETE FROM telegram_links WHERE account=?',u.id);});return json({enabled:false,profile:null});}
- }
- const profile=await this.telegramProfile(u);if(!profile||profile.disabled)return json({error:'Link your Telegram account on a signed-in device first'},409);
- if(path==='/v1/account/telegram/requests'){
- if(request.method==='GET')return json({requests:Array.from(this.sql.exec("SELECT id,expires FROM telegram_links WHERE account=? AND requester<>? AND status='pending' ORDER BY expires DESC LIMIT 8",u.id,u.jti)).map(r=>({id:r.id,expires:r.expires}))});
- if(request.method==='POST'){
- const data=await body(request);if(typeof data.link!=='string'||!/^tg:\/\/login\?token=[A-Za-z0-9_-]{20,256}$/.test(data.link))throw Error('Invalid Telegram device link');
- // Rate limit only creating a fresh request; token refreshes remain bounded.
- const recent=this.first('SELECT expires FROM telegram_links WHERE account=? AND requester=? ORDER BY expires DESC LIMIT 1',u.id,u.jti);if(recent&&recent.expires>now+115)return json({error:'Wait a moment before retrying device sign-in'},429);
- const id=random(),code=String(crypto.getRandomValues(new Uint32Array(1))[0]%1000000).padStart(6,'0'),expires=now+120;
- const encrypted=JSON.stringify(await crypt({link:data.link,code},this.env,false,'auralis-telegram-link:'+u.id+':'+id));this.active(u);
- this.state.storage.transactionSync(()=>{this.sql.exec('DELETE FROM telegram_links WHERE account=? AND requester=?',u.id,u.jti);if(this.first('SELECT count(*) AS n FROM telegram_links WHERE account=?',u.id).n>=8)throw Error('Too many pending device requests');this.sql.exec('INSERT INTO telegram_links VALUES(?,?,?,?,?,?,NULL)',id,u.id,u.jti,encrypted,expires,'pending');});return json({id,code,expires});}
- }
- const match=/^\/v1\/account\/telegram\/requests\/([a-f0-9]{64})(?:\/(claim|complete))?$/.exec(path);if(!match)return json({error:'Not found'},404);
- const row=this.first('SELECT * FROM telegram_links WHERE id=? AND account=?',match[1],u.id);if(!row)return json({error:'Device request expired. Retry on the new device.'},404);
- if(!match[2]&&request.method==='GET'&&row.requester===u.jti)return json({state:row.status,expires:row.expires});
- if(!match[2]&&request.method==='DELETE'&&row.requester===u.jti){this.sql.exec('DELETE FROM telegram_links WHERE id=?',row.id);return json({ok:true});}
- if(match[2]==='claim'&&request.method==='POST'){
- if(row.requester===u.jti||row.status!=='pending')return json({error:'Approve from another signed-in device'},409);
- const data=await body(request);this.rate(request,'telegram:'+u.id);
- const saved=await crypt(JSON.parse(row.value),this.env,true,'auralis-telegram-link:'+u.id+':'+row.id);
- if(typeof data.code!=='string'||!/^\d{6}$/.test(data.code)||!await equal(data.code,saved.code))return json({error:'The code does not match the new device'},400);
- this.active(u);if(!this.first("UPDATE telegram_links SET status='claiming',approver=? WHERE id=? AND account=? AND status='pending' AND expires>? RETURNING id",u.jti,row.id,u.id,Math.floor(Date.now()/1000)))return json({error:'Device request was already used'},409);
- return json({link:saved.link,userId:profile.userId});}
- if(match[2]==='complete'&&request.method==='POST'&&row.approver===u.jti&&row.status==='claiming'){
- const data=await body(request);this.active(u);this.sql.exec("UPDATE telegram_links SET status=?,value='' WHERE id=? AND approver=?",data.ok===true?'approved':'failed',row.id,u.jti);return json({ok:true});}
- return json({error:'Not permitted'},403);
+   const now=Math.floor(Date.now()/1000);
+   const root='/v1/account/telegram';
+   this.sql.exec('DELETE FROM telegram_links WHERE expires<=?',now);
+   if(path===root){
+     if(request.method==='GET'){
+       const profile=await this.telegramProfile(u);
+       if(!profile||profile.disabled)return json({enabled:profile?.disabled!==true,profile:null});
+       const {passwordVersion=1,...details}=profile;
+       return json({enabled:true,profile:details,automaticLinking:passwordVersion===u.version});
+     }
+     if(request.method==='PUT'){
+       const data=await body(request);
+       if(!Number.isSafeInteger(data.userId)||data.userId<=0||
+          !Number.isSafeInteger(data.apiId)||data.apiId<=0||
+          typeof data.apiHash!=='string'||!/^[a-fA-F0-9]{32}$/.test(data.apiHash)||
+          typeof data.name!=='string'||!data.name.trim()||data.name.length>160)throw Error('Invalid Telegram account');
+       const initial=this.first('SELECT value FROM telegram_accounts WHERE account=?',u.id)?.value??null;
+       const previous=initial?await crypt(JSON.parse(initial),this.env,true,'auralis-telegram:'+u.id):null;
+       if(data.automatic===true&&previous?.disabled)throw Error('Telegram account sync is disabled');
+       if(previous&&!previous.disabled&&previous.userId!==data.userId)throw Error('Disable the current Telegram link before linking another account');
+       const profile={userId:data.userId,name:data.name.trim(),apiId:data.apiId,apiHash:data.apiHash};
+       const passwordVersion=previous&&!previous.disabled?previous.passwordVersion??1:u.version;
+       const encrypted=JSON.stringify(await crypt({...profile,passwordVersion},this.env,false,'auralis-telegram:'+u.id));
+       this.active(u);
+       this.state.storage.transactionSync(()=>{
+         if((this.first('SELECT value FROM telegram_accounts WHERE account=?',u.id)?.value??null)!==initial)throw Error('Telegram link changed. Retry sync');
+         this.sql.exec('INSERT INTO telegram_accounts VALUES(?,?) ON CONFLICT(account) DO UPDATE SET value=excluded.value',u.id,encrypted);
+       });
+       return json({enabled:true,profile});
+     }
+     if(request.method==='DELETE'){
+       const encrypted=JSON.stringify(await crypt({disabled:true},this.env,false,'auralis-telegram:'+u.id));
+       this.active(u);
+       this.state.storage.transactionSync(()=>{
+         this.sql.exec('INSERT INTO telegram_accounts VALUES(?,?) ON CONFLICT(account) DO UPDATE SET value=excluded.value',u.id,encrypted);
+         this.sql.exec('DELETE FROM telegram_links WHERE account=?',u.id);
+       });
+       return json({enabled:false,profile:null});
+     }
+   }
+
+   const profile=await this.telegramProfile(u);
+   if(!profile||profile.disabled)return json({error:'Link your Telegram account on a signed-in device first'},409);
+   const requestsPath=root+'/requests';
+   const automaticPath=requestsPath+'/automatic';
+   if(request.method==='GET'&&(path===requestsPath||path===automaticPath)){
+     const includeAutomatic=path===automaticPath;
+     const requests=Array.from(this.sql.exec(
+       "SELECT id,expires,status FROM telegram_links WHERE account=? AND requester<>? AND (status='pending' OR (?=1 AND status='automatic')) ORDER BY expires DESC LIMIT 8",
+       u.id,u.jti,includeAutomatic?1:0,
+     ));
+     return json({requests:requests.map(({id,expires,status})=>({
+       id,expires,...(status==='automatic'?{automatic:true}:{}),
+     }))});
+   }
+   if(path===requestsPath&&request.method==='POST'){
+     const data=await body(request);
+     if(typeof data.link!=='string'||!/^tg:\/\/login\?token=[A-Za-z0-9_-]{20,256}$/.test(data.link))throw Error('Invalid Telegram device link');
+     const automatic=data.grant!==undefined;
+     let expires=now+120;
+     if(automatic){
+       if((profile.passwordVersion??1)!==u.version)return json({error:'Re-link Telegram after resetting your Auralis password.'},403);
+       let grant;
+       try{grant=await claimsFor(data.grant,this.env,'auralis-telegram-login');}
+       catch{return json({error:'Sign in to Auralis again to connect Telegram automatically.'},403);}
+       if(grant.sub!==u.id||grant.jti!==u.jti)return json({error:'Sign in to Auralis again to connect Telegram automatically.'},403);
+       expires=Math.min(expires,grant.exp);
+     }
+     const id=random();
+     const code=automatic?null:String(crypto.getRandomValues(new Uint32Array(1))[0]%1000000).padStart(6,'0');
+     const encrypted=JSON.stringify(await crypt({link:data.link,code},this.env,false,'auralis-telegram-link:'+u.id+':'+id));
+     this.active(u);
+     this.state.storage.transactionSync(()=>{
+       const recent=this.first('SELECT expires FROM telegram_links WHERE account=? AND requester=? ORDER BY expires DESC LIMIT 1',u.id,u.jti);
+       if(recent&&recent.expires>now+115)throw Object.assign(Error('Wait a moment before retrying device sign-in'),{status:429});
+       this.sql.exec('DELETE FROM telegram_links WHERE account=? AND requester=?',u.id,u.jti);
+       if(this.first('SELECT count(*) AS n FROM telegram_links WHERE account=?',u.id).n>=8)throw Error('Too many pending device requests');
+       this.sql.exec('INSERT INTO telegram_links VALUES(?,?,?,?,?,?,NULL)',id,u.id,u.jti,encrypted,expires,automatic?'automatic':'pending');
+     });
+     return json({id,expires,...(automatic?{automatic:true}:{code})});
+   }
+
+   const match=/^\/v1\/account\/telegram\/requests\/([a-f0-9]{64})(?:\/(claim|complete))?$/.exec(path);
+   if(!match)return json({error:'Not found'},404);
+   const row=this.first('SELECT * FROM telegram_links WHERE id=? AND account=?',match[1],u.id);
+   if(!row)return json({error:'Device request expired. Retry on the new device.'},404);
+   if(!match[2]&&request.method==='GET'&&row.requester===u.jti)return json({state:row.status,expires:row.expires});
+   if(!match[2]&&request.method==='DELETE'&&row.requester===u.jti){
+     this.sql.exec('DELETE FROM telegram_links WHERE id=?',row.id);
+     return json({ok:true});
+   }
+   if(match[2]==='claim'&&request.method==='POST'){
+     if(row.requester===u.jti||!['pending','automatic'].includes(row.status))return json({error:'Request is already claimed or belongs to this device'},409);
+     const data=await body(request);
+     const automatic=row.status==='automatic';
+     if(automatic){
+       if(data.automatic!==true||data.userId!==profile.userId)return json({error:'Use an updated device signed in to the linked Telegram account'},403);
+     }else{
+       this.rate(request,'telegram:'+u.id);
+     }
+     const saved=await crypt(JSON.parse(row.value),this.env,true,'auralis-telegram-link:'+u.id+':'+row.id);
+     if(!automatic&&(typeof data.code!=='string'||!/^\d{6}$/.test(data.code)||!await equal(data.code,saved.code)))return json({error:'The code does not match the new device'},400);
+     this.active(u);
+     if(!this.first("UPDATE telegram_links SET status='claiming',approver=? WHERE id=? AND account=? AND status=? AND expires>? RETURNING id",u.jti,row.id,u.id,row.status,Math.floor(Date.now()/1000)))return json({error:'Device request was already used'},409);
+     return json({link:saved.link,userId:profile.userId});
+   }
+   if(match[2]==='complete'&&request.method==='POST'&&row.approver===u.jti&&row.status==='claiming'){
+     const data=await body(request);
+     this.active(u);
+     this.sql.exec("UPDATE telegram_links SET status=?,value='' WHERE id=? AND approver=? AND status='claiming'",data.ok===true?'approved':'failed',row.id,u.jti);
+     return json({ok:true});
+   }
+   return json({error:'Not permitted'},403);
  }
  async dispatch(request){const path=new URL(request.url).pathname;
  if(path==='/_auth/status')return json({ownerCreated:this.ownerCreated});
@@ -108,7 +194,7 @@ export class AccountStore {
  if(owner)await this.revoke(u);return json(await this.session(u,code));}
  if(path==='/v1/auth/login'&&request.method==='POST'){
  const data=await body(request),name=username(data.username);this.rate(request,name);const u=this.first('SELECT * FROM accounts WHERE username=?',name),hash=await passwordHash(typeof data.password==='string'&&data.password.length<=128?data.password:'',u?.salt||'missing-account-salt',this.env);
- if(!u||!await equal(hash,u.password))return json({error:'Invalid username or password'},401);return json(await this.session(u));}
+ if(!u||!await equal(hash,u.password))return json({error:'Invalid username or password'},401);return json(await this.session(u,undefined,{automaticTelegram:data.automaticTelegram===true}));}
  if(path==='/v1/auth/recover'&&request.method==='POST'){
  const data=await body(request),name=username(data.username);this.rate(request,name);const u=this.first('SELECT * FROM accounts WHERE username=?',name);
  if(!u||typeof data.recoveryCode!=='string'||!await equal(await digest(data.recoveryCode.trim(),this.env),u.recovery))return json({error:'Invalid username or recovery code'},401);
