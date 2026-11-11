@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../app_popups.dart';
+
 import 'package:flutter/services.dart';
 
 import '../external_links.dart';
@@ -117,22 +120,20 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   });
   Future<void> _showCode(String code) async {
     if (!mounted) return;
-    await showDialog<void>(
+    await showAuralisDialog<void>(
       context: context,
-      builder: (c) => AlertDialog(
+      builder: (c) => AuralisDialog(
         title: const Text('Save your recovery code'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Keep this code somewhere private. It resets your password and is replaced after use.',
-              ),
-              const SizedBox(height: 12),
-              SelectableText(code),
-            ],
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Keep this code somewhere private. It resets your password and is replaced after use.',
+            ),
+            const SizedBox(height: 12),
+            SelectableText(code),
+          ],
         ),
         actions: [
           TextButton(
@@ -170,28 +171,18 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   }
 
   Future<bool> _confirm(String title, String text) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: Text(title),
-          content: Text(text),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(c, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(c, true),
-              child: const Text('Continue'),
-            ),
-          ],
-        ),
+      await confirmAuralisAction(
+        context,
+        title: title,
+        message: text,
+        confirmLabel: 'Continue',
       ) ==
       true;
+
   Future<void> _signOut() async {
-    final clear = await showDialog<bool>(
+    final clear = await showAuralisDialog<bool>(
       context: context,
-      builder: (c) => AlertDialog(
+      builder: (c) => AuralisDialog(
         title: const Text('Sign out'),
         content: const Text(
           'Keep or clear the visible local library? Your account’s saved snapshot and cloud data are kept. Telegram sign-in stays on this device.',
@@ -217,9 +208,9 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
 
   Future<void> _delete() async {
     final field = TextEditingController();
-    final pass = await showDialog<String>(
+    final pass = await showAuralisDialog<String>(
       context: context,
-      builder: (c) => AlertDialog(
+      builder: (c) => AuralisDialog(
         title: const Text('Delete account?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -242,7 +233,11 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
             onPressed: () => Navigator.pop(c),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(c).colorScheme.error,
+              foregroundColor: Theme.of(c).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(c, field.text),
             child: const Text('Delete account'),
           ),
@@ -255,35 +250,42 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   }
 
   Future<void> _switch() async {
-    final selected = await showDialog<String>(
+    final selected = await showAuralisDialog<String>(
       context: context,
-      builder: (c) => SimpleDialog(
+      builder: (c) => AuralisDialog(
         title: const Text('Switch account'),
-        children: [
-          for (final user in sync.savedAccounts)
-            ListTile(
-              leading: Icon(
-                user.identity == sync.account?.identity
-                    ? Icons.check_circle_rounded
-                    : Icons.person_rounded,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final user in sync.savedAccounts)
+              AuralisChoiceTile(
+                selected: user.identity == sync.account?.identity,
+                leading: const Icon(Icons.person_rounded),
+                title: Text(user.username),
+                subtitle: Text(
+                  '${Uri.parse(user.url).host}${user.expired ? ' · Sign in again' : ''}',
+                ),
+                onTap: () => Navigator.pop(c, user.identity),
+                trailing: user.identity == sync.account?.identity
+                    ? null
+                    : IconButton(
+                        tooltip: 'Forget saved account',
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () =>
+                            Navigator.pop(c, 'forget:${user.identity}'),
+                      ),
               ),
-              title: Text(user.username),
-              subtitle: Text(
-                '${Uri.parse(user.url).host}${user.expired ? ' · Sign in again' : ''}',
-              ),
-              onTap: () => Navigator.pop(c, user.identity),
-              trailing: user.identity == sync.account?.identity
-                  ? null
-                  : IconButton(
-                      tooltip: 'Forget saved account',
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () =>
-                          Navigator.pop(c, 'forget:${user.identity}'),
-                    ),
-            ),
-          SimpleDialogOption(
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
             onPressed: () => Navigator.pop(c, 'add'),
-            child: const Text('Add account'),
+            icon: const Icon(Icons.person_add_alt_1_rounded),
+            label: const Text('Add account'),
           ),
         ],
       ),
@@ -337,40 +339,38 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
     final username = TextEditingController(text: _username.text),
         code = TextEditingController(),
         password = TextEditingController();
-    final values = await showDialog<List<String>>(
+    final values = await showAuralisDialog<List<String>>(
       context: context,
-      builder: (c) => AlertDialog(
+      builder: (c) => AuralisDialog(
         title: const Text('Recover account'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Use your latest recovery code. All earlier sign-ins will be revoked.',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Use your latest recovery code. All earlier sign-ins will be revoked.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: username,
+              decoration: const InputDecoration(labelText: 'Username'),
+            ),
+            TextField(
+              controller: code,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: const InputDecoration(labelText: 'Recovery code'),
+            ),
+            TextField(
+              controller: password,
+              obscureText: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: const InputDecoration(
+                labelText: 'New password',
+                helperText: 'At least 10 characters',
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: username,
-                decoration: const InputDecoration(labelText: 'Username'),
-              ),
-              TextField(
-                controller: code,
-                autocorrect: false,
-                enableSuggestions: false,
-                decoration: const InputDecoration(labelText: 'Recovery code'),
-              ),
-              TextField(
-                controller: password,
-                obscureText: true,
-                autocorrect: false,
-                enableSuggestions: false,
-                decoration: const InputDecoration(
-                  labelText: 'New password',
-                  helperText: 'At least 10 characters',
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -404,9 +404,6 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
 
   Widget _card(List<Widget> children) => Card(
     margin: const EdgeInsets.only(bottom: 12),
-    elevation: 0,
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     child: Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -417,9 +414,9 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
   );
   Future<void> _approveTelegram(String id) async {
     final code = TextEditingController();
-    final entered = await showDialog<String>(
+    final entered = await showAuralisDialog<String>(
       context: context,
-      builder: (c) => AlertDialog(
+      builder: (c) => AuralisDialog(
         title: const Text('Approve your new device'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
