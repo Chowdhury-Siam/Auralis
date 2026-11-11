@@ -952,12 +952,6 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
       child: Dialog(
         constraints: const BoxConstraints(maxWidth: 460),
         insetPadding: const EdgeInsets.all(16),
-        backgroundColor: colors.surfaceContainerLow,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: colors.outlineVariant),
-        ),
         clipBehavior: Clip.antiAlias,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -1108,7 +1102,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     }
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      constraints: const BoxConstraints(maxWidth: 720),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 720),
         child: Column(
