@@ -1,6 +1,13 @@
 {
-  "current": "0.1.126",
+  "current": "0.1.127",
   "releases": [
+    {
+      "version": "0.1.127",
+      "changes": [
+        "Match Video to Music with shared Home cards, channel browsing tiles, desktop sidebar and all three navigation styles; use the same saved appearance settings in both interfaces.",
+        "Give Video Search a compact search field and channel grid, keep channel searches in Search, and adapt Home, Search and Library to narrow screens and large text."
+      ]
+    },
     {
       "version": "0.1.126",
       "changes": [
