@@ -1,6 +1,12 @@
 {
-  "current": "0.1.154",
+  "current": "0.1.155",
   "releases": [
+    {
+      "version": "0.1.155",
+      "changes": [
+        "Keep the backup selection summary and options reachable when resizing at large text sizes."
+      ]
+    },
     {
       "version": "0.1.154",
       "changes": [
