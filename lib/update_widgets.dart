@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'external_links.dart';
 import 'updater.dart';
 import 'release_notes.dart';
 
@@ -101,6 +102,24 @@ class UpdateSettings extends StatelessWidget {
                   : updater.check,
               label: Text(updater.checking ? 'Checking…' : 'Check now'),
             ),
+            if (updater.error != null)
+              TextButton.icon(
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                onPressed: () async {
+                  try {
+                    await openExternalLink(updater.releasesPage.toString());
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not open GitHub Releases.'),
+                        ),
+                      );
+                    }
+                  }
+                },
+                label: const Text('GitHub Releases'),
+              ),
             if (updater.available != null)
               TextButton(
                 onPressed: () => showReleaseChanges(
