@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import 'video_playback_data.dart';
 import 'models.dart';
 import 'listening.dart';
 
@@ -121,6 +122,7 @@ class AppSettings {
   bool setupComplete = false;
   AppInterface defaultInterface = AppInterface.music;
   int? videoChannelId;
+  VideoPlaybackData videoPlayback = VideoPlaybackData();
   void Function(Map<String, dynamic>)? captureSync;
   void Function()? onSaved;
   bool reducedMotion = false;
@@ -160,6 +162,7 @@ class AppSettings {
     if (!await file.exists()) return;
     final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     applyJson(json);
+    videoPlayback = VideoPlaybackData.fromJson(json['_videoPlayback']);
     syncState = json['_sync'] is Map<String, dynamic>
         ? json['_sync'] as Map<String, dynamic>
         : {};
@@ -171,6 +174,7 @@ class AppSettings {
   Map<String, dynamic> _diskJson(Map<String, dynamic> snapshot) => {
     ...snapshot,
     '_sync': syncState,
+    '_videoPlayback': videoPlayback.toJson(),
     '_lastSeenRelease': lastSeenRelease,
     '_setupComplete': setupComplete,
   };
