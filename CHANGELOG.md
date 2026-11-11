@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.146
+
+- Fix build analysis errors in Video mode.
+
 ## 0.1.145
 
 - Simplify first-run setup and Appearance settings.
