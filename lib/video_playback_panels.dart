@@ -327,6 +327,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
     );
     if (_canPlay && track != null) {
       await _native.setProperty('secondary-sid', track);
+      _qualitySecondarySubtitle = null;
       _secondarySubtitle = track;
       _changed();
     }
@@ -1181,6 +1182,11 @@ extension _PlaybackPanels on _VideoPlaybackState {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  _VideoMenuRow(
+                    label: 'Quality', detail: _videoQualityLabel,
+                    icon: Icons.high_quality_outlined,
+                    onTap: () => select(() => _qualityPanel(playerContext)),
+                  ),
                   for (final section in groups)
                     _VideoMenuRow(
                       label: section.title,
