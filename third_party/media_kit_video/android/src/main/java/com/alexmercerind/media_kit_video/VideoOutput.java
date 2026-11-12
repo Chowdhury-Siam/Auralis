@@ -7,9 +7,8 @@
  */
 package com.alexmercerind.media_kit_video;
 
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
+import android.view.Surface;
 
 import java.lang.reflect.Method;
 import java.util.HashSet;
@@ -22,8 +21,6 @@ public class VideoOutput implements TextureRegistry.SurfaceProducer.Callback {
     private static final String TAG = "VideoOutput";
     private static final Method newGlobalObjectRef;
     private static final Method deleteGlobalObjectRef;
-    private static final HashSet<Long> deletedGlobalObjectRefs = new HashSet<>();
-    private static final Handler handler = new Handler(Looper.getMainLooper());
 
     static {
         try {
@@ -42,6 +39,9 @@ public class VideoOutput implements TextureRegistry.SurfaceProducer.Callback {
 
     private long id = 0;
     private long wid = 0;
+    private Surface surface;
+    private boolean disposed;
+    private final HashSet<Long> retiredReferences = new HashSet<>();
 
     private final TextureUpdateCallback textureUpdateCallback;
 
@@ -58,28 +58,24 @@ public class VideoOutput implements TextureRegistry.SurfaceProducer.Callback {
 
     public void dispose() {
         synchronized (lock) {
-            try {
-                surfaceProducer.getSurface().release();
-            } catch (Throwable e) {
-                Log.e(TAG, "dispose", e);
-            }
+            if (disposed) return;
+            disposed = true;
+            retireSurfaceReference();
             try {
                 surfaceProducer.release();
             } catch (Throwable e) {
                 Log.e(TAG, "dispose", e);
             }
-            onSurfaceCleanup();
+            for (final long reference : retiredReferences) deleteGlobalObjectRef(reference);
+            retiredReferences.clear();
         }
     }
 
     public void setSurfaceSize(int width, int height) {
-        setSurfaceSize(width, height, false);
-    }
-
-    private void setSurfaceSize(int width, int height, boolean force) {
         synchronized (lock) {
+            if (disposed) return;
             try {
-                if (!force && surfaceProducer.getWidth() == width && surfaceProducer.getHeight() == height) {
+                if (wid != 0 && surfaceProducer.getWidth() == width && surfaceProducer.getHeight() == height) {
                     return;
                 }
                 surfaceProducer.setSize(width, height);
@@ -93,22 +89,39 @@ public class VideoOutput implements TextureRegistry.SurfaceProducer.Callback {
     @Override
     public void onSurfaceAvailable() {
         synchronized (lock) {
-            Log.i(TAG, "onSurfaceAvailable");
+            if (disposed) return;
+            final Surface next = surfaceProducer.getSurface();
+            long previous = 0;
+            if (surface != next || wid == 0) {
+                previous = retireSurfaceReference();
+                surface = next;
+                wid = newGlobalObjectRef(surface);
+            }
             id = surfaceProducer.id();
-            wid = newGlobalObjectRef(surfaceProducer.getSurface());
-            textureUpdateCallback.onTextureUpdate(id, wid, surfaceProducer.getWidth(), surfaceProducer.getHeight());
+            textureUpdateCallback.onTextureUpdate(id, wid, previous, surfaceProducer.getWidth(), surfaceProducer.getHeight());
         }
     }
 
     @Override
     public void onSurfaceCleanup() {
         synchronized (lock) {
-            Log.i(TAG, "onSurfaceCleanup");
-            textureUpdateCallback.onTextureUpdate(id, 0, surfaceProducer.getWidth(), surfaceProducer.getHeight());
-            if (wid != 0) {
-                final long widReference = wid;
-                handler.postDelayed(() -> deleteGlobalObjectRef(widReference), 5000);
-            }
+            if (disposed) return;
+            final long previous = retireSurfaceReference();
+            textureUpdateCallback.onTextureUpdate(id, 0, previous, surfaceProducer.getWidth(), surfaceProducer.getHeight());
+        }
+    }
+
+    private long retireSurfaceReference() {
+        final long reference = wid;
+        if (reference != 0) retiredReferences.add(reference);
+        wid = 0;
+        surface = null;
+        return reference;
+    }
+
+    void releaseSurfaceReference(long reference) {
+        synchronized (lock) {
+            if (retiredReferences.remove(reference)) deleteGlobalObjectRef(reference);
         }
     }
 
@@ -123,14 +136,6 @@ public class VideoOutput implements TextureRegistry.SurfaceProducer.Callback {
     }
 
     private static void deleteGlobalObjectRef(long ref) {
-        if (deletedGlobalObjectRefs.contains(ref)) {
-            Log.i(TAG, String.format(Locale.ENGLISH, "deleteGlobalObjectRef: ref = %d ALREADY DELETED", ref));
-            return;
-        }
-        if (deletedGlobalObjectRefs.size() > 100) {
-            deletedGlobalObjectRefs.clear();
-        }
-        deletedGlobalObjectRefs.add(ref);
         Log.i(TAG, String.format(Locale.ENGLISH, "deleteGlobalObjectRef: ref = %d", ref));
         try {
             deleteGlobalObjectRef.invoke(null, ref);
