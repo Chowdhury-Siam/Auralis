@@ -40,60 +40,6 @@ const _videoExtensions = {
   '.ogv',
 };
 
-/// A real Telegram re-encode, not a display-size or upscaling preset.
-class VideoQuality {
-  const VideoQuality({
-    required this.fileId,
-    required this.size,
-    required this.width,
-    required this.height,
-    required this.codec,
-  });
-
-  final int fileId, size, width, height;
-  final String codec;
-  int get resolution => width < height ? width : height;
-  String get label => videoResolutionLabel(width, height);
-
-  static VideoQuality? fromTelegram(Object? raw) {
-    if (raw is! Map) return null;
-    final file = raw['video'];
-    final width = raw['width'], height = raw['height'];
-    if (file is! Map ||
-        file['id'] is! int ||
-        file['size'] is! int ||
-        (file['id'] as int) <= 0 ||
-        (file['size'] as int) <= 0 ||
-        width is! int ||
-        height is! int ||
-        width <= 0 ||
-        height <= 0) {
-      return null;
-    }
-    return VideoQuality(
-      fileId: file['id'] as int,
-      size: file['size'] as int,
-      width: width,
-      height: height,
-      codec: raw['codec'] is String ? raw['codec'] as String : '',
-    );
-  }
-}
-
-String videoResolutionLabel(int? width, int? height) {
-  if (width == null || height == null || width <= 0 || height <= 0) {
-    return 'Original';
-  }
-  final resolution = width < height ? width : height;
-  return switch (resolution) {
-    2160 => '2160p · 4K',
-    1440 => '1440p · QHD',
-    1080 => '1080p · FHD',
-    720 => '720p · HD',
-    _ => '${resolution}p',
-  };
-}
-
 class Track {
   const Track({
     required this.id,
@@ -109,14 +55,12 @@ class Track {
     this.mime = 'application/octet-stream',
     this.videoWidth,
     this.videoHeight,
-    this.videoQualities = const [],
   });
   final String id, title, artist, source, mime;
   final int? fileId, coverFileId;
   final Uint8List? coverPreview;
   final int size, date;
   final int? videoWidth, videoHeight;
-  final List<VideoQuality> videoQualities;
   final Duration duration;
 
   // Video sources use the same byte-range proxy as music. They never enter
@@ -152,16 +96,6 @@ class Track {
     }
     final caption = (content['caption']?['text'] as String? ?? '').trim();
     final title = p.basenameWithoutExtension(name);
-    final seen = <int>{file['id'] as int};
-    final alternatives = content['alternative_videos'];
-    final qualities = key == 'video' && alternatives is List
-        ? alternatives
-              .map(VideoQuality.fromTelegram)
-              .whereType<VideoQuality>()
-              .where((quality) => seen.add(quality.fileId))
-              .toList()
-        : <VideoQuality>[];
-    qualities.sort((a, b) => b.resolution.compareTo(a.resolution));
     return Track(
       id: '${message['chat_id']}:${message['id']}',
       title: title.isNotEmpty
@@ -176,7 +110,6 @@ class Track {
       duration: Duration(seconds: media['duration'] as int? ?? 0),
       videoWidth: media['width'] as int?,
       videoHeight: media['height'] as int?,
-      videoQualities: List.unmodifiable(qualities),
       date: message['date'] as int? ?? 0,
       mime: mime,
       coverPreview: decodePreview(media['minithumbnail']?['data']),
