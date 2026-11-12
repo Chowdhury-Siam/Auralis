@@ -463,6 +463,33 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-media')), findsNothing);
+      final search = find.byKey(const ValueKey('settings-search'));
+      await tester.enterText(search, 'mpv console');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings-video')));
+      await tester.pumpAndSettle();
+      final decoder = find.widgetWithText(ListTile, 'Video decoder');
+      expect(tester.widget<ListTile>(decoder).enabled, isFalse);
+      await tester.tap(find.text('Player settings'));
+      await tester.pumpAndSettle();
+      final gestures = find.widgetWithText(
+        SwitchListTile,
+        'Tap and swipe gestures',
+      );
+      final gesturesEnabled = player.settings.videoPlayback.gestures;
+      await tester.tap(gestures);
+      await tester.pumpAndSettle();
+      expect(player.settings.videoPlayback.gestures, !gesturesEnabled);
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      await tester.enterText(search, 'mymemory');
+      await tester.pumpAndSettle();
+      expect(find.text('No matching settings'), findsOneWidget);
+      await tester.tap(find.byTooltip('Clear settings search'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('General'));
       await tester.pumpAndSettle();
       expect(find.text('Open on startup'), findsOneWidget);
