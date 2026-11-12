@@ -1,108 +1,21 @@
 part of 'video_playback.dart';
 
 extension _VideoPlaybackTools on _VideoPlaybackState {
-
-  static const _customSlots = [
-    VideoControl.customOne,
-    VideoControl.customTwo,
-    VideoControl.customThree,
-  ];
-
-  String _controlLabel(VideoControl control) =>
-      _data.commands[control]?.label ?? control.label;
-
   Future<void> _runCustomControl(
     BuildContext context,
     VideoControl slot,
   ) async {
     final command = _data.commands[slot];
     if (command == null) {
-      await _editCommand(context, slot);
+      await showVideoCommandEditor(
+        context,
+        widget.music.settings,
+        slot,
+        onChanged: _changed,
+      );
     } else if (_canPlay) {
       await _native.command(command.args, checkError: true);
     }
-  }
-
-  Future<void> _customControlsPanel(BuildContext context) async {
-    final slot = await _choose<VideoControl>(context, 'Custom buttons', [
-      for (final slot in _customSlots)
-        (value: slot, label: _controlLabel(slot), selected: false),
-    ]);
-    if (slot != null && _canPlay && context.mounted) {
-      await _editCommand(context, slot);
-    }
-  }
-
-  Future<void> _editCommand(BuildContext context, VideoControl slot) async {
-    final existing = _data.commands[slot];
-    var label = existing?.label ?? '';
-    var command = existing == null ? '' : jsonEncode(existing.args);
-    String? error;
-    await showAuralisDialog<void>(
-      context: context,
-      builder: (dialog) => StatefulBuilder(
-        builder: (context, update) => AuralisDialog(
-          title: Text(slot.label),
-          content: Column(
-            children: [
-              TextFormField(
-                initialValue: label,
-                maxLength: 40,
-                decoration: const InputDecoration(labelText: 'Button name'),
-                onChanged: (value) => label = value,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                initialValue: command,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: 'mpv command',
-                  hintText: '["show-text", "Ready"]',
-                  errorText: error,
-                ),
-                onChanged: (value) => command = value,
-              ),
-            ],
-          ),
-          actions: [
-            if (existing != null)
-              TextButton(
-                onPressed: () {
-                  _data.commands.remove(slot);
-                  _saveSettings();
-                  _changed();
-                  Navigator.pop(dialog);
-                },
-                child: const Text('Remove'),
-              ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialog),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                try {
-                  final name = label.trim();
-                  if (name.isEmpty) {
-                    throw const FormatException('Enter a button name.');
-                  }
-                  _data.commands[slot] = VideoCommand(
-                    name,
-                    VideoCommand.parse(command),
-                  );
-                  _saveSettings();
-                  _changed();
-                  Navigator.pop(dialog);
-                } on FormatException catch (failure) {
-                  update(() => error = failure.message);
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> _loadVideoScript(BuildContext context) async {
