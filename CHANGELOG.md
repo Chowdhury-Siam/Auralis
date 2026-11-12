@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.184
+
+- Add a Quality menu to the video player's controls using real Telegram alternate resolutions, with a marked current selection and an Original option. Keep playback position, play/pause state, speed, volume and available audio/subtitle choices when switching, and restore the previous quality if a source switch fails. Local and single-source videos show only their original quality.
+
 ## 0.1.183
 
 - Swipe horizontally between Library collections in Music and Video, with tappable page indicators and the existing dropdown selector. Keep Video playlists, history and snapshots inside Library without leaving its navigation.
