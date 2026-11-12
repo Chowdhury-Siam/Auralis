@@ -53,4 +53,14 @@ class Initializer {
       InitializerIsolate().dispose(mpv, ctx);
     }
   }
+
+  /// Stops event delivery and joins the native player off the caller's isolate.
+  Future<void> disposeAndDestroy(Pointer<generated.mpv_handle> ctx) async {
+    if (!isExecmemRestricted) {
+      await InitializerNativeCallable(mpv).disposeAndDestroy(ctx);
+    } else {
+      await InitializerIsolate().dispose(mpv, ctx, waitForExit: true);
+      await terminateDestroy(ctx);
+    }
+  }
 }
