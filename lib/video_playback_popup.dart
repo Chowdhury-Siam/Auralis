@@ -3,22 +3,23 @@ part of 'video_playback.dart';
 class _VideoPanel extends StatelessWidget {
   const _VideoPanel({
     required this.title,
-    required this.icon,
     required this.content,
+    this.icon,
     this.detail,
     this.onBack,
     this.actions = const [],
     this.width = 440,
+    this.maxHeight = 580,
     this.scrollable = true,
   });
 
   final String title;
   final String? detail;
-  final IconData icon;
+  final IconData? icon;
   final Widget content;
   final VoidCallback? onBack;
   final List<Widget> actions;
-  final double width;
+  final double width, maxHeight;
   final bool scrollable;
 
   @override
@@ -35,7 +36,7 @@ class _VideoPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         side: BorderSide(color: colors.outlineVariant),
       ),
-      constraints: BoxConstraints(maxWidth: width, maxHeight: 580),
+      constraints: BoxConstraints(maxWidth: width, maxHeight: maxHeight),
       child: SizedBox(
         width: width,
         child: Column(
@@ -52,7 +53,7 @@ class _VideoPanel extends StatelessWidget {
                       tooltip: 'Back to player controls',
                       icon: const Icon(Icons.arrow_back_rounded),
                     )
-                  else
+                  else if (icon != null)
                     DecoratedBox(
                       decoration: BoxDecoration(
                         color: colors.primaryContainer,
@@ -63,7 +64,7 @@ class _VideoPanel extends StatelessWidget {
                         child: Icon(icon, size: 20, color: colors.onPrimaryContainer),
                       ),
                     ),
-                  const SizedBox(width: 10),
+                  if (onBack != null || icon != null) const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
