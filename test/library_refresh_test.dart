@@ -158,7 +158,7 @@ void main() {
             () => Future<void>.delayed(const Duration(milliseconds: 5)),
           );
           await tester.pump(const Duration(milliseconds: 50));
-          final label = find.byKey(const ValueKey('library-counts'));
+          final label = find.byKey(const ValueKey('browse-cache-status'));
           if (label.evaluate().isNotEmpty) {
             counts.add(tester.widget<Text>(label).data!);
           }
@@ -170,12 +170,12 @@ void main() {
       }
 
       bool caching() => tester
-          .widget<Text>(find.byKey(const ValueKey('library-counts')))
+          .widget<Text>(find.byKey(const ValueKey('browse-cache-status')))
           .data!
           .startsWith('Caching');
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Library'));
+      await tester.tap(find.byTooltip('Browse'));
       await tester.pumpAndSettle();
       telegram.pause = Completer<void>();
       await refresh();
@@ -216,7 +216,7 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Library'));
+      await tester.tap(find.byTooltip('Browse'));
       await tester.pumpAndSettle();
       await fullyCachedRefresh();
       tracks.add(song(43));
@@ -238,7 +238,7 @@ void main() {
       await until(
         () => find.text('Artwork 45/45 · Lyrics 44/45').evaluate().isNotEmpty,
       );
-      await tester.tap(find.byKey(const ValueKey('library-counts')));
+      await tester.tap(find.byKey(const ValueKey('browse-cache-status')));
       await tester.pumpAndSettle();
       expect(find.text('Library cache'), findsOneWidget);
       expect(find.text('Artist\nCouldn’t save lyrics'), findsOneWidget);
