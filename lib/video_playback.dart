@@ -32,6 +32,7 @@ part 'video_playback_config.dart';
 part 'video_playback_hdr.dart';
 
 const _videoWindow = MethodChannel('app.auralis/video');
+final _desktopVideo = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
 Future<({Uint8List bytes, String? path})?> _pickVideoDocument(
   String label,
@@ -159,7 +160,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
   bool _appInBackground = false, _selectingFile = false;
   bool _acceptVideoParams = false;
   List<DeviceOrientation>? _requestedOrientations;
-  bool _immersive = false;
   bool _hasHistoryRecord = false;
   bool _probingCrop = false, _cropped = false;
   String _decoder = 'auto-safe';
@@ -167,7 +167,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
   double? _brightness;
   bool _brightnessChanged = false;
   double _zoom = 0, _panX = 0, _panY = 0;
-  Duration? _loopA, _loopB;
   Duration? _skipStart;
   Duration? _autoSkipEnd;
   Directory? _scripts;
@@ -190,6 +189,12 @@ class _VideoPlaybackState extends State<VideoPlayback>
     (value) => value.name == _data.orientations[_source.id],
     orElse: () => _Orientation.video,
   );
+
+  bool _supportsControl(VideoControl control) => switch (control) {
+    VideoControl.fullscreen => _desktopVideo,
+    VideoControl.orientation || VideoControl.pip => Platform.isAndroid,
+    _ => true,
+  };
   bool get _canPlay =>
       mounted &&
       !_closed &&
@@ -343,11 +348,10 @@ class _VideoPlaybackState extends State<VideoPlayback>
         _data.positions[_source.id] != null;
     _error = null;
     _chapters = const [];
-    _loopA = _loopB = null;
     _skipStart = _autoSkipEnd = null;
     _secondarySubtitle = 'no';
     _changed();
-    unawaited(_applyOrientation(fullscreen: _immersive));
+    unawaited(_applyOrientation());
     try {
       if (!_source.canPlay) {
         throw const FormatException('Choose a Telegram or local video.');
@@ -384,7 +388,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
                   (player.state.height ?? 0) > 0) {
                 _startupTimeout?.cancel();
               }
-              unawaited(_applyOrientation(fullscreen: _immersive));
+              unawaited(_applyOrientation());
             }),
           player.stream.duration.listen((duration) {
             if (duration > Duration.zero && _canPlay) {
@@ -396,7 +400,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
                 position > Duration.zero &&
                 _startupTimeout?.isActive == true) {
               _startupTimeout!.cancel();
-              unawaited(_applyOrientation(fullscreen: _immersive));
+              unawaited(_applyOrientation());
             }
             if (position > Duration.zero && !_opening && !_positionReady) {
               _positionReady = true;
@@ -455,8 +459,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
         }
       }
       if (!_canPlay) return;
-      await _native.setProperty('ab-loop-a', 'no');
-      await _native.setProperty('ab-loop-b', 'no');
       await _native.setProperty('secondary-sid', 'no');
       if (!_canPlay) return;
       if (widget.music.audio.playing) await widget.music.audio.toggle();
@@ -523,7 +525,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
       if (!_canPlay || _error != null) return;
       widget.onOpened(source);
       _hasHistoryRecord = _data.history.containsKey(source.id);
-      await _applyOrientation(fullscreen: _immersive);
+      await _applyOrientation();
       unawaited(_updateRefreshRate());
     } catch (failure) {
       if (_canPlay) {
@@ -655,7 +657,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     await _native.setProperty('video-pan-y', _panY.toStringAsFixed(3));
   }
 
-  Future<void> _applyOrientation({bool fullscreen = false}) async {
+  Future<void> _applyOrientation() async {
     if (!Platform.isAndroid || _closed) return;
     final orientation = widget.minimized ? _Orientation.free : _orientation;
     // Keep startup in landscape. After it starts, use the decoder's display
@@ -666,8 +668,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
     final width = state?.width ?? 0;
     final height = state?.height ?? 0;
     final allowed = switch (orientation) {
-      _Orientation.free when fullscreen && !widget.minimized =>
-        _Orientation.sensorLandscape.orientations,
       _Orientation.video when width > 0 && height > width =>
         _Orientation.sensorPortrait.orientations,
       _Orientation.video => _Orientation.sensorLandscape.orientations,
@@ -710,7 +710,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
   void didUpdateWidget(covariant VideoPlayback oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.minimized != oldWidget.minimized) {
-      unawaited(_applyOrientation(fullscreen: _immersive));
+      unawaited(_applyOrientation());
       unawaited(_updatePip());
       unawaited(_updateRefreshRate());
     }
@@ -806,9 +806,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
         await _videoWindow.invokeMethod<void>('brightness');
       }
       await _videoWindow.invokeMethod<void>('matchRefreshRate');
-      if (_immersive) {
-        await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      }
     } on PlatformException {
       // Window may have closed before the route.
     } on MissingPluginException {
@@ -846,27 +843,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
     unawaited(_beginRelease(detachSurface: false));
     _changes.dispose();
     super.dispose();
-  }
-
-  Future<void> _enterFullscreen() async {
-    if (Platform.isAndroid) {
-      _immersive = true;
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      await _applyOrientation(fullscreen: true);
-    } else {
-      await defaultEnterNativeFullscreen();
-    }
-  }
-
-  Future<void> _exitFullscreen() async {
-    _immersive = false;
-    if (Platform.isAndroid) {
-      if (_closed) return;
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      await _applyOrientation();
-    } else {
-      await defaultExitNativeFullscreen();
-    }
   }
 
   @override
@@ -908,8 +884,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
               ),
               pauseUponEnteringBackgroundMode: false,
               resumeUponEnteringForegroundMode: false,
-              onEnterFullscreen: _enterFullscreen,
-              onExitFullscreen: _exitFullscreen,
               controls: (state) => _VideoHud(this, state),
             ),
     );
