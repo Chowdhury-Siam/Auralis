@@ -27,6 +27,7 @@ class _TestPlayerCore extends mpv.PlatformPlayer {
 
   void seeked(Duration position) => positionController.add(position);
   void rateChanged(double rate) => rateController.add(rate);
+  void bufferingChanged(bool buffering) => bufferingController.add(buffering);
 }
 
 class _NativeVideo implements mpv.NativePlayer {
@@ -82,6 +83,16 @@ class _NativeVideo implements mpv.NativePlayer {
   Future<void> setRate(double rate, {bool synchronized = true}) async {
     state = state.copyWith(rate: rate);
     _core.rateChanged(rate);
+  }
+
+  @override
+  Future<void> setVolume(double volume, {bool synchronized = true}) async {
+    state = state.copyWith(volume: volume);
+  }
+
+  void setBuffering(bool buffering) {
+    state = state.copyWith(buffering: buffering);
+    _core.bufferingChanged(buffering);
   }
 
   @override
@@ -384,6 +395,16 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        final pauseButton = find.byTooltip('Pause video');
+        native.setBuffering(true);
+        await tester.pump();
+        final spinner = find.byType(CircularProgressIndicator);
+        expect(tester.getCenter(spinner), tester.getCenter(pauseButton));
+        expect(find.byIcon(Icons.pause_rounded), findsNothing);
+        native.setBuffering(false);
+        await tester.pump();
+        expect(spinner, findsNothing);
+
         if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
           const space = LogicalKeyboardKey.space;
           await tester.sendKeyDownEvent(space);
@@ -462,6 +483,26 @@ void main() {
         await tester.tapAt(seekZone);
         await tester.pumpAndSettle();
         expect(native.state.position, const Duration(seconds: 10));
+        final transportCenter = tester.getCenter(pauseButton);
+        expect(
+          tester.getCenter(find.byIcon(Icons.fast_forward_rounded)).dy,
+          lessThan(tester.getTopLeft(pauseButton).dy),
+        );
+        for (final x in [200.0, 1080.0]) {
+          final drag = await tester.startGesture(Offset(x, 420));
+          await drag.moveBy(const Offset(0, -25));
+          await drag.moveBy(const Offset(0, -60));
+          await tester.pump();
+          final onLeft = x < transportCenter.dx;
+          final feedback = tester.getCenter(find.byIcon(
+            onLeft && Platform.isAndroid
+                ? Icons.brightness_6_rounded
+                : Icons.volume_up_rounded,
+          ));
+          expect(feedback.dx < transportCenter.dx, onLeft);
+          await drag.up();
+          await tester.pump();
+        }
 
         await tester.tap(find.byTooltip('Lock controls'));
         await tester.pumpAndSettle();
