@@ -25,6 +25,13 @@ extension _PlaybackTracks on _VideoPlaybackState {
       if (audio != null && audio.id != player.state.track.audio.id) {
         await player.setAudioTrack(audio);
       }
+    } else if (_qualityAudio case final mpv.AudioTrack selected) {
+      final audio =
+          _matchingAudio(selected, player.state.tracks.audio) ??
+          preferredVideoAudio(player.state.tracks.audio);
+      if (audio != null && audio.id != player.state.track.audio.id) {
+        await player.setAudioTrack(audio);
+      }
     }
     if (!_canPlay || !_acceptVideoParams) return;
     if (_automaticSubtitles) {
@@ -32,10 +39,29 @@ extension _PlaybackTracks on _VideoPlaybackState {
       if (subtitle != null && subtitle.id != player.state.track.subtitle.id) {
         await player.setSubtitleTrack(subtitle);
       }
+    } else if (_qualitySubtitle case final mpv.SubtitleTrack selected) {
+      final subtitle =
+          _matchingSubtitle(selected, player.state.tracks.subtitle) ??
+          preferredVideoSubtitle(player.state.tracks.subtitle);
+      if (subtitle != null && subtitle.id != player.state.track.subtitle.id) {
+        await player.setSubtitleTrack(subtitle);
+      }
+    }
+    if (!_canPlay || !_acceptVideoParams) return;
+    if (_qualitySecondarySubtitle case final mpv.SubtitleTrack selected) {
+      final subtitle = _matchingSubtitle(
+        selected,
+        player.state.tracks.subtitle,
+      );
+      if (subtitle != null && subtitle.id != _secondarySubtitle) {
+        await _native.setProperty('secondary-sid', subtitle.id);
+        _secondarySubtitle = subtitle.id;
+      }
     }
   });
 
   Future<void> _selectAudioTrack(mpv.AudioTrack track) {
+    _qualityAudio = null;
     _automaticAudio = track.id == 'auto';
     return _queueTrackUpdate(() async {
       final selected = track.id == 'auto'
@@ -46,6 +72,7 @@ extension _PlaybackTracks on _VideoPlaybackState {
   }
 
   Future<void> _selectSubtitleTrack(mpv.SubtitleTrack track) {
+    _qualitySubtitle = null;
     _automaticSubtitles = track.id == 'auto';
     return _queueTrackUpdate(() async {
       final selected = track.id == 'auto'
