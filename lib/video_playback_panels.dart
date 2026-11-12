@@ -38,10 +38,11 @@ extension _PlaybackPanels on _VideoPlaybackState {
     required IconData icon,
     required bool selected,
     required String offHint,
+    String autoHint = 'Use the default track',
   }) {
     if (id == 'auto') {
       return _VideoOption(value, 'Automatic', Icons.auto_awesome_rounded,
-          detail: 'Use the default track', selected: selected);
+          detail: autoHint, selected: selected);
     }
     if (id == 'no') {
       return _VideoOption(value, 'Off', Icons.block_rounded,
@@ -49,8 +50,8 @@ extension _PlaybackPanels on _VideoPlaybackState {
     }
     final tag = language?.trim().toLowerCase().split(RegExp('[-_]')).first ?? '';
     final languageName = switch (tag) {
-      'en' || 'eng' => 'English',
-      'ja' || 'jpn' => 'Japanese',
+      'en' || 'eng' || 'english' => 'English',
+      'ja' || 'jp' || 'jpn' || 'jap' || 'japan' || 'japanese' => 'Japanese',
       'de' || 'deu' || 'ger' => 'German',
       'es' || 'spa' => 'Spanish',
       'fr' || 'fra' || 'fre' => 'French',
@@ -184,10 +185,11 @@ extension _PlaybackPanels on _VideoPlaybackState {
         content: _trackChoices<_PanelAction>([
           for (final track in player.state.tracks.audio)
             _trackOption<_PanelAction>(
-              () => player.setAudioTrack(track), track.id, track.title, track.language,
+               () => _selectAudioTrack(track), track.id, track.title, track.language,
               icon: Icons.audiotrack_rounded,
               selected: track.id == player.state.track.audio.id,
-              offHint: 'Mute the soundtrack',
+               offHint: 'Mute the soundtrack',
+               autoHint: 'Prefer Japanese when available',
             ),
         ], (action) => Navigator.pop(dialog, action)),
         actions: [
@@ -203,7 +205,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
   }
 
   Future<void> _subtitleFile() async {
-    final player = _player!;
     if (Platform.isAndroid) {
       const platform = MethodChannel('app.auralis/platform');
       final uri = await _withFilePicker(
@@ -215,7 +216,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
         'maxBytes': 4 * 1024 * 1024,
       });
       if (_canPlay && bytes != null) {
-        await player.setSubtitleTrack(
+        await _selectSubtitleTrack(
           mpv.SubtitleTrack.data(
             utf8.decode(bytes, allowMalformed: true),
             title: 'External subtitles',
@@ -232,7 +233,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
         ],
       );
       if (_canPlay && file != null) {
-        await player.setSubtitleTrack(
+        await _selectSubtitleTrack(
           mpv.SubtitleTrack.uri(
             File(file.path).uri.toString(),
             title: file.name,
@@ -280,10 +281,11 @@ extension _PlaybackPanels on _VideoPlaybackState {
                 : _trackChoices<_PanelAction>([
                     for (final track in player.state.tracks.subtitle)
                       _trackOption<_PanelAction>(
-                        () => player.setSubtitleTrack(track), track.id, track.title, track.language,
+                         () => _selectSubtitleTrack(track), track.id, track.title, track.language,
                         icon: Icons.subtitles_outlined,
                         selected: track.id == player.state.track.subtitle.id,
-                        offHint: 'Hide subtitles',
+                         offHint: 'Hide subtitles',
+                         autoHint: 'Prefer English when available',
                       ),
                   ], select),
             actions: [
@@ -594,17 +596,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
       ),
     );
     if (_canPlay && source != null) await _switchTo(_queue.indexOf(source));
-  }
-
-  Future<void> _chapterStep(int direction) async {
-    if (_chapters.isEmpty) await _readChapters();
-    if (!_canPlay) return;
-    final offset = const Duration(milliseconds: 750) * direction;
-    final at = _position + offset;
-    final target = direction > 0
-        ? _chapters.where((point) => point.position > at).firstOrNull
-        : _chapters.where((point) => point.position < at).lastOrNull;
-    if (target != null) await _seek(target.position);
   }
 
   Future<void> _chaptersPanel(BuildContext context) async {
@@ -1070,8 +1061,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
         _VideoOption(() => _speedPanel(context), 'Playback speed', Icons.speed_rounded),
         _VideoOption(() => _queuePanel(context), 'Now playing queue', Icons.queue_play_next_rounded),
         _VideoOption(() => _chaptersPanel(context), 'Chapters and bookmarks', Icons.bookmarks_outlined),
-        _VideoOption(() => _chapterStep(-1), 'Previous chapter', Icons.skip_previous_rounded),
-        _VideoOption(() => _chapterStep(1), 'Next chapter', Icons.skip_next_rounded),
         _VideoOption(() => _skipSegmentsPanel(context), 'Skip segments', Icons.fast_forward_rounded),
         _VideoOption(() async {
           _repeatVideo = !_repeatVideo;
