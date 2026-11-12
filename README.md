@@ -317,7 +317,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive contains source version **0.1.177+178**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
+Auralis is under active development. This archive contains source version **0.1.179+180**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
