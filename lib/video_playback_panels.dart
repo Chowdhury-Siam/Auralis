@@ -744,37 +744,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
     _changed();
   }
 
-  Future<void> _setLoopPoint() async {
-    if (!_canPlay || _opening || _duration <= Duration.zero) return;
-    if (_loopA == null) {
-      _loopA = _position;
-      await _setOption(
-        'ab-loop-a',
-        (_position.inMilliseconds / 1000).toString(),
-      );
-      _notice('Loop start set. Choose the end point.');
-    } else if (_loopB == null) {
-      final end = _position;
-      if (end <= _loopA!) {
-        _notice('Choose an end point after the start.');
-        return;
-      }
-      _loopB = end;
-      await _setOption('ab-loop-b', (end.inMilliseconds / 1000).toString());
-      _notice('A–B loop active.');
-    } else {
-      _loopA = _loopB = null;
-      await _setOption('ab-loop-a', 'no');
-      await _setOption('ab-loop-b', 'no');
-      _notice('A–B loop cleared.');
-    }
-    _changed();
-  }
-
-  Future<void> _orientationPanel(
-    BuildContext context, {
-    required bool fullscreen,
-  }) async {
+  Future<void> _orientationPanel(BuildContext context) async {
     final selected = await _choose<_Orientation>(context, 'Orientation', [
       for (final value in _Orientation.values)
         (value: value, label: value.label, selected: _orientation == value),
@@ -782,7 +752,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
     if (selected != null && _canPlay) {
       _data.setOrientation(_source.id, selected.name);
       _saveSettings();
-      await _applyOrientation(fullscreen: fullscreen);
+      await _applyOrientation();
     }
   }
 
@@ -956,7 +926,10 @@ extension _PlaybackPanels on _VideoPlaybackState {
             _changed();
           }
 
-          final items = _data.controls(zone, wide: wide);
+          final items = _data
+              .controls(zone, wide: wide)
+              .where(_supportsControl)
+              .toList();
           return AuralisDialog(
             title: const Text('Player control layout'),
             content: Column(
@@ -994,30 +967,26 @@ extension _PlaybackPanels on _VideoPlaybackState {
                     for (final control in [
                       ...items,
                       ...VideoControl.values.where(
-                        (item) => !items.contains(item),
+                        (item) => _supportsControl(item) && !items.contains(item),
                       ),
                     ])
-                      if (Platform.isAndroid ||
-                          (control != VideoControl.orientation &&
-                              control != VideoControl.pip))
-                        FilterChip(
-                          label: Text(_controlLabel(control)),
-                          selected: items.contains(control),
-                          onSelected:
-                              items.contains(control) ||
-                                  items.length < zone.limit
-                              ? (enabled) => change(() {
-                                  _data.setControls(
-                                    zone,
-                                    wide: wide,
-                                    controls: [
-                                      ...items.where((item) => item != control),
-                                      if (enabled) control,
-                                    ],
-                                  );
-                                })
-                              : null,
-                        ),
+                      FilterChip(
+                        label: Text(_controlLabel(control)),
+                        selected: items.contains(control),
+                        onSelected:
+                            items.contains(control) || items.length < zone.limit
+                            ? (enabled) => change(() {
+                                _data.setControls(
+                                  zone,
+                                  wide: wide,
+                                  controls: [
+                                    ...items.where((item) => item != control),
+                                    if (enabled) control,
+                                  ],
+                                );
+                              })
+                            : null,
+                      ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -1303,7 +1272,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
         _VideoOption(() => _chapterStep(-1), 'Previous chapter', Icons.skip_previous_rounded),
         _VideoOption(() => _chapterStep(1), 'Next chapter', Icons.skip_next_rounded),
         _VideoOption(() => _skipSegmentsPanel(context), 'Skip segments', Icons.fast_forward_rounded),
-        _VideoOption(_setLoopPoint, 'A–B loop', Icons.repeat_rounded, selected: _loopA != null),
         _VideoOption(() async {
           _repeatVideo = !_repeatVideo;
           await _setOption('loop-file', _repeatVideo ? 'inf' : 'no');
@@ -1320,7 +1288,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
         if (Platform.isAndroid) ...[
           _VideoOption(_pictureInPicture, 'Picture in picture', Icons.picture_in_picture_alt_outlined),
           _VideoOption(
-            () => _orientationPanel(context, fullscreen: isFullscreen(context)),
+            () => _orientationPanel(context),
             'Orientation', Icons.screen_rotation_rounded,
           ),
         ],
@@ -1385,11 +1353,12 @@ extension _PlaybackPanels on _VideoPlaybackState {
                           icon: const Icon(Icons.picture_in_picture_alt_outlined),
                           label: const Text('Minimize video'),
                         ),
-                      OutlinedButton.icon(
-                        onPressed: () => select(() => toggleFullscreen(playerContext)),
-                        icon: Icon(fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded),
-                        label: Text(fullscreen ? 'Exit fullscreen' : 'Fullscreen'),
-                      ),
+                      if (_desktopVideo)
+                        OutlinedButton.icon(
+                          onPressed: () => select(() => toggleFullscreen(playerContext)),
+                          icon: Icon(fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded),
+                          label: Text(fullscreen ? 'Exit fullscreen' : 'Fullscreen'),
+                        ),
                       if (widget.onClose case final VoidCallback close)
                         TextButton.icon(
                           onPressed: () => select(() async {
