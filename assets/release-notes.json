@@ -1,6 +1,18 @@
 {
-  "current": "0.1.170",
+  "current": "0.1.172",
   "releases": [
+    {
+      "version": "0.1.172",
+      "changes": [
+        "Make the mini-player follow vertical drags with a blurred background and a staged Now Playing reveal. Fade the full artwork and controls in once the panel settles."
+      ]
+    },
+    {
+      "version": "0.1.171",
+      "changes": [
+        "Select multiple music channels in Browse. Move Artists to the Library collection menu and remove the Telegram navigation item and Home sync shortcut."
+      ]
+    },
     {
       "version": "0.1.170",
       "changes": [
