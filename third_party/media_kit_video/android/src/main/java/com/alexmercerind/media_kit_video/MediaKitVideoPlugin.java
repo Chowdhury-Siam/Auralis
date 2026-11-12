@@ -38,10 +38,11 @@ public class MediaKitVideoPlugin implements FlutterPlugin, MethodCallHandler {
         switch (call.method) {
             case "VideoOutputManager.Create": {
                 final long handle = Long.parseLong(call.argument("handle"));
-                videoOutputManager.create(handle, (id, wid, width, height) -> channel.invokeMethod("VideoOutput.Resize", new HashMap<String, Object>() {{
+                videoOutputManager.create(handle, (id, wid, previousWid, width, height) -> channel.invokeMethod("VideoOutput.Resize", new HashMap<String, Object>() {{
                     put("handle", handle);
                     put("id", id);
                     put("wid", wid);
+                    put("previousWid", previousWid);
                     put("rect", new HashMap<String, Object>() {{
                         put("left", 0);
                         put("top", 0);
@@ -63,6 +64,13 @@ public class MediaKitVideoPlugin implements FlutterPlugin, MethodCallHandler {
             case "VideoOutputManager.Dispose": {
                 final long handle = Long.parseLong(call.argument("handle"));
                 videoOutputManager.dispose(handle);
+                result.success(null);
+                break;
+            }
+            case "VideoOutputManager.ReleaseSurfaceReference": {
+                final long handle = Long.parseLong(call.argument("handle"));
+                final long reference = Long.parseLong(call.argument("reference"));
+                videoOutputManager.releaseSurfaceReference(handle, reference);
                 result.success(null);
                 break;
             }
