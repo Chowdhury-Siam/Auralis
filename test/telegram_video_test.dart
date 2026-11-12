@@ -8,6 +8,7 @@ import 'package:auralis/player.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/td_transport.dart';
 import 'package:auralis/telegram/telegram_service.dart';
+import 'package:auralis/video_playback_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -35,74 +36,40 @@ Json post(int id, String name, {bool document = false}) {
 }
 
 void main() {
-  test(
-    'Telegram quality parsing keeps only real alternate video files',
-    () async {
-      final message = post(12, 'Trailer.mp4');
-      final content = message['content'] as Map<String, dynamic>;
-      Map<String, dynamic> quality(int id, int width, int height) => {
-        'id': '$id',
-        'width': width,
-        'height': height,
+  test('Telegram videos with alternate files use the original file', () async {
+    final message = post(12, 'Trailer.mp4');
+    final content = message['content'] as Map<String, dynamic>;
+    content['alternative_videos'] = [
+      {
+        'width': 640,
+        'height': 360,
         'codec': 'h264',
-        'video': {'id': id, 'size': 4096},
-        'hls_file': {'id': id + 100, 'size': 128},
-      };
-      content['alternative_videos'] = [
-        quality(21, 640, 360),
-        quality(22, 1280, 720),
-        quality(22, 1280, 720),
-        quality(12, 720, 1280),
-        quality(23, 0, 1080),
-        quality(-1, 1280, 720),
-        {
-          ...quality(24, 1920, 1080),
-          'video': {'id': 24, 'size': 0},
-        },
-        {...quality(25, 1920, 1080), 'video': null},
-        null,
-        'invalid',
-      ];
-      final track = Track.fromVideoMessage(message, channel.title)!;
-      expect(track.videoQualities.map((quality) => quality.fileId), [22, 21]);
-      expect(track.videoQualities.map((quality) => quality.label), [
-        '720p · HD',
-        '360p',
-      ]);
-      expect(track.fileId, 12);
-      expect(() => track.videoQualities.clear(), throwsUnsupportedError);
-      expect(videoResolutionLabel(2160, 3840), '2160p · 4K');
-      expect(videoResolutionLabel(null, null), 'Original');
-      expect(videoResolutionLabel(1920, 800), '800p');
-      final document = post(15, 'Movie.mkv', document: true);
-      (document['content'] as Map)['alternative_videos'] =
-          content['alternative_videos'];
-      expect(
-        Track.fromVideoMessage(document, channel.title)!.videoQualities,
-        isEmpty,
-      );
+        'video': {'id': 21, 'size': 32},
+      },
+    ];
+    final track = Track.fromVideoMessage(message, channel.title)!;
+    expect(track.fileId, 12);
+    expect(track.size, 64);
+    expect(track.videoWidth, 720);
+    expect(track.videoHeight, 1280);
 
-      final td = FakeTd()..onRequest = (_) async => message;
-      final telegram = TelegramService(
-        Directory('unused'),
-        MemoryVault(),
-        transport: td,
-      )..state = 'authorizationStateReady';
-      addTearDown(telegram.shutdown);
-      final restored = await telegram.restoreVideo(
-        const Track(
-          id: '-100123:12',
-          title: 'Saved',
-          artist: '',
-          source: 'Cinema',
-        ),
-      );
-      expect(restored!.videoQualities.map((quality) => quality.fileId), [
-        22,
-        21,
-      ]);
-    },
-  );
+    final td = FakeTd()..onRequest = (_) async => message;
+    final telegram = TelegramService(
+      Directory('unused'),
+      MemoryVault(),
+      transport: td,
+    )..state = 'authorizationStateReady';
+    addTearDown(telegram.shutdown);
+    final restored = await telegram.restoreVideo(
+      const Track(
+        id: '-100123:12',
+        title: 'Saved',
+        artist: '',
+        source: 'Cinema',
+      ),
+    );
+    expect(restored!.fileId, 12);
+  });
 
   test('video browsing and saved video references use TDLib and exclude other files', () async {
     final td = FakeTd();
@@ -162,6 +129,80 @@ void main() {
     expect(video.videoHeight, 1280);
     expect(Track.fromMessage(post(12, 'Trailer.mp4'), channel.title), isNull);
     expect(td.requests, hasLength(2));
+  });
+
+  testWidgets('History loads the full thumbnail for a saved video', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final td = FakeTd();
+    final message = post(55, 'Saved episode.mp4');
+    (message['content']['video'] as Map<String, dynamic>)['thumbnail'] = {
+      'file': {'id': 90},
+    };
+    final photo = File('test/fixtures/cover.png').absolute.path;
+    td.onRequest = (request) async => switch (request['@type']) {
+      'getMessage' when request['message_id'] == 55 => message,
+      'downloadFile' when request['file_id'] == 90 => {
+        'local': {'path': photo, 'is_downloading_completed': true},
+      },
+      _ => null,
+    };
+    final telegram = TelegramService(
+      Directory('unused'),
+      MemoryVault(),
+      transport: td,
+    )..state = 'authorizationStateReady';
+    final settings = MemorySettings()..defaultInterface = AppInterface.video;
+    final saved = VideoSource.restore({
+      'title': 'Saved episode',
+      'message': '${channel.id}:55',
+      'channel': channel.title,
+    })!;
+    settings.videoPlayback.recordVideo(saved);
+    final player = PlayerController(
+      FakeAudio(),
+      TelegramStreamProxy(telegram.request),
+      settings,
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      await player.shutdown();
+      await telegram.shutdown();
+    });
+
+    await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+    await tester.pumpAndSettle();
+    final navigation = find.byKey(const ValueKey('video-navigation'));
+    await tester.tap(find.descendant(
+      of: navigation,
+      matching: find.byIcon(Icons.video_library_rounded),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('video-library-collection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('History'));
+    await tester.pumpAndSettle();
+
+    expect(td.requests.where((r) => r['@type'] == 'getMessage'), hasLength(1));
+    expect(
+      td.requests.where((r) => r['@type'] == 'downloadFile' && r['file_id'] == 90),
+      hasLength(1),
+    );
+    await tester.runAsync(() => telegram.image(90));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey(saved.id)),
+        matching: find.byType(Image),
+      ),
+      findsOneWidget,
+    );
+    expect(saved.telegram!.coverFileId, isNull);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -444,7 +485,7 @@ void main() {
       await tester.tap(find.text(channel.title));
       await tester.pumpAndSettle();
       expect(find.text('Browse channels'), findsOneWidget);
-      expect(find.text('Selected in Library'), findsOneWidget);
+      expect(find.text('2 videos'), findsOneWidget);
       expect(find.text('New release'), findsNothing);
 
       await tester.tap(find.byTooltip('Library'));
@@ -456,7 +497,7 @@ void main() {
 
       await tester.tap(find.byTooltip('Browse'));
       await tester.pumpAndSettle();
-      expect(find.text('Selected in Library'), findsOneWidget);
+      expect(find.text('2 videos'), findsOneWidget);
       await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
       expect(find.text('Older film'), findsOneWidget);
