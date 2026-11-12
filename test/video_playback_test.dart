@@ -396,12 +396,21 @@ void main() {
         await tester.pumpAndSettle();
 
         final pauseButton = find.byTooltip('Pause video');
+        final spinner = find.byWidgetPredicate(
+          (widget) =>
+              widget is CircularProgressIndicator &&
+              widget.semanticsLabel == 'Loading video',
+        );
+        expect(spinner, findsNothing);
         native.setBuffering(true);
+        // The broadcast stream schedules the rebuild after delivering its event.
+        await tester.idle();
         await tester.pump();
-        final spinner = find.byType(CircularProgressIndicator);
+        expect(spinner, findsOneWidget);
         expect(tester.getCenter(spinner), tester.getCenter(pauseButton));
         expect(find.byIcon(Icons.pause_rounded), findsNothing);
         native.setBuffering(false);
+        await tester.idle();
         await tester.pump();
         expect(spinner, findsNothing);
 
