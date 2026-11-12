@@ -9,30 +9,41 @@ class _VideoCollectionPage extends StatelessWidget {
     required this.slivers,
     this.onBack,
     this.actions = const [],
+    this.embedded = false,
+    this.bottomPadding = 28,
   });
 
   final String title, summary, description;
   final IconData icon;
   final VoidCallback? onBack;
   final List<Widget> actions, slivers;
+  final bool embedded;
+  final double bottomPadding;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1120),
-            child: CustomScrollView(
-              key: const ValueKey('video-collection-scroll'),
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                  sliver: SliverToBoxAdapter(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+    Widget wrap(Widget child) =>
+        embedded ? child : Scaffold(body: SafeArea(child: child));
+    return wrap(
+      Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: CustomScrollView(
+            key: const ValueKey('video-collection-scroll'),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  embedded ? 8 : 16,
+                  embedded ? 4 : 12,
+                  embedded ? 8 : 16,
+                  20,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (!embedded || onBack != null) ...[
                         Row(
                           children: [
                             BackButton(onPressed: onBack),
@@ -51,102 +62,98 @@ class _VideoCollectionPage extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Container(
-                          key: const ValueKey('video-collection-header'),
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(28),
-                            border: Border.all(
-                              color: colors.outlineVariant.withValues(
-                                alpha: .35,
-                              ),
-                            ),
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                colors.primaryContainer.withValues(alpha: .45),
-                                colors.surfaceContainerLow,
-                              ],
-                            ),
+                      ],
+                      Container(
+                        key: const ValueKey('video-collection-header'),
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: colors.outlineVariant.withValues(alpha: .35),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      color: colors.primaryContainer,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Icon(
-                                      icon,
-                                      color: colors.onPrimaryContainer,
-                                      size: 28,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          title,
-                                          style: const TextStyle(
-                                            fontSize: 28,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: -.7,
-                                            height: 1.15,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          summary,
-                                          style: TextStyle(
-                                            color: colors.primary,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                description,
-                                style: TextStyle(
-                                  color: colors.onSurfaceVariant,
-                                ),
-                              ),
-                              if (actions.isNotEmpty) ...[
-                                const SizedBox(height: 18),
-                                Wrap(
-                                  spacing: 10,
-                                  runSpacing: 10,
-                                  children: actions,
-                                ),
-                              ],
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              colors.primaryContainer.withValues(alpha: .45),
+                              colors.surfaceContainerLow,
                             ],
                           ),
                         ),
-                      ],
-                    ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: colors.primaryContainer,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Icon(
+                                    icon,
+                                    color: colors.onPrimaryContainer,
+                                    size: 28,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: const TextStyle(
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -.7,
+                                          height: 1.15,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        summary,
+                                        style: TextStyle(
+                                          color: colors.primary,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              description,
+                              style: TextStyle(color: colors.onSurfaceVariant),
+                            ),
+                            if (actions.isNotEmpty) ...[
+                              const SizedBox(height: 18),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: actions,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                for (final sliver in slivers)
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    sliver: sliver,
-                  ),
-                const SliverToBoxAdapter(child: SizedBox(height: 28)),
-              ],
-            ),
+              ),
+              for (final sliver in slivers)
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: embedded ? 8 : 16),
+                  sliver: sliver,
+                ),
+              SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
+            ],
           ),
         ),
       ),
