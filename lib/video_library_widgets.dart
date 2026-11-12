@@ -13,7 +13,8 @@ class _VideoCollectionPage extends StatelessWidget {
     this.bottomPadding = 28,
   });
 
-  final String title, summary, description;
+  final String title, description;
+  final String? summary;
   final IconData icon;
   final VoidCallback? onBack;
   final List<Widget> actions, slivers;
@@ -113,15 +114,17 @@ class _VideoCollectionPage extends StatelessWidget {
                                           height: 1.15,
                                         ),
                                       ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        summary,
-                                        style: TextStyle(
-                                          color: colors.primary,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
+                                      if (summary case final label?) ...[
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          label,
+                                          style: TextStyle(
+                                            color: colors.primary,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                          ),
                                         ),
-                                      ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -269,12 +272,14 @@ class _VideoPlaylistCard extends StatelessWidget {
   const _VideoPlaylistCard({
     required this.name,
     required this.sources,
+    required this.showCount,
     required this.onOpen,
     required this.onRename,
     required this.onRemove,
   });
   final String name;
   final List<VideoSource> sources;
+  final bool showCount;
   final VoidCallback onOpen, onRename, onRemove;
 
   @override
@@ -360,12 +365,15 @@ class _VideoPlaylistCard extends StatelessWidget {
                     const Spacer(),
                     Row(
                       children: [
-                        Expanded(
-                          child: Text(
-                            '${sources.length} ${sources.length == 1 ? 'video' : 'videos'}',
-                            style: TextStyle(color: colors.onSurfaceVariant),
-                          ),
-                        ),
+                        if (showCount)
+                          Expanded(
+                            child: Text(
+                              '${sources.length} ${sources.length == 1 ? 'video' : 'videos'}',
+                              style: TextStyle(color: colors.onSurfaceVariant),
+                            ),
+                          )
+                        else
+                          const Spacer(),
                         Icon(
                           Icons.arrow_forward_rounded,
                           color: colors.primary,
@@ -393,11 +401,13 @@ class _VideoEntryCard extends StatelessWidget {
     required this.onTap,
     this.date,
     this.progress,
+    this.artwork,
   });
   final VideoSource source;
   final String status;
   final String? date;
   final double? progress;
+  final Widget? artwork;
   final List<Widget> actions;
   final VoidCallback onTap;
 
@@ -435,7 +445,7 @@ class _VideoEntryCard extends StatelessWidget {
                           child: SizedBox(
                             width: wide ? 112 : 64,
                             height: wide ? 78 : 56,
-                            child: _VideoSourcePreview(source),
+                            child: artwork ?? _VideoSourcePreview(source),
                           ),
                         ),
                         const SizedBox(width: 14),
