@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.166
+
+- Center video loading on play and pause, show brightness and volume on their gesture sides, and move seek feedback above the transport controls.
+
+## 0.1.165
+
+- Start Android videos in landscape in Match video mode. Switch to portrait once portrait playback is ready.
+
 ## 0.1.164
 
 - Align video controls and the seek bar to the picture on desktop and mobile.
