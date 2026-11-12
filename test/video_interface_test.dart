@@ -84,6 +84,7 @@ void main() {
         await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
         await tester.pumpAndSettle();
         expect(find.byType(DiscoveryHero), findsOneWidget);
+        expect(find.byTooltip('Settings'), findsNothing);
         final musicShortcut = find.widgetWithIcon(
           IconButton,
           Icons.music_note_rounded,
@@ -130,6 +131,7 @@ void main() {
         await tester.pumpAndSettle();
         final searchField = find.widgetWithText(TextField, 'Search channels');
         expect(searchField, findsOneWidget);
+        expect(find.byTooltip('Settings'), findsNothing);
         expect(find.byTooltip('Choose video channel'), findsNothing);
         expect(find.text(channel.title), findsOneWidget);
         expect(find.text('Music only'), findsOneWidget);
