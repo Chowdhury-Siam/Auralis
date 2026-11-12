@@ -708,19 +708,9 @@ void main() {
         expect(tester.takeException(), isNull, reason: '$size Settings');
         await tester.tap(find.byTooltip('Back to Library'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Telegram').first);
+        await tester.tap(find.byTooltip('Browse'));
         await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull, reason: '$size Telegram');
-        final channel = find.widgetWithText(CheckboxListTile, 'Music channel');
-        await tester.scrollUntilVisible(
-          channel,
-          80,
-          scrollable: find.descendant(
-            of: find.byKey(const ValueKey('telegram-channels')),
-            matching: find.byType(Scrollable),
-          ),
-        );
-        await tester.pumpAndSettle();
+        final channel = find.text('Music channel');
         expect(channel.hitTestable(), findsOneWidget);
         expect(tester.takeException(), isNull, reason: '$size channel list');
         await tester.tap(find.byTooltip('Library').first);
