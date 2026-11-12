@@ -115,7 +115,7 @@ The top controls open decoder, audio, subtitle, and **More** panels. Use **Now p
 - **More → HDR processing** includes BT.2100 PQ, BT.2100 HLG, BT.2020 gamut mapping, and Linear HDR when libmpv reports GPU-next. On Android, enable **GPU-next renderer** under **Player settings** and reopen playback. These profiles change color processing in the player. Native HDR display output depends on the renderer and display path. **Match video frame rate** requests a compatible refresh mode on Android.
 
 - Use **Subtitles → Search subtitles with Wyzie** with a TMDB or IMDb ID and a Wyzie API key. **More → Skip segments** lets you mark start and end times or look up AniSkip segments by MyAnimeList ID and episode. The seekbar shows saved segment boundaries.
-- **More → Custom buttons** creates mpv command shortcuts that can be placed in the control layout. **Load a player script** loads a local Lua or JavaScript file into the current session when the installed libmpv supports the language. **mpv configuration** saves `mpv.conf` and `input.conf` text on this device for the next player session. Flutter's built-in playback keys retain their mappings.
+- In Video mode, **Settings → Settings & diagnostics** contains player preferences, control layouts, custom mpv buttons, and the `mpv.conf` and `input.conf` editors. During playback, **More → Video settings** opens the same controls and enables decoder selection, playback information, the mpv console, and loading Lua or JavaScript scripts into the current session. Flutter's built-in playback keys retain their mappings.
 
 ## Streaming audio quality
 
