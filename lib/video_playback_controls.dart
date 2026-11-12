@@ -602,7 +602,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
 
   List<Widget> _zone(VideoControlZone zone, bool wide) => [
     for (final control in session._data.controls(zone, wide: wide))
-      if (session._supportsControl(control)) _control(control),
+      if (supportsVideoControl(control)) _control(control),
   ];
 
   Widget _control(VideoControl control) => switch (control) {
@@ -710,7 +710,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     VideoControl.customOne ||
     VideoControl.customTwo ||
     VideoControl.customThree => _button(
-      session._controlLabel(control),
+      videoControlLabel(session._data, control),
       Icons.bolt_rounded,
       () => session._runCustomControl(context, control),
     ),
