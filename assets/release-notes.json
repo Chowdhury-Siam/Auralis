@@ -1,6 +1,18 @@
 {
-  "current": "0.1.179",
+  "current": "0.1.181",
   "releases": [
+    {
+      "version": "0.1.181",
+      "changes": [
+        "Add three-dot item actions to Music and Video lists, cards and video queues, opening an artwork-led Options / Info sheet with mode-specific playback, playlist and collection actions."
+      ]
+    },
+    {
+      "version": "0.1.180",
+      "changes": [
+        "Redesign Video playlists, history and snapshots with responsive cards, clearer summaries, larger frame previews and helpful empty states."
+      ]
+    },
     {
       "version": "0.1.179",
       "changes": [
