@@ -36,62 +36,133 @@ Json post(int id, String name, {bool document = false}) {
 
 void main() {
   test(
-    'video browsing and saved video references use TDLib and exclude other files',
+    'Telegram quality parsing keeps only real alternate video files',
     () async {
-      final td = FakeTd();
+      final message = post(12, 'Trailer.mp4');
+      final content = message['content'] as Map<String, dynamic>;
+      Map<String, dynamic> quality(int id, int width, int height) => {
+        'id': '$id',
+        'width': width,
+        'height': height,
+        'codec': 'h264',
+        'video': {'id': id, 'size': 4096},
+        'hls_file': {'id': id + 100, 'size': 128},
+      };
+      content['alternative_videos'] = [
+        quality(21, 640, 360),
+        quality(22, 1280, 720),
+        quality(22, 1280, 720),
+        quality(12, 720, 1280),
+        quality(23, 0, 1080),
+        quality(-1, 1280, 720),
+        {
+          ...quality(24, 1920, 1080),
+          'video': {'id': 24, 'size': 0},
+        },
+        {...quality(25, 1920, 1080), 'video': null},
+        null,
+        'invalid',
+      ];
+      final track = Track.fromVideoMessage(message, channel.title)!;
+      expect(track.videoQualities.map((quality) => quality.fileId), [22, 21]);
+      expect(track.videoQualities.map((quality) => quality.label), [
+        '720p · HD',
+        '360p',
+      ]);
+      expect(track.fileId, 12);
+      expect(() => track.videoQualities.clear(), throwsUnsupportedError);
+      expect(videoResolutionLabel(2160, 3840), '2160p · 4K');
+      expect(videoResolutionLabel(null, null), 'Original');
+      expect(videoResolutionLabel(1920, 800), '800p');
+      final document = post(15, 'Movie.mkv', document: true);
+      (document['content'] as Map)['alternative_videos'] =
+          content['alternative_videos'];
+      expect(
+        Track.fromVideoMessage(document, channel.title)!.videoQualities,
+        isEmpty,
+      );
+
+      final td = FakeTd()..onRequest = (_) async => message;
       final telegram = TelegramService(
         Directory('unused'),
         MemoryVault(),
         transport: td,
       )..state = 'authorizationStateReady';
       addTearDown(telegram.shutdown);
-      td.onRequest = (request) async {
-        if (request['@type'] == 'searchChatMessages') {
-          return {
-            'messages': [
-              post(30, 'Clip.MKV', document: true),
-              post(20, 'Song.mp3', document: true),
-            ],
-            'next_from_message_id': 10,
-          };
-        }
-        if (request['@type'] == 'getMessage') {
-          expect(request['chat_id'], channel.id);
-          expect(request['message_id'], 12);
-          return post(12, 'Trailer.mp4');
-        }
-        return null;
-      };
-
-      final page = await telegram.videos(
-        channel,
-        before: 40,
-        query: 'clip',
-        documents: true,
+      final restored = await telegram.restoreVideo(
+        const Track(
+          id: '-100123:12',
+          title: 'Saved',
+          artist: '',
+          source: 'Cinema',
+        ),
       );
-      expect(page.nextMessageId, 10);
-      expect(page.tracks.single.title, 'Clip');
-      expect(page.tracks.single.size, 64);
-      expect(page.tracks.single.videoWidth, isNull);
-      expect(page.tracks.single.videoHeight, isNull);
-      expect(td.requests.single['filter'], {
-        '@type': 'searchMessagesFilterDocument',
-      });
-      expect(td.requests.single['from_message_id'], 40);
-      expect(td.requests.single['query'], 'clip');
-
-      final video = await telegram.restoreVideo(Track(
-        id: '${channel.id}:12', title: 'Trailer', artist: '', source: channel.title,
-      ));
-      expect(video!.fileId, 12);
-      expect(video.title, 'Trailer');
-      expect(video.duration, const Duration(seconds: 90));
-      expect(video.videoWidth, 720);
-      expect(video.videoHeight, 1280);
-      expect(Track.fromMessage(post(12, 'Trailer.mp4'), channel.title), isNull);
-      expect(td.requests, hasLength(2));
+      expect(restored!.videoQualities.map((quality) => quality.fileId), [
+        22,
+        21,
+      ]);
     },
   );
+
+  test('video browsing and saved video references use TDLib and exclude other files', () async {
+    final td = FakeTd();
+    final telegram = TelegramService(
+      Directory('unused'),
+      MemoryVault(),
+      transport: td,
+    )..state = 'authorizationStateReady';
+    addTearDown(telegram.shutdown);
+    td.onRequest = (request) async {
+      if (request['@type'] == 'searchChatMessages') {
+        return {
+          'messages': [
+            post(30, 'Clip.MKV', document: true),
+            post(20, 'Song.mp3', document: true),
+          ],
+          'next_from_message_id': 10,
+        };
+      }
+      if (request['@type'] == 'getMessage') {
+        expect(request['chat_id'], channel.id);
+        expect(request['message_id'], 12);
+        return post(12, 'Trailer.mp4');
+      }
+      return null;
+    };
+
+    final page = await telegram.videos(
+      channel,
+      before: 40,
+      query: 'clip',
+      documents: true,
+    );
+    expect(page.nextMessageId, 10);
+    expect(page.tracks.single.title, 'Clip');
+    expect(page.tracks.single.size, 64);
+    expect(page.tracks.single.videoWidth, isNull);
+    expect(page.tracks.single.videoHeight, isNull);
+    expect(td.requests.single['filter'], {
+      '@type': 'searchMessagesFilterDocument',
+    });
+    expect(td.requests.single['from_message_id'], 40);
+    expect(td.requests.single['query'], 'clip');
+
+    final video = await telegram.restoreVideo(
+      Track(
+        id: '${channel.id}:12',
+        title: 'Trailer',
+        artist: '',
+        source: channel.title,
+      ),
+    );
+    expect(video!.fileId, 12);
+    expect(video.title, 'Trailer');
+    expect(video.duration, const Duration(seconds: 90));
+    expect(video.videoWidth, 720);
+    expect(video.videoHeight, 1280);
+    expect(Track.fromMessage(post(12, 'Trailer.mp4'), channel.title), isNull);
+    expect(td.requests, hasLength(2));
+  });
 
   testWidgets(
     'Browse discovers a new channel and Library shows history and live videos before indexing catches up',
@@ -199,7 +270,8 @@ void main() {
       expect(find.text('New episode'), findsOneWidget);
       final episode = find.byKey(ValueKey('${channel.id}:40'));
       final watch = find.descendant(
-        of: episode, matching: find.byTooltip('Mark as watched'),
+        of: episode,
+        matching: find.byTooltip('Mark as watched'),
       );
       final artworkFilter = find.descendant(
         of: episode,
@@ -213,15 +285,21 @@ void main() {
       expect(artworkFilter, findsNothing);
       await tester.tap(watch);
       await tester.pumpAndSettle();
-      expect(find.descendant(of: episode, matching: find.textContaining('Watched')), findsOneWidget);
+      expect(
+        find.descendant(of: episode, matching: find.textContaining('Watched')),
+        findsOneWidget,
+      );
       expect(artworkFilter, findsOneWidget);
       expect(
         tester.widget<Text>(title).style?.color,
         Theme.of(tester.element(title)).colorScheme.onSurfaceVariant,
       );
-      await tester.tap(find.descendant(
-        of: episode, matching: find.byTooltip('Mark as unwatched'),
-      ));
+      await tester.tap(
+        find.descendant(
+          of: episode,
+          matching: find.byTooltip('Mark as unwatched'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(artworkFilter, findsNothing);
       expect(tester.widget<Text>(title).style?.color, unwatchedColor);
