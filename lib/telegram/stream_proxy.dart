@@ -174,12 +174,27 @@ class TelegramStreamProxy {
         !cancelled.isCompleted &&
         _ranges[fileId] == cancelled &&
         _tracks[segments[1]] != null;
-    Future<T> current<T>(Future<T> operation) => Future.any([
-      operation,
-      cancelled.future.then<T>(
-        (_) => throw StateError('Playback range superseded'),
-      ),
-    ]);
+    // Forward cancellation only to the pending operation. Racing every read
+    // against the range's lifetime future retains completed chunk results.
+    Completer<void>? pendingCancellation;
+    unawaited(cancelled.future.then<void>((_) {
+      final pending = pendingCancellation;
+      if (pending != null && !pending.isCompleted) pending.complete();
+    }));
+    Future<T> current<T>(Future<T> operation) async {
+      final signal = pendingCancellation = Completer<void>();
+      if (cancelled.isCompleted) signal.complete();
+      try {
+        return await Future.any([
+          operation,
+          signal.future.then<T>(
+            (_) => throw StateError('Playback range superseded'),
+          ),
+        ]);
+      } finally {
+        pendingCancellation = null;
+      }
+    }
     try {
       // TDLib's newest downloadFile offset replaces the previous one. Old reads
       // may finish later, but cannot retarget the download or report a seek error.
