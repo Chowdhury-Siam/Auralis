@@ -20,6 +20,7 @@ import 'player.dart';
 import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
 import 'video_playback_data.dart';
+import 'video_settings.dart';
 import 'video_library.dart';
 
 part 'video_playback_controls.dart';
@@ -190,11 +191,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
     orElse: () => _Orientation.video,
   );
 
-  bool _supportsControl(VideoControl control) => switch (control) {
-    VideoControl.fullscreen => _desktopVideo,
-    VideoControl.orientation || VideoControl.pip => Platform.isAndroid,
-    _ => true,
-  };
   bool get _canPlay =>
       mounted &&
       !_closed &&
