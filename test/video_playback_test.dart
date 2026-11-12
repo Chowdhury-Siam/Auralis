@@ -239,6 +239,19 @@ void main() {
     final settings = AppSettings(file);
     const point = Duration(seconds: 45);
     final data = settings.videoPlayback;
+    expect(
+      data.controls(VideoControlZone.bottomStart, wide: false),
+      contains(VideoControl.orientation),
+    );
+    final legacy = VideoPlaybackData.fromJson({
+      'controlLayouts': {
+        'landscape:bottomStart': ['lock', 'loop', 'speed'],
+      },
+    });
+    expect(
+      legacy.controls(VideoControlZone.bottomStart, wide: true),
+      [VideoControl.lock, VideoControl.speed],
+    );
     data.remember('telegram:1:2', point, const Duration(minutes: 2));
     data.remember('file:example', point, const Duration(minutes: 2));
     data.setBookmarks('telegram:1:2', [const VideoBookmark(point, 'Opening')]);
@@ -457,6 +470,12 @@ void main() {
             find.byTooltip('Now playing queue').hitTestable(),
             findsOneWidget,
           );
+          if (Platform.isAndroid) {
+            expect(find.byTooltip('Orientation').hitTestable(), findsOneWidget);
+            expect(find.byTooltip('Fullscreen'), findsNothing);
+          } else {
+            expect(find.byTooltip('Fullscreen').hitTestable(), findsOneWidget);
+          }
           expect(
             find.byKey(const ValueKey('video-seek')).hitTestable(),
             findsOneWidget,
@@ -556,6 +575,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Playback'));
         await tester.pumpAndSettle();
+        expect(find.text('A–B loop'), findsNothing);
         await tester.tap(find.text('Playback speed'));
         await tester.pumpAndSettle();
         expect(find.text('Normal'), findsOneWidget);
