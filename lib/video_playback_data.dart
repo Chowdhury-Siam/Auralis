@@ -453,7 +453,7 @@ class VideoPlaybackData {
 
   void setOrientation(String id, String value) {
     orientations.remove(id);
-    if (value == 'free') return;
+    if (value == 'video') return;
     orientations[id] = value;
     if (orientations.length > _limit) {
       orientations.remove(orientations.keys.first);
