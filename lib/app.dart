@@ -251,7 +251,7 @@ class PlayerShell extends StatefulWidget {
 }
 
 class _PlayerShellState extends State<PlayerShell>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   ColorScheme get _colors => Theme.of(context).colorScheme;
   _Page get _rootPage => widget.startOnHome ? _Page.home : _Page.library;
   late _Page destination = _rootPage;
@@ -296,11 +296,6 @@ class _PlayerShellState extends State<PlayerShell>
   late final ChannelLibrary library;
   late final Listenable _shellUpdates;
   late final AnimationController _dismissPlayer;
-  late final AnimationController _playerReveal;
-  late final _playerBodyMotion = Listenable.merge([
-    _dismissPlayer,
-    _playerReveal,
-  ]);
   late final _playerHeaderOpacity = ReverseAnimation(_dismissPlayer).drive(
     CurveTween(curve: const Interval(.32, .83)),
   );
@@ -338,10 +333,6 @@ class _PlayerShellState extends State<PlayerShell>
       vsync: this,
       duration: const Duration(milliseconds: 440),
       reverseDuration: const Duration(milliseconds: 500),
-    );
-    _playerReveal = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 190),
     );
     lyrics = LyricsRepository(
       cache: () => telegram.mediaCache,
@@ -577,7 +568,6 @@ class _PlayerShellState extends State<PlayerShell>
       // Cancel a pending close before another page (or a new open) takes over.
       _draggingPlayerSurface = false;
       _dismissPlayer.reset();
-      _playerReveal.reset();
     } else if (opening) {
       if (destination != page) {
         _playerOrigin = destination;
@@ -591,7 +581,6 @@ class _PlayerShellState extends State<PlayerShell>
         } else {
           _dockBounds = null;
         }
-        _playerReveal.value = reduced ? 1 : 0;
         // A second pointer event can arrive before the first expanded frame.
         _playerTravel = math.max(
           1,
@@ -603,14 +592,11 @@ class _PlayerShellState extends State<PlayerShell>
       }
       if (reduced) {
         _dismissPlayer.reset();
-        _playerReveal.value = 1;
+      } else if (draggingDock) {
+        _dismissPlayer.value = 1;
       } else {
-        if (draggingDock) {
-          _dismissPlayer.value = 1;
-        } else {
-          if (destination != page) _dismissPlayer.value = 1;
-          unawaited(_expandPlayer());
-        }
+        if (destination != page) _dismissPlayer.value = 1;
+        unawaited(_movePlayer(0));
       }
     }
     if (page == _Page.settings) {
@@ -661,7 +647,6 @@ class _PlayerShellState extends State<PlayerShell>
     telegram.removeListener(_prepareMedia);
     library.removeListener(_prepareMedia);
     _dismissPlayer.dispose();
-    _playerReveal.dispose();
     _transitionBlur.dispose();
     lyrics.close();
     library.dispose();
@@ -677,7 +662,6 @@ class _PlayerShellState extends State<PlayerShell>
     final reduced = _reducedPlayerMotion;
     setState(() => _closingPlayer = true);
     _draggingPlayerSurface = false;
-    _playerReveal.stop();
     if (!reduced) {
       try {
         // Continue from the current position if Back interrupts opening.
@@ -695,7 +679,6 @@ class _PlayerShellState extends State<PlayerShell>
       }
       _closingPlayer = false;
       _dismissPlayer.reset();
-      _playerReveal.reset();
     });
   }
 
@@ -858,29 +841,13 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Future<void> _expandPlayer({double? velocity}) async {
-    try {
-      await _movePlayer(0, velocity: velocity).orCancel;
-    } on TickerCanceled {
-      return;
-    }
-    if (mounted && destination == _Page.nowPlaying && !_closingPlayer) {
-      if (_reducedPlayerMotion) {
-        _playerReveal.value = 1;
-      } else {
-        _playerReveal.forward();
-      }
-    }
-  }
-
   Widget _fadePlayerBody(Widget body, {Key? key}) => AnimatedBuilder(
-    animation: _playerBodyMotion,
+    animation: _dismissPlayer,
     child: body,
     builder: (context, child) {
-      final position = const Interval(.24, .72).transform(
+      final opacity = const Interval(.28, .90).transform(
         1 - _dismissPlayer.value,
       );
-      final opacity = Curves.easeOut.transform(_playerReveal.value) * position;
       return IgnorePointer(
         ignoring: opacity == 0,
         child: Opacity(key: key, opacity: opacity, child: child),
@@ -896,9 +863,8 @@ class _PlayerShellState extends State<PlayerShell>
       unawaited(_closeNowPlaying(velocity: speed / _playerTravel));
     } else if (_reducedPlayerMotion) {
       _dismissPlayer.reset();
-      _playerReveal.value = 1;
     } else {
-      unawaited(_expandPlayer(velocity: speed / _playerTravel));
+      unawaited(_movePlayer(0, velocity: speed / _playerTravel));
     }
   }
 
@@ -907,7 +873,7 @@ class _PlayerShellState extends State<PlayerShell>
     final speed = details.primaryVelocity ?? 0;
     final opening = speed.abs() > 500 ? speed < 0 : _dismissPlayer.value < .82;
     if (opening) {
-      unawaited(_expandPlayer(velocity: speed / _playerTravel));
+      unawaited(_movePlayer(0, velocity: speed / _playerTravel));
     } else {
       unawaited(_closeNowPlaying(velocity: speed / _playerTravel));
     }
@@ -952,7 +918,6 @@ class _PlayerShellState extends State<PlayerShell>
                     : (_) {
                         _draggingPlayerSurface = true;
                         _dismissPlayer.stop();
-                        _playerReveal.stop();
                       },
                 onVerticalDragUpdate: showLyrics || _closingPlayer
                     ? null
@@ -967,9 +932,8 @@ class _PlayerShellState extends State<PlayerShell>
                         _draggingPlayerSurface = false;
                         if (_reducedPlayerMotion) {
                           _dismissPlayer.reset();
-                          _playerReveal.value = 1;
                         } else {
-                          unawaited(_expandPlayer());
+                          unawaited(_movePlayer(0));
                         }
                       },
                 child: Stack(
