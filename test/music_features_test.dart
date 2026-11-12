@@ -57,17 +57,12 @@ class UnwritableSettings extends MemorySettings {
 
 void main() {
   setUpAll(() async {
-    final font = File(
-      Platform.isWindows
-          ? 'C:/Windows/Fonts/segoeui.ttf'
-          : '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    );
-    if (font.existsSync()) {
-      await (FontLoader('Segoe UI')..addFont(
-            font.readAsBytes().then((bytes) => ByteData.sublistView(bytes)),
-          ))
-          .load();
-    }
+    // Use the checked-in CI font on every host: system font metrics can hide
+    // off-screen action buttons on Windows while the Linux runner exposes them.
+    await (FontLoader('Segoe UI')..addFont(
+          rootBundle.load('assets/fonts/DejaVuSans.ttf'),
+        ))
+        .load();
     await (FontLoader(
       'MaterialIcons',
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
@@ -341,6 +336,14 @@ void main() {
         await tester.pumpAndSettle();
       }
 
+      Future<void> tapSheetItem(Finder item) async {
+        await tester.ensureVisible(item);
+        await tester.pumpAndSettle();
+        expect(item.hitTestable(), findsOneWidget);
+        await tester.tap(item);
+        await tester.pumpAndSettle();
+      }
+
       await selectCollection('Recently played');
       expect(
         tester.getTopLeft(find.text(b.title)).dy,
@@ -350,19 +353,15 @@ void main() {
       await tester.tap(find.byTooltip('Track actions for ${a.title}'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('media-item-sheet')), findsOneWidget);
-      await tester.tap(find.text('Info'));
-      await tester.pumpAndSettle();
+      await tapSheetItem(find.text('Info'));
       expect(find.text('Artist'), findsOneWidget);
       expect(find.text('Channel'), findsOneWidget);
-      await tester.tap(find.text('Options'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Add to favorites'));
-      await tester.pumpAndSettle();
+      await tapSheetItem(find.text('Options'));
+      await tapSheetItem(find.byKey(const ValueKey('media-action-favorite')));
       expect(settings.favoriteIds, {a.id});
       await tester.tap(find.byTooltip('Track actions for ${a.title}'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Play next'));
-      await tester.pumpAndSettle();
+      await tapSheetItem(find.byKey(const ValueKey('media-action-next')));
       expect(player.queue.single.id, a.id);
       expect(player.index, -1);
       await selectCollection('Favorites');
@@ -370,8 +369,7 @@ void main() {
       expect(find.text(b.title), findsNothing);
       await tester.tap(find.byTooltip('Track actions for ${a.title}'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Add to playlist'));
-      await tester.pumpAndSettle();
+      await tapSheetItem(find.byKey(const ValueKey('media-action-playlist')));
       await tester.tap(find.text('Create playlist'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextFormField), 'Night drive');
@@ -413,8 +411,7 @@ void main() {
       }
       await tester.tap(find.byTooltip('Track actions for ${a.title}'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Remove from playlist'));
-      await tester.pumpAndSettle();
+      await tapSheetItem(find.byKey(const ValueKey('media-action-remove')));
       expect(settings.playlists['Evening mix'], isEmpty);
       await tester.tap(find.byTooltip('Delete playlist'));
       await tester.pumpAndSettle();
