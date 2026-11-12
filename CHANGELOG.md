@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.173
+
+- Fix the Flutter analyzer warning in the Music Browse layout toggle.
+
 ## 0.1.172
 
 - Make the mini-player follow vertical drags with a blurred background and a staged Now Playing reveal. Fade the full artwork and controls in once the panel settles.
