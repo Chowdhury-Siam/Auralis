@@ -102,9 +102,9 @@ Before the first timed lyric and during blank timestamped gaps, lyrics stay full
 
 ## Telegram Video
 
-Choose **Music** or **Video** under **Open on startup** in setup or **Settings → General**. Hold **Home** on Android or Windows to switch interfaces. Choose a channel under **Video Search → Browse channels**, then open **Library** to view its episodes. Video Library sorts channel videos by Title (A–Z) by default.
+Choose **Music** or **Video** under **Open on startup** in setup or **Settings → General**. Hold **Home** on Android or Windows to switch interfaces. Choose a channel under **Video → Browse**, then open **Library** to view its episodes. Video Library sorts channel videos by Title (A–Z) by default.
 
-The player uses libmpv and an [mpvRx](https://github.com/Riteshp2001/mpvRx)-style overlay. Tap the video to show or hide controls. Double-tap the sides to seek or the center to play and pause. Swipe horizontally to scrub, swipe vertically to change volume or Android brightness, hold for a temporary speed boost, and pinch to zoom. On Windows, Space plays or pauses, the arrows seek or adjust volume, and F toggles fullscreen.
+The player uses libmpv and an [mpvRx](https://github.com/Riteshp2001/mpvRx)-style overlay. Tap the video to show or hide controls. Double-tap the sides to seek or the center to play and pause. Swipe horizontally to scrub, swipe vertically to change volume or Android brightness, hold for a temporary speed boost, and pinch to zoom. On Windows, tap **Space** to play or pause, or hold it to use **2×** speed until you release it. The arrow keys seek or adjust volume, and **F** toggles fullscreen.
 
 The top controls open decoder, audio, subtitle, and **More** panels. Use **Now playing queue** to switch, remove, reorder, or save the current queue as a playlist. **Chapters and bookmarks** lists seek points, and a long press on that button adds a named bookmark. **More** opens the control layout editor, frame navigation, sleep timer, Anime4K, ambient lighting, HDR tone mapping, and live playback statistics. **Detect and crop black bars** samples the playing video when the active decoder supports crop detection. Android includes orientation and picture-in-picture controls. Anime4K uses a reduced quality setting under thermal pressure and skips 4K inputs.
 
