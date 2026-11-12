@@ -1945,23 +1945,25 @@ class _PlayerShellState extends State<PlayerShell>
     },
   );
 
-  List<Track> _collectionTracks() {
+  List<Track> _collectionTracks([String? scope]) {
+    final selectedCollection = scope ?? collection;
     final tracks = library.tracks;
-    final artist = _selectedArtist?.toLowerCase();
+    final artist = selectedCollection == 'Artists' && selectedCollection == collection
+        ? _selectedArtist?.toLowerCase() : null;
     if (artist != null) {
       return tracks
           .where((track) => _artistName(track).toLowerCase() == artist)
           .toList();
     }
-    if (collection == 'Favorites') {
+    if (selectedCollection == 'Favorites') {
       return tracks
           .where((t) => player.settings.favoriteIds.contains(t.id))
           .toList();
     }
-    final ids = collection == 'Recently played'
+    final ids = selectedCollection == 'Recently played'
         ? player.settings.recentIds
-        : collection == 'Playlists'
-        ? player.settings.playlists[selectedPlaylist] ?? <String>[]
+        : selectedCollection == 'Playlists'
+        ? player.settings.playlists[selectedCollection == collection ? selectedPlaylist : null] ?? <String>[]
         : null;
     return ids == null ? tracks : _tracksForIds(ids);
   }
@@ -2009,7 +2011,8 @@ class _PlayerShellState extends State<PlayerShell>
                       ? 'Create a playlist, then add music using a track’s actions.'
                       : 'No playlists match this search.',
                 )
-              : ListView.builder(
+               : ListView.builder(
+                  key: const PageStorageKey('music-playlists'),
                   padding: EdgeInsets.only(bottom: _dockPadding),
                   itemCount: entries.length,
                   itemBuilder: (context, i) => ListTile(
@@ -2310,8 +2313,15 @@ class _PlayerShellState extends State<PlayerShell>
                     ),
                     onPressed: () => _navigate(_Page.settings),
                     icon: const Icon(Icons.settings_outlined, size: 20),
-                  ),
+                ),
               ],
+            ),
+            LibraryPageIndicator(
+              key: const ValueKey('music-library-indicator'),
+              labels: _libraryCollections.map((entry) => entry.$1).toList(),
+              index: _libraryCollections.indexWhere((entry) => entry.$1 == collection),
+              onSelected: (index) => _selectLibraryCollection(_libraryCollections[index].$1),
+              reducedMotion: player.settings.reducedMotion,
             ),
             Padding(
               padding: const EdgeInsets.only(top: 3, bottom: 8),
@@ -2429,51 +2439,14 @@ class _PlayerShellState extends State<PlayerShell>
                     ],
                     const SizedBox(height: 8),
                     Expanded(
-                      child: playlistOverview
-                          ? _playlists()
-                          : !telegram.ready
-                          ? _empty(
-                              Icons.send_rounded,
-                              'Connect Telegram for your music',
-                              'Sign in and choose channels to fill your Library.',
-                              action: FilledButton.tonalIcon(
-                                onPressed: _openTelegram,
-                                icon: const Icon(Icons.send_rounded),
-                                label: const Text('Connect Telegram'),
-                              ),
-                            )
-                          : player.settings.selectedChannels.isEmpty
-                          ? _empty(
-                              Icons.campaign_rounded,
-                              'Choose your music channels',
-                              'Select channels in Browse. Their music appears here together.',
-                              action: FilledButton.tonalIcon(
-                                onPressed: _openMusicChannels,
-                                icon: const Icon(Icons.playlist_add_rounded),
-                                label: const Text('Choose channels'),
-                              ),
-                            )
-                          : library.tracks.isEmpty
-                          ? _empty(
-                              Icons.library_music_rounded,
-                              library.loading
-                                  ? 'Finding your music'
-                                  : 'No music loaded',
-                              library.loading
-                                  ? 'Tracks appear here as your channels load.'
-                                  : 'Refresh to try again, or choose different channels.',
-                            )
-                          : artistOverview
-                          ? _musicArtists(tracks)
-                          : tracks.isEmpty &&
-                                collection != 'All songs' &&
-                                collection != 'Artists'
-                          ? _empty(
-                              Icons.music_note_rounded,
-                              'No loaded tracks in this collection',
-                              'Add music using track actions. Saved entries appear when their Telegram channels are selected and loaded.',
-                            )
-                          : _trackList(visible),
+                      child: LibraryCollectionPager(
+                        key: const ValueKey('music-library-pager'),
+                        index: _libraryCollections.indexWhere((entry) => entry.$1 == collection),
+                        count: _libraryCollections.length,
+                        reducedMotion: player.settings.reducedMotion,
+                        onChanged: (index) => _selectLibraryCollection(_libraryCollections[index].$1),
+                        itemBuilder: (_, index) => _libraryCollectionBody(_libraryCollections[index].$1),
+                      ),
                     ),
                   ],
                 ),
@@ -2484,6 +2457,40 @@ class _PlayerShellState extends State<PlayerShell>
       );
     },
   );
+
+  Widget _libraryCollectionBody(String scope) {
+    final tracks = _collectionTracks(scope);
+    final active = scope == collection;
+    if (scope == 'Playlists' && (!active || selectedPlaylist == null)) return _playlists();
+    if (!telegram.ready) {
+      return _empty(Icons.send_rounded, 'Connect Telegram for your music',
+        bottomPadding: _dockPadding,
+        'Sign in and choose channels to fill your Library.',
+        action: FilledButton.tonalIcon(onPressed: _openTelegram,
+          icon: const Icon(Icons.send_rounded), label: const Text('Connect Telegram')));
+    }
+    if (player.settings.selectedChannels.isEmpty) {
+      return _empty(Icons.campaign_rounded, 'Choose your music channels',
+        bottomPadding: _dockPadding,
+        'Select channels in Browse. Their music appears here together.',
+        action: FilledButton.tonalIcon(onPressed: _openMusicChannels,
+          icon: const Icon(Icons.playlist_add_rounded), label: const Text('Choose channels')));
+    }
+    if (library.tracks.isEmpty) {
+      return _empty(Icons.library_music_rounded,
+        library.loading ? 'Finding your music' : 'No music loaded',
+        library.loading ? 'Tracks appear here as your channels load.'
+            : 'Refresh to try again, or choose different channels.');
+    }
+    if (scope == 'Artists' && (!active || _selectedArtist == null)) return _musicArtists(tracks);
+    if (tracks.isEmpty && scope != 'All songs' && scope != 'Artists') {
+      return _empty(Icons.music_note_rounded, 'No loaded tracks in this collection',
+        'Add music using track actions. Saved entries appear when their Telegram channels are selected and loaded.');
+    }
+    return _trackList(_visibleTracks(tracks,
+        preserveOrder: scope == 'Recently played' || scope == 'Playlists'),
+        key: PageStorageKey(('music-collection', scope)));
+  }
 
   List<Track> _visibleTracks(List<Track> tracks, {bool preserveOrder = false}) {
     final query = search.text.trim().toLowerCase();
@@ -2498,7 +2505,7 @@ class _PlayerShellState extends State<PlayerShell>
     return visible;
   }
 
-  Widget _trackList(List<Track> visible) {
+  Widget _trackList(List<Track> visible, {Key? key}) {
     if (visible.isEmpty) {
       return _empty(
         Icons.search_off_rounded,
@@ -2507,6 +2514,7 @@ class _PlayerShellState extends State<PlayerShell>
       );
     }
     return ListView.builder(
+      key: key,
       padding: EdgeInsets.only(bottom: _dockPadding),
       itemCount: visible.length,
       itemBuilder: (context, i) => _trackTile(
@@ -3276,9 +3284,10 @@ class _PlayerShellState extends State<PlayerShell>
     String title,
     String description, {
     Widget? action,
+    double bottomPadding = 0,
   }) => Center(
     child: SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 22),
+      padding: EdgeInsets.fromLTRB(0, 22, 0, 22 + bottomPadding),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
