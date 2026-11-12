@@ -439,6 +439,14 @@ void main() {
         find.widgetWithIcon(IconButton, Icons.music_note_rounded),
         findsNothing,
       );
+      expect(find.byTooltip('Settings'), findsNothing);
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('video-navigation')),
+          matching: find.byIcon(Icons.video_library_rounded),
+        ),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('General'));
