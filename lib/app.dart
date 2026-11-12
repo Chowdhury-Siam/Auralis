@@ -13,6 +13,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
 import 'models.dart';
+import 'media_item_sheet.dart';
 import 'library_widgets.dart';
 import 'lyrics.dart';
 import 'lyrics_view.dart';
@@ -1895,53 +1896,53 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _trackActions(Track track) => AuralisPopupMenu<String>(
+  Widget _trackActions(Track track, {VoidCallback? onPlay}) => IconButton.filledTonal(
     tooltip: 'Track actions for ${track.title}',
-    icon: const Icon(Icons.playlist_play_rounded, size: 22),
-    onSelected: (value) async {
+    icon: const Icon(Icons.more_vert_rounded, size: 22),
+    style: IconButton.styleFrom(backgroundColor: _colors.surfaceContainerHigh,
+        foregroundColor: _colors.onSurface),
+    onPressed: () async {
+      final playlist = destination == _Page.library && collection == 'Playlists' ? selectedPlaylist : null;
+      final favorite = player.settings.favoriteIds.contains(track.id);
+      final value = await showMediaItemSheet(
+        context: context,
+        title: track.title,
+        subtitle: [track.artist, track.source].where((text) => text.isNotEmpty).join(' · '),
+        artwork: Artwork(seed: track.title, telegram: telegram, track: track, small: true),
+        details: mediaItemDetails(track, video: false),
+        actions: [
+          const MediaItemAction('play', 'Play', Icons.play_arrow_rounded, primary: true),
+          MediaItemAction('favorite', favorite ? 'Remove from favorites' : 'Add to favorites',
+              favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, selected: favorite),
+          const MediaItemAction('queue', 'Add to queue', Icons.queue_music_rounded),
+          const MediaItemAction('next', 'Play next', Icons.playlist_play_rounded),
+          const MediaItemAction('playlist', 'Add to playlist', Icons.playlist_add_rounded),
+          if (playlist != null)
+            const MediaItemAction('remove', 'Remove from playlist', Icons.remove_circle_outline_rounded, destructive: true),
+        ],
+      );
+      if (!mounted || value == null) return;
       try {
         switch (value) {
+          case 'play':
+            if (onPlay != null) { onPlay(); } else { await player.play(track); }
           case 'favorite':
             await player.toggleFavorite(track);
+          case 'queue':
+            player.enqueue(track);
+            _notice('Added to queue');
           case 'next':
             player.playNext(track);
             _notice('Playing next');
           case 'playlist':
             await _choosePlaylist(track);
           case 'remove':
-            final name = selectedPlaylist;
-            if (name != null) await player.removeFromPlaylist(name, track);
+            if (playlist != null) await player.removeFromPlaylist(playlist, track);
         }
       } on StateError catch (e) {
         _notice(e.message);
       }
     },
-    itemBuilder: (_) => [
-      for (final (value, icon, label) in [
-        (
-          'favorite',
-          player.settings.favoriteIds.contains(track.id)
-              ? Icons.favorite_rounded
-              : Icons.favorite_border_rounded,
-          player.settings.favoriteIds.contains(track.id)
-              ? 'Remove from favorites'
-              : 'Add to favorites',
-        ),
-        ('next', Icons.play_arrow_rounded, 'Play next'),
-        ('playlist', Icons.playlist_add_rounded, 'Add to playlist'),
-        if (collection == 'Playlists' && selectedPlaylist != null)
-          (
-            'remove',
-            Icons.remove_circle_outline_rounded,
-            'Remove from playlist',
-          ),
-      ])
-        PopupMenuItem<String>(
-          value: value,
-          padding: EdgeInsets.zero,
-          child: AuralisMenuRow(icon: icon, title: label),
-        ),
-    ],
   );
 
   List<Track> _collectionTracks() {
@@ -2578,7 +2579,7 @@ class _PlayerShellState extends State<PlayerShell>
                 },
                 icon: const Icon(Icons.playlist_add_rounded, size: 20),
               ),
-              _trackActions(track),
+              _trackActions(track, onPlay: onPlay),
             ],
           ),
         ),
@@ -3252,11 +3253,7 @@ class _PlayerShellState extends State<PlayerShell>
                                     ),
                                   ),
                                   const SizedBox(width: 16),
-                                  Icon(
-                                    Icons.play_circle_fill_rounded,
-                                    size: 32,
-                                    color: _colors.primary,
-                                  ),
+                                  _trackActions(player.queue[nextIndex]),
                                 ],
                               ),
                             ),
