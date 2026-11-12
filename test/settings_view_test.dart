@@ -220,6 +220,11 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        final compact = size.width < 900;
+        if (compact) {
+          await tester.tap(find.byTooltip('Library'));
+          await tester.pumpAndSettle();
+        }
         await tester.tap(find.byTooltip('Settings').first);
         await tester.pumpAndSettle();
         if (size.width == 320) {
@@ -238,7 +243,9 @@ void main() {
               .getTopLeft(
                 find
                     .ancestor(
-                      of: find.byTooltip('Back to Home'),
+                      of: find.byTooltip(
+                        compact ? 'Back to Library' : 'Back to Home',
+                      ),
                       matching: find.byType(IconButton),
                     )
                     .first,
@@ -343,7 +350,12 @@ void main() {
         await tester.pumpAndSettle();
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
-        expect(find.text('Your Mix'), findsOneWidget);
+        expect(
+          compact
+              ? find.byKey(const ValueKey('library-collection-menu'))
+              : find.text('Your Mix'),
+          findsOneWidget,
+        );
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
       },
