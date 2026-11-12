@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.175
+
+- Move manual video refresh to Browse. Refresh the selected video channel and discover new Telegram channels from the same control.
+
+## 0.1.174
+
+- Fade in Now Playing artwork and controls as the panel expands, removing the blank panel pause on mobile and desktop.
+
 ## 0.1.173
 
 - Fix the Flutter analyzer warning in the Music Browse layout toggle.
