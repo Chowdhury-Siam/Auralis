@@ -246,7 +246,7 @@ extension _DiscoveryPages on _PlayerShellState {
                     ),
                   ),
                 ),
-                if (sync != null)
+                if (!_mobileNavigation && sync != null)
                   IconButton.filledTonal(
                     tooltip: 'Account & sync',
                     onPressed: () => Navigator.of(context).push<void>(
@@ -256,10 +256,6 @@ extension _DiscoveryPages on _PlayerShellState {
                     ),
                     icon: const Icon(Icons.cloud_outlined, size: 20),
                   ),
-                if (_mobileNavigation) ...[
-                  _telegramButton(),
-                  _settingsButton(),
-                ],
               ],
             ),
             const SizedBox(height: 10),
@@ -408,15 +404,7 @@ extension _DiscoveryPages on _PlayerShellState {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(child: _search('Search your music', discover: true)),
-                if (_mobileNavigation) ...[
-                  const SizedBox(width: 8),
-                  _settingsButton(),
-                ],
-              ],
-            ),
+            _search('Search your music', discover: true),
             const SizedBox(height: 12),
             if (library.loading) const LinearProgressIndicator(minHeight: 2),
             if (library.error != null) _banner(library.error!),
@@ -424,7 +412,7 @@ extension _DiscoveryPages on _PlayerShellState {
               _sectionHeading(
                 MediaQuery.textScalerOf(context).scale(20) > 30
                     ? 'Browse'
-                    : 'Browse your library',
+                    : 'Browse ${_browseBy.label.toLowerCase()}',
                 action: discoveryLayoutButton(
                   list: _browseAsList,
                   onPressed: _toggleBrowseLayout,
