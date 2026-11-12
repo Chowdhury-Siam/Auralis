@@ -4,6 +4,8 @@ enum _DragMode { seek, volume, brightness, zoom }
 
 enum _BoostInput { pointer, space }
 
+enum _FeedbackPosition { top, left, right }
+
 class _VideoHud extends StatefulWidget {
   const _VideoHud(this.session, this.video);
 
@@ -19,6 +21,11 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   mpv.Player get player => session._player!;
   ColorScheme get colors => Theme.of(context).colorScheme;
   bool get _playing => player.state.playing;
+  bool get _buffering =>
+      session._error == null &&
+      (session._loading ||
+          player.state.buffering ||
+          session._startupTimeout?.isActive == true);
   bool get _gestures =>
       session._data.gestures &&
       !session._locked &&
@@ -39,6 +46,10 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   _DragMode? _drag;
   String? _feedback;
   IconData? _feedbackIcon;
+  _FeedbackPosition _feedbackPosition = _FeedbackPosition.top;
+  static const _playButtonSize = 64.0;
+  static const _skipButtonSize = 48.0;
+  static const _transportGap = 12.0;
   DateTime? _lastZoomUpdate;
   VideoSkipSegment? _lastSegment;
 
@@ -119,7 +130,12 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     }
   }
 
-  void _feedbackFor(String text, IconData icon, {bool resetSeek = true}) {
+  void _feedbackFor(
+    String text,
+    IconData icon, {
+    bool resetSeek = true,
+    _FeedbackPosition position = _FeedbackPosition.top,
+  }) {
     _feedbackTimer?.cancel();
     if (!mounted) return;
     if (resetSeek) {
@@ -129,6 +145,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     setState(() {
       _feedback = text;
       _feedbackIcon = icon;
+      _feedbackPosition = position;
     });
     _feedbackTimer = Timer(const Duration(milliseconds: 1200), () {
       if (!mounted) return;
@@ -269,6 +286,8 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   void _dragUpdate(ScaleUpdateDetails details, Size size) {
     if (!_gestures) return;
     final delta = details.localFocalPoint - _dragOrigin;
+    final left = _dragOrigin.dx < size.width / 2;
+    final side = left ? _FeedbackPosition.left : _FeedbackPosition.right;
     if (details.pointerCount > 1 || (_startZoom > .02 && _drag == null)) {
       _drag = _DragMode.zoom;
     }
@@ -277,7 +296,6 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       if (delta.dx.abs() >= delta.dy.abs()) {
         _drag = _DragMode.seek;
       } else {
-        final left = _dragOrigin.dx < size.width / 2;
         final brightness =
             Platform.isAndroid && left != session._data.swapSides;
         _drag = brightness ? _DragMode.brightness : _DragMode.volume;
@@ -308,14 +326,22 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
           0.0,
           max,
         );
-        _feedbackFor('${(value * 100).round()}%', Icons.volume_up_rounded);
+        _feedbackFor(
+          '${(value * 100).round()}%',
+          Icons.volume_up_rounded,
+          position: side,
+        );
         unawaited(_perform(() => player.setVolume(value * 100)));
       case _DragMode.brightness:
         final value = (_gestureValue - delta.dy / size.height * 1.5).clamp(
           .01,
           1.0,
         );
-        _feedbackFor('${(value * 100).round()}%', Icons.brightness_6_rounded);
+        _feedbackFor(
+          '${(value * 100).round()}%',
+          Icons.brightness_6_rounded,
+          position: side,
+        );
         unawaited(session._setBrightness(value));
       case _DragMode.zoom:
         final now = DateTime.now();
@@ -414,7 +440,11 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
         0.0,
         session._data.volumeBoost ? 130.0 : 100.0,
       );
-      _feedbackFor('${volume.round()}%', Icons.volume_up_rounded);
+      _feedbackFor(
+        '${volume.round()}%',
+        Icons.volume_up_rounded,
+        position: _FeedbackPosition.right,
+      );
       unawaited(_perform(() => player.setVolume(volume)));
     } else if (session._mpvKey(event) case final String name) {
       unawaited(_perform(() => session._native.command(['keypress', name])));
@@ -426,7 +456,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
 
   Widget _button(
     String label,
-    IconData icon,
+    IconData? icon,
     Future<void> Function()? action, {
     double size = 44,
     bool selected = false,
@@ -461,16 +491,16 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     );
   }
 
-  Widget _pill(Widget child) => DecoratedBox(
+  Widget _pill(
+    Widget child, {
+    EdgeInsets padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+  }) => DecoratedBox(
     decoration: BoxDecoration(
       color: colors.surfaceContainerHigh.withValues(alpha: .74),
       border: Border.all(color: colors.onSurface.withValues(alpha: .13)),
       borderRadius: BorderRadius.circular(26),
     ),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      child: child,
-    ),
+    child: Padding(padding: padding, child: child),
   );
 
   Widget _top(bool wide) {
@@ -542,19 +572,23 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
         'Previous video',
         Icons.skip_previous_rounded,
         session._index > 0 ? () => session._step(-1) : null,
-        size: 48,
+        size: _skipButtonSize,
       ),
-      const SizedBox(width: 12),
+      const SizedBox(width: _transportGap),
       _button(
         _playing ? 'Pause video' : 'Play video',
-        _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+        _buffering
+            ? null
+            : _playing
+            ? Icons.pause_rounded
+            : Icons.play_arrow_rounded,
         session._loading || session._error != null
             ? null
             : session._togglePlayback,
         selected: true,
-        size: 64,
+        size: _playButtonSize,
       ),
-      const SizedBox(width: 12),
+      const SizedBox(width: _transportGap),
       _button(
         'Next video',
         Icons.skip_next_rounded,
@@ -562,7 +596,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                 (session._shuffle && session._queue.length > 1)
             ? () => session._step(1)
             : null,
-        size: 48,
+        size: _skipButtonSize,
       ),
     ],
   );
@@ -867,6 +901,52 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     );
   }
 
+  Widget _feedbackOverlay(String text, Size viewport, double inset) {
+    final icon = Icon(_feedbackIcon, size: 20, color: colors.primary);
+    final label = Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: colors.onSurface, fontWeight: FontWeight.w700),
+    );
+    if (_feedbackPosition == _FeedbackPosition.top) {
+      return Center(
+        child: Transform.translate(
+          offset: Offset(0, -math.min(76.0, viewport.height / 4)),
+          child: _pill(
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [icon, const SizedBox(width: 8), Flexible(child: label)],
+            ),
+          ),
+        ),
+      );
+    }
+
+    const transportWidth = _playButtonSize + 2 * (_skipButtonSize + _transportGap);
+    final sideWidth = (viewport.width - 2 * inset - transportWidth) / 2 - 6;
+    if (sideWidth <= 0) return const SizedBox.shrink();
+    return Align(
+      alignment: _feedbackPosition == _FeedbackPosition.left
+          ? Alignment.centerLeft
+          : Alignment.centerRight,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: sideWidth),
+        child: _pill(
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              icon,
+              const SizedBox(height: 3),
+              FittedBox(fit: BoxFit.scaleDown, child: label),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        ),
+      ),
+    );
+  }
+
   Widget _overlay(bool wide, bool short, double horizontalInset) {
     final shown = _visible && !session._locked && session._error == null;
     final duration = MediaQuery.disableAnimationsOf(context)
@@ -1029,10 +1109,22 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                   valueListenable: session._video!.rect,
                   builder: (context, texture, _) {
                     final inset = _horizontalControlInset(box.biggest, texture);
-                    return _overlay(
-                      box.maxWidth - 2 * inset >= 640,
-                      box.maxHeight < 380,
-                      inset,
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _overlay(
+                          box.maxWidth - 2 * inset >= 640,
+                          box.maxHeight < 380,
+                          inset,
+                        ),
+                        if (_feedback case final String text)
+                          IgnorePointer(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: inset),
+                              child: _feedbackOverlay(text, box.biggest, inset),
+                            ),
+                          ),
+                      ],
                     );
                   },
                 ),
@@ -1069,36 +1161,14 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
-                if (session._error == null &&
-                    (session._loading ||
-                        player.state.buffering ||
-                        session._startupTimeout?.isActive == true))
+                if (_buffering)
                   const IgnorePointer(
-                    child: Align(
-                      alignment: Alignment(0, -.42),
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-                if (_feedback case final String text)
-                  IgnorePointer(
-                    child: Align(
-                      alignment: Alignment(_lastSeekDirection * .63, -.26),
-                      child: _pill(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(_feedbackIcon, color: colors.primary),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                text,
-                                style: TextStyle(
-                                  color: colors.onSurface,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
+                    child: Center(
+                      child: SizedBox.square(
+                        dimension: 28,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          semanticsLabel: 'Loading video',
                         ),
                       ),
                     ),
