@@ -47,65 +47,6 @@ extension _VideoPlaybackConfig on _VideoPlaybackState {
     }
   }
 
-  Future<void> _configurationPanel(BuildContext context) async {
-    final input = await _choose<bool>(context, 'mpv configuration', [
-      (value: false, label: 'mpv.conf', selected: _data.mpvConfig.isNotEmpty),
-      (
-        value: true,
-        label: 'input.conf',
-        selected: _data.inputConfig.isNotEmpty,
-      ),
-    ]);
-    if (input == null || !context.mounted || !_canPlay) return;
-    final filename = input ? 'input.conf' : 'mpv.conf';
-    var text = input ? _data.inputConfig : _data.mpvConfig;
-    String? error;
-    await showAuralisDialog<void>(
-      context: context,
-      builder: (dialog) => StatefulBuilder(
-        builder: (context, update) => AuralisDialog(
-          title: Text(filename),
-          content: TextFormField(
-            initialValue: text,
-            minLines: 3,
-            maxLines: 8,
-            maxLength: 32768,
-            autocorrect: false,
-            onChanged: (value) => text = value,
-            decoration: InputDecoration(
-              hintText: input ? 'Ctrl+j seek 10' : 'keep-open=yes',
-              errorText: error,
-              helperText: 'Changes load when you reopen the player.',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialog),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (text.length > 32768 ||
-                    text.contains(String.fromCharCode(0))) {
-                  update(() => error = 'Enter a valid configuration.');
-                  return;
-                }
-                if (input) {
-                  _data.inputConfig = text;
-                } else {
-                  _data.mpvConfig = text;
-                }
-                _saveSettings();
-                Navigator.pop(dialog);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   String? _mpvKey(KeyEvent event) {
     if (!_customKeysLoaded) return null;
     final label = event.logicalKey.keyLabel.toLowerCase();
