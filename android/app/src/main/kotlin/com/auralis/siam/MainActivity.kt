@@ -139,6 +139,11 @@ class MainActivity : AudioServiceActivity() {
         videoWindow?.onIntent(intent)
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) videoWindow?.onWindowFocused()
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         videoWindow?.onUserLeave()
