@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:auralis/app.dart';
 import 'package:auralis/app_navigation.dart';
+import 'package:auralis/discovery_widgets.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/stats_view.dart';
@@ -210,8 +211,9 @@ void main() {
     expect(find.text('Search your Artists'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'sol');
     await tester.pumpAndSettle();
-    expect(find.text('Lunar'), findsNothing);
-    await tester.tap(find.text('Solar'));
+    final lunar = find.widgetWithText(DiscoveryTile, 'Lunar');
+    expect(lunar, findsNothing);
+    await tester.tap(find.widgetWithText(DiscoveryTile, 'Solar'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('track-title-1:1')), findsOneWidget);
     expect(find.byKey(const ValueKey('track-title-1:0')), findsNothing);
@@ -219,7 +221,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Lunar');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Lunar'));
+    await tester.tap(lunar);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('track-title-1:0')), findsOneWidget);
     expect(find.byKey(const ValueKey('track-title-1:1')), findsNothing);
