@@ -194,6 +194,7 @@ class VideoLibraryPage extends StatefulWidget {
     required this.save,
     required this.pickFiles,
     required this.playlists,
+    this.historyArtwork,
     this.changes,
     this.embedded = false,
     this.onPlay,
@@ -205,6 +206,7 @@ class VideoLibraryPage extends StatefulWidget {
   final Future<void> Function() save;
   final Future<List<VideoSource>> Function() pickFiles;
   final bool playlists;
+  final Widget? Function(VideoSource)? historyArtwork;
   final Listenable? changes;
   final bool embedded;
   final ValueChanged<VideoSelection>? onPlay;
@@ -406,7 +408,9 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
       icon: widget.playlists
           ? Icons.playlist_play_rounded
           : Icons.history_rounded,
-      summary: widget.playlists
+      summary: widget.embedded
+          ? null
+          : widget.playlists
           ? inPlaylist
                 ? '${list.length} ${list.length == 1 ? 'video' : 'videos'}'
                 : '${entries.length} ${entries.length == 1 ? 'playlist' : 'playlists'} · ${entries.fold<int>(0, (count, entry) => count + entry.value.length)} videos'
@@ -521,6 +525,7 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
               return _VideoPlaylistCard(
                 name: entry.key,
                 sources: entry.value,
+                showCount: !widget.embedded,
                 onOpen: () => setState(() => _selected = entry.key),
                 onRename: () => _rename(entry.key),
                 onRemove: () => _removePlaylist(entry.key),
@@ -547,6 +552,7 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                 key: ValueKey(source.id),
                 source: source,
                 date: date,
+                artwork: widget.historyArtwork?.call(source),
                 status: status(source),
                 progress: progress(source),
                 onTap: () => _play([source], 0),
