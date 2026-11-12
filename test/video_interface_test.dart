@@ -33,7 +33,7 @@ void main() {
 
   for (final style in AppNavigationStyle.values) {
     testWidgets(
-      'Video shares Music navigation appearance and searches for channels: ${style.name}',
+      'Video Browse shares Music navigation appearance and searches for channels: ${style.name}',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = const Size(390, 844);
@@ -84,7 +84,25 @@ void main() {
         await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
         await tester.pumpAndSettle();
         expect(find.byType(DiscoveryHero), findsOneWidget);
+        final musicShortcut = find.widgetWithIcon(
+          IconButton,
+          Icons.music_note_rounded,
+        );
+        expect(musicShortcut, findsNothing);
         final navigation = find.byKey(const ValueKey('video-navigation'));
+        if (style == AppNavigationStyle.fullWidth) {
+          expect(
+            tester.widget<NavigationBar>(find.byType(NavigationBar))
+                .destinations.whereType<NavigationDestination>()
+                .map((destination) => destination.label),
+            contains('Browse'),
+          );
+        } else {
+          expect(
+            find.descendant(of: navigation, matching: find.byTooltip('Browse')),
+            findsOneWidget,
+          );
+        }
         expect(tester.widget<AppNavigation>(navigation).style, style);
         expect(tester.widget<AppNavigation>(navigation).radius, 18);
         final floating = style != AppNavigationStyle.fullWidth;
@@ -106,7 +124,7 @@ void main() {
         await tester.tap(
           find.descendant(
             of: navigation,
-            matching: find.byIcon(Icons.search_rounded),
+            matching: find.byIcon(Icons.explore_outlined),
           ),
         );
         await tester.pumpAndSettle();
@@ -146,6 +164,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byTooltip('Choose video channel'), findsNothing);
         expect(find.text('Full movie'), findsOneWidget);
+        expect(musicShortcut, findsNothing);
         expect(tester.getSize(videoRow), searchRowSize);
         expectVideoViewport();
         final list = find.descendant(
@@ -295,7 +314,7 @@ void main() {
         lessThan(tester.getTopLeft(alpha).dy),
       );
 
-      await openTab(Icons.search_rounded);
+      await openTab(Icons.explore_outlined);
       Finder channelRow(MusicChat chat) => find.byKey(ValueKey(chat.id));
       Finder selectedIn(MusicChat chat) => find.descendant(
         of: channelRow(chat),
@@ -322,6 +341,13 @@ void main() {
       expect(find.byType(DiscoveryTile), findsNothing);
       expect(td.requests, hasLength(searchesBefore));
       expect(find.text(channel.title), findsNothing);
+      expect(
+        find.descendant(
+          of: channelRow(archive),
+          matching: find.byIcon(Icons.chevron_right_rounded),
+        ),
+        findsNothing,
+      );
       await tester.tap(find.text(archive.title));
       await tester.pumpAndSettle();
       expect(tester.widget<AppNavigation>(navigation).selected, 1);
@@ -333,6 +359,13 @@ void main() {
       await tester.pumpAndSettle();
       final searchField = find.widgetWithText(TextField, 'Search channels');
       expect(selectedIn(archive), findsOneWidget);
+      expect(
+        find.descendant(
+          of: channelRow(archive),
+          matching: find.byIcon(Icons.check_circle_rounded),
+        ),
+        findsOneWidget,
+      );
       expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
       await tester.tap(find.byTooltip('Show grid'));
       await tester.pumpAndSettle();
@@ -362,7 +395,7 @@ void main() {
     const Size(844, 390),
     const Size(1280, 800),
   ]) {
-    testWidgets('Video Home, Search and Library fit $size with large text', (
+    testWidgets('Video Home, Browse and Library fit $size with large text', (
       tester,
     ) async {
       tester.view.devicePixelRatio = 1;
@@ -407,8 +440,14 @@ void main() {
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      const libraryOptions = ['Playlists', 'History', 'Snapshots'];
+      for (final option in libraryOptions) {
+        expect(find.text(option), findsNothing);
+      }
+      final optionsMenu = find.byTooltip('Library options');
+      expect(optionsMenu, findsNothing);
       if (size.width >= 900) expect(find.byType(AppSidebar), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.search_rounded).last);
+      await tester.tap(find.byIcon(Icons.explore_outlined));
       await tester.pumpAndSettle();
       final searchField = find.widgetWithText(TextField, 'Search channels');
       expect(searchField, findsOneWidget);
@@ -423,6 +462,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text('Trailer'), findsOneWidget);
+      expect(optionsMenu.hitTestable(), findsOneWidget);
+      await tester.tap(optionsMenu);
+      await tester.pumpAndSettle();
+      for (final option in libraryOptions) {
+        expect(find.text(option).hitTestable(), findsOneWidget);
+      }
+      await tester.tap(find.text('History'));
+      await tester.pumpAndSettle();
+      expect(find.text('Video history'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   }
 }
