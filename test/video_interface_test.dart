@@ -152,6 +152,7 @@ void main() {
         expect(tester.widget<AppNavigation>(navigation).selected, 1);
         expect(find.text('Full movie'), findsOneWidget);
         expect(find.byTooltip('Back to channels'), findsOneWidget);
+        expect(find.byTooltip('Refresh videos'), findsOneWidget);
         expect(settings.videoChannelId, channel.id);
         final videoRow = find.byKey(ValueKey('${channel.id}:30'));
         final searchRowSize = tester.getSize(videoRow);
