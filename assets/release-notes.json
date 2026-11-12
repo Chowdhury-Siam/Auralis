@@ -1,6 +1,30 @@
 {
-  "current": "0.1.185",
+  "current": "0.1.189",
   "releases": [
+    {
+      "version": "0.1.189",
+      "changes": [
+        "Load full Telegram thumbnails for video History, including entries saved before restarting. Release completed streaming reads throughout playback to prevent memory from growing with the amount streamed."
+      ]
+    },
+    {
+      "version": "0.1.188",
+      "changes": [
+        "Keep video controls in place when the first picture appears. Hide the Android status and navigation bars during full-player playback, with an edge swipe to reveal them temporarily."
+      ]
+    },
+    {
+      "version": "0.1.187",
+      "changes": [
+        "Remove the video Quality menu and alternate stream switching. Telegram and local videos play their original files."
+      ]
+    },
+    {
+      "version": "0.1.186",
+      "changes": [
+        "Move Sort to the Library header and remove the collection Shuffle and totals in Music and Video. Use Browse to refresh and see each Telegram channel's media count. Music track rows keep queue actions in the three-dot menu."
+      ]
+    },
     {
       "version": "0.1.185",
       "changes": [
