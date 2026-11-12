@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.181
+
+- Add three-dot item actions to Music and Video lists, cards and video queues, opening an artwork-led Options / Info sheet with mode-specific playback, playlist and collection actions.
+
+## 0.1.180
+
+- Redesign Video playlists, history and snapshots with responsive cards, clearer summaries, larger frame previews and helpful empty states.
+
 ## 0.1.179
 
 - Remove duplicate Previous chapter and Next chapter shortcuts; keep chapter navigation in Chapters and bookmarks.
