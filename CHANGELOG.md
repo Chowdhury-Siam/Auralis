@@ -1,5 +1,21 @@
 # Auralis changes
 
+## 0.1.170
+
+- Rename Music Search to Browse and use the same compass icon as Video on mobile and desktop. Show Browse channels or Browse artists above the music collection.
+
+## 0.1.169
+
+- Remove the cloud, Telegram, and Settings shortcuts from mobile Music Home. Let the Music Search field fill the header.
+
+## 0.1.168
+
+- Remove Settings shortcuts from Video Home and Browse on mobile. Let channel search fill the Browse header.
+
+## 0.1.167
+
+- Add Orientation to the default Android portrait controls, remove A–B Loop, and make Fullscreen desktop-only.
+
 ## 0.1.166
 
 - Center video loading on play and pause, show brightness and volume on their gesture sides, and move seek feedback above the transport controls.
