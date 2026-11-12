@@ -6,6 +6,7 @@ import 'package:auralis/discovery_widgets.dart';
 import 'package:auralis/library_widgets.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
+import 'package:auralis/video_playback_data.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
 import 'package:flutter/material.dart';
@@ -277,6 +278,20 @@ void main() {
 
       await openTab(Icons.video_library_rounded);
       final alpha = find.text('Alpha'), zebra = find.text('Zebra');
+      await tester.tap(find.byTooltip('Video actions for Alpha'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('media-item-sheet')), findsOneWidget);
+      expect(find.text('Mark as watched'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('media-action-watched')));
+      await tester.pumpAndSettle();
+      final alphaSource = VideoSource.telegram(Track(id: '${channel.id}:30',
+          title: 'Alpha', artist: '', source: channel.title));
+      expect(settings.videoPlayback.isWatched(alphaSource), isTrue);
+      await tester.tap(find.byTooltip('Video actions for Alpha'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mark as unwatched'));
+      await tester.pumpAndSettle();
+      expect(settings.videoPlayback.isWatched(alphaSource), isFalse);
       expect(settings.librarySort, LibrarySort.title);
       expect(
         tester.getTopLeft(alpha).dy,
