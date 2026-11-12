@@ -103,7 +103,16 @@ void main() {
     expect(find.byTooltip('Library collection: Favorites'), findsOneWidget);
     await tester.tap(find.byTooltip('Settings').first);
     await tester.pumpAndSettle();
-    for (final section in SettingsSection.values) {
+    expect(find.byKey(const ValueKey('settings-video')), findsNothing);
+    await tester.enterText(
+      find.byKey(const ValueKey('settings-search')),
+      'mpv console',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('No matching settings'), findsOneWidget);
+    for (final section in SettingsSection.values.where(
+      (section) => section != SettingsSection.video,
+    )) {
       await tester.enterText(
         find.byKey(const ValueKey('settings-search')),
         section.title,
