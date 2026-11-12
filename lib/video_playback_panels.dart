@@ -438,10 +438,10 @@ extension _PlaybackPanels on _VideoPlaybackState {
       builder: (dialog) => ListenableBuilder(
         listenable: _changes,
         builder: (context, _) => _VideoPanel(
-          title: 'Now playing queue',
-          icon: Icons.queue_play_next_rounded,
-          detail: '${_index + 1} of ${_queue.length} · Drag to reorder',
-          width: 560,
+          title: 'Queue',
+          detail: '${_index + 1} of ${_queue.length}',
+          width: 480,
+          maxHeight: 480,
           scrollable: false,
           content: ReorderableListView.builder(
             shrinkWrap: true,
@@ -456,77 +456,138 @@ extension _PlaybackPanels on _VideoPlaybackState {
               _changed();
             },
             itemBuilder: (context, index) {
+              final theme = Theme.of(context);
+              final colors = theme.colorScheme;
               final entry = _queue[index];
               final current = index == _index;
               final time = entry.duration > Duration.zero
                   ? clockText(entry.duration)
                   : null;
-              return AuralisChoiceTile(
+              return Padding(
                 key: ValueKey(entry.id),
-                selected: current,
-                leading: SizedBox(
-                  width: 26,
-                  child: Center(
-                    child: current
-                        ? const Icon(Icons.equalizer_rounded, size: 20)
-                        : Text('${index + 1}'),
-                  ),
-                ),
-                title: Text(
-                  entry.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: current
-                    ? Text(time == null ? 'Current video' : 'Current video · $time')
-                    : time == null ? null : Text(time),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!current)
-                      IconButton(
-                        tooltip: 'Remove from queue',
-                        onPressed: () {
-                          final currentEntry = _source;
-                          _queue.remove(entry);
-                          _index = _queue.indexOf(currentEntry);
-                          _changed();
-                        },
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                      ),
-                    ReorderableDragStartListener(
-                      index: index,
-                      child: const Tooltip(
-                        message: 'Drag to reorder',
-                        child: Padding(
-                          padding: EdgeInsets.all(8),
-                          child: Icon(Icons.drag_handle_rounded),
-                        ),
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Material(
+                  color: current
+                      ? Color.alphaBlend(
+                          colors.primary.withValues(alpha: .16),
+                          colors.surfaceContainer,
+                        )
+                      : colors.surfaceContainer,
+                  borderRadius: BorderRadius.circular(12),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    dense: true,
+                    minTileHeight: 50,
+                    minVerticalPadding: 4,
+                    minLeadingWidth: 28,
+                    horizontalTitleGap: 8,
+                    contentPadding: const EdgeInsetsDirectional.only(
+                      start: 8,
+                      end: 2,
+                    ),
+                    selected: current,
+                    selectedColor: colors.primary,
+                    leading: SizedBox(
+                      width: 28,
+                      child: Center(
+                        child: current
+                            ? Semantics(
+                                label: 'Current video',
+                                child: Icon(
+                                  Icons.equalizer_rounded,
+                                  size: 18,
+                                  color: colors.primary,
+                                ),
+                              )
+                            : Text(
+                                '${index + 1}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                              ),
                       ),
                     ),
-                  ],
+                    title: Text(
+                      entry.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: current ? FontWeight.w700 : FontWeight.w500,
+                        color: colors.onSurface,
+                      ),
+                    ),
+                    subtitle: time == null
+                        ? null
+                        : Text(
+                            time,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!current)
+                          IconButton(
+                            tooltip: 'Remove from queue',
+                            onPressed: () {
+                              final currentEntry = _source;
+                              _queue.remove(entry);
+                              _index = _queue.indexOf(currentEntry);
+                              _changed();
+                            },
+                            icon: Icon(
+                              Icons.remove_circle_outline_rounded,
+                              size: 18,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ReorderableDragStartListener(
+                          index: index,
+                          child: Tooltip(
+                            message: 'Drag to reorder',
+                            child: SizedBox.square(
+                              dimension: 44,
+                              child: Icon(
+                                Icons.drag_indicator_rounded,
+                                size: 20,
+                                color: colors.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    onTap: () => Navigator.pop(dialog, entry),
+                  ),
                 ),
-                onTap: () => Navigator.pop(dialog, entry),
               );
             },
           ),
           actions: [
-            TextButton.icon(
+            FilledButton.tonalIcon(
               onPressed: () => saveVideoPlaylist(
                 dialog, _data, widget.music.settings.save, List<VideoSource>.of(_queue),
               ),
               icon: const Icon(Icons.playlist_add_rounded),
               label: const Text('Save as playlist'),
             ),
-            TextButton.icon(
-              onPressed: () {
-                _shuffle = !_shuffle;
+            FilterChip(
+              selected: _shuffle,
+              showCheckmark: false,
+              onSelected: (selected) {
+                _shuffle = selected;
                 _changed();
               },
-              icon: Icon(
+              avatar: Icon(
                 _shuffle ? Icons.shuffle_on_rounded : Icons.shuffle_rounded,
+                size: 18,
               ),
-              label: Text(_shuffle ? 'Shuffle on' : 'Shuffle'),
+              label: const Text('Shuffle'),
             ),
           ],
         ),
