@@ -82,13 +82,13 @@ class InitializerNativeCallable {
     _wakeUpNativeCallables.remove(ctx.address)?.close();
   }
 
-  /// Windows must join the native core before releasing its Dart callback.
+  /// Join the native core before releasing its Dart callback.
   Future<void> disposeAndDestroy(Pointer<generated.mpv_handle> ctx) async {
     mpv.mpv_set_wakeup_callback(ctx, nullptr, nullptr);
     _eventCallbacks.remove(ctx.address);
     final lock = _locks.remove(ctx.address);
     if (lock != null) await lock.synchronized(() {});
-    await compute(_terminateDestroy, (NativeLibrary.path, ctx.address));
+    await terminateDestroy(ctx);
     _wakeUpNativeCallables.remove(ctx.address)?.close();
     _releaseWindowsMta(_windowsMtaCookies.remove(ctx.address) ?? nullptr);
   }
@@ -117,6 +117,9 @@ typedef WakeUpNativeCallableMap = HashMap<int, WakeUpNativeCallable>;
 
 typedef EventCallback = Future<void> Function(Pointer<generated.mpv_event>);
 typedef EventCallbackMap = HashMap<int, EventCallback>;
+
+Future<void> terminateDestroy(Pointer<generated.mpv_handle> ctx) =>
+    compute(_terminateDestroy, (NativeLibrary.path, ctx.address));
 
 void _terminateDestroy((String, int) handle) {
   final mpv = generated.MPV(DynamicLibrary.open(handle.$1));
