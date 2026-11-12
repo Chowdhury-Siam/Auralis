@@ -799,236 +799,37 @@ extension _PlaybackPanels on _VideoPlaybackState {
     }
   }
 
-  Future<void> _settingsPanel(BuildContext context) async {
-    await showAuralisDialog<void>(
-      context: context,
-      builder: (dialog) => StatefulBuilder(
-        builder: (context, update) {
-          Widget toggle(String label, bool value, ValueChanged<bool> setter) =>
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(label),
-                value: value,
-                onChanged: (next) {
-                  update(() => setter(next));
-                  _saveSettings();
-                  _changed();
-                },
-              );
-          return AuralisDialog(
-            title: const Text('Player settings'),
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Seek interval · ${_data.seekSeconds} seconds'),
-                Slider(
-                  min: 5,
-                  max: 60,
-                  divisions: 11,
-                  value: _data.seekSeconds.toDouble().clamp(5, 60),
-                  onChanged: (value) =>
-                      update(() => _data.seekSeconds = value.round()),
-                  onChangeEnd: (_) => _saveSettings(),
-                ),
-                toggle(
-                  'Tap and swipe gestures',
-                  _data.gestures,
-                  (value) => _data.gestures = value,
-                ),
-                toggle(
-                  'Require double tap for every seek',
-                  _data.strictDoubleTap,
-                  (value) => _data.strictDoubleTap = value,
-                ),
-                if (Platform.isAndroid)
-                  toggle(
-                    'Swap brightness and volume sides',
-                    _data.swapSides,
-                    (value) => _data.swapSides = value,
-                  ),
-                toggle('Allow volume boost', _data.volumeBoost, (value) {
-                  _data.volumeBoost = value;
-                  if (!value && _player!.state.volume > 100) {
-                    unawaited(_player!.setVolume(100));
-                  }
-                }),
-                toggle(
-                  'Play immediately when opened',
-                  _data.autoplay,
-                  (value) => _data.autoplay = value,
-                ),
-                toggle(
-                  'Play next video automatically',
-                  _data.autoAdvance,
-                  (value) => _data.autoAdvance = value,
-                ),
-                toggle(
-                  'Automatically skip saved segments',
-                  _data.autoSkip,
-                  (value) => _data.autoSkip = value,
-                ),
-                toggle(
-                  'Include subtitles in snapshots',
-                  _data.snapshotSubtitles,
-                  (value) => _data.snapshotSubtitles = value,
-                ),
-                toggle(
-                  'Continue playing in the background',
-                  _data.background,
-                  (value) => _data.background = value,
-                ),
-                if (Platform.isAndroid) ...[
-                  toggle('GPU-next renderer (reopen video)', _data.gpuNext, (
-                    value,
-                  ) {
-                    _data.gpuNext = value;
-                  }),
-                  toggle('Match video frame rate', _data.matchRefreshRate, (
-                    value,
-                  ) {
-                    _data.matchRefreshRate = value;
-                    unawaited(_updateRefreshRate());
-                  }),
-                ],
-                if (Platform.isAndroid)
-                  toggle(
-                    'Picture in picture when leaving the app',
-                    _data.autoPip,
-                    (value) {
-                      _data.autoPip = value;
-                      unawaited(_updatePip());
-                    },
-                  ),
-              ],
+  Future<void> _videoSettingsPanel(BuildContext context) =>
+      showAuralisDialog<void>(
+        context: context,
+        builder: (dialog) => AuralisDialog(
+          title: const Text('Settings & diagnostics'),
+          content: VideoSettingsOptions(
+            settings: widget.music.settings,
+            onChanged: _changed,
+            onVolumeBoostDisabled: () {
+              final player = _player;
+              if (_canPlay && player != null && player.state.volume > 100) {
+                unawaited(player.setVolume(100));
+              }
+            },
+            onFrameRateChanged: () => unawaited(_updateRefreshRate()),
+            onAutoPipChanged: () => unawaited(_updatePip()),
+            diagnostics: {
+              VideoDiagnostic.decoder: _decoderPanel,
+              VideoDiagnostic.information: _infoPanel,
+              VideoDiagnostic.console: _consolePanel,
+              VideoDiagnostic.script: _loadVideoScript,
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog),
+              child: const Text('Done'),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialog),
-                child: const Text('Done'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _layoutPanel(BuildContext context) async {
-    var wide = MediaQuery.sizeOf(context).width >= 660;
-    var zone = VideoControlZone.topEnd;
-    await showAuralisDialog<void>(
-      context: context,
-      builder: (dialog) => StatefulBuilder(
-        builder: (context, update) {
-          void change(VoidCallback change) {
-            update(change);
-            _saveSettings();
-            _changed();
-          }
-
-          final items = _data
-              .controls(zone, wide: wide)
-              .where(_supportsControl)
-              .toList();
-          return AuralisDialog(
-            title: const Text('Player control layout'),
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final landscape in [false, true])
-                      ChoiceChip(
-                        label: Text(landscape ? 'Landscape' : 'Portrait'),
-                        selected: wide == landscape,
-                        onSelected: (_) => update(() => wide = landscape),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  children: [
-                    for (final value in VideoControlZone.values)
-                      ChoiceChip(
-                        label: Text(value.label),
-                        selected: zone == value,
-                        onSelected: (_) => update(() => zone = value),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text('Buttons in this area · ${items.length}/${zone.limit}'),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 2,
-                  children: [
-                    for (final control in [
-                      ...items,
-                      ...VideoControl.values.where(
-                        (item) => _supportsControl(item) && !items.contains(item),
-                      ),
-                    ])
-                      FilterChip(
-                        label: Text(_controlLabel(control)),
-                        selected: items.contains(control),
-                        onSelected:
-                            items.contains(control) || items.length < zone.limit
-                            ? (enabled) => change(() {
-                                _data.setControls(
-                                  zone,
-                                  wide: wide,
-                                  controls: [
-                                    ...items.where((item) => item != control),
-                                    if (enabled) control,
-                                  ],
-                                );
-                              })
-                            : null,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Transparent button backgrounds'),
-                  value: _data.transparentControls,
-                  onChanged: (value) =>
-                      change(() => _data.transparentControls = value),
-                ),
-                DropdownButton<VideoControlAnimation>(
-                  isExpanded: true,
-                  value: _data.animation,
-                  items: [
-                    for (final style in VideoControlAnimation.values)
-                      DropdownMenuItem(
-                        value: style,
-                        child: Text('Animation · ${style.label}'),
-                      ),
-                  ],
-                  onChanged: (style) {
-                    if (style != null) change(() => _data.animation = style);
-                  },
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () =>
-                    change(() => _data.setControls(zone, wide: wide)),
-                child: const Text('Reset this area'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialog),
-                child: const Text('Done'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
+          ],
+        ),
+      );
 
   Future<void> _sleepPanel(BuildContext context) async {
     final remaining = _sleepAt?.difference(DateTime.now()).inMinutes;
@@ -1310,16 +1111,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
         _VideoOption(_saveFrame, 'Save video frame', Icons.photo_camera_outlined),
         _VideoOption(() => _framePanel(context), 'Frame navigation', Icons.movie_outlined),
       ]),
-      _VideoMenuGroup('Settings & diagnostics', 'Controls, decoder and advanced tools', Icons.settings_outlined, [
-        _VideoOption(() => _settingsPanel(context), 'Player settings', Icons.settings_outlined),
-        _VideoOption(() => _layoutPanel(context), 'Player control layout', Icons.dashboard_customize_outlined),
-        _VideoOption(() => _customControlsPanel(context), 'Custom buttons', Icons.extension_outlined),
-        _VideoOption(() => _decoderPanel(context), 'Video decoder', Icons.memory_rounded),
-        _VideoOption(() => _infoPanel(context), 'Playback information', Icons.info_outline_rounded),
-        _VideoOption(() => _consolePanel(context), 'mpv console', Icons.terminal_rounded),
-        _VideoOption(() => _loadVideoScript(context), 'Load a player script', Icons.code_rounded),
-        _VideoOption(() => _configurationPanel(context), 'mpv configuration', Icons.build_outlined),
-      ]),
     ];
     final fullscreen = isFullscreen(context);
     _VideoMenuGroup? page;
@@ -1378,6 +1169,12 @@ extension _PlaybackPanels on _VideoPlaybackState {
                       icon: section.icon,
                       onTap: () => update(() => page = section),
                     ),
+                  _VideoMenuRow(
+                    label: 'Video settings',
+                    detail: 'Player options and playback diagnostics',
+                    icon: Icons.settings_outlined,
+                    onTap: () => select(() => _videoSettingsPanel(context)),
+                  ),
                 ] else
                   for (final item in group.items) item.row(select),
               ],
