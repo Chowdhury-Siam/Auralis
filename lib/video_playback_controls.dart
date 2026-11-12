@@ -853,12 +853,12 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     );
   }
 
-  double _horizontalControlInset(Size viewport, Rect? texture) {
-    final state = player.state;
-    final source = texture != null && texture.width > 1 && texture.height > 1
-        ? texture.size
-        : Size((state.width ?? 0).toDouble(), (state.height ?? 0).toDouble());
-    final picture = applyBoxFit(session._fit.boxFit, source, viewport).destination;
+  double _horizontalControlInset(Size viewport) {
+    final picture = applyBoxFit(
+      session._fit.boxFit,
+      session._controlReferenceSize,
+      viewport,
+    ).destination;
     final pictureInset = picture.isEmpty
         ? 0.0
         : (viewport.width - picture.width) / 2;
@@ -1075,10 +1075,9 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                       : null,
                   onScaleEnd: _gestures ? _dragEnd : null,
                 ),
-                ValueListenableBuilder<Rect?>(
-                  valueListenable: session._video!.rect,
-                  builder: (context, texture, _) {
-                    final inset = _horizontalControlInset(box.biggest, texture);
+                Builder(
+                  builder: (context) {
+                    final inset = _horizontalControlInset(box.biggest);
                     return Stack(
                       fit: StackFit.expand,
                       children: [
