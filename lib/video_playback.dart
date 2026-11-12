@@ -132,6 +132,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
   final _subscriptions = <StreamSubscription<dynamic>>[];
   final _changes = ValueNotifier(0);
   final _log = <String>[];
+  final _closing = Completer<Track?>();
   Future<void>? _openingTask, _releaseTask;
   late final _queue = List<VideoSource>.of(widget.sources);
   late int _index = widget.initialIndex;
@@ -142,6 +143,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
   VideoController? _video;
   AudioSession? _session;
   Timer? _checkpoint, _sleepTimer, _thermalTimer;
+  Timer? _startupTimeout;
   DateTime? _sleepAt;
   String? _error;
   bool _loading = true,
@@ -155,6 +157,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
       _repeatVideo = false,
       _resumeSeek = false;
   bool _appInBackground = false, _selectingFile = false;
+  bool _acceptVideoParams = false;
+  List<DeviceOrientation>? _requestedOrientations;
   bool _immersive = false;
   bool _hasHistoryRecord = false;
   bool _probingCrop = false, _cropped = false;
@@ -184,7 +188,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   _Orientation get _orientation => _Orientation.values.firstWhere(
     (value) => value.name == _data.orientations[_source.id],
-    orElse: () => _Orientation.free,
+    orElse: () => _Orientation.video,
   );
   bool get _canPlay =>
       mounted &&
@@ -299,7 +303,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
   }
 
   void _setError(String message) {
-    if (!_canPlay) return;
+    if (!_canPlay || _error != null) return;
+    _startupTimeout?.cancel();
     _error = message;
     _loading = false;
     _changed();
@@ -331,6 +336,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   Future<void> _openVideo({required bool resume}) async {
     _opening = _loading = true;
+    _startupTimeout?.cancel();
+    _acceptVideoParams = false;
     _positionReady = false;
     _resumeSeek = resume && !_data.isWatched(_source) &&
         _data.positions[_source.id] != null;
@@ -340,6 +347,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     _skipStart = _autoSkipEnd = null;
     _secondarySubtitle = 'no';
     _changed();
+    unawaited(_applyOrientation(fullscreen: _immersive));
     try {
       if (!_source.canPlay) {
         throw const FormatException('Choose a Telegram or local video.');
@@ -368,12 +376,25 @@ class _VideoPlaybackState extends State<VideoPlayback>
           }),
           player.stream.width.listen((_) => unawaited(_updateUpscaling())),
           player.stream.height.listen((_) => unawaited(_updateUpscaling())),
+          if (Platform.isAndroid)
+            player.stream.videoParams.listen((_) {
+              if (!_acceptVideoParams || !_canPlay) return;
+              if (!player.state.playing &&
+                  (player.state.width ?? 0) > 0 &&
+                  (player.state.height ?? 0) > 0) {
+                _startupTimeout?.cancel();
+              }
+              unawaited(_applyOrientation(fullscreen: _immersive));
+            }),
           player.stream.duration.listen((duration) {
             if (duration > Duration.zero && _canPlay) {
               unawaited(_readChapters());
             }
           }),
           player.stream.position.listen((position) {
+            if (_acceptVideoParams && position > Duration.zero) {
+              _startupTimeout?.cancel();
+            }
             if (position > Duration.zero && !_opening && !_positionReady) {
               _positionReady = true;
               if (_data.hdrProfile != _activeHdr) unawaited(_updateUpscaling());
@@ -449,12 +470,16 @@ class _VideoPlaybackState extends State<VideoPlayback>
       }
       var source = _source;
       if (source.telegram case final Track reference when reference.fileId == null) {
-        final restored = await widget.telegram.restoreVideo(reference);
+        final restored = await Future.any([
+          widget.telegram.restoreVideo(reference),
+          _closing.future,
+        ]);
         if (!_canPlay) return;
         if (restored == null) {
           throw const FormatException('This Telegram video is unavailable.');
         }
         _queue[_index] = source = VideoSource.telegram(restored);
+        unawaited(_applyOrientation(fullscreen: _immersive));
       }
       final track = source.telegram;
       if (track == null) await widget.proxy.stop();
@@ -478,6 +503,17 @@ class _VideoPlaybackState extends State<VideoPlayback>
         }
       }
       if (!_canPlay) return;
+      _acceptVideoParams = true;
+      if (Platform.isAndroid) {
+        _startupTimeout = Timer(const Duration(seconds: 45), () {
+          _setError('The video took too long to start. Try again.');
+          if (_opening && track != null) {
+            unawaited(
+              _releaseStep(widget.proxy.interrupt, 'interrupt video reads'),
+            );
+          }
+        });
+      }
       await _player!.open(
         mpv.Media(uri.toString(), start: start),
         play: _data.autoplay,
@@ -485,7 +521,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
       if (!_canPlay || _error != null) return;
       widget.onOpened(source);
       _hasHistoryRecord = _data.history.containsKey(source.id);
-      await _applyOrientation();
+      await _applyOrientation(fullscreen: _immersive);
       unawaited(_updateRefreshRate());
     } catch (failure) {
       if (_canPlay) {
@@ -533,7 +569,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
       if (!_canPlay || id != _source.id) return;
       _chapters = result;
       _changed();
-      if (_orientation == _Orientation.video) await _applyOrientation();
     } catch (_) {
       // Chapter metadata is optional.
     }
@@ -620,12 +655,13 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   Future<void> _applyOrientation({bool fullscreen = false}) async {
     if (!Platform.isAndroid || _closed) return;
-    final orientation = _orientation;
-    final media = _player?.state.videoParams;
-    final width = media?.dw ?? _player?.state.width ?? 0;
-    final height = media?.dh ?? _player?.state.height ?? 0;
+    final orientation = widget.minimized ? _Orientation.free : _orientation;
+    final state = _acceptVideoParams ? _player?.state : null;
+    // media_kit's display dimensions already account for rotation metadata.
+    final width = state?.width ?? _source.telegram?.videoWidth ?? 0;
+    final height = state?.height ?? _source.telegram?.videoHeight ?? 0;
     final allowed = switch (orientation) {
-      _Orientation.free when fullscreen =>
+      _Orientation.free when fullscreen && !widget.minimized =>
         _Orientation.sensorLandscape.orientations,
       _Orientation.video when width > 0 && height > 0 =>
         (width > height
@@ -634,7 +670,12 @@ class _VideoPlaybackState extends State<VideoPlayback>
             .orientations,
       _ => orientation.orientations,
     };
-    await SystemChrome.setPreferredOrientations(allowed);
+    if (listEquals(allowed, _requestedOrientations)) return;
+    _requestedOrientations = allowed;
+    await _releaseStep(
+      () => SystemChrome.setPreferredOrientations(allowed),
+      'set video orientation',
+    );
   }
 
   Future<T> _withFilePicker<T>(Future<T> Function() pick) async {
@@ -666,6 +707,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
   void didUpdateWidget(covariant VideoPlayback oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.minimized != oldWidget.minimized) {
+      unawaited(_applyOrientation(fullscreen: _immersive));
       unawaited(_updatePip());
       unawaited(_updateRefreshRate());
     }
@@ -704,6 +746,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
     VideoPlayback playback, {
     required bool detachSurface,
   }) async {
+    if (Platform.isAndroid) {
+      // Close active HTTP sockets so mpv can abort a read during shutdown.
+      // Keep the Telegram file buffer until the decoder has stopped.
+      await _releaseStep(playback.proxy.interrupt, 'interrupt video reads');
+    }
     await _releaseStep(() async {
       await _openingTask;
     }, 'finish opening media');
@@ -747,6 +794,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   Future<void> _resetAndroidWindow() async {
     try {
+      await SystemChrome.setPreferredOrientations([]);
       await _videoWindow.invokeMethod<void>('autoPip', {
         'auto': false,
         'playing': false,
@@ -755,7 +803,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
         await _videoWindow.invokeMethod<void>('brightness');
       }
       await _videoWindow.invokeMethod<void>('matchRefreshRate');
-      await SystemChrome.setPreferredOrientations([]);
       if (_immersive) {
         await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       }
@@ -772,7 +819,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
     if (_releaseTask case final Future<void> release) return release;
     _saveProgress();
     _closed = true;
+    _closing.complete(null);
     _checkpoint?.cancel();
+    _startupTimeout?.cancel();
     _sleepTimer?.cancel();
     _thermalTimer?.cancel();
     widget.music.audio.removeListener(_musicChanged);
@@ -807,14 +856,21 @@ class _VideoPlaybackState extends State<VideoPlayback>
   }
 
   Future<void> _exitFullscreen() async {
-    await defaultExitNativeFullscreen();
     _immersive = false;
-    if (!_closed) await _applyOrientation();
+    if (Platform.isAndroid) {
+      if (_closed) return;
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      await _applyOrientation();
+    } else {
+      await defaultExitNativeFullscreen();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_surfaceDetached) return const SizedBox.shrink();
+    if (_surfaceDetached) {
+      return const PopScope(canPop: false, child: SizedBox.shrink());
+    }
     final video = _video;
     final surface = Scaffold(
       backgroundColor: Colors.black,
@@ -959,7 +1015,10 @@ class _VideoPlaybackState extends State<VideoPlayback>
         children: [
           Text(_error ?? '', textAlign: TextAlign.center),
           if (_canPlay)
-            FilledButton.tonal(onPressed: _open, child: const Text('Retry')),
+            FilledButton.tonal(
+              onPressed: _opening ? null : _open,
+              child: const Text('Retry'),
+            ),
         ],
       ),
     ),
