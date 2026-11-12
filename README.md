@@ -147,23 +147,23 @@ Android APKs now always use optimized release mode. Run **Set up Android signing
 
 ### First launch
 
-A fresh install opens with **Worker Sync**. Sign in or create an account with your Worker URL, or connect later in **Settings → Account & sync**. Choose **Customize setup** for Telegram, backup restore, Android permissions, lyrics and interactive appearance previews, or **Skip setup** to go straight to Home. You can reopen setup under **Settings → About → Set up Auralis**.
+A fresh install opens with **Worker Sync**. Sign in or create an account with your Worker URL, or connect later in **Settings → Data & sync → Account & sync**. Choose **Customize setup** for Telegram, backup restore, Android permissions, lyrics and interactive appearance previews, or **Skip setup** to go straight to Home. You can reopen setup under **Settings → About → Set up Auralis**.
 
 | Welcome | Navigation | Translation menu |
 | --- | --- | --- |
 | ![Auralis setup welcome](docs/screenshots/setup-welcome-390.png) | ![Navigation choices](docs/screenshots/setup-navigation-390.png) | ![Compact translation menu](docs/screenshots/translation-menu-390.png) |
 
 
-1. Open **Telegram** in Auralis. Release builds configured with the application's Telegram credentials do not ask for an API ID or API hash.
+1. Open **Browse** and choose **Connect Telegram**. Release builds configured with the application's Telegram credentials do not ask for an API ID or API hash.
 2. Choose your country/calling code and enter your phone number, or paste a full international number beginning with `+`. Enter the Telegram login code and two-step password if requested. The code page shows the destination number; use **Change number** to correct it and request a replacement code.
-3. Select one or more channels and choose **Open Library**.
+3. Select one or more channels in **Browse**, then open **Library** to play their music together.
 4. Wait for the selected channels' audio posts to load, then choose a track to play.
 
 Choose **Music** or **Video** as your default interface in setup or **Settings → General → Open on startup**. Hold **Home** for about a second to switch interfaces. Pick a Telegram channel in **Video → Browse**, then view its video posts in **Library**. See the [video playback guide](docs/GUIDE.md#telegram-video).
 
 Maintainers must set the two [Telegram build secrets](docs/TELEGRAM_BUILD.md) before building releases. Local/PR builds without application credentials retain manual API setup using an application registered at [my.telegram.org](https://my.telegram.org).
 
-Use **Load more** in Telegram to discover more accessible channels and **Refresh** in Library to scan for new music or retry partial failures. Refresh caches only missing artwork or lyrics and reuses valid saved items, including after restart. Auralis respects your account's existing channel access; it does not join channels automatically.
+Use **Load more channels** in Browse to discover more accessible channels and **Refresh** in Library to scan for new music or retry partial failures. Refresh caches only missing artwork or lyrics and reuses valid saved items, including after restart. Auralis respects your account's existing channel access; it does not join channels automatically.
 
 ---
 
@@ -174,11 +174,12 @@ Use **Load more** in Telegram to discover more accessible channels and **Refresh
 | View | What it holds |
 | --- | --- |
 | **All songs** | Audio from the currently selected Telegram channels |
+| **Artists** | Tracks grouped by artist from the selected channels |
 | **Favorites** | Tracks you have marked with the heart action |
 | **Playlists** | Named, ordered collections you can create, rename, and delete |
 | **Recently played** | The last 100 unique successfully opened tracks |
 
-Track/channel counts and icon-only Refresh/Sort controls sit in the Library header. On narrow screens, the counts appear beneath the title. Home shows your Daily Mix, recent music, and listening stats. Open Browse to find songs or explore channels and artists in a grid or list. On phones, the Telegram and Settings shortcuts are on the Library tab.
+Track/channel counts and icon-only Refresh/Sort controls sit in the Library header. On narrow screens, the counts appear beneath the title. Home shows your Daily Mix, recent music, and listening stats. Open Browse to search and select channels in a grid or list. Use the Library collection menu to switch to Artists and search by name. On phones, open Settings from Library.
 
 Use a track's actions to favorite it, play it next, or add it to a playlist. Library sorting leaves saved playlist order unchanged. Deleting a playlist removes the collection, not files from Telegram.
 
@@ -316,7 +317,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive contains source version **0.1.170+171**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
+Auralis is under active development. This archive contains source version **0.1.172+173**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
