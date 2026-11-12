@@ -15,12 +15,13 @@ class AppNavigation extends StatelessWidget {
     required this.onSelected,
     this.onHomeHold,
     this.libraryIcon = Icons.library_music_rounded,
+    this.browseChannels = false,
     this.homeHoldHint = 'Open Telegram Video',
   });
   final AppNavigationStyle style;
   final double radius;
   final int selected;
-  final bool reducedMotion;
+  final bool reducedMotion, browseChannels;
   final ValueChanged<int> onSelected;
   final VoidCallback? onHomeHold;
   final IconData libraryIcon;
@@ -32,6 +33,17 @@ class AppNavigation extends StatelessWidget {
     Icons.library_music_rounded,
   ];
 
+  static List<({String label, IconData icon})> _tabs(
+    IconData libraryIcon, {
+    required bool browseChannels,
+  }) => [
+    (label: labels[0], icon: icons[0]),
+    browseChannels
+        ? (label: 'Browse', icon: Icons.explore_outlined)
+        : (label: labels[1], icon: icons[1]),
+    (label: labels[2], icon: libraryIcon),
+  ];
+
   Widget _destination(int index, Widget child) =>
       index == 0 && onHomeHold != null
       ? HomeHold(onHold: onHomeHold!, hint: homeHoldHint, child: child)
@@ -40,6 +52,7 @@ class AppNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final tabs = _tabs(libraryIcon, browseChannels: browseChannels);
     if (style == AppNavigationStyle.fullWidth) {
       return NavigationBar(
         height: 80,
@@ -48,13 +61,13 @@ class AppNavigation extends StatelessWidget {
         onDestinationSelected: onSelected,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: [
-          for (var i = 0; i < labels.length; i++)
+          for (final (i, tab) in tabs.indexed)
             _destination(
               i,
               NavigationDestination(
-                icon: Icon(i == 2 ? libraryIcon : icons[i]),
-                label: labels[i],
-                tooltip: i == 0 && onHomeHold != null ? '' : labels[i],
+                icon: Icon(tab.icon),
+                label: tab.label,
+                tooltip: i == 0 && onHomeHold != null ? '' : tab.label,
               ),
             ),
         ],
@@ -73,7 +86,7 @@ class AppNavigation extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             child: Row(
               children: [
-                for (var i = 0; i < labels.length; i++)
+                for (final (i, tab) in tabs.indexed)
                   Expanded(
                     child: _destination(
                       i,
@@ -81,7 +94,7 @@ class AppNavigation extends StatelessWidget {
                         selected: selected == i,
                         button: true,
                         child: Tooltip(
-                          message: labels[i],
+                          message: tab.label,
                           triggerMode: i == 0 && onHomeHold != null
                               ? TooltipTriggerMode.manual
                               : null,
@@ -107,7 +120,7 @@ class AppNavigation extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Icon(
-                                    i == 2 ? libraryIcon : icons[i],
+                                    tab.icon,
                                     size: 21,
                                     color: selected == i
                                         ? colors.onPrimaryContainer
@@ -116,7 +129,7 @@ class AppNavigation extends StatelessWidget {
                                 ),
                                 if (expressive)
                                   Text(
-                                    labels[i],
+                                    tab.label,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: Theme.of(context)
@@ -256,6 +269,7 @@ class AppSidebar extends StatelessWidget {
     required this.onHomeHold,
     this.homeHoldHint = 'Open Telegram Video',
     this.libraryIcon = Icons.library_music_rounded,
+    this.browseChannels = false,
     this.icon = Icons.graphic_eq_rounded,
     this.tagline = 'A LITTLE CLOSER TO MUSIC',
     this.caption = 'YOUR MUSIC. YOUR SPACE.\n\nIndependent. Open source.',
@@ -264,7 +278,7 @@ class AppSidebar extends StatelessWidget {
     this.telegramSelected = false,
     this.settingsSelected = false,
   });
-  final bool narrow, short, telegramSelected, settingsSelected;
+  final bool narrow, short, telegramSelected, settingsSelected, browseChannels;
   final int selected;
   final ValueChanged<int> onSelected;
   final VoidCallback onHomeHold;
@@ -275,6 +289,7 @@ class AppSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final tabs = AppNavigation._tabs(libraryIcon, browseChannels: browseChannels);
     Widget item(
       int index,
       IconData icon,
@@ -393,11 +408,11 @@ class AppSidebar extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                for (var i = 0; i < AppNavigation.labels.length; i++)
+                for (final (i, tab) in tabs.indexed)
                   item(
                     i,
-                    i == 2 ? libraryIcon : AppNavigation.icons[i],
-                    AppNavigation.labels[i],
+                    tab.icon,
+                    tab.label,
                     () => onSelected(i),
                     selected == i,
                   ),
