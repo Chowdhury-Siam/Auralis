@@ -554,7 +554,7 @@ void main() {
         expect(start.top, greaterThan(size.height * .5));
         await tester.pump(const Duration(milliseconds: 150));
         final middle = tester.getRect(surface);
-        expect(tester.widget<Opacity>(body).opacity, 0);
+        expect(tester.widget<Opacity>(body).opacity, inExclusiveRange(0, 1));
         expect(middle.height, greaterThan(start.height));
         expect(middle.top, lessThan(start.top));
         expect(
@@ -739,11 +739,14 @@ void main() {
         identical(tester.widget<SnapshotWidget>(cachedBlur), snapshot),
         isTrue,
       );
+      final body = find.byKey(const ValueKey('now-playing-content-opacity'));
+      await gesture.moveBy(Offset(0, -tester.getTopLeft(surface).dy * .45));
+      await tester.pump();
+      expect(tester.widget<Opacity>(body).opacity, inExclusiveRange(0, 1));
       await gesture.moveBy(const Offset(0, -700));
       await tester.pump(const Duration(milliseconds: 250));
       expect(tester.getRect(surface).top, 0);
-      final body = find.byKey(const ValueKey('now-playing-content-opacity'));
-      expect(tester.widget<Opacity>(body).opacity, 0);
+      expect(tester.widget<Opacity>(body).opacity, 1);
       expect(find.byKey(const ValueKey('close-now-playing')), findsOneWidget);
       await gesture.up();
       await tester.pumpAndSettle();
