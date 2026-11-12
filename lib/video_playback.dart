@@ -33,9 +33,11 @@ part 'video_playback_lookup.dart';
 part 'video_playback_config.dart';
 part 'video_playback_hdr.dart';
 part 'video_playback_tracks.dart';
+part 'video_playback_quality.dart';
 
 const _videoWindow = MethodChannel('app.auralis/video');
-final _desktopVideo = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+final _desktopVideo =
+    Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
 Future<({Uint8List bytes, String? path})?> _pickVideoDocument(
   String label,
@@ -60,7 +62,6 @@ Future<({Uint8List bytes, String? path})?> _pickVideoDocument(
   if (length > maxBytes) throw const FormatException('The file is too large.');
   return (bytes: await file.readAsBytes(), path: file.path);
 }
-
 
 class VideoPlayback extends StatefulWidget {
   const VideoPlayback({
@@ -163,6 +164,10 @@ class _VideoPlaybackState extends State<VideoPlayback>
   bool _appInBackground = false, _selectingFile = false;
   bool _acceptVideoParams = false;
   bool _automaticAudio = true, _automaticSubtitles = true;
+  VideoQuality? _selectedVideoQuality;
+  mpv.AudioTrack? _qualityAudio;
+  mpv.SubtitleTrack? _qualitySubtitle;
+  mpv.SubtitleTrack? _qualitySecondarySubtitle;
   int _trackGeneration = 0;
   Future<void> _trackUpdates = Future<void>.value();
   List<DeviceOrientation>? _requestedOrientations;
@@ -346,8 +351,14 @@ class _VideoPlaybackState extends State<VideoPlayback>
     _acceptVideoParams = false;
     _trackGeneration++;
     _automaticAudio = _automaticSubtitles = true;
+    _selectedVideoQuality = null;
+    _qualityAudio = null;
+    _qualitySubtitle = null;
+    _qualitySecondarySubtitle = null;
     _positionReady = false;
-    _resumeSeek = resume && !_data.isWatched(_source) &&
+    _resumeSeek =
+        resume &&
+        !_data.isWatched(_source) &&
         _data.positions[_source.id] != null;
     _error = null;
     _chapters = const [];
@@ -485,7 +496,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
         );
       }
       var source = _source;
-      if (source.telegram case final Track reference when reference.fileId == null) {
+      if (source.telegram case final Track reference
+          when reference.fileId == null) {
         final restored = await Future.any([
           widget.telegram.restoreVideo(reference),
           _closing.future,
@@ -522,16 +534,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
       }
       if (!_canPlay) return;
       _acceptVideoParams = true;
-      if (Platform.isAndroid) {
-        _startupTimeout = Timer(const Duration(seconds: 45), () {
-          _setError('The video took too long to start. Try again.');
-          if (_opening && track != null) {
-            unawaited(
-              _releaseStep(widget.proxy.interrupt, 'interrupt video reads'),
-            );
-          }
-        });
-      }
+      _armVideoStartupTimeout(track);
       await _player!.open(
         mpv.Media(uri.toString(), start: start),
         play: _data.autoplay,
@@ -559,6 +562,18 @@ class _VideoPlaybackState extends State<VideoPlayback>
     }
   }
 
+  void _armVideoStartupTimeout(Track? track) {
+    _startupTimeout?.cancel();
+    if (!Platform.isAndroid) return;
+    _startupTimeout = Timer(const Duration(seconds: 45), () {
+      _setError('The video took too long to start. Try again.');
+      if (_opening && track != null) {
+        unawaited(
+          _releaseStep(widget.proxy.interrupt, 'interrupt video reads'),
+        );
+      }
+    });
+  }
 
   Future<void> _readChapters() async {
     if (!_canPlay || _player == null) return;
