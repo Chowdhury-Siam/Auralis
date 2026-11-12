@@ -241,14 +241,9 @@ extension _DiscoveryPages on _PlayerShellState {
                       icon: const Icon(Icons.shuffle_rounded, size: 26),
                     )
                   : FilledButton.tonalIcon(
-                      onPressed:
-                          !telegram.ready
+                      onPressed: !telegram.ready
                           ? _openTelegram
-                          : settings.selectedChannels.isEmpty
-                          ? _openMusicChannels
-                          : library.loading
-                          ? null
-                          : _refreshLibrary,
+                          : _openMusicChannels,
                       icon: Icon(
                         !telegram.ready
                             ? Icons.send_rounded
@@ -259,7 +254,7 @@ extension _DiscoveryPages on _PlayerShellState {
                             ? 'Connect Telegram'
                             : settings.selectedChannels.isEmpty
                             ? 'Choose channels'
-                            : 'Refresh library',
+                            : 'Open Browse',
                       ),
                     ),
             ),
@@ -367,10 +362,20 @@ extension _DiscoveryPages on _PlayerShellState {
                   children: [
                     if (telegram.ready)
                       IconButton(
-                        tooltip: 'Load more channels',
-                        onPressed: telegram.busy
+                        key: const ValueKey('library-refresh'),
+                        tooltip: 'Refresh library',
+                        onPressed: telegram.busy ||
+                                library.saving ||
+                                library.loading ||
+                                _cachingLibrary
                             ? null
-                            : () => telegram.action(telegram.refreshChats),
+                            : () {
+                                telegram.clearChannelMediaCounts(video: false);
+                                unawaited(
+                                  telegram.action(telegram.refreshChats),
+                                );
+                                unawaited(_refreshLibrary());
+                              },
                         icon: const Icon(Icons.refresh_rounded),
                       ),
                     if (channels.isNotEmpty)
@@ -383,6 +388,15 @@ extension _DiscoveryPages on _PlayerShellState {
               ),
               const SizedBox(height: 8),
             ],
+            if (!_keyboardOpen &&
+                (_cachingLibrary || _cacheReport?.scope == _libraryCacheScope))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: _libraryCacheStatus(),
+                ),
+              ),
             Expanded(
               child: channels.isEmpty
                   ? ListView(
@@ -460,7 +474,7 @@ extension _DiscoveryPages on _PlayerShellState {
               child: const Text('Connect Telegram'),
             )
           else if (query.isEmpty)
-            const Text('Join a channel in Telegram, then load more channels.'),
+            const Text('Join a channel in Telegram, then refresh Browse.'),
         ],
       ),
     );
@@ -468,31 +482,37 @@ extension _DiscoveryPages on _PlayerShellState {
 
   Widget _musicChannelTile(MusicChat channel, int index) {
     final selected = library.selected(channel.id);
-    return DiscoveryTile(
+    return ChannelMediaCount(
       key: ValueKey(channel.id),
-      title: channel.title,
-      subtitle: selected ? 'Selected in Library' : null,
-      icon: Icons.campaign_rounded,
-      index: index,
-      list: _browseAsList,
+      count: library.trackCount(channel.id),
+      estimate: () => telegram.channelMediaCount(channel.id, video: false),
+      unit: 'track',
       selected: selected,
-      leading: _browseAsList
-          ? SizedBox.square(
-              dimension: 40,
-              child: ClipOval(
-                child: Artwork(
-                  seed: channel.title,
-                  small: true,
-                  telegram: telegram,
-                  fileId: channel.photoFileId,
-                  preview: channel.photoPreview,
+      builder: (subtitle) => DiscoveryTile(
+        title: channel.title,
+        subtitle: subtitle,
+        icon: Icons.campaign_rounded,
+        index: index,
+        list: _browseAsList,
+        selected: selected,
+        leading: _browseAsList
+            ? SizedBox.square(
+                dimension: 40,
+                child: ClipOval(
+                  child: Artwork(
+                    seed: channel.title,
+                    small: true,
+                    telegram: telegram,
+                    fileId: channel.photoFileId,
+                    preview: channel.photoPreview,
+                  ),
                 ),
-              ),
-            )
-          : null,
-      onTap: library.saving
-          ? null
-          : () => unawaited(library.select(channel, !selected)),
+              )
+            : null,
+        onTap: library.saving
+            ? null
+            : () => unawaited(library.select(channel, !selected)),
+      ),
     );
   }
 
@@ -503,16 +523,12 @@ extension _DiscoveryPages on _PlayerShellState {
 
   Widget _musicArtists(List<Track> tracks) {
     final query = search.text.trim().toLowerCase();
-    final artists = <String, ({String name, int count})>{};
+    final artists = <String, String>{};
     for (final track in tracks) {
       final name = _artistName(track);
       final key = name.toLowerCase();
       if (key.contains(query)) {
-        final previous = artists[key];
-        artists[key] = (
-          name: previous?.name ?? name,
-          count: (previous?.count ?? 0) + 1,
-        );
+        artists.putIfAbsent(key, () => name);
       }
     }
     final keys = artists.keys.toList()..sort();
@@ -529,15 +545,13 @@ extension _DiscoveryPages on _PlayerShellState {
       count: keys.length,
       itemBuilder: (_, index) {
         final artist = artists[keys[index]]!;
-        final count = artist.count;
         return DiscoveryTile(
           key: ValueKey(keys[index]),
-          title: artist.name,
-          subtitle: '$count ${count == 1 ? 'track' : 'tracks'}',
+          title: artist,
           icon: Icons.person_rounded,
           index: index,
           list: _artistsAsList,
-          onTap: () => _selectArtist(artist.name),
+          onTap: () => _selectArtist(artist),
         );
       },
     );
