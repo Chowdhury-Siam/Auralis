@@ -10,6 +10,7 @@ import 'package:auralis/telegram/telegram_service.dart';
 import 'package:auralis/video_playback.dart';
 import 'package:auralis/video_playback_data.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart' as mpv;
 import 'package:media_kit_video/media_kit_video.dart';
@@ -25,6 +26,7 @@ class _TestPlayerCore extends mpv.PlatformPlayer {
   }
 
   void seeked(Duration position) => positionController.add(position);
+  void rateChanged(double rate) => rateController.add(rate);
 }
 
 class _NativeVideo implements mpv.NativePlayer {
@@ -74,6 +76,12 @@ class _NativeVideo implements mpv.NativePlayer {
   Future<void> seek(Duration duration, {bool synchronized = true}) async {
     state = state.copyWith(position: duration);
     _core.seeked(duration);
+  }
+
+  @override
+  Future<void> setRate(double rate, {bool synchronized = true}) async {
+    state = state.copyWith(rate: rate);
+    _core.rateChanged(rate);
   }
 
   @override
@@ -376,6 +384,31 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          const space = LogicalKeyboardKey.space;
+          await tester.sendKeyDownEvent(space);
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(native.state.playing, isTrue);
+          await tester.sendKeyUpEvent(space);
+          await tester.pumpAndSettle();
+          expect(native.state.playing, isFalse);
+          await tester.sendKeyEvent(space);
+          await tester.pumpAndSettle();
+          expect(native.state.playing, isTrue);
+
+          await native.setRate(1.5);
+          await tester.sendKeyDownEvent(space);
+          await tester.pump(const Duration(milliseconds: 450));
+          expect(native.state.rate, 2);
+          expect(native.state.playing, isTrue);
+          await tester.sendKeyUpEvent(space);
+          await tester.pumpAndSettle();
+          expect(native.state.rate, 1.5);
+          expect(native.state.playing, isTrue);
+          await native.setRate(1);
+        }
+
+        surface.rect.value = const Rect.fromLTWH(0, 0, 1920, 1080);
         for (final size in [
           const Size(320, 540),
           const Size(800, 390),
@@ -398,6 +431,28 @@ void main() {
             find.byKey(const ValueKey('video-seek')).hitTestable(),
             findsOneWidget,
           );
+          if (size.width > size.height * 16 / 9) {
+            final pictureLeft = (size.width - size.height * 16 / 9) / 2;
+            final pictureRight = size.width - pictureLeft;
+            final back = tester.getRect(find.byTooltip('Back to videos'));
+            final more = tester.getRect(find.byTooltip('More player controls'));
+            final seek = tester.getRect(find.byKey(const ValueKey('video-seek')));
+            expect(back.left, greaterThan(pictureLeft));
+            expect(more.right, lessThan(pictureRight));
+            expect(seek.left, greaterThan(pictureLeft));
+            expect(seek.right, lessThan(pictureRight));
+          }
+          await tester.tap(find.byTooltip('Now playing queue'));
+          await tester.pumpAndSettle();
+          expect(find.text('Queue'), findsOneWidget);
+          expect(find.text('Save as playlist').hitTestable(), findsOneWidget);
+          expect(
+            find.widgetWithText(FilterChip, 'Shuffle').hitTestable(),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull, reason: 'Queue at $size');
+          await tester.tap(find.byTooltip('Close panel'));
+          await tester.pumpAndSettle();
           expect(tester.takeException(), isNull, reason: '$size');
         }
 
@@ -423,8 +478,22 @@ void main() {
 
         await tester.tap(find.byTooltip('Now playing queue'));
         await tester.pumpAndSettle();
-        expect(find.text('Current video'), findsOneWidget);
-        expect(find.text('Save as playlist'), findsOneWidget);
+        final current = find.widgetWithText(ListTile, 'First video');
+        expect(tester.widget<ListTile>(current).selected, isTrue);
+        expect(
+          find.descendant(
+            of: current,
+            matching: find.byTooltip('Remove from queue'),
+          ),
+          findsNothing,
+        );
+        final shuffle = find.widgetWithText(FilterChip, 'Shuffle');
+        expect(tester.widget<FilterChip>(shuffle).selected, isFalse);
+        await tester.tap(shuffle);
+        await tester.pumpAndSettle();
+        expect(tester.widget<FilterChip>(shuffle).selected, isTrue);
+        await tester.tap(shuffle);
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Second video'));
         await tester.pumpAndSettle();
         expect(native.opened.last.start, const Duration(seconds: 21));
