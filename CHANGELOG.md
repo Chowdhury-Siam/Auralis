@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.172
+
+- Make the mini-player follow vertical drags with a blurred background and a staged Now Playing reveal. Fade the full artwork and controls in once the panel settles.
+
+## 0.1.171
+
+- Select multiple music channels in Browse. Move Artists to the Library collection menu and remove the Telegram navigation item and Home sync shortcut.
+
 ## 0.1.170
 
 - Rename Music Search to Browse and use the same compass icon as Video on mobile and desktop. Show Browse channels or Browse artists above the music collection.
