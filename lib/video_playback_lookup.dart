@@ -299,7 +299,7 @@ extension _VideoPlaybackLookup on _VideoPlaybackState {
         allowRedirects: true,
       );
       if (_canPlay && _source.id == source) {
-        await _player!.setSubtitleTrack(
+        await _selectSubtitleTrack(
           mpv.SubtitleTrack.data(
             utf8.decode(data, allowMalformed: true),
             title: selected.title,
