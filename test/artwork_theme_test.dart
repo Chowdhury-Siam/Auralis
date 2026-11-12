@@ -110,6 +110,8 @@ void main() {
         await tester.pump();
       }
       expect(identical(scheme(tester), palette), isTrue);
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Settings').first);
       await tester.pumpAndSettle();
       expect(
