@@ -392,8 +392,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
             }
           }),
           player.stream.position.listen((position) {
-            if (_acceptVideoParams && position > Duration.zero) {
-              _startupTimeout?.cancel();
+            if (_acceptVideoParams &&
+                position > Duration.zero &&
+                _startupTimeout?.isActive == true) {
+              _startupTimeout!.cancel();
+              unawaited(_applyOrientation(fullscreen: _immersive));
             }
             if (position > Duration.zero && !_opening && !_positionReady) {
               _positionReady = true;
@@ -479,7 +482,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
           throw const FormatException('This Telegram video is unavailable.');
         }
         _queue[_index] = source = VideoSource.telegram(restored);
-        unawaited(_applyOrientation(fullscreen: _immersive));
       }
       final track = source.telegram;
       if (track == null) await widget.proxy.stop();
@@ -656,18 +658,19 @@ class _VideoPlaybackState extends State<VideoPlayback>
   Future<void> _applyOrientation({bool fullscreen = false}) async {
     if (!Platform.isAndroid || _closed) return;
     final orientation = widget.minimized ? _Orientation.free : _orientation;
-    final state = _acceptVideoParams ? _player?.state : null;
-    // media_kit's display dimensions already account for rotation metadata.
-    final width = state?.width ?? _source.telegram?.videoWidth ?? 0;
-    final height = state?.height ?? _source.telegram?.videoHeight ?? 0;
+    // Keep startup in landscape. After it starts, use the decoder's display
+    // dimensions, which already account for rotation metadata.
+    final state = _acceptVideoParams && _startupTimeout?.isActive != true
+        ? _player?.state
+        : null;
+    final width = state?.width ?? 0;
+    final height = state?.height ?? 0;
     final allowed = switch (orientation) {
       _Orientation.free when fullscreen && !widget.minimized =>
         _Orientation.sensorLandscape.orientations,
-      _Orientation.video when width > 0 && height > 0 =>
-        (width > height
-                ? _Orientation.sensorLandscape
-                : _Orientation.sensorPortrait)
-            .orientations,
+      _Orientation.video when width > 0 && height > width =>
+        _Orientation.sensorPortrait.orientations,
+      _Orientation.video => _Orientation.sensorLandscape.orientations,
       _ => orientation.orientations,
     };
     if (listEquals(allowed, _requestedOrientations)) return;
