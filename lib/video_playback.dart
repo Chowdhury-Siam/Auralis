@@ -22,6 +22,7 @@ import 'telegram/telegram_service.dart';
 import 'video_playback_data.dart';
 import 'video_settings.dart';
 import 'video_library.dart';
+import 'video_track_preferences.dart';
 
 part 'video_playback_controls.dart';
 part 'video_playback_panels.dart';
@@ -31,6 +32,7 @@ part 'video_playback_tools.dart';
 part 'video_playback_lookup.dart';
 part 'video_playback_config.dart';
 part 'video_playback_hdr.dart';
+part 'video_playback_tracks.dart';
 
 const _videoWindow = MethodChannel('app.auralis/video');
 final _desktopVideo = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -160,6 +162,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
       _resumeSeek = false;
   bool _appInBackground = false, _selectingFile = false;
   bool _acceptVideoParams = false;
+  bool _automaticAudio = true, _automaticSubtitles = true;
+  int _trackGeneration = 0;
+  Future<void> _trackUpdates = Future<void>.value();
   List<DeviceOrientation>? _requestedOrientations;
   bool _hasHistoryRecord = false;
   bool _probingCrop = false, _cropped = false;
@@ -339,6 +344,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
     _opening = _loading = true;
     _startupTimeout?.cancel();
     _acceptVideoParams = false;
+    _trackGeneration++;
+    _automaticAudio = _automaticSubtitles = true;
     _positionReady = false;
     _resumeSeek = resume && !_data.isWatched(_source) &&
         _data.positions[_source.id] != null;
@@ -349,6 +356,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     _changed();
     unawaited(_applyOrientation());
     try {
+      await _trackUpdates;
       if (!_source.canPlay) {
         throw const FormatException('Choose a Telegram or local video.');
       }
@@ -376,6 +384,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
           }),
           player.stream.width.listen((_) => unawaited(_updateUpscaling())),
           player.stream.height.listen((_) => unawaited(_updateUpscaling())),
+          player.stream.tracks.listen((_) {
+            if (_acceptVideoParams && _canPlay) {
+              unawaited(_preferVideoTracks());
+            }
+          }),
           if (Platform.isAndroid)
             player.stream.videoParams.listen((_) {
               if (!_acceptVideoParams || !_canPlay) return;
@@ -442,6 +455,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
         await video.platform.future;
         if (!_canPlay) return;
         await _native.setProperty('network-timeout', '60');
+        await _native.setProperty('alang', 'ja,jpn,jp,japan,japanese');
+        await _native.setProperty('slang', 'en,eng,english');
         await _applySavedConfigurations();
         for (final entry in _data.subtitleStyle.entries.toList()) {
           if (!_canPlay) return;
@@ -490,6 +505,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
       }
       if (!_canPlay) return;
       final start = _resumeSeek ? _data.positions[source.id] : null;
+      // Manual track IDs (including Off) belong to the previous video only.
+      await _player!.setAudioTrack(mpv.AudioTrack.auto());
+      await _player!.setSubtitleTrack(mpv.SubtitleTrack.auto());
       await _native.setProperty('start', 'none');
       if (Platform.isAndroid && _brightness == null) {
         try {
@@ -518,6 +536,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
         mpv.Media(uri.toString(), start: start),
         play: _data.autoplay,
       );
+      if (!_canPlay || _error != null) return;
+      await _preferVideoTracks();
       if (!_canPlay || _error != null) return;
       widget.onOpened(source);
       _hasHistoryRecord = _data.history.containsKey(source.id);
@@ -757,6 +777,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
       await _releaseStep(subscription.cancel, 'detach playback listener');
     }
     await _releaseStep(() => _shaderUpdates, 'finish video filter changes');
+    await _releaseStep(() => _trackUpdates, 'finish track changes');
     if (Platform.isWindows) {
       // Unload playback while the Windows renderer can still consume its last
       // update. Disposing the player also tears down the native texture.
