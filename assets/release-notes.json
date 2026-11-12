@@ -1,6 +1,18 @@
 {
-  "current": "0.1.175",
+  "current": "0.1.177",
   "releases": [
+    {
+      "version": "0.1.177",
+      "changes": [
+        "Move Settings & diagnostics into Video Settings. Open Video settings from the playback menu to use live diagnostics."
+      ]
+    },
+    {
+      "version": "0.1.176",
+      "changes": [
+        "Hide Lyrics & artwork in Video mode Settings and Settings search."
+      ]
+    },
     {
       "version": "0.1.175",
       "changes": [
