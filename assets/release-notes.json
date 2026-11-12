@@ -1,6 +1,18 @@
 {
-  "current": "0.1.173",
+  "current": "0.1.175",
   "releases": [
+    {
+      "version": "0.1.175",
+      "changes": [
+        "Move manual video refresh to Browse. Refresh the selected video channel and discover new Telegram channels from the same control."
+      ]
+    },
+    {
+      "version": "0.1.174",
+      "changes": [
+        "Fade in Now Playing artwork and controls as the panel expands, removing the blank panel pause on mobile and desktop."
+      ]
+    },
     {
       "version": "0.1.173",
       "changes": [
