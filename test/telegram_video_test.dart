@@ -26,6 +26,7 @@ Json post(int id, String name, {bool document = false}) {
       media: {
         'file_name': name,
         'duration': 90,
+        if (!document) ...{'width': 720, 'height': 1280},
         'mime_type': name.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4',
         media: {'id': id, 'size': 64},
       },
@@ -71,6 +72,8 @@ void main() {
       expect(page.nextMessageId, 10);
       expect(page.tracks.single.title, 'Clip');
       expect(page.tracks.single.size, 64);
+      expect(page.tracks.single.videoWidth, isNull);
+      expect(page.tracks.single.videoHeight, isNull);
       expect(td.requests.single['filter'], {
         '@type': 'searchMessagesFilterDocument',
       });
@@ -83,13 +86,15 @@ void main() {
       expect(video!.fileId, 12);
       expect(video.title, 'Trailer');
       expect(video.duration, const Duration(seconds: 90));
+      expect(video.videoWidth, 720);
+      expect(video.videoHeight, 1280);
       expect(Track.fromMessage(post(12, 'Trailer.mp4'), channel.title), isNull);
       expect(td.requests, hasLength(2));
     },
   );
 
   testWidgets(
-    'Search discovers a new channel and Library shows history and live videos before indexing catches up',
+    'Browse discovers a new channel and Library shows history and live videos before indexing catches up',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(390, 844);
@@ -147,7 +152,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: navigation,
-          matching: find.byIcon(Icons.search_rounded),
+          matching: find.byIcon(Icons.explore_outlined),
         ),
       );
       await tester.pumpAndSettle();
@@ -194,9 +199,30 @@ void main() {
       final watch = find.descendant(
         of: episode, matching: find.byTooltip('Mark as watched'),
       );
+      final artworkFilter = find.descendant(
+        of: episode,
+        matching: find.byType(ColorFiltered),
+      );
+      final title = find.descendant(
+        of: episode,
+        matching: find.text('New episode'),
+      );
+      final unwatchedColor = tester.widget<Text>(title).style?.color;
+      expect(artworkFilter, findsNothing);
       await tester.tap(watch);
       await tester.pumpAndSettle();
       expect(find.descendant(of: episode, matching: find.textContaining('Watched')), findsOneWidget);
+      expect(artworkFilter, findsOneWidget);
+      expect(
+        tester.widget<Text>(title).style?.color,
+        Theme.of(tester.element(title)).colorScheme.onSurfaceVariant,
+      );
+      await tester.tap(find.descendant(
+        of: episode, matching: find.byTooltip('Mark as unwatched'),
+      ));
+      await tester.pumpAndSettle();
+      expect(artworkFilter, findsNothing);
+      expect(tester.widget<Text>(title).style?.color, unwatchedColor);
       expect(find.text('Could not load videos'), findsNothing);
       final distance =
           tester.getCenter(find.text('Next episode')).dy -
@@ -254,7 +280,7 @@ void main() {
   }
 
   testWidgets(
-    'desktop channel selection stays in Search and Library keeps loaded videos',
+    'desktop channel selection stays in Browse and Library keeps loaded videos',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1100, 750);
@@ -315,6 +341,12 @@ void main() {
       await gesture.up();
       await tester.pumpAndSettle();
       expect(find.text('Auralis Video'), findsOneWidget);
+      expect(find.byTooltip('Telegram'), findsNothing);
+      final musicShortcut = find.widgetWithIcon(
+        IconButton,
+        Icons.music_note_rounded,
+      );
+      expect(musicShortcut, findsNothing);
       await tester.tap(find.text('Browse videos'));
       await tester.pumpAndSettle();
       await tester.tap(find.text(channel.title));
@@ -328,8 +360,9 @@ void main() {
       expect(find.text('New release'), findsOneWidget);
       expect(find.text('Older film'), findsOneWidget);
       expect(find.text('Load older videos'), findsNothing);
+      expect(musicShortcut, findsNothing);
 
-      await tester.tap(find.byTooltip('Search'));
+      await tester.tap(find.byTooltip('Browse'));
       await tester.pumpAndSettle();
       expect(find.text('Selected in Library'), findsOneWidget);
       await tester.tap(find.byTooltip('Library'));
@@ -342,7 +375,11 @@ void main() {
         ),
         hasLength(1),
       );
-      await tester.tap(find.byTooltip('Switch to Music'));
+      final returnGesture = await tester.startGesture(
+        tester.getCenter(find.byTooltip('Home')),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await returnGesture.up();
       await tester.pumpAndSettle();
       expect(find.text('Auralis Video'), findsNothing);
       expect(find.text('Your Mix'), findsOneWidget);
@@ -398,6 +435,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Auralis Video'), findsOneWidget);
       expect(find.text('Connect Telegram'), findsOneWidget);
+      expect(
+        find.widgetWithIcon(IconButton, Icons.music_note_rounded),
+        findsNothing,
+      );
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('General'));
