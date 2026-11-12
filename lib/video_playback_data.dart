@@ -197,7 +197,6 @@ enum VideoControl {
   lock('Lock controls'),
   orientation('Orientation'),
   speed('Playback speed'),
-  loop('A–B loop'),
   chapters('Chapters and bookmarks'),
   queue('Now playing queue'),
   zoom('Video size and zoom'),
@@ -225,12 +224,16 @@ enum VideoControlZone {
   ),
   bottomStart(
     'Bottom left',
-    [VideoControl.lock, VideoControl.speed, VideoControl.chapters],
     [
       VideoControl.lock,
       VideoControl.orientation,
       VideoControl.speed,
-      VideoControl.loop,
+      VideoControl.chapters,
+    ],
+    [
+      VideoControl.lock,
+      VideoControl.orientation,
+      VideoControl.speed,
       VideoControl.chapters,
     ],
   ),
