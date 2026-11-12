@@ -2,6 +2,8 @@ part of 'video_playback.dart';
 
 enum _DragMode { seek, volume, brightness, zoom }
 
+enum _BoostInput { pointer, space }
+
 class _VideoHud extends StatefulWidget {
   const _VideoHud(this.session, this.video);
 
@@ -12,7 +14,7 @@ class _VideoHud extends StatefulWidget {
   State<_VideoHud> createState() => _VideoHudState();
 }
 
-class _VideoHudState extends State<_VideoHud> {
+class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   _VideoPlaybackState get session => widget.session;
   mpv.Player get player => session._player!;
   ColorScheme get colors => Theme.of(context).colorScheme;
@@ -24,11 +26,11 @@ class _VideoHudState extends State<_VideoHud> {
       session._error == null;
   bool get _fullscreen => isFullscreen(context);
   final _subscriptions = <StreamSubscription<dynamic>>[];
-  Timer? _hide, _feedbackTimer;
+  Timer? _hide, _feedbackTimer, _spaceHold;
   bool _visible = true,
       _exitArmed = false,
-      _boosting = false,
       _remaining = true;
+  _BoostInput? _boostInput;
   double _startRate = 1, _gestureValue = 0, _startZoom = 0;
   int _lastSeekDirection = 0, _accumulated = 0;
   Offset _tap = Offset.zero, _dragOrigin = Offset.zero;
@@ -43,6 +45,7 @@ class _VideoHudState extends State<_VideoHud> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     session._changes.addListener(_refresh);
     _subscriptions.addAll([
       player.stream.playing.listen((playing) {
@@ -71,7 +74,15 @@ class _VideoHudState extends State<_VideoHud> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _cancelSpaceHold();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cancelSpaceHold();
+    _stopBoost(_BoostInput.pointer);
     session._changes.removeListener(_refresh);
     _hide?.cancel();
     _feedbackTimer?.cancel();
@@ -189,23 +200,62 @@ class _VideoHudState extends State<_VideoHud> {
     }
   }
 
-  void _longPress() {
-    if (!_gestures) return;
-    _boosting = true;
+  void _startBoost(_BoostInput input) {
+    if (_boostInput != null ||
+        !session._canPlay ||
+        session._opening ||
+        session._locked ||
+        session._error != null) {
+      return;
+    }
+    _boostInput = input;
     _startRate = player.state.rate;
-    _boostAt(2);
+    _boostAt(input, 2);
   }
 
-  void _boostAt(double rate) {
-    if (!_boosting) return;
-    _feedbackFor('${rate.toStringAsFixed(2)}×', Icons.speed_rounded);
+  void _boostAt(_BoostInput input, double rate) {
+    if (_boostInput != input) return;
+    _feedbackFor(
+      rate == 2 ? '2×' : '${rate.toStringAsFixed(2)}×',
+      Icons.speed_rounded,
+    );
     unawaited(_perform(() => player.setRate(rate)));
   }
 
-  void _longEnd() {
-    if (!_boosting) return;
-    _boosting = false;
-    unawaited(_perform(() => player.setRate(_startRate)));
+  void _stopBoost(_BoostInput input) {
+    if (_boostInput != input) return;
+    _boostInput = null;
+    final rate = _startRate;
+    if (session._canPlay) {
+      unawaited(_perform(() => player.setRate(rate)));
+    }
+  }
+
+  void _cancelSpaceHold() {
+    _spaceHold?.cancel();
+    _spaceHold = null;
+    _stopBoost(_BoostInput.space);
+  }
+
+  KeyEventResult _spaceKey(KeyEvent event) {
+    if (event is KeyDownEvent &&
+        !event.synthesized &&
+        !session._locked &&
+        session._canPlay) {
+      _spaceHold ??= Timer(
+        const Duration(milliseconds: 400),
+        () => _startBoost(_BoostInput.space),
+      );
+    }
+    if (_spaceHold == null) return KeyEventResult.ignored;
+    if (event is KeyUpEvent) {
+      final tap = _spaceHold!.isActive && !event.synthesized;
+      _cancelSpaceHold();
+      if (tap && !session._locked) {
+        unawaited(_perform(session._togglePlayback));
+      }
+    }
+    return KeyEventResult.handled;
   }
 
   void _dragStart(ScaleStartDetails details) {
@@ -331,8 +381,12 @@ class _VideoHudState extends State<_VideoHud> {
   Future<void> _toggleFullscreen() => toggleFullscreen(context);
 
   KeyEventResult _keys(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.space &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      return _spaceKey(event);
+    }
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
       unawaited(_back());
     } else if (session._locked) {
@@ -795,7 +849,25 @@ class _VideoHudState extends State<_VideoHud> {
     );
   }
 
-  Widget _overlay(bool wide, bool short) {
+  double _horizontalControlInset(Size viewport, Rect? texture) {
+    final state = player.state;
+    final source = texture != null && texture.width > 1 && texture.height > 1
+        ? texture.size
+        : Size((state.width ?? 0).toDouble(), (state.height ?? 0).toDouble());
+    final picture = applyBoxFit(session._fit.boxFit, source, viewport).destination;
+    final pictureInset = picture.isEmpty
+        ? 0.0
+        : (viewport.width - picture.width) / 2;
+    // A portrait video in a wide window can be narrower than the toolbar.
+    final maxInset = math.max(10.0, (viewport.width - 380) / 2);
+    final padding = MediaQuery.paddingOf(context);
+    return math.max(
+      math.max(padding.left, padding.right),
+      math.min(10 + pictureInset, maxInset),
+    );
+  }
+
+  Widget _overlay(bool wide, bool short, double horizontalInset) {
     final shown = _visible && !session._locked && session._error == null;
     final duration = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
@@ -861,7 +933,9 @@ class _VideoHudState extends State<_VideoHud> {
                     ),
                   ),
                   SafeArea(
-                    minimum: const EdgeInsets.fromLTRB(10, 6, 10, 2),
+                    minimum: EdgeInsets.fromLTRB(
+                      horizontalInset, 6, horizontalInset, 2,
+                    ),
                     child: Align(
                       alignment: Alignment.topCenter,
                       child: _top(wide),
@@ -869,7 +943,9 @@ class _VideoHudState extends State<_VideoHud> {
                   ),
                   Center(child: _transport()),
                   SafeArea(
-                    minimum: const EdgeInsets.fromLTRB(10, 2, 10, 2),
+                    minimum: EdgeInsets.fromLTRB(
+                      horizontalInset, 2, horizontalInset, 2,
+                    ),
                     child: Align(
                       alignment: Alignment.bottomCenter,
                       child: _bottom(wide, short),
@@ -884,23 +960,24 @@ class _VideoHudState extends State<_VideoHud> {
   @override
   Widget build(BuildContext context) {
     if (session._pip) return const SizedBox.expand();
-    final wide = MediaQuery.sizeOf(context).width >= 660;
-    final short = MediaQuery.sizeOf(context).height < 380;
     final segment = session._currentSegment;
     return PopScope(
       canPop:
           session.widget.minimized ||
-          (!session._locked && session.widget.onBack == null),
+          (!session._locked && (_fullscreen || session.widget.onBack == null)),
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop &&
             !session.widget.minimized &&
-            (session._locked || session.widget.onBack != null)) {
+            (session._locked || (!_fullscreen && session.widget.onBack != null))) {
           unawaited(_back());
         }
       },
       child: Focus(
         autofocus: true,
         onKeyEvent: _keys,
+        onFocusChange: (focused) {
+          if (!focused) _cancelSpaceHold();
+        },
         child: MouseRegion(
           onHover: (_) => _show(),
           child: LayoutBuilder(
@@ -923,23 +1000,42 @@ class _VideoHudState extends State<_VideoHud> {
                   onDoubleTap: _gestures
                       ? () => _doubleTap(box.maxWidth)
                       : null,
-                  onLongPressStart: _gestures ? (_) => _longPress() : null,
+                  onLongPressStart: _gestures
+                      ? (_) => _startBoost(_BoostInput.pointer)
+                      : null,
                   onLongPressMoveUpdate: _gestures
                       ? (details) {
                           final step = (details.offsetFromOrigin.dx / 40)
                               .round();
-                          _boostAt((2 + step * .25).clamp(.5, 3.0));
+                          _boostAt(
+                            _BoostInput.pointer,
+                            (2 + step * .25).clamp(.5, 3.0),
+                          );
                         }
                       : null,
-                  onLongPressEnd: _gestures ? (_) => _longEnd() : null,
-                  onLongPressCancel: _gestures ? _longEnd : null,
+                  onLongPressEnd: _gestures
+                      ? (_) => _stopBoost(_BoostInput.pointer)
+                      : null,
+                  onLongPressCancel: _gestures
+                      ? () => _stopBoost(_BoostInput.pointer)
+                      : null,
                   onScaleStart: _gestures ? _dragStart : null,
                   onScaleUpdate: _gestures
                       ? (details) => _dragUpdate(details, box.biggest)
                       : null,
                   onScaleEnd: _gestures ? _dragEnd : null,
                 ),
-                _overlay(wide, short),
+                ValueListenableBuilder<Rect?>(
+                  valueListenable: session._video!.rect,
+                  builder: (context, texture, _) {
+                    final inset = _horizontalControlInset(box.biggest, texture);
+                    return _overlay(
+                      box.maxWidth - 2 * inset >= 640,
+                      box.maxHeight < 380,
+                      inset,
+                    );
+                  },
+                ),
                 if (!session._locked &&
                     !session._pip &&
                     session._error == null &&
@@ -973,7 +1069,10 @@ class _VideoHudState extends State<_VideoHud> {
                       ),
                     ),
                   ),
-                if (session._loading || player.state.buffering)
+                if (session._error == null &&
+                    (session._loading ||
+                        player.state.buffering ||
+                        session._startupTimeout?.isActive == true))
                   const IgnorePointer(
                     child: Align(
                       alignment: Alignment(0, -.42),
