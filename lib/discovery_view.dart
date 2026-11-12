@@ -1,26 +1,5 @@
 part of 'app.dart';
 
-enum _BrowseBy {
-  channel('Channels', 'channel', Icons.campaign_rounded),
-  artist('Artists', 'artist', Icons.person_rounded);
-
-  const _BrowseBy(this.label, this.singular, this.icon);
-  final String label, singular;
-  final IconData icon;
-
-  String name(Track track) {
-    final value = (this == channel ? track.source : track.artist).trim();
-    return value.isEmpty ? 'Unknown $singular' : value;
-  }
-
-  String group(Track track) {
-    final separator = track.id.indexOf(':');
-    return this == channel && separator > 0
-        ? track.id.substring(0, separator)
-        : name(track).toLowerCase();
-  }
-}
-
 extension _DiscoveryPages on _PlayerShellState {
   Widget _sectionHeading(String title, {Widget? action}) => Row(
     children: [
@@ -55,7 +34,6 @@ extension _DiscoveryPages on _PlayerShellState {
       ...mix.where((track) => !picks.contains(track)).take(24 - picks.length),
     ];
     final stats = settings.listening;
-    final sync = widget.sync;
     final hasMusic = daily.isNotEmpty;
     final prompt = !telegram.ready
         ? 'Connect Telegram to bring your music into Auralis.'
@@ -234,29 +212,13 @@ extension _DiscoveryPages on _PlayerShellState {
           key: const PageStorageKey('home-scroll'),
           padding: EdgeInsets.only(bottom: _dockPadding),
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'AURALIS',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: _colors.primary,
-                      letterSpacing: 2,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                if (!_mobileNavigation && sync != null)
-                  IconButton.filledTonal(
-                    tooltip: 'Account & sync',
-                    onPressed: () => Navigator.of(context).push<void>(
-                      MaterialPageRoute(
-                        builder: (_) => SyncAccountPage(sync: sync),
-                      ),
-                    ),
-                    icon: const Icon(Icons.cloud_outlined, size: 20),
-                  ),
-              ],
+            Text(
+              'AURALIS',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: _colors.primary,
+                letterSpacing: 2,
+                fontWeight: FontWeight.w800,
+              ),
             ),
             const SizedBox(height: 10),
             DiscoveryHero(
@@ -280,11 +242,13 @@ extension _DiscoveryPages on _PlayerShellState {
                     )
                   : FilledButton.tonalIcon(
                       onPressed:
-                          telegram.ready && settings.selectedChannels.isNotEmpty
-                          ? library.loading
-                                ? null
-                                : _refreshLibrary
-                          : _openTelegram,
+                          !telegram.ready
+                          ? _openTelegram
+                          : settings.selectedChannels.isEmpty
+                          ? _openMusicChannels
+                          : library.loading
+                          ? null
+                          : _refreshLibrary,
                       icon: Icon(
                         !telegram.ready
                             ? Icons.send_rounded
@@ -376,27 +340,10 @@ extension _DiscoveryPages on _PlayerShellState {
   }
 
   Widget _discover() {
-    final groupId = _browseGroup;
-    final group = groupId == null
-        ? const <Track>[]
-        : library.tracks
-              .where((track) => _browseBy.group(track) == groupId)
-              .toList();
-    final groupName = group.isEmpty ? null : _browseBy.name(group.first);
-    final results = groupName != null || search.text.trim().isNotEmpty;
-    final groups = <String, List<Track>>{};
-    if (!results) {
-      for (final track in library.tracks) {
-        groups.putIfAbsent(_browseBy.group(track), () => []).add(track);
-      }
-    }
-    final entries = groups.entries.toList()
-      ..sort(
-        (a, b) => _browseBy
-            .name(a.value.first)
-            .toLowerCase()
-            .compareTo(_browseBy.name(b.value.first).toLowerCase()),
-      );
+    final query = search.text.trim().toLowerCase();
+    final channels = telegram.ready
+        ? _matchingMusicChannels(query)
+        : const <MusicChat>[];
     return Align(
       alignment: Alignment.topLeft,
       child: ConstrainedBox(
@@ -404,102 +351,50 @@ extension _DiscoveryPages on _PlayerShellState {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _search('Search your music', discover: true),
+            _search('Search your Channel', discover: true),
             const SizedBox(height: 12),
-            if (library.loading) const LinearProgressIndicator(minHeight: 2),
+            if (telegram.ready && telegram.error != null)
+              _banner(telegram.error!),
             if (library.error != null) _banner(library.error!),
-            if (!results && !_keyboardOpen) ...[
+            if (!_keyboardOpen) ...[
               _sectionHeading(
                 MediaQuery.textScalerOf(context).scale(20) > 30
                     ? 'Browse'
-                    : 'Browse ${_browseBy.label.toLowerCase()}',
-                action: discoveryLayoutButton(
-                  list: _browseAsList,
-                  onPressed: _toggleBrowseLayout,
+                    : 'Browse channels',
+                action: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (telegram.ready)
+                      IconButton(
+                        tooltip: 'Load more channels',
+                        onPressed: telegram.busy
+                            ? null
+                            : () => telegram.action(telegram.refreshChats),
+                        icon: const Icon(Icons.refresh_rounded),
+                      ),
+                    if (channels.isNotEmpty)
+                      discoveryLayoutButton(
+                        list: _browseAsList,
+                        onPressed: () =>
+                            setState(() => _browseAsList = !_browseAsList),
+                      ),
+                  ],
                 ),
               ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final type in _BrowseBy.values)
-                    ChoiceChip(
-                      label: Text(type.label),
-                      selected: type == _browseBy,
-                      onSelected: (_) => _setBrowseBy(type),
-                    ),
-                ],
-              ),
               const SizedBox(height: 8),
-            ] else if (results && (groupName != null || !_keyboardOpen))
-              Row(
-                children: [
-                  if (groupName != null)
-                    IconButton(
-                      tooltip: 'Back to browse',
-                      onPressed: () {
-                        search.clear();
-                        _selectBrowseGroup(null);
-                      },
-                      icon: const Icon(Icons.arrow_back_rounded),
-                    ),
-                  Expanded(
-                    child: Text(
-                      groupName ?? 'Search results',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ],
-              ),
+            ],
             Expanded(
-              child: results
-                  ? _trackList(
-                      _visibleTracks(group.isEmpty ? library.tracks : group),
-                    )
-                  : groups.isEmpty
+              child: channels.isEmpty
                   ? ListView(
                       padding: EdgeInsets.only(bottom: _dockPadding),
-                      children: [
-                        DiscoveryCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                library.loading
-                                    ? 'Finding your music'
-                                    : 'Your library is empty',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Add music channels in Telegram to browse songs and artists.',
-                              ),
-                              if (!library.loading)
-                                TextButton.icon(
-                                  onPressed: _openTelegram,
-                                  icon: const Icon(Icons.send_rounded),
-                                  label: const Text('Open Telegram'),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      children: [_musicBrowseEmpty(query)],
                     )
-                  : _browseAsList
-                  ? ListView.separated(
-                      key: const PageStorageKey('browse-list'),
-                      padding: EdgeInsets.only(bottom: _dockPadding),
-                      itemCount: entries.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 6),
-                      itemBuilder: (context, index) =>
-                          _browseTile(entries[index], index, list: true),
-                    )
-                  : GridView.builder(
-                      key: const PageStorageKey('browse-grid'),
-                      padding: EdgeInsets.only(bottom: _dockPadding),
-                      gridDelegate: discoveryGridDelegate(context),
-                      itemCount: entries.length,
-                      itemBuilder: (context, index) =>
-                          _browseTile(entries[index], index),
+                  : _discoveryTiles(
+                      page: 'channels',
+                      list: _browseAsList,
+                      count: channels.length,
+                      itemBuilder: (_, index) =>
+                          _musicChannelTile(channels[index], index),
                     ),
             ),
           ],
@@ -508,26 +403,143 @@ extension _DiscoveryPages on _PlayerShellState {
     );
   }
 
-  Widget _browseTile(
-    MapEntry<String, List<Track>> entry,
-    int index, {
-    bool list = false,
+  Widget _discoveryTiles({
+    required String page,
+    required bool list,
+    required int count,
+    required IndexedWidgetBuilder itemBuilder,
   }) {
-    final name = _browseBy.name(entry.value.first);
-    final count =
-        '${entry.value.length} ${entry.value.length == 1 ? 'track' : 'tracks'}';
-    void open() {
-      FocusManager.instance.primaryFocus?.unfocus();
-      _selectBrowseGroup(entry.key);
-    }
+    final key = PageStorageKey((page, list));
+    final padding = EdgeInsets.only(bottom: _dockPadding);
+    return list
+        ? ListView.separated(
+            key: key,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: padding,
+            itemCount: count,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: itemBuilder,
+          )
+        : GridView.builder(
+            key: key,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: padding,
+            gridDelegate: discoveryGridDelegate(context),
+            itemCount: count,
+            itemBuilder: itemBuilder,
+          );
+  }
 
+  List<MusicChat> _matchingMusicChannels(String query) {
+    final channels = {
+      for (final channel in player.settings.selectedChannels) channel.id: channel,
+      for (final channel in telegram.channels) channel.id: channel,
+    };
+    return channels.values
+        .where((channel) => channel.title.toLowerCase().contains(query))
+        .toList()
+      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+  }
+
+  Widget _musicBrowseEmpty(String query) {
+    return DiscoveryCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            !telegram.ready
+                ? 'Connect Telegram for your music'
+                : query.isNotEmpty
+                ? 'No matching channels'
+                : 'No Telegram channels available',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          if (!telegram.ready)
+            TextButton(
+              onPressed: _openTelegram,
+              child: const Text('Connect Telegram'),
+            )
+          else if (query.isEmpty)
+            const Text('Join a channel in Telegram, then load more channels.'),
+        ],
+      ),
+    );
+  }
+
+  Widget _musicChannelTile(MusicChat channel, int index) {
+    final selected = library.selected(channel.id);
     return DiscoveryTile(
-      title: name,
-      subtitle: count,
-      icon: _browseBy.icon,
+      key: ValueKey(channel.id),
+      title: channel.title,
+      subtitle: selected ? 'Selected in Library' : null,
+      icon: Icons.campaign_rounded,
       index: index,
-      list: list,
-      onTap: open,
+      list: _browseAsList,
+      selected: selected,
+      leading: _browseAsList
+          ? SizedBox.square(
+              dimension: 40,
+              child: ClipOval(
+                child: Artwork(
+                  seed: channel.title,
+                  small: true,
+                  telegram: telegram,
+                  fileId: channel.photoFileId,
+                  preview: channel.photoPreview,
+                ),
+              ),
+            )
+          : null,
+      onTap: library.saving
+          ? null
+          : () => unawaited(library.select(channel, !selected)),
+    );
+  }
+
+  String _artistName(Track track) {
+    final name = track.artist.trim();
+    return name.isEmpty ? 'Unknown artist' : name;
+  }
+
+  Widget _musicArtists(List<Track> tracks) {
+    final query = search.text.trim().toLowerCase();
+    final artists = <String, ({String name, int count})>{};
+    for (final track in tracks) {
+      final name = _artistName(track);
+      final key = name.toLowerCase();
+      if (key.contains(query)) {
+        final previous = artists[key];
+        artists[key] = (
+          name: previous?.name ?? name,
+          count: (previous?.count ?? 0) + 1,
+        );
+      }
+    }
+    final keys = artists.keys.toList()..sort();
+    if (keys.isEmpty) {
+      return _empty(
+        Icons.person_search_rounded,
+        'No matching artists',
+        'Try another artist name.',
+      );
+    }
+    return _discoveryTiles(
+      page: 'artists',
+      list: _artistsAsList,
+      count: keys.length,
+      itemBuilder: (_, index) {
+        final artist = artists[keys[index]]!;
+        final count = artist.count;
+        return DiscoveryTile(
+          key: ValueKey(keys[index]),
+          title: artist.name,
+          subtitle: '$count ${count == 1 ? 'track' : 'tracks'}',
+          icon: Icons.person_rounded,
+          index: index,
+          list: _artistsAsList,
+          onTap: () => _selectArtist(artist.name),
+        );
+      },
     );
   }
 }
