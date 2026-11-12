@@ -434,6 +434,35 @@ extension _PlaybackPanels on _VideoPlaybackState {
     }
   }
 
+  Widget _queueItemActions(BuildContext dialog, VideoSource entry) => IconButton.filledTonal(
+    tooltip: 'Video actions for ${entry.title}',
+    icon: const Icon(Icons.more_vert_rounded, size: 20),
+    onPressed: () async {
+      final action = await showVideoItemSheet(context: dialog, source: entry, data: _data,
+        playNext: entry.id != _source.id,
+        removeLabel: entry.id == _source.id ? null : 'Remove from queue');
+      if (!_canPlay || !dialog.mounted || action == null) return;
+      final index = _queue.indexWhere((source) => source.id == entry.id);
+      if (index < 0) return;
+      switch (action) {
+        case 'play': Navigator.pop(dialog, _queue[index]);
+        case 'playlist': await saveVideoPlaylist(dialog, _data, widget.music.settings.save, [entry]);
+        case 'watched':
+          _data.setWatched(entry, !_data.isWatched(entry));
+          _saveSettings();
+          widget.onWatched?.call();
+          _changed();
+        case 'next' || 'remove':
+          if (entry.id == _source.id) return;
+          final current = _source;
+          final selected = _queue.removeAt(index);
+          _index = _queue.indexOf(current);
+          if (action == 'next') _queue.insert(_index + 1, selected);
+          _changed();
+      }
+    },
+  );
+
   Future<void> _queuePanel(BuildContext context) async {
     final source = await showAuralisDialog<VideoSource>(
       context: context,
@@ -533,6 +562,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        _queueItemActions(dialog, entry),
                         if (!current)
                           IconButton(
                             tooltip: 'Remove from queue',
