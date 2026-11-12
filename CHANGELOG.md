@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.183
+
+- Swipe horizontally between Library collections in Music and Video, with tappable page indicators and the existing dropdown selector. Keep Video playlists, history and snapshots inside Library without leaving its navigation.
+
 ## 0.1.182
 
 - Fix Android CI verification of compact playlist action sheets by scrolling to off-screen buttons and using consistent test fonts. Keep the existing item actions and playback behavior unchanged.
