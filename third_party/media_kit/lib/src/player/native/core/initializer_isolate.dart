@@ -42,6 +42,7 @@ class InitializerIsolate {
     Map<String, String> options = const {},
   }) async {
     final completer = Completer();
+    final stopped = Completer<void>();
     final receiver = ReceivePort();
     late SendPort port;
     late Pointer<generated.mpv_handle> handle;
@@ -72,6 +73,7 @@ class InitializerIsolate {
           port.send(true);
         } else {
           receiver.close();
+          stopped.complete();
         }
       },
     );
@@ -81,25 +83,31 @@ class InitializerIsolate {
     // Save the references.
     _ports[handle.address] = port;
     _isolates[handle.address] = isolate;
+    _stopped[handle.address] = stopped.future;
 
     return handle;
   }
 
   /// Disposes [Pointer<mpv_handle>].
-  void dispose(generated.MPV mpv, Pointer<generated.mpv_handle> handle) {
-    final port = _ports[handle.address];
-    final isolate = _isolates[handle.address];
+  Future<void> dispose(
+    generated.MPV mpv,
+    Pointer<generated.mpv_handle> handle, {
+    bool waitForExit = false,
+  }) async {
+    final port = _ports.remove(handle.address);
+    final isolate = _isolates.remove(handle.address);
+    final stopped = _stopped.remove(handle.address);
     if (port != null && isolate != null) {
       port.send(null);
-
-      _ports.remove(handle.address);
-      _isolates.remove(handle.address);
-
       mpv.mpv_wakeup(handle);
 
-      Future.delayed(const Duration(seconds: 2), () {
-        isolate.kill(priority: Isolate.immediate);
-      });
+      if (waitForExit) {
+        await stopped;
+      } else {
+        Future.delayed(const Duration(seconds: 2), () {
+          isolate.kill(priority: Isolate.immediate);
+        });
+      }
     }
   }
 
@@ -124,11 +132,11 @@ class InitializerIsolate {
           mpv = generated.MPV(DynamicLibrary.open(message));
           completer.complete();
         } else if (message is bool) {
-          completer.complete();
+          if (!completer.isCompleted) completer.complete();
         } else if (message == null) {
           if (handle != null) {
             disposed = true;
-            completer.complete();
+            if (!completer.isCompleted) completer.complete();
           }
         }
       },
@@ -169,4 +177,5 @@ class InitializerIsolate {
 
   final _ports = HashMap<int, SendPort>();
   final _isolates = HashMap<int, Isolate>();
+  final _stopped = HashMap<int, Future<void>>();
 }
