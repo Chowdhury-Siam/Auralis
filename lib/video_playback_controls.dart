@@ -716,7 +716,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     ),
   };
 
-  Widget _bottom(bool wide, bool short) {
+  Widget _bottom(bool wide) {
     final left = Wrap(
       spacing: 5,
       runSpacing: 4,
@@ -730,25 +730,6 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (wide && !short && session._chapters.length > 1)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 5),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton(
-                  onPressed: () =>
-                      unawaited(_perform(() => session._chapterStep(-1))),
-                  child: const Text('Previous chapter'),
-                ),
-                TextButton(
-                  onPressed: () =>
-                      unawaited(_perform(() => session._chapterStep(1))),
-                  child: const Text('Next chapter'),
-                ),
-              ],
-            ),
-          ),
         if (wide)
           Row(
             children: [
@@ -936,7 +917,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     );
   }
 
-  Widget _overlay(bool wide, bool short, double horizontalInset) {
+  Widget _overlay(bool wide, double horizontalInset) {
     final shown = _visible && !session._locked && session._error == null;
     final duration = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
@@ -1017,7 +998,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                     ),
                     child: Align(
                       alignment: Alignment.bottomCenter,
-                      child: _bottom(wide, short),
+                      child: _bottom(wide),
                     ),
                   ),
                 ],
@@ -1103,7 +1084,6 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                       children: [
                         _overlay(
                           box.maxWidth - 2 * inset >= 640,
-                          box.maxHeight < 380,
                           inset,
                         ),
                         if (_feedback case final String text)
