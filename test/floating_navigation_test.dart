@@ -122,9 +122,9 @@ void main() {
       expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
       await tester.tap(find.byTooltip('Library').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Search'));
+      await tester.tap(find.byTooltip('Browse'));
       await tester.pumpAndSettle();
-      expect(find.text('Browse your library'), findsOneWidget);
+      expect(find.text('Browse channels'), findsOneWidget);
       await tester.tap(find.byTooltip('Show list'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Show grid'), findsOneWidget);
@@ -196,10 +196,11 @@ void main() {
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Search'));
+    await tester.tap(find.byTooltip('Browse'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Artists'));
     await tester.pumpAndSettle();
+    expect(find.text('Browse artists'), findsOneWidget);
     await tester.tap(find.text('Solar'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('track-title-1:1')), findsOneWidget);
