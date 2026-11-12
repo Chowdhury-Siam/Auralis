@@ -408,8 +408,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
 
   KeyEventResult _keys(FocusNode node, KeyEvent event) {
     final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.space &&
-        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    if (key == LogicalKeyboardKey.space && _desktopVideo) {
       return _spaceKey(event);
     }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -426,7 +425,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       _skip(-1);
     } else if (key == LogicalKeyboardKey.arrowRight) {
       _skip(1);
-    } else if (key == LogicalKeyboardKey.keyF) {
+    } else if (key == LogicalKeyboardKey.keyF && _desktopVideo) {
       unawaited(_perform(_toggleFullscreen));
     } else if (key == LogicalKeyboardKey.keyN ||
         key == LogicalKeyboardKey.keyP) {
@@ -603,9 +602,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
 
   List<Widget> _zone(VideoControlZone zone, bool wide) => [
     for (final control in session._data.controls(zone, wide: wide))
-      if (Platform.isAndroid ||
-          (control != VideoControl.orientation && control != VideoControl.pip))
-        _control(control),
+      if (session._supportsControl(control)) _control(control),
   ];
 
   Widget _control(VideoControl control) => switch (control) {
@@ -651,18 +648,12 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     VideoControl.orientation => _button(
       control.label,
       Icons.screen_rotation_rounded,
-      () => session._orientationPanel(context, fullscreen: _fullscreen),
+      () => session._orientationPanel(context),
     ),
     VideoControl.speed => _button(
       control.label,
       Icons.speed_rounded,
       () => session._speedPanel(context),
-    ),
-    VideoControl.loop => _button(
-      control.label,
-      Icons.repeat_rounded,
-      session._setLoopPoint,
-      selected: session._loopA != null,
     ),
     VideoControl.chapters => _button(
       control.label,
@@ -804,8 +795,6 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     final marks = [
       for (final point in session._chapters) (point.position, false),
       for (final point in session._bookmarks) (point.position, true),
-      if (session._loopA case final Duration a) (a, true),
-      if (session._loopB case final Duration b) (b, true),
       for (final segment in session._segments) ...[
         (segment.start, true),
         (segment.end, true),
