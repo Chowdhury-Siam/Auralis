@@ -1,6 +1,12 @@
 {
-  "current": "0.1.172",
+  "current": "0.1.173",
   "releases": [
+    {
+      "version": "0.1.173",
+      "changes": [
+        "Fix the Flutter analyzer warning in the Music Browse layout toggle."
+      ]
+    },
     {
       "version": "0.1.172",
       "changes": [
