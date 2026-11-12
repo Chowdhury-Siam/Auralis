@@ -326,6 +326,23 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   Widget _watchButton(Track episode, bool watched) =>
       VideoWatchButton(watched: watched, onPressed: () => _toggleWatched(episode));
 
+  Widget _videoActions(Track video) => IconButton.filledTonal(
+    tooltip: 'Video actions for ${video.title}',
+    icon: const Icon(Icons.more_vert_rounded, size: 20),
+    onPressed: () async {
+      final source = VideoSource.telegram(video);
+      final data = widget.music.settings.videoPlayback;
+      final action = await showVideoItemSheet(context: context, source: source, data: data,
+          artwork: _videoArtwork(video));
+      if (!mounted || action == null) return;
+      switch (action) {
+        case 'play': await _play(video);
+        case 'playlist': await saveVideoPlaylist(context, data, widget.music.settings.save, [source]);
+        case 'watched': _toggleWatched(video);
+      }
+    },
+  );
+
   Future<void> _play(Track video) async {
     if (!_ready) return;
     final library = _library;
@@ -968,7 +985,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: _watchButton(video, watched),
+      trailing: Row(mainAxisSize: MainAxisSize.min,
+          children: [_watchButton(video, watched), _videoActions(video)]),
       onTap: () => unawaited(_play(video)),
     );
   }
@@ -1235,7 +1253,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                 if (status.isNotEmpty) status,
               ].join(' · '),
               artwork: _videoArtwork(video, watched: watched),
-              trailing: _watchButton(video, watched),
+              trailing: Row(mainAxisSize: MainAxisSize.min,
+                  children: [_watchButton(video, watched), _videoActions(video)]),
               onTap: () => unawaited(_play(video)),
             );
           },
