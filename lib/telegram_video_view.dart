@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'app_popups.dart';
 
 import 'models.dart';
+import 'library_widgets.dart';
 import 'discovery_widgets.dart';
 import 'app_navigation.dart';
 import 'app_theme.dart';
@@ -100,6 +101,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     with WidgetsBindingObserver {
   TelegramService get _telegram => widget.telegram;
   final _search = TextEditingController();
+  final _librarySearch = TextEditingController();
   final _videoSources = <int>{};
   late final TelegramStreamProxy _proxy;
   late final bool Function(int) _previousStreaming, _isStreaming;
@@ -178,6 +180,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         _library = null;
         _showSearchChannel = false;
         _search.clear();
+        _librarySearch.clear();
         _videoSources.clear();
       });
       if (_ready) unawaited(_refreshChannels());
@@ -209,7 +212,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
 
   void _browseChannel(MusicChat channel) {
     final results = _VideoResults(channel);
-    setState(() => _library = results);
+    setState(() {
+      _library = results;
+      _librarySearch.clear();
+    });
     final settings = widget.music.settings;
     if (settings.videoChannelId != channel.id) {
       settings.videoChannelId = channel.id;
@@ -373,8 +379,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
 
   void _minimizePlayer() => setState(() => _videoMinimized = true);
 
-
-
   Future<void> _openVideoLibrary({required bool playlists}) async {
     final settings = widget.music.settings;
     final selected = await Navigator.of(context).push<VideoSelection>(
@@ -398,7 +402,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       }
     }
   }
-
 
   Future<void> _refresh({bool silent = false}) async {
     if (!_ready) return;
@@ -442,6 +445,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     }
     unawaited(_playbackRelease.whenComplete(_proxy.close));
     _search.dispose();
+    _librarySearch.dispose();
     super.dispose();
   }
 
@@ -621,57 +625,185 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   double _bottomPadding(BuildContext context) =>
       MediaQuery.paddingOf(context).bottom + (_videoMinimized ? 92 : 20);
 
-
   Widget _refreshButton() => IconButton(
     tooltip: 'Refresh videos',
     onPressed: _refresh,
     icon: const Icon(Icons.refresh_rounded, size: 20),
   );
 
-  Widget _libraryActions(BuildContext context, Widget sortButton) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      if (widget.onSettings != null && MediaQuery.sizeOf(context).width < 900)
-        IconButton(
-          tooltip: 'Settings',
-          onPressed: widget.onSettings,
-          icon: const Icon(Icons.settings_outlined, size: 20),
+  Widget _libraryMenu(BuildContext context) => LibraryCollectionMenu<int>(
+    key: const ValueKey('video-library-collection-menu'),
+    title: 'All videos',
+    titleKey: const ValueKey('video-library-title'),
+    icon: Icons.video_library_rounded,
+    tooltip: 'Library collection: All videos',
+    onSelected: (index) {
+      switch (index) {
+        case 0:
+          setState(_librarySearch.clear);
+        case 1:
+          unawaited(_openVideoLibrary(playlists: true));
+        case 2:
+          unawaited(_openVideoLibrary(playlists: false));
+        case 3:
+          unawaited(
+            Navigator.of(context).push<void>(
+              MaterialPageRoute(builder: (_) => const VideoSnapshotsPage()),
+            ),
+          );
+      }
+    },
+    itemBuilder: (_) => [
+      for (final (index, (title, icon)) in const [
+        ('All videos', Icons.video_library_rounded),
+        ('Playlists', Icons.playlist_play_rounded),
+        ('History', Icons.history_rounded),
+        ('Snapshots', Icons.photo_library_outlined),
+      ].indexed)
+        PopupMenuItem<int>(
+          value: index,
+          padding: EdgeInsets.zero,
+          child: AuralisMenuRow(title: title, icon: icon, selected: index == 0),
         ),
-      sortButton,
-      _libraryMenu(context),
     ],
   );
 
-  Widget _libraryMenu(BuildContext context) => AuralisPopupMenu<VoidCallback>(
-    tooltip: 'Library options',
-    icon: const Icon(Icons.more_vert_rounded, size: 20),
-    onSelected: (open) => open(),
-    itemBuilder: (_) => [
-      PopupMenuItem<VoidCallback>(
-        value: () => _openVideoLibrary(playlists: true),
-        child: const AuralisMenuRow(
-          icon: Icons.video_library_outlined,
-          title: 'Playlists',
+  Widget _libraryToolbar(List<Track> videos, Widget sortButton) {
+    final colors = Theme.of(context).colorScheme;
+    final VoidCallback? shuffle = !_ready || videos.isEmpty
+        ? null
+        : () {
+            final queue = videos.map(VideoSource.telegram).toList()..shuffle();
+            unawaited(_launchPlayer(queue, 0));
+          };
+    return LayoutBuilder(
+      builder: (context, box) {
+        final showLabel =
+            box.maxWidth >= 330 &&
+            MediaQuery.textScalerOf(context).scale(14) <= 18;
+        return Row(
+          children: [
+            Tooltip(
+              message: 'Shuffle collection',
+              child: showLabel
+                  ? FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colors.tertiaryContainer,
+                        foregroundColor: colors.onTertiaryContainer,
+                        minimumSize: const Size(48, 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        shape: const StadiumBorder(),
+                      ),
+                      onPressed: shuffle,
+                      icon: const Icon(Icons.shuffle_rounded, size: 20),
+                      label: const Text('Shuffle'),
+                    )
+                  : IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        backgroundColor: colors.tertiaryContainer,
+                        foregroundColor: colors.onTertiaryContainer,
+                      ),
+                      onPressed: shuffle,
+                      icon: const Icon(Icons.shuffle_rounded, size: 20),
+                    ),
+            ),
+            const Spacer(),
+            sortButton,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _libraryBrowser(
+    BuildContext context, {
+    required List<Track> videos,
+    required int total,
+    required bool loading,
+    required Widget sortButton,
+    required Widget list,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final showHeader = MediaQuery.viewInsetsOf(this.context).bottom == 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showHeader) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: _libraryMenu(context),
+                ),
+              ),
+              if (widget.onSettings != null &&
+                  MediaQuery.sizeOf(context).width < 900)
+                IconButton.filledTonal(
+                  tooltip: 'Settings',
+                  style: IconButton.styleFrom(
+                    backgroundColor: colors.primaryContainer,
+                    foregroundColor: colors.onPrimaryContainer,
+                  ),
+                  onPressed: widget.onSettings,
+                  icon: const Icon(Icons.settings_outlined, size: 20),
+                ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 3, bottom: 8),
+            child: Text(
+              '$total ${total == 1 ? 'video' : 'videos'} · ${_library?.channel.title ?? 'No channel selected'}',
+              key: const ValueKey('video-library-counts'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11),
+            ),
+          ),
+        ],
+        Expanded(
+          child: Material(
+            color: colors.surfaceContainerLowest,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (showHeader) ...[
+                    _libraryToolbar(videos, sortButton),
+                    const SizedBox(height: 5),
+                  ],
+                  TextField(
+                    key: const ValueKey('video-library-search'),
+                    controller: _librarySearch,
+                    textInputAction: TextInputAction.search,
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                    decoration: InputDecoration(
+                      hintText: 'Search your videos',
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      suffixIcon: _librarySearch.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () => setState(_librarySearch.clear),
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (loading) const LinearProgressIndicator(minHeight: 2),
+                  Expanded(child: list),
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
-      PopupMenuItem<VoidCallback>(
-        value: () => _openVideoLibrary(playlists: false),
-        child: const AuralisMenuRow(
-          icon: Icons.history_rounded,
-          title: 'History',
-        ),
-      ),
-      PopupMenuItem<VoidCallback>(
-        value: () => Navigator.of(context).push<void>(
-          MaterialPageRoute(builder: (_) => const VideoSnapshotsPage()),
-        ),
-        child: const AuralisMenuRow(
-          icon: Icons.photo_library_outlined,
-          title: 'Snapshots',
-        ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 
   Widget _heading(String title, {Widget? action}) => Row(
     children: [
@@ -1030,124 +1162,135 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   Widget _browser(BuildContext context) {
     final searching = _tab == 1;
     final results = _library;
-    final videos =
+    final allVideos =
         results?.sortedVideos(widget.music.settings.librarySort) ??
         const <Track>[];
+    final query = searching ? '' : _librarySearch.text.trim().toLowerCase();
+    final videos = query.isEmpty
+        ? allVideos
+        : allVideos
+              .where((video) => video.title.toLowerCase().contains(query))
+              .toList();
     final loading = results?.loading ?? false;
     final failed = results?.failed ?? false;
+    final colors = Theme.of(context).colorScheme;
     final sortButton = IconButton.filledTonal(
       tooltip: 'Sort Library',
       onPressed: _chooseSort,
+      style: searching
+          ? null
+          : IconButton.styleFrom(
+              backgroundColor: colors.secondaryContainer,
+              foregroundColor: colors.onSecondaryContainer,
+              minimumSize: const Size(48, 40),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
       icon: const Icon(Icons.sort_rounded, size: 20),
     );
+    final list = CustomScrollView(
+      key: ValueKey((searching, results)),
+      slivers: [
+        if (videos.isEmpty && !loading)
+          SliverToBoxAdapter(
+            child: !_ready
+                ? _connectState(context)
+                : query.isNotEmpty && allVideos.isNotEmpty
+                ? _emptyState(context, title: 'No matching videos')
+                : results == null
+                ? _emptyState(
+                    context,
+                    title: 'Browse channel videos',
+                    action: TextButton(
+                      onPressed: _showChannelSearch,
+                      child: const Text('Find a channel'),
+                    ),
+                  )
+                : _emptyState(
+                    context,
+                    title: failed
+                        ? 'Could not load videos'
+                        : 'No playable videos found',
+                    description: !failed
+                        ? null
+                        : searching
+                        ? 'Check your Telegram connection and refresh.'
+                        : 'Check your Telegram connection and refresh in Browse.',
+                  ),
+          ),
+        SliverList.separated(
+          itemCount: videos.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            final video = videos[index];
+            final watched = _isWatched(video);
+            final status = _episodeStatus(video, watched);
+            return _VideoListRow(
+              key: ValueKey(video.id),
+              title: video.title,
+              watched: watched,
+              subtitle: [
+                if (video.duration > Duration.zero) clockText(video.duration),
+                if (status.isNotEmpty) status,
+              ].join(' · '),
+              artwork: _videoArtwork(video, watched: watched),
+              trailing: _watchButton(video, watched),
+              onTap: () => unawaited(_play(video)),
+            );
+          },
+        ),
+        if (!searching && !loading && failed)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: OutlinedButton.icon(
+                  onPressed: _showChannelSearch,
+                  icon: const Icon(Icons.explore_outlined),
+                  label: const Text('Open Browse'),
+                ),
+              ),
+            ),
+          ),
+        SliverToBoxAdapter(child: SizedBox(height: _bottomPadding(context))),
+      ],
+    );
+    if (!searching) {
+      return _libraryBrowser(
+        context,
+        videos: videos,
+        total: allVideos.length,
+        loading: loading,
+        sortButton: sortButton,
+        list: list,
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (searching)
-          Row(
-            children: [
-              IconButton(
-                tooltip: 'Back to channels',
-                onPressed: _showChannelSearch,
-                icon: const Icon(Icons.arrow_back_rounded),
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Back to channels',
+              onPressed: _showChannelSearch,
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            Expanded(
+              child: Text(
+                results!.channel.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              Expanded(
-                child: Text(
-                  results!.channel.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              _refreshButton(),
-              sortButton,
-            ],
-          )
-        else ...[
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                'Library',
-                style: Theme.of(context).textTheme.headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              _libraryActions(context, sortButton),
-            ],
-          ),
-        ],
+            ),
+            _refreshButton(),
+            sortButton,
+          ],
+        ),
         const SizedBox(height: 8),
         if (loading) const LinearProgressIndicator(minHeight: 2),
-        Expanded(
-          child: CustomScrollView(
-            key: ValueKey((searching, results)),
-            slivers: [
-              if (videos.isEmpty && !loading)
-                SliverToBoxAdapter(
-                  child: !_ready
-                      ? _connectState(context)
-                      : results == null
-                      ? _emptyState(
-                          context,
-                          title: 'Browse channel videos',
-                          action: TextButton(
-                            onPressed: _showChannelSearch,
-                            child: const Text('Find a channel'),
-                          ),
-                        )
-                      : _emptyState(
-                          context,
-                          title: failed
-                              ? 'Could not load videos'
-                              : 'No playable videos found',
-                          description: !failed
-                              ? null
-                              : searching
-                              ? 'Check your Telegram connection and refresh.'
-                              : 'Check your Telegram connection and refresh in Browse.',
-                        ),
-                ),
-              SliverList.separated(
-                itemCount: videos.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final video = videos[index];
-                  final watched = _isWatched(video);
-                  final status = _episodeStatus(video, watched);
-                  return _VideoListRow(
-                    key: ValueKey(video.id),
-                    title: video.title,
-                    watched: watched,
-                    subtitle: [
-                      if (video.duration > Duration.zero) clockText(video.duration),
-                      if (status.isNotEmpty) status,
-                    ].join(' · '),
-                    artwork: _videoArtwork(video, watched: watched),
-                    trailing: _watchButton(video, watched),
-                    onTap: () => unawaited(_play(video)),
-                  );
-                },
-              ),
-              if (!searching && !loading && failed)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Center(
-                      child: OutlinedButton.icon(
-                        onPressed: _showChannelSearch,
-                        icon: const Icon(Icons.explore_outlined),
-                        label: const Text('Open Browse'),
-                      ),
-                    ),
-                  ),
-                ),
-              SliverToBoxAdapter(
-                child: SizedBox(height: _bottomPadding(context)),
-              ),
-            ],
-          ),
-        ),
+        Expanded(child: list),
       ],
     );
   }
