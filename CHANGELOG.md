@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.182
+
+- Fix Android CI verification of compact playlist action sheets by scrolling to off-screen buttons and using consistent test fonts. Keep the existing item actions and playback behavior unchanged.
+
 ## 0.1.181
 
 - Add three-dot item actions to Music and Video lists, cards and video queues, opening an artwork-led Options / Info sheet with mode-specific playback, playlist and collection actions.
