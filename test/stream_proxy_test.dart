@@ -8,7 +8,9 @@ import 'package:auralis/models.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 
 void main() {
-  test('interrupting a stalled video releases its socket before its cache', () async {
+  test('interrupting a video after many chunks releases its socket before its cache', () async {
+    const stallOffset = 128 * 1024 * 24;
+    const fileSize = stallOffset + 4;
     final calls = <String>[];
     final stalled = Completer<void>();
     var resumed = false;
@@ -17,8 +19,9 @@ void main() {
       calls.add(type);
       switch (type) {
         case 'getFileDownloadedPrefixSize':
-          if (resumed) return {'size': 4};
-          if (request['offset'] == 0) return {'size': 1};
+          final offset = request['offset'] as int;
+          if (resumed) return {'size': fileSize - offset};
+          if (offset < stallOffset) return {'size': stallOffset - offset};
           if (!stalled.isCompleted) stalled.complete();
           return {'size': 0};
         case 'readFilePart':
@@ -40,12 +43,13 @@ void main() {
       artist: '',
       source: 'Cinema',
       fileId: 1,
-      size: 4,
+      size: fileSize,
     );
     final first = await proxy.uri(video);
     final response = await (await client.getUrl(first)).close();
     final interrupted = expectLater(response.drain<void>(), throwsException);
     await stalled.future;
+    expect(calls.where((call) => call == 'readFilePart'), hasLength(24));
 
     await proxy.interrupt();
     await interrupted.timeout(const Duration(seconds: 2));
@@ -55,7 +59,9 @@ void main() {
 
     resumed = true;
     final second = await proxy.uri(video);
-    final replay = await (await client.getUrl(second)).close();
+    final tail = await client.getUrl(second);
+    tail.headers.set('Range', 'bytes=$stallOffset-');
+    final replay = await tail.close();
     expect(await replay.expand((chunk) => chunk).toList(), [7, 7, 7, 7]);
   });
 
