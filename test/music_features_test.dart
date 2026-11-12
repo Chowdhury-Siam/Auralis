@@ -349,6 +349,13 @@ void main() {
       await selectCollection('All songs');
       await tester.tap(find.byTooltip('Track actions for ${a.title}'));
       await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('media-item-sheet')), findsOneWidget);
+      await tester.tap(find.text('Info'));
+      await tester.pumpAndSettle();
+      expect(find.text('Artist'), findsOneWidget);
+      expect(find.text('Channel'), findsOneWidget);
+      await tester.tap(find.text('Options'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Add to favorites'));
       await tester.pumpAndSettle();
       expect(settings.favoriteIds, {a.id});
