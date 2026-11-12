@@ -71,9 +71,8 @@ void main() {
         expect(rect.left, greaterThanOrEqualTo(0));
         expect(rect.right, lessThanOrEqualTo(size.width));
         final searchBounds = tester.getRect(search);
-        final toolbar = tester.getRect(find.byTooltip('Shuffle collection'));
-        expect(rect.bottom, lessThan(toolbar.top));
-        expect(toolbar.bottom, lessThan(searchBounds.top));
+        expect(find.byTooltip('Shuffle collection'), findsNothing);
+        expect(rect.bottom, lessThan(searchBounds.top));
         expect(
           tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
           collection,
