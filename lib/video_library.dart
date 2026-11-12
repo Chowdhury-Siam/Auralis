@@ -182,6 +182,11 @@ class VideoWatchButton extends StatelessWidget {
   );
 }
 
+class VideoLibraryPageController {
+  bool Function()? _back;
+  bool backToOverview() => _back?.call() ?? false;
+}
+
 class VideoLibraryPage extends StatefulWidget {
   const VideoLibraryPage({
     super.key,
@@ -190,6 +195,10 @@ class VideoLibraryPage extends StatefulWidget {
     required this.pickFiles,
     required this.playlists,
     this.changes,
+    this.embedded = false,
+    this.onPlay,
+    this.controller,
+    this.bottomPadding = 28,
   });
 
   final VideoPlaybackData data;
@@ -197,6 +206,10 @@ class VideoLibraryPage extends StatefulWidget {
   final Future<List<VideoSource>> Function() pickFiles;
   final bool playlists;
   final Listenable? changes;
+  final bool embedded;
+  final ValueChanged<VideoSelection>? onPlay;
+  final VideoLibraryPageController? controller;
+  final double bottomPadding;
 
   @override
   State<VideoLibraryPage> createState() => _VideoLibraryPageState();
@@ -205,6 +218,37 @@ class VideoLibraryPage extends StatefulWidget {
 class _VideoLibraryPageState extends State<VideoLibraryPage> {
   String? _selected;
   VideoPlaybackData get _data => widget.data;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller?._back = _backToOverview;
+  }
+
+  @override
+  void didUpdateWidget(covariant VideoLibraryPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      if (oldWidget.controller?._back == _backToOverview) {
+        oldWidget.controller?._back = null;
+      }
+      widget.controller?._back = _backToOverview;
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.controller?._back == _backToOverview) {
+      widget.controller?._back = null;
+    }
+    super.dispose();
+  }
+
+  bool _backToOverview() {
+    if (!mounted || _selected == null) return false;
+    setState(() => _selected = null);
+    return true;
+  }
 
   Future<void> _change(VoidCallback update) async {
     try {
@@ -263,8 +307,14 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
     });
   }
 
-  void _play(List<VideoSource> sources, int index) =>
-      Navigator.pop(context, (List<VideoSource>.of(sources), index));
+  void _play(List<VideoSource> sources, int index) {
+    final selection = (List<VideoSource>.of(sources), index);
+    if (widget.onPlay case final callback?) {
+      callback(selection);
+    } else {
+      Navigator.pop(context, selection);
+    }
+  }
 
   Widget _itemActions(
     VideoSource source, {
@@ -344,191 +394,196 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                 .toDouble();
     }
 
-    return PopScope(
-      canPop: !inPlaylist,
-      onPopInvokedWithResult: (popped, _) {
-        if (!popped && inPlaylist) setState(() => _selected = null);
-      },
-      child: _VideoCollectionPage(
-        onBack: back,
-        title: widget.playlists
-            ? inPlaylist
-                  ? name
-                  : 'Video playlists'
-            : 'Video history',
-        icon: widget.playlists
-            ? Icons.playlist_play_rounded
-            : Icons.history_rounded,
-        summary: widget.playlists
-            ? inPlaylist
-                  ? '${list.length} ${list.length == 1 ? 'video' : 'videos'}'
-                  : '${entries.length} ${entries.length == 1 ? 'playlist' : 'playlists'} · ${entries.fold<int>(0, (count, entry) => count + entry.value.length)} videos'
-            : '${history.length} ${history.length == 1 ? 'video' : 'videos'} · $resumeCount to resume · $watchedCount watched',
-        description: widget.playlists
-            ? inPlaylist
-                  ? 'Your next viewing session, in your order. Drag the handles to rearrange videos.'
-                  : 'Keep favorite episodes and movie nights together. Your files stay where they are.'
-            : 'Pick up where you left off, or revisit something you loved.',
-        actions: [
-          if (widget.playlists)
-            FilledButton.icon(
-              onPressed: inPlaylist
-                  ? () => _add(_selected!)
-                  : () => _rename(null),
-              icon: Icon(
-                inPlaylist ? Icons.playlist_add_rounded : Icons.add_rounded,
-              ),
-              label: Text(inPlaylist ? 'Add video files' : 'Create playlist'),
+    final page = _VideoCollectionPage(
+      embedded: widget.embedded,
+      bottomPadding: widget.bottomPadding,
+      onBack: widget.embedded && !inPlaylist ? null : back,
+      title: widget.playlists
+          ? inPlaylist
+                ? name
+                : 'Video playlists'
+          : 'Video history',
+      icon: widget.playlists
+          ? Icons.playlist_play_rounded
+          : Icons.history_rounded,
+      summary: widget.playlists
+          ? inPlaylist
+                ? '${list.length} ${list.length == 1 ? 'video' : 'videos'}'
+                : '${entries.length} ${entries.length == 1 ? 'playlist' : 'playlists'} · ${entries.fold<int>(0, (count, entry) => count + entry.value.length)} videos'
+          : '${history.length} ${history.length == 1 ? 'video' : 'videos'} · $resumeCount to resume · $watchedCount watched',
+      description: widget.playlists
+          ? inPlaylist
+                ? 'Your next viewing session, in your order. Drag the handles to rearrange videos.'
+                : 'Keep favorite episodes and movie nights together. Your files stay where they are.'
+          : 'Pick up where you left off, or revisit something you loved.',
+      actions: [
+        if (widget.playlists)
+          FilledButton.icon(
+            onPressed: inPlaylist
+                ? () => _add(_selected!)
+                : () => _rename(null),
+            icon: Icon(
+              inPlaylist ? Icons.playlist_add_rounded : Icons.add_rounded,
             ),
-          if (inPlaylist && list.isNotEmpty)
-            FilledButton.tonalIcon(
-              onPressed: () => _play(list, 0),
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Play playlist'),
-            ),
-          if (!widget.playlists &&
-              (history.isNotEmpty || _data.positions.isNotEmpty))
-            OutlinedButton.icon(
-              onPressed: () async {
-                if (await _confirm(
-                      context,
-                      'Clear video history?',
-                      'This also clears saved resume positions.',
-                    ) &&
-                    mounted) {
-                  await _change(_data.clearHistory);
-                }
-              },
-              icon: const Icon(Icons.delete_sweep_outlined),
-              label: const Text('Clear history'),
-            ),
-        ],
-        slivers: [
-          if (inPlaylist)
-            if (list.isEmpty)
-              const SliverToBoxAdapter(
-                child: _VideoEmptyCollection(
-                  'Your playlist starts here',
-                  'Add video files, or save videos from the player queue to this playlist.',
-                  Icons.playlist_add_rounded,
-                ),
-              )
-            else
-              SliverReorderableList(
-                itemCount: list.length,
-                onReorderItem: (from, to) =>
-                    _change(() => list.insert(to, list.removeAt(from))),
-                itemBuilder: (_, index) {
-                  final item = list[index];
-                  final watched = _data.isWatched(item);
-                  return _VideoEntryCard(
-                    key: ValueKey(item.id),
-                    source: item,
-                    status: status(item),
-                    progress: progress(item),
-                    onTap: () => _play(list, index),
-                    actions: [
-                      if (item.telegram != null)
-                        VideoWatchButton(
-                          watched: watched,
-                          onPressed: () =>
-                              _change(() => _data.setWatched(item, !watched)),
-                        ),
-                      IconButton(
-                        tooltip: 'Remove video',
-                        icon: const Icon(Icons.close),
-                        onPressed: () => _change(() => list.remove(item)),
-                      ),
-                      _itemActions(
-                        item,
-                        play: () => _play(list, index),
-                        remove: () => list.remove(item),
-                        removeLabel: 'Remove from playlist',
-                      ),
-                      ReorderableDragStartListener(
-                        index: index,
-                        child: const Tooltip(
-                          message: 'Reorder video',
-                          child: Padding(
-                            padding: EdgeInsets.all(12),
-                            child: Icon(Icons.drag_handle_rounded),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              )
-          else if (widget.playlists)
-            if (entries.isEmpty)
-              const SliverToBoxAdapter(
-                child: _VideoEmptyCollection(
-                  'Make room for your favorites',
-                  'Create your first playlist to collect videos for later.',
-                  Icons.video_library_outlined,
-                ),
-              )
-            else
-              _collectionGrid(context, entries.length, (_, index) {
-                final entry = entries[index];
-                return _VideoPlaylistCard(
-                  name: entry.key,
-                  sources: entry.value,
-                  onOpen: () => setState(() => _selected = entry.key),
-                  onRename: () => _rename(entry.key),
-                  onRemove: () => _removePlaylist(entry.key),
-                );
-              })
-          else if (history.isEmpty)
+            label: Text(inPlaylist ? 'Add video files' : 'Create playlist'),
+          ),
+        if (inPlaylist && list.isNotEmpty)
+          FilledButton.tonalIcon(
+            onPressed: () => _play(list, 0),
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: const Text('Play playlist'),
+          ),
+        if (!widget.playlists &&
+            (history.isNotEmpty || _data.positions.isNotEmpty))
+          OutlinedButton.icon(
+            onPressed: () async {
+              if (await _confirm(
+                    context,
+                    'Clear video history?',
+                    'This also clears saved resume positions.',
+                  ) &&
+                  mounted) {
+                await _change(_data.clearHistory);
+              }
+            },
+            icon: const Icon(Icons.delete_sweep_outlined),
+            label: const Text('Clear history'),
+          ),
+      ],
+      slivers: [
+        if (inPlaylist)
+          if (list.isEmpty)
             const SliverToBoxAdapter(
               child: _VideoEmptyCollection(
-                'A fresh start',
-                'Videos you open will appear here, with watched status and saved resume points.',
-                Icons.history_rounded,
+                'Your playlist starts here',
+                'Add video files, or save videos from the player queue to this playlist.',
+                Icons.playlist_add_rounded,
               ),
             )
           else
-            SliverList.builder(
-              itemCount: history.length,
-              itemBuilder: (context, index) {
-                final entry = history[index];
-                final source = entry.source;
-                final date = MaterialLocalizations.of(context)
-                    .formatCompactDate(entry.playedAt.toLocal());
-                final watched = _data.isWatched(source);
+            SliverReorderableList(
+              itemCount: list.length,
+              onReorderItem: (from, to) =>
+                  _change(() => list.insert(to, list.removeAt(from))),
+              itemBuilder: (_, index) {
+                final item = list[index];
+                final watched = _data.isWatched(item);
                 return _VideoEntryCard(
-                  key: ValueKey(source.id),
-                  source: source,
-                  date: date,
-                  status: status(source),
-                  progress: progress(source),
-                  onTap: () => _play([source], 0),
+                  key: ValueKey(item.id),
+                  source: item,
+                  status: status(item),
+                  progress: progress(item),
+                  onTap: () => _play(list, index),
                   actions: [
-                    if (source.telegram != null)
+                    if (item.telegram != null)
                       VideoWatchButton(
                         watched: watched,
                         onPressed: () =>
-                            _change(() => _data.setWatched(source, !watched)),
+                            _change(() => _data.setWatched(item, !watched)),
                       ),
                     IconButton(
-                      tooltip: 'Remove from history',
+                      tooltip: 'Remove video',
                       icon: const Icon(Icons.close),
-                      onPressed: () =>
-                          _change(() => _data.removeHistory(source.id)),
+                      onPressed: () => _change(() => list.remove(item)),
                     ),
                     _itemActions(
-                      source,
-                      play: () => _play([source], 0),
-                      remove: () => _data.removeHistory(source.id),
-                      removeLabel: 'Remove from history',
+                      item,
+                      play: () => _play(list, index),
+                      remove: () => list.remove(item),
+                      removeLabel: 'Remove from playlist',
+                    ),
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: const Tooltip(
+                        message: 'Reorder video',
+                        child: Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Icon(Icons.drag_handle_rounded),
+                        ),
+                      ),
                     ),
                   ],
                 );
               },
+            )
+        else if (widget.playlists)
+          if (entries.isEmpty)
+            const SliverToBoxAdapter(
+              child: _VideoEmptyCollection(
+                'Make room for your favorites',
+                'Create your first playlist to collect videos for later.',
+                Icons.video_library_outlined,
+              ),
+            )
+          else
+            _collectionGrid(context, entries.length, (_, index) {
+              final entry = entries[index];
+              return _VideoPlaylistCard(
+                name: entry.key,
+                sources: entry.value,
+                onOpen: () => setState(() => _selected = entry.key),
+                onRename: () => _rename(entry.key),
+                onRemove: () => _removePlaylist(entry.key),
+              );
+            })
+        else if (history.isEmpty)
+          const SliverToBoxAdapter(
+            child: _VideoEmptyCollection(
+              'A fresh start',
+              'Videos you open will appear here, with watched status and saved resume points.',
+              Icons.history_rounded,
             ),
-        ],
-      ),
+          )
+        else
+          SliverList.builder(
+            itemCount: history.length,
+            itemBuilder: (context, index) {
+              final entry = history[index];
+              final source = entry.source;
+              final date = MaterialLocalizations.of(context)
+                  .formatCompactDate(entry.playedAt.toLocal());
+              final watched = _data.isWatched(source);
+              return _VideoEntryCard(
+                key: ValueKey(source.id),
+                source: source,
+                date: date,
+                status: status(source),
+                progress: progress(source),
+                onTap: () => _play([source], 0),
+                actions: [
+                  if (source.telegram != null)
+                    VideoWatchButton(
+                      watched: watched,
+                      onPressed: () =>
+                          _change(() => _data.setWatched(source, !watched)),
+                    ),
+                  IconButton(
+                    tooltip: 'Remove from history',
+                    icon: const Icon(Icons.close),
+                    onPressed: () =>
+                        _change(() => _data.removeHistory(source.id)),
+                  ),
+                  _itemActions(
+                    source,
+                    play: () => _play([source], 0),
+                    remove: () => _data.removeHistory(source.id),
+                    removeLabel: 'Remove from history',
+                  ),
+                ],
+              );
+            },
+          ),
+      ],
     );
+    return widget.embedded
+        ? page
+        : PopScope(
+            canPop: !inPlaylist,
+            onPopInvokedWithResult: (popped, _) {
+              if (!popped && inPlaylist) _backToOverview();
+            },
+            child: page,
+          );
   }
 }
 
@@ -583,7 +638,17 @@ Duration? _snapshotPosition(File file) {
 }
 
 class VideoSnapshotsPage extends StatefulWidget {
-  const VideoSnapshotsPage({super.key, this.loadSnapshots});
+  const VideoSnapshotsPage({
+    super.key,
+    this.loadSnapshots,
+    this.embedded = false,
+    this.active = true,
+    this.bottomPadding = 28,
+  });
+
+  final bool embedded;
+  final bool active;
+  final double bottomPadding;
 
   @visibleForTesting
   final Future<List<File>> Function()? loadSnapshots;
@@ -596,6 +661,12 @@ class _VideoSnapshotsPageState extends State<VideoSnapshotsPage> {
   late Future<List<File>> _files = _load();
 
   Future<List<File>> _load() => widget.loadSnapshots?.call() ?? _snapshots();
+
+  @override
+  void didUpdateWidget(covariant VideoSnapshotsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) _files = _load();
+  }
 
   void _reload() {
     final files = _load();
@@ -682,6 +753,8 @@ class _VideoSnapshotsPageState extends State<VideoSnapshotsPage> {
     builder: (_, snapshot) {
       final files = snapshot.data;
       return _VideoCollectionPage(
+        embedded: widget.embedded,
+        bottomPadding: widget.bottomPadding,
         title: 'Video snapshots',
         icon: Icons.photo_library_outlined,
         summary: snapshot.hasError
