@@ -268,16 +268,14 @@ class AppSidebar extends StatelessWidget {
     this.icon = Icons.graphic_eq_rounded,
     this.tagline = 'A LITTLE CLOSER TO MUSIC',
     this.caption = 'YOUR MUSIC. YOUR SPACE.\n\nIndependent. Open source.',
-    this.onTelegram,
     this.onSettings,
-    this.telegramSelected = false,
     this.settingsSelected = false,
   });
-  final bool narrow, short, telegramSelected, settingsSelected;
+  final bool narrow, short, settingsSelected;
   final int selected;
   final ValueChanged<int> onSelected;
   final VoidCallback onHomeHold;
-  final VoidCallback? onTelegram, onSettings;
+  final VoidCallback? onSettings;
   final IconData libraryIcon, icon;
   final String tagline, caption, homeHoldHint;
 
@@ -410,14 +408,6 @@ class AppSidebar extends StatelessWidget {
                     tab.label,
                     () => onSelected(i),
                     selected == i,
-                  ),
-                if (onTelegram != null)
-                  item(
-                    3,
-                    Icons.send_rounded,
-                    'Telegram',
-                    onTelegram!,
-                    telegramSelected,
                   ),
               ],
             ),
