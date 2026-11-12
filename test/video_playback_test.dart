@@ -28,6 +28,8 @@ class _TestPlayerCore extends mpv.PlatformPlayer {
   void seeked(Duration position) => positionController.add(position);
   void rateChanged(double rate) => rateController.add(rate);
   void bufferingChanged(bool buffering) => bufferingController.add(buffering);
+  void tracksChanged(mpv.Tracks tracks) => tracksController.add(tracks);
+  void trackChanged(mpv.Track track) => trackController.add(track);
 }
 
 class _NativeVideo implements mpv.NativePlayer {
@@ -42,6 +44,22 @@ class _NativeVideo implements mpv.NativePlayer {
   set state(mpv.PlayerState value) => _core.state = value;
 
   final opened = <mpv.Media>[];
+  mpv.Tracks availableTracks = mpv.Tracks(
+    audio: [
+      mpv.AudioTrack.auto(),
+      mpv.AudioTrack.no(),
+      const mpv.AudioTrack('3', 'English audio', 'en', isDefault: true),
+      const mpv.AudioTrack('1', 'Japanese audio', 'ja'),
+    ],
+    subtitle: [
+      mpv.SubtitleTrack.auto(),
+      mpv.SubtitleTrack.no(),
+      const mpv.SubtitleTrack('4', 'French subtitles', 'fr', isDefault: true),
+      const mpv.SubtitleTrack('2', 'English subtitles', 'en'),
+    ],
+  );
+  final audioSelections = <String>[];
+  final subtitleSelections = <String>[];
   VoidCallback? beforeStop;
   Future<void> Function()? beforeDispose;
   final properties = <String, String>{
@@ -65,12 +83,29 @@ class _NativeVideo implements mpv.NativePlayer {
       playing: play,
       position: media.start ?? Duration.zero,
       duration: duration,
-      tracks: const mpv.Tracks(
-        audio: [mpv.AudioTrack('1', 'Japanese audio', 'ja')],
-        subtitle: [mpv.SubtitleTrack('2', 'English subtitles', 'en')],
-      ),
+      tracks: availableTracks,
     );
     _core.opened(play, duration);
+    _core.tracksChanged(availableTracks);
+  }
+
+  void publishTracks(mpv.Tracks tracks) {
+    state = state.copyWith(tracks: tracks);
+    _core.tracksChanged(tracks);
+  }
+
+  @override
+  Future<void> setAudioTrack(mpv.AudioTrack track, {bool synchronized = true}) async {
+    audioSelections.add(track.id);
+    state = state.copyWith(track: state.track.copyWith(audio: track));
+    _core.trackChanged(state.track);
+  }
+
+  @override
+  Future<void> setSubtitleTrack(mpv.SubtitleTrack track, {bool synchronized = true}) async {
+    subtitleSelections.add(track.id);
+    state = state.copyWith(track: state.track.copyWith(subtitle: track));
+    _core.trackChanged(state.track);
   }
 
   @override
@@ -313,6 +348,101 @@ void main() {
     expect(restored.videoPlayback.positions, isEmpty);
   });
 
+  for (final size in [const Size(390, 844), const Size(1280, 720)]) {
+    testWidgets('video language defaults and manual overrides at $size', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final native = _NativeVideo();
+      final preferredTracks = native.availableTracks;
+      native.availableTracks = mpv.Tracks(
+        audio: [mpv.AudioTrack.auto(), mpv.AudioTrack.no(),
+          const mpv.AudioTrack('3', 'English audio', 'en')],
+        subtitle: [mpv.SubtitleTrack.auto(), mpv.SubtitleTrack.no()],
+      );
+      final proxy = _RecordingVideoProxy();
+      final music = PlayerController(FakeAudio(),
+          TelegramStreamProxy((_) async => {}), MemorySettings());
+      final telegram = TelegramService(Directory('unused'), MemoryVault(),
+          transport: FakeTd());
+      addTearDown(proxy.close);
+      addTearDown(telegram.shutdown);
+      final first = VideoSource.file(Uri.file('/movies/first.mp4'), 'First video');
+      final second = VideoSource.file(Uri.file('/movies/second.mp4'), 'Second video');
+
+      Future<void> select(String panel, String label) async {
+        await tester.tap(find.byTooltip(panel));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+      }
+
+      try {
+        await tester.pumpWidget(MaterialApp(
+          theme: auralisTheme(ColorScheme.fromSeed(seedColor: Colors.purple,
+              brightness: Brightness.dark)),
+          home: VideoPlayback(sources: [first, second], initialIndex: 0,
+            telegram: telegram, music: music, proxy: proxy, onOpened: (_) {},
+            createController: () => _VideoController(native)),
+        ));
+        await tester.pumpAndSettle();
+        expect(native.state.track.audio.id, 'auto');
+        expect(native.state.track.subtitle.id, 'auto');
+
+        // Telegram/libmpv can discover track metadata after open completes.
+        native.publishTracks(preferredTracks);
+        await tester.pumpAndSettle();
+        expect(native.state.track.audio.id, '1');
+        expect(native.state.track.subtitle.id, '2');
+        final audioCount = native.audioSelections.length;
+        final subtitleCount = native.subtitleSelections.length;
+        native.publishTracks(preferredTracks);
+        await tester.pumpAndSettle();
+        expect(native.audioSelections.length, audioCount);
+        expect(native.subtitleSelections.length, subtitleCount);
+
+        await select('Audio tracks', 'English audio');
+        await select('Subtitles', 'Off');
+        native.publishTracks(preferredTracks);
+        await tester.pumpAndSettle();
+        expect(native.state.track.audio.id, '3');
+        expect(native.state.track.subtitle.id, 'no');
+
+        await select('Audio tracks', 'Automatic');
+        await select('Subtitles', 'Automatic');
+        expect(native.state.track.audio.id, '1');
+        expect(native.state.track.subtitle.id, '2');
+
+        await select('Audio tracks', 'Off');
+        await select('Subtitles', 'French subtitles');
+        native.publishTracks(preferredTracks);
+        await tester.pumpAndSettle();
+        expect(native.state.track.audio.id, 'no');
+        expect(native.state.track.subtitle.id, '4');
+
+        native.availableTracks = preferredTracks;
+        await tester.tap(find.byTooltip('Now playing queue'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Second video'));
+        await tester.pumpAndSettle();
+        expect(native.state.track.audio.id, '1');
+        expect(native.state.track.subtitle.id, '2');
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        var shutdown = false;
+        unawaited(music.shutdown().then((_) => shutdown = true));
+        for (var frame = 0; frame < 20 && !shutdown; frame++) {
+          await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+          tester.binding.scheduleFrame();
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        expect(shutdown, isTrue);
+      }
+    });
+  }
+
   testWidgets(
     'video controls adapt, seek, unlock and switch to a saved queue entry',
     (tester) async {
@@ -408,6 +538,11 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        expect(native.state.track.audio.id, '1');
+        expect(native.state.track.subtitle.id, '2');
+        expect(native.properties['alang'], 'ja,jpn,jp,japan,japanese');
+        expect(native.properties['slang'], 'en,eng,english');
+
         final pauseButton = find.byTooltip('Pause video');
         final spinner = find.byWidgetPredicate(
           (widget) =>
@@ -462,6 +597,9 @@ void main() {
               ? 1.7
               : 1;
           await tester.pumpAndSettle();
+          expect(find.text('Previous chapter'), findsNothing);
+          expect(find.text('Next chapter'), findsNothing);
+          expect(find.byTooltip('Chapters and bookmarks'), findsOneWidget);
           expect(
             find.byTooltip('More player controls').hitTestable(),
             findsOneWidget,
@@ -589,6 +727,9 @@ void main() {
         await tester.tap(find.text('Playback'));
         await tester.pumpAndSettle();
         expect(find.text('A–B loop'), findsNothing);
+        expect(find.text('Previous chapter'), findsNothing);
+        expect(find.text('Next chapter'), findsNothing);
+        expect(find.text('Chapters and bookmarks'), findsOneWidget);
         await tester.tap(find.text('Playback speed'));
         await tester.pumpAndSettle();
         expect(find.text('Normal'), findsOneWidget);
