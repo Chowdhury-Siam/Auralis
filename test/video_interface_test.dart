@@ -232,6 +232,10 @@ void main() {
       const archive = MusicChat(-100456, 'Series archive');
       final td = FakeTd();
       td.onRequest = (request) async {
+        if (request['@type'] == 'getChatMessageCount') {
+          expect(request['filter']['@type'], 'searchMessagesFilterVideo');
+          return {'count': 4};
+        }
         if (request['@type'] != 'searchChatMessages') return null;
         return {
           'messages': request['filter']?['@type'] == 'searchMessagesFilterVideo'
@@ -343,25 +347,22 @@ void main() {
       await tester.pumpAndSettle();
       expect(alpha, findsOneWidget);
       expect(zebra, findsNothing);
-      expect(find.text('2 videos · Cinema'), findsOneWidget);
+      expect(find.text('2 videos · Cinema'), findsNothing);
       expect(td.requests, hasLength(requestsBeforeSearch));
       await tester.enterText(videoSearch, 'not in this library');
       await tester.pumpAndSettle();
       expect(find.text('No matching videos'), findsOneWidget);
-      expect(tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Shuffle')).onPressed, isNull);
+      expect(find.byTooltip('Shuffle collection'), findsNothing);
       await tester.tap(find.byTooltip('Clear search'));
       await tester.pumpAndSettle();
       expect(alpha, findsOneWidget);
       expect(zebra, findsOneWidget);
-      expect(tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Shuffle')).onPressed, isNotNull);
 
       await openTab(Icons.explore_outlined);
       Finder channelRow(MusicChat chat) => find.byKey(ValueKey(chat.id));
-      Finder selectedIn(MusicChat chat) => find.descendant(
+      Finder countIn(MusicChat chat, String label) => find.descendant(
         of: channelRow(chat),
-        matching: find.text('Selected in Library'),
+        matching: find.text(label),
       );
       expect(find.text('Browse channels'), findsOneWidget);
       expect(find.byType(DiscoveryTile), findsNWidgets(2));
@@ -369,8 +370,8 @@ void main() {
         tester.getTopLeft(channelRow(channel)).dy,
         tester.getTopLeft(channelRow(archive)).dy,
       );
-      expect(selectedIn(channel), findsOneWidget);
-      expect(selectedIn(archive), findsNothing);
+      expect(countIn(channel, '2 videos'), findsOneWidget);
+      expect(countIn(archive, '≈ 4 videos'), findsOneWidget);
       final searchesBefore = td.requests.length;
       await tester.enterText(
         find.widgetWithText(TextField, 'Search channels'),
@@ -401,7 +402,7 @@ void main() {
       await tester.tap(find.byTooltip('Back to channels'));
       await tester.pumpAndSettle();
       final searchField = find.widgetWithText(TextField, 'Search channels');
-      expect(selectedIn(archive), findsOneWidget);
+      expect(countIn(archive, '1 video'), findsOneWidget);
       expect(
         find.descendant(
           of: channelRow(archive),
@@ -413,7 +414,7 @@ void main() {
       await tester.tap(find.byTooltip('Show grid'));
       await tester.pumpAndSettle();
       expect(find.byType(DiscoveryTile), findsOneWidget);
-      expect(selectedIn(archive), findsOneWidget);
+      expect(countIn(archive, '1 video'), findsOneWidget);
       expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
       await tester.enterText(searchField, 'cine');
       await tester.pumpAndSettle();
@@ -573,14 +574,17 @@ void main() {
       expect(optionsMenu.hitTestable(), findsOneWidget);
       expect(find.byTooltip('Library options'), findsNothing);
       expect(find.byTooltip('Refresh videos'), findsNothing);
-      final counts = find.byKey(const ValueKey('video-library-counts'));
-      final toolbar = find.byTooltip('Shuffle collection');
+      final sort = find.byTooltip('Sort Library');
       final videoSearch = find.byKey(const ValueKey('video-library-search'));
-      expect(tester.getRect(optionsMenu).bottom, lessThan(tester.getRect(counts).top));
-      expect(tester.getRect(counts).bottom, lessThan(tester.getRect(toolbar).top));
-      expect(tester.getRect(toolbar).bottom, lessThan(tester.getRect(videoSearch).top));
+      expect(find.byTooltip('Shuffle collection'), findsNothing);
+      expect(find.byKey(const ValueKey('video-library-counts')), findsNothing);
+      expect(sort.hitTestable(), findsOneWidget);
+      expect(
+        tester.getRect(sort).bottom,
+        lessThan(tester.getRect(videoSearch).top),
+      );
       expect(find.byType(LibraryCollectionMenu<int>), findsOneWidget);
-      expect(find.text('1 video · Cinema'), findsOneWidget);
+      expect(find.text('1 video · Cinema'), findsNothing);
       await tester.tap(optionsMenu);
       await tester.pumpAndSettle();
       for (final option in libraryOptions) {
