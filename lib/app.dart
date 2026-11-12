@@ -220,9 +220,9 @@ class _AuralisAppState extends State<AuralisApp> {
   );
 }
 
-enum _Page { home, search, library, telegram, nowPlaying, settings }
+enum _Page { home, browse, library, telegram, nowPlaying, settings }
 
-const _mainPages = [_Page.home, _Page.search, _Page.library];
+const _mainPages = [_Page.home, _Page.browse, _Page.library];
 
 class PlayerShell extends StatefulWidget {
   const PlayerShell({
@@ -638,7 +638,7 @@ class _PlayerShellState extends State<PlayerShell>
       } else {
         unawaited(_closeNowPlaying());
       }
-    } else if (destination == _Page.search && _browseGroup != null) {
+    } else if (destination == _Page.browse && _browseGroup != null) {
       search.clear();
       _selectBrowseGroup(null);
     } else if (destination == _Page.settings || destination == _Page.telegram) {
@@ -714,7 +714,7 @@ class _PlayerShellState extends State<PlayerShell>
         children: [
           if (!immersiveLyrics &&
               page != _Page.home &&
-              page != _Page.search &&
+              page != _Page.browse &&
               page != _Page.library) ...[
             _header(narrow, short: short, page: page),
             SizedBox(height: short ? 10 : 22),
@@ -734,7 +734,7 @@ class _PlayerShellState extends State<PlayerShell>
                 key: ValueKey((page, immersiveLyrics)),
                 child: switch (page) {
                   _Page.home => _home(),
-                  _Page.search => _discover(),
+                  _Page.browse => _discover(),
                   _Page.library => _library(),
                   _Page.telegram => _telegram(),
                   _Page.settings => _settingsPage(),
@@ -1280,7 +1280,7 @@ class _PlayerShellState extends State<PlayerShell>
   void _openTelegram() => _navigate(_Page.telegram);
 
   void _focusDiscovery() {
-    _navigate(_Page.search);
+    _navigate(_Page.browse);
     _discoveryFocus.requestFocus();
   }
 
@@ -1640,7 +1640,7 @@ class _PlayerShellState extends State<PlayerShell>
                             _Page.telegram => 'MUSIC IN YOUR CHANNELS',
                             _Page.settings => 'MAKE IT YOURS',
                             _Page.nowPlaying => 'IN THE MOMENT',
-                            _Page.home || _Page.search => '',
+                            _Page.home || _Page.browse => '',
                           },
                           style: TextStyle(
                             fontSize: 9,
@@ -1657,7 +1657,7 @@ class _PlayerShellState extends State<PlayerShell>
                           _Page.settings => 'Settings',
                           _Page.nowPlaying => 'Now playing',
                           _Page.home => 'Home',
-                          _Page.search => 'Search',
+                          _Page.browse => 'Browse',
                         },
                         style: TextStyle(
                           fontSize: short
