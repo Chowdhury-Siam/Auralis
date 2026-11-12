@@ -48,6 +48,7 @@ class TelegramStreamProxy {
   Future<void>? _cleanup;
   HttpServer? _server;
   Future<void>? _starting;
+  Future<void>? _interruption;
   final _token = base64UrlEncode(
     List.generate(32, (_) => Random.secure().nextInt(256)),
   );
@@ -69,6 +70,10 @@ class TelegramStreamProxy {
       );
     }
     final generation = ++_sourceGeneration;
+    if (_interruption case final pending?) await pending;
+    if (_closing || generation != _sourceGeneration) {
+      throw StateError('Playback request superseded');
+    }
     await (_starting ??= _start());
     await _stopDownloads();
     if (_closing || generation != _sourceGeneration) {
@@ -254,6 +259,24 @@ class TelegramStreamProxy {
     await _errors.close();
   }
 
+  /// Unblocks the player without deleting the Telegram buffer. The next
+  /// source starts a new listener after the player has released this one.
+  Future<void> interrupt() => _interruption ??=
+      _interrupt().whenComplete(() => _interruption = null);
+
+  Future<void> _interrupt() async {
+    ++_sourceGeneration;
+    try {
+      await _starting;
+    } finally {
+      final server = _server;
+      _server = null;
+      _starting = null;
+      _cancelRanges();
+      await server?.close(force: true);
+    }
+  }
+
   Future<void> stop() async {
     ++_sourceGeneration;
     await _stopDownloads();
@@ -262,10 +285,7 @@ class TelegramStreamProxy {
   Future<void> _stopDownloads() {
     final files = _tracks.values.map((t) => t.fileId).whereType<int>().toSet();
     _tracks.clear();
-    for (final cancelled in _ranges.values) {
-      if (!cancelled.isCompleted) cancelled.complete();
-    }
-    _ranges.clear();
+    _cancelRanges();
     // New sources wait for earlier cleanup, including a quick replay of the
     // same file. A late delete must never remove a new playback buffer.
     late final Future<void> cleanup;
@@ -302,5 +322,12 @@ class TelegramStreamProxy {
           if (identical(_cleanup, cleanup)) _cleanup = null;
         });
     return _cleanup = cleanup;
+  }
+
+  void _cancelRanges() {
+    for (final cancelled in _ranges.values) {
+      if (!cancelled.isCompleted) cancelled.complete();
+    }
+    _ranges.clear();
   }
 }
