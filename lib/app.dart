@@ -22,6 +22,7 @@ import 'telegram/channel_library.dart';
 import 'telegram_video_view.dart';
 import 'video_files.dart';
 import 'video_playback_data.dart';
+import 'video_settings.dart';
 import 'updater.dart';
 import 'update_widgets.dart';
 import 'wave_seek_bar.dart';
@@ -3760,6 +3761,9 @@ class _PlayerShellState extends State<PlayerShell>
       ),
     ],
     SettingsSection.media => [_lyricPreferences()],
+    SettingsSection.video => [
+      VideoSettingsOptions(settings: player.settings),
+    ],
     SettingsSection.data => [
       ListTile(
         leading: const PreferenceIcon(Icons.bar_chart_rounded),
@@ -3878,8 +3882,12 @@ class _PlayerShellState extends State<PlayerShell>
                 search: settingsSearch,
                 sections: [
                   for (final section in SettingsSection.values)
-                    if (section != SettingsSection.updates ||
-                        widget.updater != null)
+                    if (switch (section) {
+                      SettingsSection.updates => widget.updater != null,
+                      SettingsSection.media => !_videoMode,
+                      SettingsSection.video => _videoMode,
+                      _ => true,
+                    })
                       section,
                 ],
                 onSelected: (section) =>
