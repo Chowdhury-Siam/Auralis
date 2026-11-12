@@ -13,6 +13,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
 import 'models.dart';
+import 'library_widgets.dart';
 import 'lyrics.dart';
 import 'lyrics_view.dart';
 import 'player.dart';
@@ -2147,13 +2148,12 @@ class _PlayerShellState extends State<PlayerShell>
     final collectionIcon = _libraryCollections
         .firstWhere((entry) => entry.$1 == collection)
         .$2;
-    final background = _colors.primaryContainer;
-    final foreground = _colors.onPrimaryContainer;
-    const outer = Radius.circular(32), inner = Radius.circular(6);
-    return AuralisPopupMenu<int>(
+    return LibraryCollectionMenu<int>(
       key: const ValueKey('library-collection-menu'),
+      title: collection,
+      titleKey: const ValueKey('page-title'),
+      icon: collectionIcon,
       tooltip: 'Library collection: $collection',
-      constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
       onSelected: (index) =>
           _selectLibraryCollection(_libraryCollections[index].$1),
       itemBuilder: (_) => [
@@ -2168,58 +2168,6 @@ class _PlayerShellState extends State<PlayerShell>
             ),
           ),
       ],
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 52),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: const BorderRadiusDirectional.horizontal(
-                  start: outer,
-                  end: inner,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(collectionIcon, color: foreground, size: 22),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      collection,
-                      key: const ValueKey('page-title'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: foreground,
-                        fontSize: 25,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -.6,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Container(
-            width: 48,
-            height: 52,
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: const BorderRadiusDirectional.horizontal(
-                start: inner,
-                end: outer,
-              ),
-            ),
-            child: Icon(Icons.expand_more_rounded, color: foreground),
-          ),
-        ],
-      ),
     );
   }
 
