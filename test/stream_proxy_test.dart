@@ -8,6 +8,57 @@ import 'package:auralis/models.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 
 void main() {
+  test('interrupting a stalled video releases its socket before its cache', () async {
+    final calls = <String>[];
+    final stalled = Completer<void>();
+    var resumed = false;
+    final proxy = TelegramStreamProxy((request) async {
+      final type = request['@type'] as String;
+      calls.add(type);
+      switch (type) {
+        case 'getFileDownloadedPrefixSize':
+          if (resumed) return {'size': 4};
+          if (request['offset'] == 0) return {'size': 1};
+          if (!stalled.isCompleted) stalled.complete();
+          return {'size': 0};
+        case 'readFilePart':
+          return {
+            'data': base64Encode(List<int>.filled(request['count'] as int, 7)),
+          };
+        default:
+          return {};
+      }
+    });
+    final client = HttpClient();
+    addTearDown(() async {
+      client.close(force: true);
+      await proxy.close();
+    });
+    const video = Track(
+      id: 'video',
+      title: 'Video',
+      artist: '',
+      source: 'Cinema',
+      fileId: 1,
+      size: 4,
+    );
+    final first = await proxy.uri(video);
+    final response = await (await client.getUrl(first)).close();
+    final interrupted = expectLater(response.drain<void>(), throwsException);
+    await stalled.future;
+
+    await proxy.interrupt();
+    await interrupted.timeout(const Duration(seconds: 2));
+    expect(calls, isNot(contains('deleteFile')));
+    await proxy.stop();
+    expect(calls, contains('deleteFile'));
+
+    resumed = true;
+    final second = await proxy.uri(video);
+    final replay = await (await client.getUrl(second)).close();
+    expect(await replay.expand((chunk) => chunk).toList(), [7, 7, 7, 7]);
+  });
+
   test('changing or stopping tracks deletes only the previous audio buffer', () async {
     final calls = <Map<String, dynamic>>[];
     final proxy = TelegramStreamProxy((json) async {
