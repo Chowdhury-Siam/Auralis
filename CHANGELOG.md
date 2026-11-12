@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.177
+
+- Move Settings & diagnostics into Video Settings. Open Video settings from the playback menu to use live diagnostics.
+
+## 0.1.176
+
+- Hide Lyrics & artwork in Video mode Settings and Settings search.
+
 ## 0.1.175
 
 - Move manual video refresh to Browse. Refresh the selected video channel and discover new Telegram channels from the same control.
