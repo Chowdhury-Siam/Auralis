@@ -327,7 +327,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
     );
     if (_canPlay && track != null) {
       await _native.setProperty('secondary-sid', track);
-      _qualitySecondarySubtitle = null;
       _secondarySubtitle = track;
       _changed();
     }
@@ -1104,7 +1103,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
         _VideoOption(() => _audioPanel(context), 'Audio tracks', Icons.audiotrack_rounded),
         _VideoOption(() => _subtitlesPanel(context), 'Subtitles', Icons.subtitles_outlined),
       ]),
-      _VideoMenuGroup('Picture & display', 'Size, lighting and video quality', Icons.aspect_ratio_rounded, [
+      _VideoMenuGroup('Picture & display', 'Size, lighting and picture processing', Icons.aspect_ratio_rounded, [
         _VideoOption(() => _zoomPanel(context, video), 'Video size and zoom', Icons.zoom_in_rounded),
         if (Platform.isAndroid) ...[
           _VideoOption(_pictureInPicture, 'Picture in picture', Icons.picture_in_picture_alt_outlined),
@@ -1182,11 +1181,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _VideoMenuRow(
-                    label: 'Quality', detail: _videoQualityLabel,
-                    icon: Icons.high_quality_outlined,
-                    onTap: () => select(() => _qualityPanel(playerContext)),
-                  ),
                   for (final section in groups)
                     _VideoMenuRow(
                       label: section.title,
