@@ -505,6 +505,19 @@ void main() {
           expect(tester.takeException(), isNull, reason: '$size');
         }
 
+        await tester.tap(find.byTooltip('More player controls'));
+        await tester.pumpAndSettle();
+        expect(find.text('Settings & diagnostics'), findsNothing);
+        final settingsShortcut = find.text('Video settings');
+        await tester.ensureVisible(settingsShortcut);
+        await tester.tap(settingsShortcut);
+        await tester.pumpAndSettle();
+        expect(find.text('Settings & diagnostics'), findsOneWidget);
+        final decoder = find.widgetWithText(ListTile, 'Video decoder');
+        expect(tester.widget<ListTile>(decoder).enabled, isTrue);
+        await tester.tap(find.text('Done'));
+        await tester.pumpAndSettle();
+
         const seekZone = Offset(1100, 300);
         await tester.tapAt(seekZone);
         await tester.pump(const Duration(milliseconds: 60));
