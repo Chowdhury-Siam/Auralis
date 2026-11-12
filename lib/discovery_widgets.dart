@@ -170,6 +170,47 @@ Widget discoveryLayoutButton({
   icon: Icon(list ? Icons.grid_view_rounded : Icons.view_list_rounded),
 );
 
+class ChannelMediaCount extends StatelessWidget {
+  const ChannelMediaCount({
+    super.key,
+    required this.count,
+    required this.estimate,
+    required this.unit,
+    required this.selected,
+    required this.builder,
+  });
+
+  final int? count;
+  final Future<int?> Function() estimate;
+  final String unit;
+  final bool selected;
+  final Widget Function(String? subtitle) builder;
+
+  String _label(int count) => '$count ${count == 1 ? unit : '${unit}s'}';
+
+  @override
+  Widget build(BuildContext context) {
+    final exact = count;
+    if (exact != null) return builder(_label(exact));
+    return FutureBuilder<int?>(
+      future: estimate(),
+      builder: (context, snapshot) {
+        final approximate =
+            snapshot.connectionState == ConnectionState.done
+            ? snapshot.data
+            : null;
+        return builder(
+          approximate != null && approximate > 0
+              ? '≈ ${_label(approximate)}'
+              : selected
+              ? 'Selected in Library'
+              : null,
+        );
+      },
+    );
+  }
+}
+
 class DiscoveryTile extends StatelessWidget {
   const DiscoveryTile({
     super.key,
