@@ -193,6 +193,9 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
   }
 
   Widget _build() {
+    final watchedTitleStyle = TextStyle(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
     final name = _selected;
     final list = _data.playlists[name] ?? const <VideoSource>[];
     final history = _data.history.values.toList()
@@ -242,7 +245,10 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                         final watched = _data.isWatched(item);
                         return ListTile(
                           key: ValueKey(item.id),
-                          title: Text(item.title),
+                          title: Text(
+                            item.title,
+                            style: watched ? watchedTitleStyle : null,
+                          ),
                           subtitle: watched ? const Text('Watched') : null,
                           onTap: () => _play(list, index),
                           trailing: Row(
@@ -296,7 +302,10 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                     final watched = _data.isWatched(source);
                     return ListTile(
                       leading: const Icon(Icons.history),
-                      title: Text(source.title),
+                      title: Text(
+                        source.title,
+                        style: watched ? watchedTitleStyle : null,
+                      ),
                       subtitle: Text(watched
                           ? '$date · Watched'
                           : position == null ? date : '$date · Resume at ${clockText(position)}'),
