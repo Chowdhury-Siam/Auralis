@@ -149,14 +149,20 @@ void main() {
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
       final navigation = find.byKey(const ValueKey('video-navigation'));
-      await tester.tap(
-        find.descendant(
-          of: navigation,
-          matching: find.byIcon(Icons.explore_outlined),
-        ),
+      final browse = find.descendant(
+        of: navigation,
+        matching: find.byIcon(Icons.explore_outlined),
       );
+      final library = find.descendant(
+        of: navigation,
+        matching: find.byIcon(Icons.video_library_rounded),
+      );
+      final refresh = find.byTooltip('Refresh videos');
+      expect(refresh, findsNothing);
+      await tester.tap(browse);
       await tester.pumpAndSettle();
       expect(find.text('No Telegram channels available'), findsOneWidget);
+      expect(refresh, findsOneWidget);
       expect(find.text(channel.title), findsNothing);
       td.events.add({
         '@type': 'updateNewChat',
@@ -186,13 +192,9 @@ void main() {
       delayedIndex.complete();
       await tester.pumpAndSettle();
       expect(find.text('Next episode'), findsNothing);
-      await tester.tap(
-        find.descendant(
-          of: navigation,
-          matching: find.byIcon(Icons.video_library_rounded),
-        ),
-      );
+      await tester.tap(library);
       await tester.pumpAndSettle();
+      expect(refresh, findsNothing);
       expect(find.text('Next episode'), findsOneWidget);
       expect(find.text('New episode'), findsOneWidget);
       final episode = find.byKey(ValueKey('${channel.id}:40'));
@@ -236,12 +238,24 @@ void main() {
       final refreshes = td.requests
           .where((r) => r['@type'] == 'loadChats')
           .length;
-      await tester.tap(find.byTooltip('Refresh videos'));
+      final videoSearches = td.requests
+          .where((r) => r['@type'] == 'searchChatMessages')
+          .length;
+      await tester.tap(browse);
+      await tester.pumpAndSettle();
+      await tester.tap(refresh);
       await tester.pumpAndSettle();
       expect(
         td.requests.where((r) => r['@type'] == 'loadChats').length,
         greaterThan(refreshes),
       );
+      expect(
+        td.requests.where((r) => r['@type'] == 'searchChatMessages').length,
+        greaterThan(videoSearches),
+      );
+      await tester.tap(library);
+      await tester.pumpAndSettle();
+      expect(refresh, findsNothing);
       expect(find.text('New episode'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
