@@ -33,7 +33,6 @@ part 'video_playback_lookup.dart';
 part 'video_playback_config.dart';
 part 'video_playback_hdr.dart';
 part 'video_playback_tracks.dart';
-part 'video_playback_quality.dart';
 
 const _videoWindow = MethodChannel('app.auralis/video');
 final _desktopVideo =
@@ -164,10 +163,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
   bool _appInBackground = false, _selectingFile = false;
   bool _acceptVideoParams = false;
   bool _automaticAudio = true, _automaticSubtitles = true;
-  VideoQuality? _selectedVideoQuality;
-  mpv.AudioTrack? _qualityAudio;
-  mpv.SubtitleTrack? _qualitySubtitle;
-  mpv.SubtitleTrack? _qualitySecondarySubtitle;
   int _trackGeneration = 0;
   Future<void> _trackUpdates = Future<void>.value();
   List<DeviceOrientation>? _requestedOrientations;
@@ -184,6 +179,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
   bool _customKeysLoaded = false;
   List<VideoBookmark> _chapters = const [];
   _VideoFit _fit = _VideoFit.fit;
+  Size _controlReferenceSize = const Size(16, 9);
   _Upscale _upscale = _Upscale.off;
   _ShaderQuality _quality = _ShaderQuality.balanced;
   late _Ambient _ambient = _Ambient.values.firstWhere(
@@ -229,7 +225,10 @@ class _VideoPlaybackState extends State<VideoPlayback>
     widget.telegram.addListener(_authorizationChanged);
     widget.music.audio.addListener(_musicChanged);
     widget.music.releaseVideo = _releaseForExit;
-    if (Platform.isAndroid) _videoWindow.setMethodCallHandler(_windowEvent);
+    if (Platform.isAndroid) {
+      _videoWindow.setMethodCallHandler(_windowEvent);
+      unawaited(_setVideoImmersive(!widget.minimized));
+    }
     _checkpoint = Timer.periodic(
       const Duration(seconds: 15),
       (_) => _saveProgress(),
@@ -257,6 +256,17 @@ class _VideoPlaybackState extends State<VideoPlayback>
     _pip = call.arguments == true;
     _changed();
     if (!_pip && _appInBackground && !_data.background) await _player?.pause();
+  }
+
+  Future<void> _setVideoImmersive(bool enabled) async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _videoWindow.invokeMethod<void>('immersiveMode', enabled);
+    } on PlatformException {
+      // The video remains usable if the window cannot hide its system bars.
+    } on MissingPluginException {
+      // Widget tests do not have an Android window.
+    }
   }
 
   Future<void> _updatePip() async {
@@ -351,10 +361,12 @@ class _VideoPlaybackState extends State<VideoPlayback>
     _acceptVideoParams = false;
     _trackGeneration++;
     _automaticAudio = _automaticSubtitles = true;
-    _selectedVideoQuality = null;
-    _qualityAudio = null;
-    _qualitySubtitle = null;
-    _qualitySecondarySubtitle = null;
+    // Pick the control bounds before the decoder can publish a texture.
+    final width = _source.telegram?.videoWidth ?? 0;
+    final height = _source.telegram?.videoHeight ?? 0;
+    _controlReferenceSize = width > 0 && height > 0
+        ? Size(width.toDouble(), height.toDouble())
+        : const Size(16, 9);
     _positionReady = false;
     _resumeSeek =
         resume &&
@@ -741,6 +753,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
   void didUpdateWidget(covariant VideoPlayback oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.minimized != oldWidget.minimized) {
+      if (!_closed) unawaited(_setVideoImmersive(!widget.minimized));
       unawaited(_applyOrientation());
       unawaited(_updatePip());
       unawaited(_updateRefreshRate());
@@ -860,6 +873,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     widget.telegram.removeListener(_authorizationChanged);
     WidgetsBinding.instance.removeObserver(this);
     if (Platform.isAndroid) {
+      unawaited(_setVideoImmersive(false));
       _videoWindow.setMethodCallHandler(null);
     }
     final playback = widget;
