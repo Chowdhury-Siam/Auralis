@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:auralis/app.dart';
+import 'package:auralis/discovery_widgets.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/storage.dart';
@@ -185,26 +186,30 @@ void main() {
           context,
         );
       });
-      await tester.tap(find.byTooltip('Telegram').first);
+      expect(find.byTooltip('Telegram'), findsNothing);
+      await tester.tap(find.text('Choose channels'));
+      await tester.pumpAndSettle();
+      expect(find.text('Search your Channel'), findsOneWidget);
+      expect(find.text('Artists'), findsNothing);
+      await tester.enterText(find.byType(TextField), 'channel -2');
+      await tester.pumpAndSettle();
+      expect(find.text('Channel -1'), findsNothing);
+      await tester.tap(find.text('Channel -2'));
+      await tester.pumpAndSettle();
+      expect(find.text('Selected in Library'), findsOneWidget);
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show list'));
       await tester.pump();
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pumpAndSettle();
       expect(telegram.channels.map((c) => c.photoFileId), [90, 90]);
       expect(find.byType(Image), findsNWidgets(2));
-      await tester.tap(find.text('Channel -2'));
-      await tester.pumpAndSettle();
-      expect(
-        tester.getTopLeft(find.text('Channel -2')).dy,
-        lessThan(tester.getTopLeft(find.text('Channel -1')).dy),
-      );
       await tester.tap(find.text('Channel -1'));
       await tester.pumpAndSettle();
-      expect(
-        tester.getTopLeft(find.text('Channel -1')).dy,
-        lessThan(tester.getTopLeft(find.text('Channel -2')).dy),
-      );
+      expect(find.text('Selected in Library'), findsNWidgets(2));
       expect(player.settings.selectedChannels, hasLength(2));
-      await tester.tap(find.text('Open Library (2)'));
+      await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Add Song -1 to queue'), findsOneWidget);
       expect(find.byTooltip('Add Song -2 to queue'), findsOneWidget);
@@ -344,8 +349,9 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(player.settings.librarySort, LibrarySort.duration);
-        await tester.tap(find.byTooltip('Telegram').first);
+        await tester.tap(find.byTooltip('Browse'));
         await tester.pumpAndSettle();
+        expect(find.byType(DiscoveryTile), findsNWidgets(2));
         expect(tester.takeException(), isNull);
         await tester.tap(find.byTooltip('Library').first);
         await tester.pumpAndSettle();
@@ -362,15 +368,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(player.queue.map((track) => track.title), ['Song -2']);
       expect(player.current?.title, 'Song -2');
-      await tester.tap(find.byTooltip('Telegram').first);
+      await tester.tap(find.byTooltip('Browse'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Channel -1').first);
       await tester.pumpAndSettle();
-      expect(
-        tester.getTopLeft(find.text('Channel -2')).dy,
-        lessThan(tester.getTopLeft(find.text('Channel -1')).dy),
-      );
-      await tester.tap(find.text('Open Library (1)'));
+      expect(find.text('Selected in Library'), findsOneWidget);
+      expect(player.settings.selectedChannels.map((channel) => channel.id), [-2]);
+      await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Add Song -1 to queue'), findsNothing);
       expect(find.byTooltip('Add Song -2 to queue'), findsOneWidget);
@@ -449,7 +453,7 @@ void main() {
             image.dispose();
           });
         }
-        await tester.tap(find.byTooltip('Telegram').first);
+        await tester.tap(find.text('Connect Telegram'));
         await tester.pumpAndSettle();
         expect(find.text('Telegram API ID'), findsOneWidget);
         expect(tester.takeException(), isNull);
@@ -457,14 +461,18 @@ void main() {
           telegram.state = 'authorizationStateReady';
         });
         await tester.pumpAndSettle();
-        expect(find.text('Find an accessible channel'), findsOneWidget);
-        expect(find.text('0 channels · Offline'), findsOneWidget);
-        expect(find.text('No channels to show'), findsOneWidget);
-        expect(find.text('MUSIC IN YOUR CHANNELS'), findsOneWidget);
+        expect(find.text('Telegram connected'), findsOneWidget);
+        await tester.tap(find.text('Choose channels'));
+        await tester.pumpAndSettle();
+        expect(find.text('Search your Channel'), findsOneWidget);
+        expect(find.text('No Telegram channels available'), findsOneWidget);
+        expect(find.byTooltip('Load more channels'), findsOneWidget);
         expect(tester.takeException(), isNull);
         telegram.state = 'disconnected';
         expect(find.byTooltip('Now playing'), findsNothing);
         expect(find.byKey(const ValueKey('player-bar')), findsNothing);
+        await tester.tap(find.byTooltip('Library'));
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Settings'));
         await tester.pumpAndSettle();
         expect(find.text('Reduce motion'), findsNothing);
