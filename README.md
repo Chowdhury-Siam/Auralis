@@ -163,7 +163,7 @@ Choose **Music** or **Video** as your default interface in setup or **Settings â
 
 Maintainers must set the two [Telegram build secrets](docs/TELEGRAM_BUILD.md) before building releases. Local/PR builds without application credentials retain manual API setup using an application registered at [my.telegram.org](https://my.telegram.org).
 
-Use **Load more channels** in Browse to discover more accessible channels and **Refresh** in Library to scan for new music or retry partial failures. Refresh caches only missing artwork or lyrics and reuses valid saved items, including after restart. Auralis respects your account's existing channel access; it does not join channels automatically.
+Use **Refresh library** in Browse to discover more accessible channels, scan selected channels for new music, or retry partial failures. Refresh caches only missing artwork or lyrics and reuses valid saved items, including after restart. Auralis respects your account's existing channel access; it does not join channels automatically.
 
 ---
 
@@ -179,7 +179,7 @@ Use **Load more channels** in Browse to discover more accessible channels and **
 | **Playlists** | Named, ordered collections you can create, rename, and delete |
 | **Recently played** | The last 100 unique successfully opened tracks |
 
-Track/channel counts and icon-only Refresh/Sort controls sit in the Library header. On narrow screens, the counts appear beneath the title. Home shows your Daily Mix, recent music, and listening stats. Open Browse to search and select channels in a grid or list. Use the Library collection menu to switch to Artists and search by name. On phones, open Settings from Library.
+Sort sits in the Library header. Browse shows per-channel media counts and the refresh action. Home shows your Daily Mix, recent music, and listening stats. Open Browse to search and select channels in a grid or list. Use the Library collection menu to switch to Artists and search by name. On phones, open Settings from Library.
 
 Use a track's actions to favorite it, play it next, or add it to a playlist. Library sorting leaves saved playlist order unchanged. Deleting a playlist removes the collection, not files from Telegram.
 
@@ -317,7 +317,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## ðŸš§ Project Status
 
-Auralis is under active development. This archive contains source version **0.1.185+186**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
+Auralis is under active development. This archive contains source version **0.1.189+190**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
