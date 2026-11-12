@@ -53,11 +53,14 @@ class Track {
     this.size = 0,
     this.duration = Duration.zero,
     this.mime = 'application/octet-stream',
+    this.videoWidth,
+    this.videoHeight,
   });
   final String id, title, artist, source, mime;
   final int? fileId, coverFileId;
   final Uint8List? coverPreview;
   final int size, date;
+  final int? videoWidth, videoHeight;
   final Duration duration;
 
   // Video sources use the same byte-range proxy as music. They never enter
@@ -105,6 +108,8 @@ class Track {
       fileId: file['id'] as int,
       size: file['size'] as int,
       duration: Duration(seconds: media['duration'] as int? ?? 0),
+      videoWidth: media['width'] as int?,
+      videoHeight: media['height'] as int?,
       date: message['date'] as int? ?? 0,
       mime: mime,
       coverPreview: decodePreview(media['minithumbnail']?['data']),
