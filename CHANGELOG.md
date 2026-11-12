@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.185
+
+- Fix the snapshot gallery's Windows CI test by waiting for real filesystem deletion and gallery reload instead of a fixed number of zero-delay polling turns. Add a deliberately slow filesystem regression case. Keep snapshot behavior and video quality controls unchanged.
+
 ## 0.1.184
 
 - Add a Quality menu to the video player's controls using real Telegram alternate resolutions, with a marked current selection and an Original option. Keep playback position, play/pause state, speed, volume and available audio/subtitle choices when switching, and restore the previous quality if a source switch fails. Local and single-source videos show only their original quality.
