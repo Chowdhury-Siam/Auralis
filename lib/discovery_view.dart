@@ -332,6 +332,7 @@ extension _DiscoveryPages on _PlayerShellState {
                   ],
                 ),
               ),
+              _trackActions(track, onPlay: () => player.play(track, from: queue)),
             ],
           ),
         ),
