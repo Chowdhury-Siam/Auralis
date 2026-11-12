@@ -2025,9 +2025,6 @@ class _PlayerShellState extends State<PlayerShell>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    subtitle: Text(
-                      '${entries[i].value.length} saved tracks · on this device',
-                    ),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => setState(() {
                       selectedPlaylist = entries[i].key;
@@ -2040,31 +2037,18 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Widget _libraryCounts(int trackCount) {
-    final savedCount = collection == 'Favorites'
-        ? player.settings.favoriteIds.length
-        : collection == 'Recently played'
-        ? player.settings.recentIds.length
-        : selectedPlaylist != null
-        ? player.settings.playlists[selectedPlaylist]?.length ?? 0
-        : trackCount;
-    final trackText = collection == 'Playlists' && selectedPlaylist == null
-        ? '${player.settings.playlists.length} playlists'
-        : collection == 'All songs' || collection == 'Artists'
-        ? '$trackCount ${trackCount == 1 ? 'track' : 'tracks'}'
-        : '$trackCount of $savedCount loaded';
-    final channels = player.settings.selectedChannels.length;
-    final label =
-        '$trackText · $channels ${channels == 1 ? 'channel' : 'channels'}';
+  Widget _libraryCacheStatus() {
     final report = _cacheReport;
     final summary = telegram.ready && report?.scope == _libraryCacheScope
         ? report?.summary
         : null;
+    final label = _cachingLibrary
+        ? 'Caching $_cachedTracks / $_cacheTotal'
+        : summary;
+    if (label == null) return const SizedBox.shrink();
     final text = Text(
-      _cachingLibrary
-          ? 'Caching $_cachedTracks / $_cacheTotal'
-          : summary ?? label,
-      key: const ValueKey('library-counts'),
+      label,
+      key: const ValueKey('browse-cache-status'),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
@@ -2175,288 +2159,208 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Widget _libraryToolbar(
-    List<Track> visible, {
-    required bool showLabel,
-    required bool artistOverview,
-  }) {
-    final VoidCallback? shuffle = visible.isEmpty
-        ? null
-        : () {
-            final queue = List<Track>.of(visible)..shuffle();
-            unawaited(player.play(queue.first, from: queue));
-          };
-    final shuffleStyle = FilledButton.styleFrom(
-      backgroundColor: _colors.tertiaryContainer,
-      foregroundColor: _colors.onTertiaryContainer,
-      minimumSize: const Size(48, 44),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      shape: const StadiumBorder(),
-    );
-    final actionStyle = IconButton.styleFrom(
-      backgroundColor: _colors.secondaryContainer,
-      foregroundColor: _colors.onSecondaryContainer,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    );
-    return Row(
-      children: [
-        if (!artistOverview)
-          Tooltip(
-            message: 'Shuffle collection',
-            child: showLabel
-                ? FilledButton.icon(
-                    style: shuffleStyle,
-                    onPressed: shuffle,
-                    icon: const Icon(Icons.shuffle_rounded, size: 20),
-                    label: const Text('Shuffle'),
-                  )
-                : IconButton.filledTonal(
-                    style: IconButton.styleFrom(
-                      backgroundColor: _colors.tertiaryContainer,
-                      foregroundColor: _colors.onTertiaryContainer,
-                    ),
-                    onPressed: shuffle,
-                    icon: const Icon(Icons.shuffle_rounded, size: 20),
-                  ),
-          ),
-        const Spacer(),
-        IconButton.filledTonal(
-          key: const ValueKey('library-refresh'),
-          style: actionStyle,
-          tooltip: 'Refresh library',
-          onPressed: !telegram.ready || library.saving || library.loading
-              ? null
-              : () => unawaited(_refreshLibrary()),
-          icon: const Icon(Icons.refresh_rounded, size: 20),
-        ),
-        const SizedBox(width: 4),
-        if (artistOverview)
-          discoveryLayoutButton(
-            list: _artistsAsList,
-            onPressed: () => setState(() => _artistsAsList = !_artistsAsList),
-          )
-        else
-          AuralisPopupMenu<LibrarySort>(
-            tooltip: 'Sort Library',
-            itemBuilder: (_) => [
-              for (final sort in LibrarySort.values)
-                PopupMenuItem<LibrarySort>(
-                  value: sort,
-                  padding: EdgeInsets.zero,
-                  child: AuralisMenuRow(
-                    title: sort.label,
-                    selected: player.settings.librarySort == sort,
-                  ),
-                ),
-            ],
-            onSelected: (sort) async {
-              setState(() => player.settings.librarySort = sort);
-              try {
-                await player.settings.save();
-              } catch (_) {
-                _notice(
-                  'Sort changed for this session. Could not save your preference.',
-                );
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Ink(
-                width: 48,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: _colors.secondaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  Icons.sort_rounded,
-                  color: _colors.onSecondaryContainer,
-                  size: 20,
-                ),
-              ),
+  Widget _librarySortButton() => AuralisPopupMenu<LibrarySort>(
+      tooltip: 'Sort Library',
+      itemBuilder: (_) => [
+        for (final sort in LibrarySort.values)
+          PopupMenuItem<LibrarySort>(
+            value: sort,
+            padding: EdgeInsets.zero,
+            child: AuralisMenuRow(
+              title: sort.label,
+              selected: player.settings.librarySort == sort,
             ),
           ),
       ],
+      onSelected: (sort) async {
+        setState(() => player.settings.librarySort = sort);
+        try {
+          await player.settings.save();
+        } catch (_) {
+          _notice(
+            'Sort changed for this session. Could not save your preference.',
+          );
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Ink(
+          width: 48,
+          height: 40,
+          decoration: BoxDecoration(
+            color: _colors.secondaryContainer,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(
+            Icons.sort_rounded,
+            color: _colors.onSecondaryContainer,
+            size: 20,
+          ),
+        ),
+      ),
     );
-  }
 
-  Widget _library() => LayoutBuilder(
-    builder: (context, box) {
-      final tracks = _collectionTracks();
-      final playlistOverview =
-          collection == 'Playlists' && selectedPlaylist == null;
-      final artist = _selectedArtist;
-      final artistOverview = collection == 'Artists' && artist == null;
-      final visible = _visibleTracks(
-        tracks,
-        preserveOrder:
-            collection == 'Recently played' || collection == 'Playlists',
-      );
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (!_keyboardOpen) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: _libraryCollectionMenu(),
+  Widget _library() {
+    final playlistOverview =
+        collection == 'Playlists' && selectedPlaylist == null;
+    final artist = _selectedArtist;
+    final artistOverview = collection == 'Artists' && artist == null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!_keyboardOpen) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: _libraryCollectionMenu(),
+                ),
+              ),
+              if (artistOverview)
+                discoveryLayoutButton(
+                  list: _artistsAsList,
+                  onPressed: () =>
+                      setState(() => _artistsAsList = !_artistsAsList),
+                )
+              else
+                _librarySortButton(),
+              if (_mobileNavigation) const SizedBox(width: 4),
+              if (_mobileNavigation)
+                IconButton.filledTonal(
+                  tooltip: 'Settings',
+                  style: IconButton.styleFrom(
+                    backgroundColor: _colors.primaryContainer,
+                    foregroundColor: _colors.onPrimaryContainer,
                   ),
-                ),
-                if (_mobileNavigation)
-                  IconButton.filledTonal(
-                    tooltip: 'Settings',
-                    style: IconButton.styleFrom(
-                      backgroundColor: _colors.primaryContainer,
-                      foregroundColor: _colors.onPrimaryContainer,
-                    ),
-                    onPressed: () => _navigate(_Page.settings),
-                    icon: const Icon(Icons.settings_outlined, size: 20),
-                ),
-              ],
-            ),
-            LibraryPageIndicator(
-              key: const ValueKey('music-library-indicator'),
-              labels: _libraryCollections.map((entry) => entry.$1).toList(),
-              index: _libraryCollections.indexWhere((entry) => entry.$1 == collection),
-              onSelected: (index) => _selectLibraryCollection(_libraryCollections[index].$1),
-              reducedMotion: player.settings.reducedMotion,
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 3, bottom: 8),
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: _libraryCounts(tracks.length),
+                  onPressed: () => _navigate(_Page.settings),
+                  icon: const Icon(Icons.settings_outlined, size: 20),
               ),
+            ],
+          ),
+          LibraryPageIndicator(
+            key: const ValueKey('music-library-indicator'),
+            labels: _libraryCollections.map((entry) => entry.$1).toList(),
+            index: _libraryCollections.indexWhere((entry) => entry.$1 == collection),
+            onSelected: (index) => _selectLibraryCollection(_libraryCollections[index].$1),
+            reducedMotion: player.settings.reducedMotion,
+          ),
+        ],
+        Expanded(
+          child: Material(
+            color: _colors.surfaceContainerLowest,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(26),
             ),
-          ],
-          Expanded(
-            child: Material(
-              color: _colors.surfaceContainerLowest,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(26),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (!_keyboardOpen) ...[
-                      _libraryToolbar(
-                        playlistOverview ? const [] : visible,
-                        artistOverview: artistOverview,
-                        showLabel:
-                            box.maxWidth >= 330 &&
-                            MediaQuery.textScalerOf(context).scale(14) <= 18,
-                      ),
-                      const SizedBox(height: 5),
-                    ],
-                    _search(
-                      playlistOverview
-                          ? 'Search playlists'
-                          : artistOverview
-                          ? 'Search your Artists'
-                          : 'Search your music',
-                    ),
-                    if (artist != null)
-                      Row(
-                        children: [
-                          IconButton(
-                            tooltip: 'Back to artists',
-                            onPressed: () => _selectArtist(null),
-                            icon: const Icon(Icons.arrow_back_rounded),
-                          ),
-                          Expanded(
-                            child: Text(
-                              artist,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                          ),
-                        ],
-                      ),
-                    if (collection == 'Recently played' &&
-                        player.settings.recentIds.isNotEmpty)
-                      Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: TextButton(
-                          onPressed: player.clearRecent,
-                          child: const Text('Clear history'),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _search(
+                    playlistOverview
+                        ? 'Search playlists'
+                        : artistOverview
+                        ? 'Search your Artists'
+                        : 'Search your music',
+                  ),
+                  if (artist != null)
+                    Row(
+                      children: [
+                        IconButton(
+                          tooltip: 'Back to artists',
+                          onPressed: () => _selectArtist(null),
+                          icon: const Icon(Icons.arrow_back_rounded),
                         ),
-                      ),
-                    if (collection == 'Playlists' && selectedPlaylist != null)
-                      Row(
-                        children: [
-                          IconButton(
-                            tooltip: 'Back to playlists',
-                            onPressed: () => setState(() {
-                              selectedPlaylist = null;
-                              search.clear();
-                            }),
-                            icon: const Icon(Icons.arrow_back_rounded),
-                          ),
-                          Expanded(
-                            child: Text(
-                              selectedPlaylist!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Rename playlist',
-                            onPressed: () async {
-                              final name = await _editPlaylist(
-                                previous: selectedPlaylist,
-                              );
-                              if (mounted && name != null) {
-                                setState(() => selectedPlaylist = name);
-                              }
-                            },
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(
-                            tooltip: 'Delete playlist',
-                            onPressed: () => _deletePlaylist(selectedPlaylist!),
-                            icon: const Icon(Icons.delete_outline_rounded),
-                          ),
-                        ],
-                      ),
-                    if (library.error != null) _banner(library.error!),
-                    if (library.loading) ...[
-                      const LinearProgressIndicator(minHeight: 2),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          'Loading music from your channels…',
-                          style: TextStyle(
-                            color: _colors.onSurfaceVariant,
-                            fontSize: 11,
+                        Expanded(
+                          child: Text(
+                            artist,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleLarge,
                           ),
                         ),
+                      ],
+                    ),
+                  if (collection == 'Recently played' &&
+                      player.settings.recentIds.isNotEmpty)
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: TextButton(
+                        onPressed: player.clearRecent,
+                        child: const Text('Clear history'),
                       ),
-                    ],
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: LibraryCollectionPager(
-                        key: const ValueKey('music-library-pager'),
-                        index: _libraryCollections.indexWhere((entry) => entry.$1 == collection),
-                        count: _libraryCollections.length,
-                        reducedMotion: player.settings.reducedMotion,
-                        onChanged: (index) => _selectLibraryCollection(_libraryCollections[index].$1),
-                        itemBuilder: (_, index) => _libraryCollectionBody(_libraryCollections[index].$1),
+                    ),
+                  if (collection == 'Playlists' && selectedPlaylist != null)
+                    Row(
+                      children: [
+                        IconButton(
+                          tooltip: 'Back to playlists',
+                          onPressed: () => setState(() {
+                            selectedPlaylist = null;
+                            search.clear();
+                          }),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                        ),
+                        Expanded(
+                          child: Text(
+                            selectedPlaylist!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Rename playlist',
+                          onPressed: () async {
+                            final name = await _editPlaylist(
+                              previous: selectedPlaylist,
+                            );
+                            if (mounted && name != null) {
+                              setState(() => selectedPlaylist = name);
+                            }
+                          },
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                        IconButton(
+                          tooltip: 'Delete playlist',
+                          onPressed: () => _deletePlaylist(selectedPlaylist!),
+                          icon: const Icon(Icons.delete_outline_rounded),
+                        ),
+                      ],
+                    ),
+                  if (library.error != null) _banner(library.error!),
+                  if (library.loading) ...[
+                    const LinearProgressIndicator(minHeight: 2),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'Loading music from your channels…',
+                        style: TextStyle(
+                          color: _colors.onSurfaceVariant,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                   ],
-                ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: LibraryCollectionPager(
+                      key: const ValueKey('music-library-pager'),
+                      index: _libraryCollections.indexWhere((entry) => entry.$1 == collection),
+                      count: _libraryCollections.length,
+                      reducedMotion: player.settings.reducedMotion,
+                      onChanged: (index) => _selectLibraryCollection(_libraryCollections[index].$1),
+                      itemBuilder: (_, index) => _libraryCollectionBody(_libraryCollections[index].$1),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
-      );
-    },
-  );
+        ),
+      ],
+    );
+  }
 
   Widget _libraryCollectionBody(String scope) {
     final tracks = _collectionTracks(scope);
@@ -2480,7 +2384,7 @@ class _PlayerShellState extends State<PlayerShell>
       return _empty(Icons.library_music_rounded,
         library.loading ? 'Finding your music' : 'No music loaded',
         library.loading ? 'Tracks appear here as your channels load.'
-            : 'Refresh to try again, or choose different channels.');
+            : 'Refresh in Browse or choose different channels.');
     }
     if (scope == 'Artists' && (!active || _selectedArtist == null)) return _musicArtists(tracks);
     if (tracks.isEmpty && scope != 'All songs' && scope != 'Artists') {
@@ -2520,11 +2424,16 @@ class _PlayerShellState extends State<PlayerShell>
       itemBuilder: (context, i) => _trackTile(
         visible[i],
         onPlay: () => player.play(visible[i], from: visible),
+        showQueueShortcut: false,
       ),
     );
   }
 
-  Widget _trackTile(Track track, {required VoidCallback onPlay}) {
+  Widget _trackTile(
+    Track track, {
+    required VoidCallback onPlay,
+    bool showQueueShortcut = true,
+  }) {
     final active = player.current?.id == track.id;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -2579,14 +2488,15 @@ class _PlayerShellState extends State<PlayerShell>
                     color: _colors.onSurfaceVariant,
                   ),
                 ),
-              IconButton(
-                tooltip: 'Add ${track.title} to queue',
-                onPressed: () {
-                  player.enqueue(track);
-                  _notice('Added to queue');
-                },
-                icon: const Icon(Icons.playlist_add_rounded, size: 20),
-              ),
+              if (showQueueShortcut)
+                IconButton(
+                  tooltip: 'Add ${track.title} to queue',
+                  onPressed: () {
+                    player.enqueue(track);
+                    _notice('Added to queue');
+                  },
+                  icon: const Icon(Icons.playlist_add_rounded, size: 20),
+                ),
               _trackActions(track, onPlay: onPlay),
             ],
           ),
