@@ -260,6 +260,7 @@ class _PlayerShellState extends State<PlayerShell>
   late bool _videoMode;
   List<VideoSource>? _incomingVideos;
   void _toggleMixExpanded() => setState(() => _mixExpanded = !_mixExpanded);
+  void _toggleBrowseLayout() => setState(() => _browseAsList = !_browseAsList);
   void _openRecent() {
     _navigate(_Page.library);
     _selectLibraryCollection('Recently played');
