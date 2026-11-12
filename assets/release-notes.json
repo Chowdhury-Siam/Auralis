@@ -1,6 +1,12 @@
 {
-  "current": "0.1.181",
+  "current": "0.1.182",
   "releases": [
+    {
+      "version": "0.1.182",
+      "changes": [
+        "Fix Android CI verification of compact playlist action sheets by scrolling to off-screen buttons and using consistent test fonts. Keep the existing item actions and playback behavior unchanged."
+      ]
+    },
     {
       "version": "0.1.181",
       "changes": [
