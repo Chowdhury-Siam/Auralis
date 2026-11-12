@@ -103,7 +103,15 @@ void main() {
         find.ancestor(of: dock, matching: find.byType(Positioned)),
         findsWidgets,
       );
-      await tester.tap(find.byTooltip('Search'));
+      final browse = find.byTooltip('Browse');
+      expect(
+        find.descendant(
+          of: browse,
+          matching: find.byIcon(Icons.explore_outlined),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(browse);
       await tester.pumpAndSettle();
       await tester.tap(find.byType(TextField));
       await tester.pump();
