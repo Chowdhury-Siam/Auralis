@@ -193,6 +193,8 @@ void main() {
         openPlayer: false,
         size: const Size(390, 844),
       );
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Settings').first);
       await tester.pumpAndSettle();
       expect(find.byType(PreferenceChoice<LyricsSource?>), findsNothing);
@@ -834,6 +836,8 @@ void main() {
     tester,
   ) async {
     await mount(tester, openPlayer: false, size: const Size(390, 844));
+    await tester.tap(find.byTooltip('Library'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Settings').first);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('open-current-track')));
@@ -1079,7 +1083,7 @@ void main() {
     },
   );
 
-  testWidgets('Settings is a full page and system Back returns to Home', (
+  testWidgets('mobile Home and Browse keep settings access in Library', (
     tester,
   ) async {
     await mount(
@@ -1088,6 +1092,17 @@ void main() {
       openPlayer: false,
       size: const Size(390, 844),
     );
+    expect(find.text('Your Mix'), findsOneWidget);
+    expect(find.byTooltip('Telegram'), findsNothing);
+    expect(find.byTooltip('Settings'), findsNothing);
+    await tester.tap(find.byIcon(Icons.explore_outlined));
+    await tester.pumpAndSettle();
+    expect(find.text('Search your music'), findsOneWidget);
+    expect(find.byTooltip('Settings'), findsNothing);
+    expect(find.byTooltip('Show list'), findsOneWidget);
+    await tester.tap(find.byTooltip('Library'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Telegram'), findsOneWidget);
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     expect(
@@ -1103,12 +1118,15 @@ void main() {
     final labels = destinations
         .map((destination) => destination.label)
         .toList();
-    expect(labels, ['Home', 'Search', 'Library']);
-    expect(labels[tester.widget<NavigationBar>(bar).selectedIndex], 'Home');
+    expect(labels, ['Home', 'Browse', 'Library']);
+    expect(labels[tester.widget<NavigationBar>(bar).selectedIndex], 'Library');
     expect(find.byTooltip('Play queue'), findsNothing);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('Your Mix'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('library-collection-menu')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -1217,7 +1235,7 @@ void main() {
         matching: find.byType(NavigationDestination),
       );
       expect(destinations, findsNWidgets(3));
-      for (final label in ['Home', 'Search', 'Library']) {
+      for (final label in ['Home', 'Browse', 'Library']) {
         final destination = find.widgetWithText(NavigationDestination, label);
         final icon = find.descendant(
           of: destination,
