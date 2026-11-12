@@ -178,15 +178,18 @@ class DiscoveryTile extends StatelessWidget {
     required this.icon,
     required this.index,
     required this.onTap,
+    this.leading,
     this.list = false,
-    this.selected = false,
+    this.selected,
   });
   final String title;
   final String? subtitle;
   final IconData icon;
   final int index;
-  final VoidCallback onTap;
-  final bool list, selected;
+  final VoidCallback? onTap;
+  final Widget? leading;
+  final bool list;
+  final bool? selected;
   @override
   Widget build(BuildContext context) {
     final (background, foreground) = discoveryColors(
@@ -194,18 +197,19 @@ class DiscoveryTile extends StatelessWidget {
       Theme.of(context).colorScheme,
     );
     final detail = subtitle;
+    final isSelected = selected == true;
     return Semantics(
-      selected: selected ? true : null,
+      selected: selected,
       child: Material(
         color: background,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(list ? 16 : 22),
-          side: selected ? BorderSide(color: foreground) : BorderSide.none,
+          side: isSelected ? BorderSide(color: foreground) : BorderSide.none,
         ),
         clipBehavior: Clip.antiAlias,
         child: list
             ? ListTile(
-                leading: Icon(icon, color: foreground),
+                leading: leading ?? Icon(icon, color: foreground),
                 title: Text(
                   title,
                   maxLines: 2,
@@ -213,12 +217,14 @@ class DiscoveryTile extends StatelessWidget {
                 ),
                 subtitle: detail == null ? null : Text(detail),
                 textColor: foreground,
-                trailing: Icon(
-                  selected
-                      ? Icons.check_circle_rounded
-                      : Icons.chevron_right_rounded,
-                  color: foreground,
-                ),
+                trailing: selected == false
+                    ? null
+                    : Icon(
+                        isSelected
+                            ? Icons.check_circle_rounded
+                            : Icons.chevron_right_rounded,
+                        color: foreground,
+                      ),
                 onTap: onTap,
               )
             : InkWell(
@@ -240,7 +246,7 @@ class DiscoveryTile extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (selected)
+                    if (isSelected)
                       PositionedDirectional(
                         top: 10,
                         end: 10,
@@ -254,7 +260,7 @@ class DiscoveryTile extends StatelessWidget {
                       padding: EdgeInsetsDirectional.fromSTEB(
                         12,
                         12,
-                        selected ? 34 : 12,
+                        isSelected ? 34 : 12,
                         12,
                       ),
                       child: Column(
