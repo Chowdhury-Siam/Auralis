@@ -547,7 +547,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                 onHomeHold: _switchMusic,
                 homeHoldHint: 'Switch to Music',
                 libraryIcon: Icons.video_library_rounded,
-                browseChannels: true,
               ),
         body: wide
             ? Row(
@@ -566,7 +565,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                       onHomeHold: _switchMusic,
                       homeHoldHint: 'Switch to Music',
                       libraryIcon: Icons.video_library_rounded,
-                      browseChannels: true,
                       onSettings: widget.onSettings,
                     ),
                   ),
@@ -624,23 +622,24 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       MediaQuery.paddingOf(context).bottom + (_videoMinimized ? 92 : 20);
 
 
-  Widget _actions({Widget? sortButton, Widget? libraryMenu}) => Row(
+  Widget _refreshButton() => IconButton(
+    tooltip: 'Refresh videos',
+    onPressed: _refresh,
+    icon: const Icon(Icons.refresh_rounded, size: 20),
+  );
+
+  Widget _libraryActions(BuildContext context, Widget sortButton) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      if (_ready)
-        IconButton(
-          tooltip: 'Refresh videos',
-          onPressed: _refresh,
-          icon: const Icon(Icons.refresh_rounded, size: 20),
-        ),
+      if (_ready) _refreshButton(),
       if (widget.onSettings != null && MediaQuery.sizeOf(context).width < 900)
         IconButton(
           tooltip: 'Settings',
           onPressed: widget.onSettings,
           icon: const Icon(Icons.settings_outlined, size: 20),
         ),
-      ?sortButton,
-      ?libraryMenu,
+      sortButton,
+      _libraryMenu(context),
     ],
   );
 
@@ -716,7 +715,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                 fontWeight: FontWeight.w800,
               ),
             ),
-            _actions(),
+            if (_ready) _refreshButton(),
           ],
         ),
         const SizedBox(height: 12),
@@ -895,54 +894,37 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _search,
-                enabled: _ready,
-                textInputAction: TextInputAction.search,
-                onChanged: (_) => setState(() {}),
-                onSubmitted: (text) {
-                  final matches = _matchingChannels(text.trim().toLowerCase());
-                  if (_ready && matches.length == 1) {
-                    _chooseChannel(matches.single);
-                  }
-                },
-                decoration: InputDecoration(
-                  hintText: 'Search channels',
-                  enabledBorder: auralisFieldBorder(radius: 28),
-                  focusedBorder: auralisFieldBorder(
-                    radius: 28,
-                    side: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  suffixIcon: _search.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear channel search',
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: () {
-                            _search.clear();
-                            setState(() {});
-                          },
-                        ),
-                ),
-              ),
+        TextField(
+          controller: _search,
+          enabled: _ready,
+          textInputAction: TextInputAction.search,
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (text) {
+            final matches = _matchingChannels(text.trim().toLowerCase());
+            if (_ready && matches.length == 1) {
+              _chooseChannel(matches.single);
+            }
+          },
+          decoration: InputDecoration(
+            hintText: 'Search channels',
+            enabledBorder: auralisFieldBorder(radius: 28),
+            focusedBorder: auralisFieldBorder(
+              radius: 28,
+              side: BorderSide(color: Theme.of(context).colorScheme.primary),
             ),
-            if (widget.onSettings != null &&
-                MediaQuery.sizeOf(context).width < 900) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: 'Settings',
-                onPressed: widget.onSettings,
-                icon: const Icon(Icons.tune_rounded, size: 20),
-              ),
-            ],
-          ],
+            prefixIcon: const Icon(Icons.search_rounded, size: 20),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            suffixIcon: _search.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear channel search',
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () {
+                      _search.clear();
+                      setState(() {});
+                    },
+                  ),
+          ),
         ),
         const SizedBox(height: 12),
         if (_ready && showHeader) ...[
@@ -1095,10 +1077,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                 style: Theme.of(context).textTheme.headlineMedium
                     ?.copyWith(fontWeight: FontWeight.w700),
               ),
-              _actions(
-                sortButton: sortButton,
-                libraryMenu: _libraryMenu(context),
-              ),
+              _libraryActions(context, sortButton),
             ],
           ),
         ],
