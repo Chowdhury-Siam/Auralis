@@ -1,6 +1,12 @@
 {
-  "current": "0.1.182",
+  "current": "0.1.183",
   "releases": [
+    {
+      "version": "0.1.183",
+      "changes": [
+        "Swipe horizontally between Library collections in Music and Video, with tappable page indicators and the existing dropdown selector. Keep Video playlists, history and snapshots inside Library without leaving its navigation."
+      ]
+    },
     {
       "version": "0.1.182",
       "changes": [
