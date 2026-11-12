@@ -1,5 +1,14 @@
 # Auralis changes
 
+## 0.1.179
+
+- Remove duplicate Previous chapter and Next chapter shortcuts; keep chapter navigation in Chapters and bookmarks.
+- Match the Video Library header to Music with a split collection menu, video count, shuffle and sort toolbar, and a separate video search field.
+
+## 0.1.178
+
+- Prefer Japanese audio and English subtitles automatically in Video mode, recognizing language names and codes while preserving manual track choices for the current video.
+
 ## 0.1.177
 
 - Move Settings & diagnostics into Video Settings. Open Video settings from the playback menu to use live diagnostics.
