@@ -500,18 +500,16 @@ void main() {
         }
         expect(find.byTooltip('Listening stats'), findsNothing);
         expect(find.byTooltip('Choose channels'), findsNothing);
-        expect(find.byKey(const ValueKey('library-counts')), findsOneWidget);
-        expect(find.byTooltip('Refresh library').hitTestable(), findsOneWidget);
-        expect(find.byTooltip('Sort Library').hitTestable(), findsOneWidget);
+        expect(find.byKey(const ValueKey('library-counts')), findsNothing);
+        expect(find.byTooltip('Refresh library'), findsNothing);
+        expect(find.byTooltip('Shuffle collection'), findsNothing);
+        final sort = find.byTooltip('Sort Library');
+        expect(sort.hitTestable(), findsOneWidget);
         expect(
-          tester.getRect(find.byTooltip('Sort Library')).right,
-          inInclusiveRange(
-            tester.getRect(find.byType(TextField).first).right - 8,
-            tester.getRect(find.byType(TextField).first).right,
-          ),
-          reason: '$size keeps Library actions at the right edge',
+          tester.getRect(sort).bottom,
+          lessThan(tester.getRect(find.byType(TextField).first).top),
+          reason: '$size puts Sort in the Library header',
         );
-        expect(find.text('Refresh library'), findsNothing);
 
         expect(
           find.byType(NavigationBar),
