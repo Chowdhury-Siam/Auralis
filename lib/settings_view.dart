@@ -20,6 +20,11 @@ enum SettingsSection {
     Icons.lyrics_rounded,
     'automatic translate translation japanese english google mymemory deepl fallback source provider covers cache',
   ),
+  video(
+    'Settings & diagnostics',
+    Icons.settings_outlined,
+    'video player settings gestures seek decoder control layout custom buttons mpv console script configuration playback information',
+  ),
   data(
     'Data & sync',
     Icons.cloud_sync_rounded,
