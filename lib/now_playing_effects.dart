@@ -627,6 +627,7 @@ class _PlayerDockMotionState extends State<PlayerDockMotion>
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) => GestureDetector(
       behavior: HitTestBehavior.translucent,
+      dragStartBehavior: DragStartBehavior.down,
       onHorizontalDragStart: widget.enabled ? (_) => _offset.stop() : null,
       onHorizontalDragUpdate: widget.enabled
           ? (details) {
