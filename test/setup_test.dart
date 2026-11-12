@@ -136,7 +136,7 @@ void main() {
       expect(settings.setupComplete, isTrue);
       expect(settings.lastSeenRelease, currentReleaseVersion);
       expect(find.byType(SetupView), findsNothing);
-      expect(find.byTooltip('Search'), findsOneWidget);
+      expect(find.byTooltip('Browse'), findsOneWidget);
       expect(find.byType(AlertDialog), findsNothing);
       expect(tester.takeException(), isNull);
       await capture('floating-navigation');
@@ -463,7 +463,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(AppNavigation), findsOneWidget);
-      await tester.tap(find.byTooltip('Search'));
+      await tester.tap(find.byTooltip('Browse'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Example');
       await tester.pumpAndSettle();
