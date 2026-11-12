@@ -537,39 +537,24 @@ void main() {
         final dockBounds = tester.getRect(
           find.byKey(const ValueKey('player-bar')),
         );
-        final miniArtwork = tester.getRect(
-          find.descendant(
-            of: find.byKey(const ValueKey('open-current-track')),
-            matching: find.byType(Artwork),
-          ),
-        );
         await tester.tap(find.byKey(const ValueKey('open-current-track')));
         await tester.pump();
         final start = tester.getRect(surface);
+        final preview = find.byKey(const ValueKey('player-dock-preview'));
+        final body = find.byKey(const ValueKey('now-playing-content-opacity'));
         expect(start, rectMoreOrLessEquals(dockBounds, epsilon: .01));
-        await tester.pump(const Duration(milliseconds: 1));
-        final flight = find.byKey(const ValueKey('player-artwork-flight'));
+        expect(tester.getRect(preview).topLeft, start.topLeft);
+        expect(tester.widget<Opacity>(preview).opacity, 1);
         expect(
-          tester.getRect(flight),
-          rectMoreOrLessEquals(miniArtwork, epsilon: .5),
+          find.descendant(of: preview, matching: find.text('First song')),
+          findsOneWidget,
         );
-        expect(
-          tester
-              .widget<RawImage>(
-                find.descendant(of: flight, matching: find.byType(RawImage)),
-              )
-              .image,
-          isNotNull,
-          reason: 'The cached cover stays visible as it leaves the mini-player',
-        );
+        expect(tester.widget<Opacity>(body).opacity, 0);
         expect(start.height, lessThan(150));
         expect(start.top, greaterThan(size.height * .5));
         await tester.pump(const Duration(milliseconds: 150));
         final middle = tester.getRect(surface);
-        final middleArtwork = tester.getRect(flight);
-        final progress = 1 - middle.top / start.top;
-        expect(middleArtwork.top, lessThan(miniArtwork.top));
-        expect(middleArtwork.width, greaterThan(miniArtwork.width));
+        expect(tester.widget<Opacity>(body).opacity, 0);
         expect(middle.height, greaterThan(start.height));
         expect(middle.top, lessThan(start.top));
         expect(
@@ -581,17 +566,8 @@ void main() {
           findsNothing,
         );
         await tester.pumpAndSettle();
-        final fullArtwork = tester.getRect(
-          find.byKey(const ValueKey('now-playing-artwork-frame')),
-        );
-        expect(
-          middleArtwork,
-          rectMoreOrLessEquals(
-            Rect.lerp(miniArtwork, fullArtwork, progress)!,
-            epsilon: .01,
-          ),
-        );
-        expect(flight, findsNothing);
+        expect(preview, findsNothing);
+        expect(tester.widget<Opacity>(body).opacity, 1);
         expect(
           tester.widget<ClipRRect>(surface).borderRadius,
           BorderRadius.zero,
@@ -603,16 +579,9 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('close-now-playing')));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 150));
-        final closingProgress = 1 - tester.getRect(surface).top / start.top;
-        expect(
-          tester.getRect(flight),
-          rectMoreOrLessEquals(
-            Rect.lerp(miniArtwork, fullArtwork, closingProgress)!,
-            epsilon: .01,
-          ),
-        );
+        expect(tester.getRect(surface).top, greaterThan(0));
         await tester.pumpAndSettle();
-        expect(flight, findsNothing);
+        expect(preview, findsNothing);
         expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
       }
       expect(player.current?.id, 'first');
@@ -650,7 +619,7 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('close-now-playing')));
         await tester.pump();
         var previousBlur = 1.0;
-        var revealedDock = false;
+        var previewReachedDock = false;
         // Bound the tail as well as the visible travel: the old transition still
         // blocked the dock after it appeared to have reached its final position.
         for (var frame = 0; frame < 45; frame++) {
@@ -666,19 +635,16 @@ void main() {
           expect(opacity, lessThanOrEqualTo(previousBlur));
           previousBlur = opacity;
           if (opacity == 0) {
-            revealedDock = true;
-            final cardOpacity = tester
-                .widget<Opacity>(
-                  find.byKey(const ValueKey('player-transition-card-opacity')),
-                )
-                .opacity;
-            expect(cardOpacity, lessThan(.3));
+            previewReachedDock = true;
+            final preview = find.byKey(const ValueKey('player-dock-preview'));
+            expect(tester.widget<Opacity>(preview).opacity, 1);
+            expect(tester.getRect(preview).top, closeTo(dockBounds.top, 20));
           }
         }
         expect(
-          revealedDock,
+          previewReachedDock,
           isTrue,
-          reason: 'The actual dock is visible before the animation ends',
+          reason: 'The mini-player row is restored as the panel reaches the dock',
         );
         expect(
           find.byKey(const ValueKey('now-playing-container')),
@@ -773,6 +739,12 @@ void main() {
         identical(tester.widget<SnapshotWidget>(cachedBlur), snapshot),
         isTrue,
       );
+      await gesture.moveBy(const Offset(0, -700));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(tester.getRect(surface).top, 0);
+      final body = find.byKey(const ValueKey('now-playing-content-opacity'));
+      expect(tester.widget<Opacity>(body).opacity, 0);
+      expect(find.byKey(const ValueKey('close-now-playing')), findsOneWidget);
       await gesture.up();
       await tester.pumpAndSettle();
       expect(
@@ -800,6 +772,17 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
+      await tester.fling(
+        find.byKey(const ValueKey('open-current-track')),
+        const Offset(0, -90),
+        1600,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<Opacity>(body).opacity, 1);
+      expect(
+        find.byKey(const ValueKey('now-playing-play-pause')).hitTestable(),
+        findsOneWidget,
+      );
       expect(player.current?.id, 'first');
       expect(audio.playing, isFalse);
       expect(tester.takeException(), isNull);
@@ -944,15 +927,11 @@ void main() {
               .onPressed,
           isNull,
         );
+        final fade = find.byKey(const ValueKey('now-playing-content-opacity'));
+        final beforeFade = tester.widget<Opacity>(fade).opacity;
+        expect(beforeFade, greaterThan(0));
         await tester.pump(const Duration(milliseconds: 100));
-        final surface = find.byKey(const ValueKey('now-playing-container'));
-        final fade = tester.widget<Opacity>(
-          find.descendant(
-            of: surface,
-            matching: find.byKey(const ValueKey('now-playing-content-opacity')),
-          ),
-        );
-        expect(fade.opacity, inExclusiveRange(0, 1));
+        expect(tester.widget<Opacity>(fade).opacity, lessThan(beforeFade));
         await tester.pump(const Duration(milliseconds: 180));
         await tester.pump();
         expect(audio.playing, isTrue, reason: 'Collapsing keeps music playing');
@@ -979,12 +958,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('close-now-playing')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
-    await tester.tap(find.byTooltip('Telegram').first);
+    await tester.tap(find.byTooltip('Browse'));
     await tester.pumpAndSettle();
-    expect(
-      tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
-      'Telegram',
-    );
+    expect(find.text('Search your Channel'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1097,12 +1073,11 @@ void main() {
     expect(find.byTooltip('Settings'), findsNothing);
     await tester.tap(find.byIcon(Icons.explore_outlined));
     await tester.pumpAndSettle();
-    expect(find.text('Search your music'), findsOneWidget);
+    expect(find.text('Search your Channel'), findsOneWidget);
     expect(find.byTooltip('Settings'), findsNothing);
-    expect(find.byTooltip('Show list'), findsOneWidget);
     await tester.tap(find.byTooltip('Library'));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Telegram'), findsOneWidget);
+    expect(find.byTooltip('Telegram'), findsNothing);
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     expect(
