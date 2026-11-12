@@ -709,6 +709,14 @@ void main() {
         );
         final shuffle = find.widgetWithText(FilterChip, 'Shuffle');
         expect(tester.widget<FilterChip>(shuffle).selected, isFalse);
+        await tester.tap(find.byTooltip('Video actions for Second video'));
+        await tester.pumpAndSettle();
+        expect(find.text('Play next'), findsOneWidget);
+        expect(find.byKey(const ValueKey('media-item-sheet')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('media-action-next')));
+        await tester.pumpAndSettle();
+        expect(tester.widget<ListTile>(current).selected, isTrue);
+        expect(native.opened, hasLength(1));
         await tester.tap(shuffle);
         await tester.pumpAndSettle();
         expect(tester.widget<FilterChip>(shuffle).selected, isTrue);
