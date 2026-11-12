@@ -15,7 +15,7 @@ Auralis 0.1.144+145 builds on the Video mode port from the supplied Auralis 0.1.
 | Subtitles | Embedded and external tracks, secondary tracks, Wyzie lookup, delay, and persistent supported style and position settings | Sidecar discovery, custom font catalog, drag and pinch on subtitle text, broader provider coverage |
 | Skip segments | Manual ranges, AniSkip, seekbar markers, automatic skipping of saved segments, and import from recognized chapter titles | Broader lookup providers and configurable chapter classification |
 | Gestures | Tap controls, double-tap seek, horizontal scrub, vertical volume/brightness, hold for speed, and pinch/pan | Per-gesture action mapping and subtitle-specific touch targets |
-| Player controls | Editable portrait/landscape control layouts, custom command buttons, bookmarks, chapters, A–B loop, frame steps, and sleep timer | Dedicated frame-review timeline and richer custom button action types |
+| Player controls | Editable portrait/landscape control layouts, custom command buttons, bookmarks, chapters, frame steps, and sleep timer | Dedicated frame-review timeline and richer custom button action types |
 | HDR | Android GPU-next option, HDR Toys profiles, tone mapping, and refresh-rate matching | Physical HDR output and device/profile compatibility remain unverified |
 | Ambient rendering | Texture-based blurred letterbox fill with thermal throttling and persisted mode | Reference shader-based modes and finer controls |
 | Background playback | In-app mini-player, continued playback setting, and Android PiP | Unified video foreground service, notification transport controls, and explicit video decoder suspension |
