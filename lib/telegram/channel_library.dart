@@ -15,9 +15,13 @@ class ChannelLibrary extends ChangeNotifier {
   final TelegramService telegram;
   final AppSettings settings;
   final List<Track> tracks = [];
+  final _trackCounts = <int, int>{};
+
   bool loading = false, saving = false, _disposed = false, _ready;
   int _generation = 0;
   String? error;
+
+  int? trackCount(int channelId) => _trackCounts[channelId];
 
   bool selected(int id) => settings.selectedChannels.any((c) => c.id == id);
 
@@ -31,6 +35,7 @@ class ChannelLibrary extends ChangeNotifier {
     ];
     final generation = ++_generation;
     tracks.clear();
+    _trackCounts.clear();
     loading = false;
     saving = true;
     error = null;
@@ -62,6 +67,7 @@ class ChannelLibrary extends ChangeNotifier {
       ++_generation;
       loading = false;
       tracks.clear();
+      _trackCounts.clear();
       error = null;
       notifyListeners();
     }
@@ -71,6 +77,7 @@ class ChannelLibrary extends ChangeNotifier {
     if (_disposed || saving) return;
     final generation = ++_generation;
     tracks.clear();
+    _trackCounts.clear();
     error = null;
     final channels = List<MusicChat>.of(settings.selectedChannels);
     loading = telegram.ready && channels.isNotEmpty;
@@ -78,6 +85,7 @@ class ChannelLibrary extends ChangeNotifier {
     if (!loading) return;
     final ids = <String>{};
     for (final selected in channels) {
+      final start = tracks.length;
       try {
         final channel = await telegram.channel(selected.id);
         if (_disposed || generation != _generation) return;
@@ -101,10 +109,12 @@ class ChannelLibrary extends ChangeNotifier {
             }
           } while (cursor != 0);
         }
+        _trackCounts[channel.id] = tracks.length - start;
+        notifyListeners();
       } catch (_) {
         if (_disposed || generation != _generation) return;
         final message =
-            'Could not load all music from ${selected.title}. Check channel access and refresh the Library.';
+            'Could not load all music from ${selected.title}. Check channel access and refresh in Browse.';
         error = error == null ? message : '$error\n$message';
         notifyListeners();
       }
