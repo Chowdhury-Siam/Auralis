@@ -453,6 +453,9 @@ void main() {
             image.dispose();
           });
         }
+        await tester.ensureVisible(find.text('Connect Telegram'));
+        await tester.pumpAndSettle();
+        expect(find.text('Connect Telegram').hitTestable(), findsOneWidget);
         await tester.tap(find.text('Connect Telegram'));
         await tester.pumpAndSettle();
         expect(find.text('Telegram API ID'), findsOneWidget);
