@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:auralis/app.dart';
 import 'package:auralis/app_navigation.dart';
 import 'package:auralis/discovery_widgets.dart';
+import 'package:auralis/library_widgets.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
@@ -168,7 +169,11 @@ void main() {
         expect(find.byTooltip('Choose video channel'), findsNothing);
         expect(find.text('Full movie'), findsOneWidget);
         expect(musicShortcut, findsNothing);
-        expect(tester.getSize(videoRow), searchRowSize);
+        final libraryRowSize = tester.getSize(videoRow);
+        expect(libraryRowSize.height, searchRowSize.height);
+        expect(libraryRowSize.width, searchRowSize.width - 16);
+        expect(find.byType(LibraryCollectionMenu<int>), findsOneWidget);
+        expect(find.widgetWithText(TextField, 'Search your videos'), findsOneWidget);
         expectVideoViewport();
         final list = find.descendant(
           of: find.byType(CustomScrollView),
@@ -317,6 +322,26 @@ void main() {
         lessThan(tester.getTopLeft(alpha).dy),
       );
 
+      final videoSearch = find.byKey(const ValueKey('video-library-search'));
+      final requestsBeforeSearch = td.requests.length;
+      await tester.enterText(videoSearch, 'ALPHA');
+      await tester.pumpAndSettle();
+      expect(alpha, findsOneWidget);
+      expect(zebra, findsNothing);
+      expect(find.text('2 videos · Cinema'), findsOneWidget);
+      expect(td.requests, hasLength(requestsBeforeSearch));
+      await tester.enterText(videoSearch, 'not in this library');
+      await tester.pumpAndSettle();
+      expect(find.text('No matching videos'), findsOneWidget);
+      expect(tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Shuffle')).onPressed, isNull);
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pumpAndSettle();
+      expect(alpha, findsOneWidget);
+      expect(zebra, findsOneWidget);
+      expect(tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Shuffle')).onPressed, isNotNull);
+
       await openTab(Icons.explore_outlined);
       Finder channelRow(MusicChat chat) => find.byKey(ValueKey(chat.id));
       Finder selectedIn(MusicChat chat) => find.descendant(
@@ -393,6 +418,71 @@ void main() {
     },
   );
 
+  testWidgets('Video Library search stays separate from Browse and fits the keyboard',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetViewInsets);
+    final td = FakeTd();
+    td.onRequest = (request) async => request['@type'] == 'searchChatMessages'
+        ? {
+            'messages': request['filter']?['@type'] == 'searchMessagesFilterVideo'
+                ? [post(30, 'Alpha.mp4'), post(40, 'Zebra.mp4')]
+                : [],
+            'next_from_message_id': 0,
+          }
+        : null;
+    final telegram = TelegramService(Directory('unused'), MemoryVault(),
+        transport: td)..state = 'authorizationStateReady';
+    final settings = MemorySettings()
+      ..defaultInterface = AppInterface.video
+      ..selectedChannels = [channel]
+      ..videoChannelId = channel.id;
+    final player = PlayerController(FakeAudio(),
+        TelegramStreamProxy(telegram.request), settings);
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      await player.shutdown();
+      await telegram.shutdown();
+    });
+    await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+    await tester.pumpAndSettle();
+    final navigation = find.byKey(const ValueKey('video-navigation'));
+    Future<void> openTab(IconData icon) async {
+      await tester.tap(find.descendant(of: navigation, matching: find.byIcon(icon)));
+      await tester.pumpAndSettle();
+    }
+    await openTab(Icons.video_library_rounded);
+    final menu = find.byKey(const ValueKey('video-library-collection-menu'));
+    final search = find.byKey(const ValueKey('video-library-search'));
+    await tester.enterText(search, 'Alpha');
+    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+    await tester.pumpAndSettle();
+    expect(menu, findsNothing);
+    expect(find.byTooltip('Shuffle collection'), findsNothing);
+    expect(tester.widget<TextField>(search).controller!.text, 'Alpha');
+    expect(find.byKey(ValueKey('${channel.id}:30')), findsOneWidget);
+    expect(find.text('Zebra'), findsNothing);
+    expect(tester.takeException(), isNull);
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
+    expect(menu, findsOneWidget);
+    await openTab(Icons.explore_outlined);
+    final channelSearch = find.widgetWithText(TextField, 'Search channels');
+    expect(tester.widget<TextField>(channelSearch).controller!.text, isEmpty);
+    await tester.enterText(channelSearch, 'Cinema');
+    await openTab(Icons.video_library_rounded);
+    expect(tester.widget<TextField>(search).controller!.text, 'Alpha');
+    await tester.tap(find.byTooltip('Clear search'));
+    await tester.pumpAndSettle();
+    expect(find.text('Zebra'), findsOneWidget);
+    await openTab(Icons.explore_outlined);
+    expect(tester.widget<TextField>(channelSearch).controller!.text, 'Cinema');
+    expect(tester.takeException(), isNull);
+  }, variant: TargetPlatformVariant({TargetPlatform.android, TargetPlatform.windows}));
+
   for (final size in [
     const Size(320, 568),
     const Size(844, 390),
@@ -447,7 +537,7 @@ void main() {
       for (final option in libraryOptions) {
         expect(find.text(option), findsNothing);
       }
-      final optionsMenu = find.byTooltip('Library options');
+      final optionsMenu = find.byKey(const ValueKey('video-library-collection-menu'));
       expect(optionsMenu, findsNothing);
       if (size.width >= 900) expect(find.byType(AppSidebar), findsOneWidget);
       await tester.tap(find.byIcon(Icons.explore_outlined));
@@ -466,6 +556,16 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Trailer'), findsOneWidget);
       expect(optionsMenu.hitTestable(), findsOneWidget);
+      expect(find.byTooltip('Library options'), findsNothing);
+      expect(find.byTooltip('Refresh videos'), findsNothing);
+      final counts = find.byKey(const ValueKey('video-library-counts'));
+      final toolbar = find.byTooltip('Shuffle collection');
+      final videoSearch = find.byKey(const ValueKey('video-library-search'));
+      expect(tester.getRect(optionsMenu).bottom, lessThan(tester.getRect(counts).top));
+      expect(tester.getRect(counts).bottom, lessThan(tester.getRect(toolbar).top));
+      expect(tester.getRect(toolbar).bottom, lessThan(tester.getRect(videoSearch).top));
+      expect(find.byType(LibraryCollectionMenu<int>), findsOneWidget);
+      expect(find.text('1 video · Cinema'), findsOneWidget);
       await tester.tap(optionsMenu);
       await tester.pumpAndSettle();
       for (final option in libraryOptions) {
