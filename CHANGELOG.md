@@ -1,5 +1,21 @@
 # Auralis changes
 
+## 0.1.189
+
+- Load full Telegram thumbnails for video History, including entries saved before restarting. Release completed streaming reads throughout playback to prevent memory from growing with the amount streamed.
+
+## 0.1.188
+
+- Keep video controls in place when the first picture appears. Hide the Android status and navigation bars during full-player playback, with an edge swipe to reveal them temporarily.
+
+## 0.1.187
+
+- Remove the video Quality menu and alternate stream switching. Telegram and local videos play their original files.
+
+## 0.1.186
+
+- Move Sort to the Library header and remove the collection Shuffle and totals in Music and Video. Use Browse to refresh and see each Telegram channel's media count. Music track rows keep queue actions in the three-dot menu.
+
 ## 0.1.185
 
 - Fix the snapshot gallery's Windows CI test by waiting for real filesystem deletion and gallery reload instead of a fixed number of zero-delay polling turns. Add a deliberately slow filesystem regression case. Keep snapshot behavior and video quality controls unchanged.
