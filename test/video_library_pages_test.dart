@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -76,6 +77,34 @@ Future<void> visible(WidgetTester tester, Finder target) async {
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pumpAndSettle();
+}
+
+/// Exercise slow host I/O without changing the gallery's deletion behavior.
+class _SlowSnapshotFile implements File {
+  _SlowSnapshotFile(this.file, this.ioZone);
+  final File file;
+  final Zone ioZone;
+
+  @override
+  String get path => file.path;
+  @override
+  Uri get uri => file.uri;
+  @override
+  bool existsSync() => file.existsSync();
+  @override
+  Future<int> length() => file.length();
+  @override
+  Future<Uint8List> readAsBytes() => file.readAsBytes();
+  @override
+  Future<FileSystemEntity> delete({bool recursive = false}) =>
+      ioZone.run(() async {
+        // This is wall-clock time, not Flutter's fake animation clock.
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        return file.delete(recursive: recursive);
+      });
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
@@ -419,72 +448,94 @@ void main() {
     },
   );
 
-  testWidgets('Snapshot gallery previews originals and confirms deletion', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1280, 800);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    addTearDown(tester.view.resetPhysicalSize);
-    final directory = (await tester.runAsync(
-      () => Directory.systemTemp.createTemp('auralis-frame-gallery-'),
-    ))!;
-    addTearDown(() async {
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.runAsync(() => directory.delete(recursive: true));
-    });
-    final file = File(
-      '${directory.path}/1794470400000000-Romantic_Killer_-_01-264221ms.png',
-    );
-    await tester.runAsync(
-      () => File('test/fixtures/cover.png').copy(file.path),
-    );
-    var loads = 0;
-    Future<List<File>> load() async {
-      loads++;
-      return file.existsSync() ? [file] : [];
-    }
+  for (final slowFilesystem in [false, true]) {
+    testWidgets(
+      'Snapshot gallery previews originals and confirms deletion (slow filesystem: $slowFilesystem)',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1280, 800);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final directory = (await tester.runAsync(
+          () => Directory.systemTemp.createTemp('auralis-frame-gallery-'),
+        ))!;
+        final ioZone = (await tester.runAsync(() async => Zone.current))!;
+        addTearDown(() async {
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.runAsync(() => directory.delete(recursive: true));
+        });
+        final original = File(
+          '${directory.path}/1794470400000000-Romantic_Killer_-_01-264221ms.png',
+        );
+        final File file = slowFilesystem
+            ? _SlowSnapshotFile(original, ioZone)
+            : original;
+        await tester.runAsync(
+          () => File('test/fixtures/cover.png').copy(file.path),
+        );
+        var loads = 0;
+        Future<List<File>> load() async {
+          loads++;
+          return file.existsSync() ? [file] : [];
+        }
 
-    await tester.pumpWidget(app(const Scaffold(body: SizedBox.shrink())));
-    final imageContext = tester.element(find.byType(Scaffold).first);
-    await tester.runAsync(() async {
-      await precacheImage(FileImage(file), imageContext);
-      await precacheImage(
-        ResizeImage(FileImage(file), width: 720),
-        imageContext,
-      );
-    });
-    final key = GlobalKey();
-    await tester.pumpWidget(
-      app(VideoSnapshotsPage(loadSnapshots: load), capture: key),
+        await tester.pumpWidget(app(const Scaffold(body: SizedBox.shrink())));
+        final imageContext = tester.element(find.byType(Scaffold).first);
+        await tester.runAsync(() async {
+          await precacheImage(FileImage(file), imageContext);
+          await precacheImage(
+            ResizeImage(FileImage(file), width: 720),
+            imageContext,
+          );
+        });
+        final key = GlobalKey();
+        await tester.pumpWidget(
+          app(VideoSnapshotsPage(loadSnapshots: load), capture: key),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Frame at 4:24'), findsOneWidget);
+        expect(find.text(first.title), findsOneWidget);
+        await capture(tester, key, 'video-snapshots-desktop');
+        await tester.tap(find.text(first.title));
+        await tester.pumpAndSettle();
+        expect(find.text('Export PNG'), findsOneWidget);
+        expect(find.text('Romantic_Killer_-_01-264221ms.png'), findsOneWidget);
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Delete snapshot'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(file.existsSync(), isTrue);
+        expect(
+          loads,
+          1,
+          reason: 'Cancel must not delete or reload the gallery.',
+        );
+        await tester.tap(find.byTooltip('Delete snapshot'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+        final waiting = Stopwatch()..start();
+        // pumpAndSettle only waits for Flutter frames, not host filesystem I/O.
+        // Yield real time and pump its completion back into the widget test zone.
+        while (loads < 2 && waiting.elapsed < const Duration(seconds: 10)) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        expect(
+          loads,
+          2,
+          reason: 'Timed out waiting for snapshot deletion and gallery reload.',
+        );
+        await tester.pumpAndSettle();
+        expect(file.existsSync(), isFalse);
+        expect(find.text('Keep a favorite frame'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
     );
-    await tester.pumpAndSettle();
-    expect(find.text('Frame at 4:24'), findsOneWidget);
-    expect(find.text(first.title), findsOneWidget);
-    await capture(tester, key, 'video-snapshots-desktop');
-    await tester.tap(find.text(first.title));
-    await tester.pumpAndSettle();
-    expect(find.text('Export PNG'), findsOneWidget);
-    expect(find.text('Romantic_Killer_-_01-264221ms.png'), findsOneWidget);
-    await tester.tap(find.text('Close'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Delete snapshot'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
-    expect(file.existsSync(), isTrue);
-    await tester.tap(find.byTooltip('Delete snapshot'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
-    for (var frame = 0; frame < 30 && loads < 2; frame++) {
-      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    await tester.pumpAndSettle();
-    expect(file.existsSync(), isFalse);
-    expect(find.text('Keep a favorite frame'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  }
 
   testWidgets('Snapshot failures keep a retry action and do not modify files', (
     tester,
