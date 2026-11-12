@@ -1,6 +1,30 @@
 {
-  "current": "0.1.166",
+  "current": "0.1.170",
   "releases": [
+    {
+      "version": "0.1.170",
+      "changes": [
+        "Rename Music Search to Browse and use the same compass icon as Video on mobile and desktop. Show Browse channels or Browse artists above the music collection."
+      ]
+    },
+    {
+      "version": "0.1.169",
+      "changes": [
+        "Remove the cloud, Telegram, and Settings shortcuts from mobile Music Home. Let the Music Search field fill the header."
+      ]
+    },
+    {
+      "version": "0.1.168",
+      "changes": [
+        "Remove Settings shortcuts from Video Home and Browse on mobile. Let channel search fill the Browse header."
+      ]
+    },
+    {
+      "version": "0.1.167",
+      "changes": [
+        "Add Orientation to the default Android portrait controls, remove A–B Loop, and make Fullscreen desktop-only."
+      ]
+    },
     {
       "version": "0.1.166",
       "changes": [
