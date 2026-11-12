@@ -16,6 +16,9 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Rational
 import android.view.WindowManager
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executor
@@ -36,6 +39,8 @@ internal class VideoWindow(
     private val toggleAction = "${activity.packageName}.VIDEO_PIP_TOGGLE"
     private var picker: MethodChannel.Result? = null
     private var autoPip = false
+    private var immersive = false
+    private var previousSystemBarsBehavior: Int? = null
     private var playing = false
     private var closed = false
     private var aspect = Rational(16, 9)
@@ -65,6 +70,11 @@ internal class VideoWindow(
             try {
                 when (call.method) {
                     "openFiles" -> openFiles(result)
+                    "immersiveMode" -> {
+                        immersive = call.arguments == true
+                        updateSystemBars()
+                        result.success(null)
+                    }
                     "matchRefreshRate" -> {
                         matchRefreshRate((call.arguments as? Number)?.toDouble())
                         result.success(null)
@@ -176,7 +186,33 @@ internal class VideoWindow(
         }
     }
 
-    fun onPipChanged(enabled: Boolean) = channel.invokeMethod("pipChanged", enabled)
+    fun onPipChanged(enabled: Boolean) {
+        updateSystemBars()
+        channel.invokeMethod("pipChanged", enabled)
+    }
+
+    fun onWindowFocused() {
+        if (immersive) updateSystemBars()
+    }
+
+    private fun updateSystemBars() {
+        val inPip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode
+        val window = activity.window
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        val systemBars = WindowInsetsCompat.Type.systemBars()
+        if (immersive && !inPip) {
+            if (previousSystemBarsBehavior == null) {
+                previousSystemBarsBehavior = controller.systemBarsBehavior
+            }
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(systemBars)
+        } else if (previousSystemBarsBehavior != null) {
+            controller.show(systemBars)
+            previousSystemBarsBehavior?.let { controller.systemBarsBehavior = it }
+            previousSystemBarsBehavior = null
+        }
+    }
 
     private fun openFiles(result: MethodChannel.Result) {
         if (picker != null) {
@@ -228,6 +264,8 @@ internal class VideoWindow(
 
     fun close() {
         closed = true
+        immersive = false
+        updateSystemBars()
         documents.close()
         if (supported) activity.unregisterReceiver(receiver)
         picker?.success(null)
