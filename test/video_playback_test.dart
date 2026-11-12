@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:auralis/app_theme.dart';
+import 'package:auralis/app_popups.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/storage.dart';
@@ -95,14 +96,20 @@ class _NativeVideo implements mpv.NativePlayer {
   }
 
   @override
-  Future<void> setAudioTrack(mpv.AudioTrack track, {bool synchronized = true}) async {
+  Future<void> setAudioTrack(
+    mpv.AudioTrack track, {
+    bool synchronized = true,
+  }) async {
     audioSelections.add(track.id);
     state = state.copyWith(track: state.track.copyWith(audio: track));
     _core.trackChanged(state.track);
   }
 
   @override
-  Future<void> setSubtitleTrack(mpv.SubtitleTrack track, {bool synchronized = true}) async {
+  Future<void> setSubtitleTrack(
+    mpv.SubtitleTrack track, {
+    bool synchronized = true,
+  }) async {
     subtitleSelections.add(track.id);
     state = state.copyWith(track: state.track.copyWith(subtitle: track));
     _core.trackChanged(state.track);
@@ -179,6 +186,20 @@ class _RecordingVideoProxy extends TelegramStreamProxy {
   _RecordingVideoProxy() : super((_) async => {});
 
   VoidCallback? onStop;
+  bool fakeUris = false;
+  Future<void> Function(Track)? beforeUri;
+  int? failFileId;
+  final requestedTracks = <Track>[];
+
+  @override
+  Future<Uri> uri(Track track) async {
+    requestedTracks.add(track);
+    await beforeUri?.call(track);
+    if (track.fileId == failFileId) throw StateError('Unavailable quality');
+    return fakeUris
+        ? Uri.file('/movies/quality-${track.fileId}.mp4')
+        : super.uri(track);
+  }
 
   @override
   Future<void> stop() {
@@ -217,42 +238,350 @@ class _VideoController implements VideoController {
 }
 
 void main() {
+  for (final (size, scale) in [
+    (const Size(390, 844), 1.0),
+    (const Size(1280, 720), 1.0),
+    (const Size(360, 480), 2.0),
+  ]) {
+    testWidgets(
+      'real quality switching preserves playback and identity at $size / $scale',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = size;
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final native = _NativeVideo();
+        final proxy = _RecordingVideoProxy()..fakeUris = true;
+        final settings = MemorySettings();
+        final music = PlayerController(
+          FakeAudio(),
+          TelegramStreamProxy((_) async => {}),
+          settings,
+        );
+        final telegram = TelegramService(
+          Directory('unused'),
+          MemoryVault(),
+          transport: FakeTd(),
+        )..state = 'authorizationStateReady';
+        addTearDown(proxy.close);
+        addTearDown(telegram.shutdown);
+        final opened = <VideoSource>[];
+        Completer<void>? qualityGate;
+        const source = VideoSource.telegram(
+          Track(
+            id: '-1001:42',
+            title: 'Episode',
+            artist: '',
+            source: 'Cinema',
+            fileId: 7,
+            size: 8192,
+            videoWidth: 1920,
+            videoHeight: 1080,
+            duration: Duration(minutes: 2),
+            videoQualities: [
+              VideoQuality(
+                fileId: 8,
+                size: 4096,
+                width: 1280,
+                height: 720,
+                codec: 'h264',
+              ),
+              VideoQuality(
+                fileId: 9,
+                size: 2048,
+                width: 640,
+                height: 360,
+                codec: 'h264',
+              ),
+            ],
+          ),
+        );
+        final next = VideoSource.file(
+          Uri.file('/movies/next.mp4'),
+          'Next episode',
+        );
+
+        Future<void> tapLabel(String label) async {
+          await tester.ensureVisible(find.text(label));
+          await tester.pumpAndSettle();
+          expect(find.text(label).hitTestable(), findsOneWidget);
+          await tester.tap(find.text(label));
+          await tester.pumpAndSettle();
+        }
+
+        Future<void> qualityPanel() async {
+          await tester.tap(find.byTooltip('More player controls'));
+          await tester.pumpAndSettle();
+          await tapLabel('Quality');
+        }
+
+        Future<void> selectTrack(String panel, String label) async {
+          await tester.tap(find.byTooltip(panel));
+          await tester.pumpAndSettle();
+          await tapLabel(label);
+        }
+
+        try {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: auralisTheme(
+                ColorScheme.fromSeed(seedColor: Colors.purple),
+              ),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: VideoPlayback(
+                sources: [source, next],
+                initialIndex: 0,
+                telegram: telegram,
+                music: music,
+                proxy: proxy,
+                onOpened: (value) {
+                  opened.add(value);
+                  settings.videoPlayback.recordVideo(value);
+                },
+                createController: () => _VideoController(native),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await selectTrack('Audio tracks', 'English audio');
+          await selectTrack('Subtitles', 'Off');
+          await tester.tap(find.byTooltip('Subtitles'));
+          await tester.pumpAndSettle();
+          await tapLabel('Subtitle options');
+          await tapLabel('Secondary subtitles');
+          await tapLabel('French subtitles');
+          await native.seek(const Duration(seconds: 47));
+          await native.setRate(1.5);
+          await native.setVolume(65);
+          // Paused quality changes must not start playback, even with autoplay on.
+          await native.playOrPause();
+          await tester.pumpAndSettle();
+          await qualityPanel();
+          expect(find.text('Original · 1080p · FHD'), findsOneWidget);
+          expect(find.text('2160p · 4K'), findsNothing);
+          final originalRow = tester.widget<AuralisChoiceTile>(
+            find.ancestor(
+              of: find.text('Original · 1080p · FHD'),
+              matching: find.byType(AuralisChoiceTile),
+            ),
+          );
+          expect(originalRow.selected, isTrue);
+          native.availableTracks = mpv.Tracks(
+            audio: [
+              mpv.AudioTrack.auto(),
+              mpv.AudioTrack.no(),
+              const mpv.AudioTrack('11', 'Japanese audio', 'ja'),
+              const mpv.AudioTrack('13', 'English audio', 'en'),
+            ],
+            subtitle: [
+              mpv.SubtitleTrack.auto(),
+              mpv.SubtitleTrack.no(),
+              const mpv.SubtitleTrack('12', 'English subtitles', 'en'),
+              const mpv.SubtitleTrack('14', 'French subtitles', 'fr'),
+            ],
+          );
+          await tapLabel('720p · HD');
+          expect(proxy.requestedTracks.map((track) => track.fileId), [7, 8]);
+          expect(native.opened.last.start, const Duration(seconds: 47));
+          expect(native.state.position, const Duration(seconds: 47));
+          expect(native.state.playing, isFalse);
+          expect(native.state.rate, 1.5);
+          expect(native.state.volume, 65);
+          expect(native.state.track.audio.id, '13');
+          expect(native.state.track.subtitle.id, 'no');
+          expect(native.properties['secondary-sid'], '14');
+          expect(opened, hasLength(1));
+          expect(settings.videoPlayback.history.keys, [source.id]);
+          expect(
+            settings.videoPlayback.positions[source.id],
+            const Duration(seconds: 47),
+          );
+          expect(
+            VideoSource.restore(source.toJson())!.telegram!.videoQualities,
+            isEmpty,
+          );
+          expect(
+            VideoSource.restore(source.toJson())!.telegram!.fileId,
+            isNull,
+          );
+
+          // More complete track metadata may arrive after the quality opens.
+          final lateTracks = mpv.Tracks(
+            audio: [
+              mpv.AudioTrack.auto(),
+              mpv.AudioTrack.no(),
+              const mpv.AudioTrack('11', 'Japanese audio', 'ja'),
+              const mpv.AudioTrack('23', 'English audio', 'en'),
+            ],
+            subtitle: [
+              mpv.SubtitleTrack.auto(),
+              mpv.SubtitleTrack.no(),
+              const mpv.SubtitleTrack('12', 'English subtitles', 'en'),
+              const mpv.SubtitleTrack('24', 'French subtitles', 'fr'),
+            ],
+          );
+          native.availableTracks = lateTracks;
+          native.publishTracks(lateTracks);
+          await tester.pumpAndSettle();
+          expect(native.state.track.audio.id, '23');
+          expect(native.state.track.subtitle.id, 'no');
+          expect(native.properties['secondary-sid'], '24');
+
+          await qualityPanel();
+          final selectedRow = tester.widget<AuralisChoiceTile>(
+            find.ancestor(
+              of: find.text('720p · HD'),
+              matching: find.byType(AuralisChoiceTile),
+            ),
+          );
+          expect(selectedRow.selected, isTrue);
+          await tapLabel('720p · HD');
+          expect(
+            native.opened,
+            hasLength(2),
+            reason: 'Selecting current quality is a no-op',
+          );
+          proxy.failFileId = 9;
+          await qualityPanel();
+          await tapLabel('360p');
+          expect(proxy.requestedTracks.map((track) => track.fileId), [
+            7,
+            8,
+            9,
+            8,
+          ]);
+          expect(native.state.position, const Duration(seconds: 47));
+          expect(native.state.playing, isFalse);
+          expect(native.state.track.audio.id, '23');
+
+          // Let the transient failure notice clear the bottom playback controls.
+          await tester.pump(const Duration(seconds: 5));
+          await tester.pumpAndSettle();
+          await native.playOrPause();
+          await tester.pumpAndSettle();
+          await qualityPanel();
+          await tapLabel('Original · 1080p · FHD');
+          expect(proxy.requestedTracks.last.fileId, 7);
+          expect(native.state.playing, isTrue);
+          expect(native.state.position, const Duration(seconds: 47));
+          expect(opened, hasLength(1));
+          await tester.tap(find.byTooltip('Now playing queue'));
+          await tester.pumpAndSettle();
+          await tapLabel('Next episode');
+          expect(opened.last.id, next.id);
+          expect(native.state.track.audio.id, '11');
+          expect(native.state.track.subtitle.id, '12');
+          await qualityPanel();
+          expect(
+            find.text('Only the original quality is available for this video.'),
+            findsOneWidget,
+          );
+          expect(find.text('720p · HD'), findsNothing);
+          await tapLabel('Original');
+          expect(native.opened, hasLength(5));
+
+          await tester.tap(find.byTooltip('Now playing queue'));
+          await tester.pumpAndSettle();
+          await tapLabel('Episode');
+          expect(native.opened, hasLength(6));
+          await qualityPanel();
+          final gate = qualityGate = Completer<void>();
+          proxy.beforeUri = (_) => gate.future;
+          await tester.ensureVisible(find.text('720p · HD'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('720p · HD'));
+          await tester.pump();
+          expect(proxy.requestedTracks.last.fileId, 8);
+          // Closing during an in-flight source replacement must not reopen mpv.
+          await tester.pumpWidget(const SizedBox.shrink());
+          gate.complete();
+          await tester.pump();
+          expect(native.opened, hasLength(6));
+          expect(tester.takeException(), isNull);
+        } finally {
+          if (qualityGate != null && !qualityGate.isCompleted) {
+            qualityGate.complete();
+          }
+          await tester.pumpWidget(const SizedBox.shrink());
+          var shutdown = false;
+          unawaited(music.shutdown().then((_) => shutdown = true));
+          for (var frame = 0; frame < 20 && !shutdown; frame++) {
+            await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+            tester.binding.scheduleFrame();
+            await tester.pump(const Duration(milliseconds: 16));
+          }
+          expect(shutdown, isTrue);
+        }
+      },
+    );
+  }
 
   test('playlist and history restore Telegram and local videos only', () {
     final data = VideoPlaybackData();
-    final local = VideoSource.file(Uri.parse('content://provider/video/1'), 'Local');
+    final local = VideoSource.file(
+      Uri.parse('content://provider/video/1'),
+      'Local',
+    );
     final other = VideoSource.file(Uri.file('/movies/other.mp4'), 'Other');
-    final telegram = VideoSource.telegram(const Track(
-      id: '-1001:42', title: 'Telegram video', artist: '', source: 'Channel',
-      fileId: 7,
-    ));
+    final telegram = VideoSource.telegram(
+      const Track(
+        id: '-1001:42',
+        title: 'Telegram video',
+        artist: '',
+        source: 'Channel',
+        fileId: 7,
+      ),
+    );
     data.putPlaylist('Queue', [telegram, local, other, local]);
     data.recordVideo(local, at: DateTime.utc(2026, 10, 1));
     data.recordVideo(telegram, at: DateTime.utc(2026, 10, 2));
     data.recordVideo(local, at: DateTime.utc(2026, 10, 3));
-    data.remember(local.id, const Duration(seconds: 8), const Duration(minutes: 1));
+    data.remember(
+      local.id,
+      const Duration(seconds: 8),
+      const Duration(minutes: 1),
+    );
     data.subtitleStyle['sub-pos'] = '75';
     data.subtitleStyle['sub-scale'] = 'Infinity';
     final json = data.toJson();
-    final oldWeb = {'title': 'Website', 'uri': 'https://youtu.be/test', 'web': {'height': 720}};
+    final oldWeb = {
+      'title': 'Website',
+      'uri': 'https://youtu.be/test',
+      'web': {'height': 720},
+    };
     (json['playlists']['Queue'] as List).add(oldWeb);
-    (json['history'] as List).add({'source': oldWeb, 'at': '2026-10-04T00:00:00Z'});
+    (json['history'] as List).add({
+      'source': oldWeb,
+      'at': '2026-10-04T00:00:00Z',
+    });
     final restored = VideoPlaybackData.fromJson(json);
     final list = restored.playlists['Queue']!;
     expect(list.map((source) => source.id), [telegram.id, local.id, other.id]);
     expect(list.first.telegram!.fileId, isNull);
-    expect(VideoSource.restore({'title': 'Playlist', 'uri': 'file:///tmp/play.m3u8'}), isNull);
+    expect(
+      VideoSource.restore({
+        'title': 'Playlist',
+        'uri': 'file:///tmp/play.m3u8',
+      }),
+      isNull,
+    );
     expect(restored.history.keys, [telegram.id, local.id]);
     expect(restored.history[local.id]!.playedAt, DateTime.utc(2026, 10, 3));
     expect(restored.subtitleStyle, {'sub-pos': '75'});
     restored.clearTelegram();
-    expect(restored.playlists['Queue']!.map((source) => source.id), [local.id, other.id]);
+    expect(restored.playlists['Queue']!.map((source) => source.id), [
+      local.id,
+      other.id,
+    ]);
     expect(restored.history.keys, [local.id]);
     restored.removeHistory(local.id);
     expect(restored.positions, isEmpty);
     expect(restored.playlists['Queue']!.length, 2);
   });
-
 
   test('skip chapter import respects boundaries and known labels', () {
     final segments = videoChapterSegments(const [
@@ -283,10 +612,10 @@ void main() {
         'landscape:bottomStart': ['lock', 'loop', 'speed'],
       },
     });
-    expect(
-      legacy.controls(VideoControlZone.bottomStart, wide: true),
-      [VideoControl.lock, VideoControl.speed],
-    );
+    expect(legacy.controls(VideoControlZone.bottomStart, wide: true), [
+      VideoControl.lock,
+      VideoControl.speed,
+    ]);
     data.remember('telegram:1:2', point, const Duration(minutes: 2));
     data.remember('file:example', point, const Duration(minutes: 2));
     data.setBookmarks('telegram:1:2', [const VideoBookmark(point, 'Opening')]);
@@ -349,7 +678,9 @@ void main() {
   });
 
   for (final size in [const Size(390, 844), const Size(1280, 720)]) {
-    testWidgets('video language defaults and manual overrides at $size', (tester) async {
+    testWidgets('video language defaults and manual overrides at $size', (
+      tester,
+    ) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = size;
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -357,19 +688,34 @@ void main() {
       final native = _NativeVideo();
       final preferredTracks = native.availableTracks;
       native.availableTracks = mpv.Tracks(
-        audio: [mpv.AudioTrack.auto(), mpv.AudioTrack.no(),
-          const mpv.AudioTrack('3', 'English audio', 'en')],
+        audio: [
+          mpv.AudioTrack.auto(),
+          mpv.AudioTrack.no(),
+          const mpv.AudioTrack('3', 'English audio', 'en'),
+        ],
         subtitle: [mpv.SubtitleTrack.auto(), mpv.SubtitleTrack.no()],
       );
       final proxy = _RecordingVideoProxy();
-      final music = PlayerController(FakeAudio(),
-          TelegramStreamProxy((_) async => {}), MemorySettings());
-      final telegram = TelegramService(Directory('unused'), MemoryVault(),
-          transport: FakeTd());
+      final music = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy((_) async => {}),
+        MemorySettings(),
+      );
+      final telegram = TelegramService(
+        Directory('unused'),
+        MemoryVault(),
+        transport: FakeTd(),
+      );
       addTearDown(proxy.close);
       addTearDown(telegram.shutdown);
-      final first = VideoSource.file(Uri.file('/movies/first.mp4'), 'First video');
-      final second = VideoSource.file(Uri.file('/movies/second.mp4'), 'Second video');
+      final first = VideoSource.file(
+        Uri.file('/movies/first.mp4'),
+        'First video',
+      );
+      final second = VideoSource.file(
+        Uri.file('/movies/second.mp4'),
+        'Second video',
+      );
 
       Future<void> select(String panel, String label) async {
         await tester.tap(find.byTooltip(panel));
@@ -379,13 +725,25 @@ void main() {
       }
 
       try {
-        await tester.pumpWidget(MaterialApp(
-          theme: auralisTheme(ColorScheme.fromSeed(seedColor: Colors.purple,
-              brightness: Brightness.dark)),
-          home: VideoPlayback(sources: [first, second], initialIndex: 0,
-            telegram: telegram, music: music, proxy: proxy, onOpened: (_) {},
-            createController: () => _VideoController(native)),
-        ));
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: auralisTheme(
+              ColorScheme.fromSeed(
+                seedColor: Colors.purple,
+                brightness: Brightness.dark,
+              ),
+            ),
+            home: VideoPlayback(
+              sources: [first, second],
+              initialIndex: 0,
+              telegram: telegram,
+              music: music,
+              proxy: proxy,
+              onOpened: (_) {},
+              createController: () => _VideoController(native),
+            ),
+          ),
+        );
         await tester.pumpAndSettle();
         expect(native.state.track.audio.id, 'auto');
         expect(native.state.track.subtitle.id, 'auto');
@@ -623,7 +981,9 @@ void main() {
             final pictureRight = size.width - pictureLeft;
             final back = tester.getRect(find.byTooltip('Back to videos'));
             final more = tester.getRect(find.byTooltip('More player controls'));
-            final seek = tester.getRect(find.byKey(const ValueKey('video-seek')));
+            final seek = tester.getRect(
+              find.byKey(const ValueKey('video-seek')),
+            );
             expect(back.left, greaterThan(pictureLeft));
             expect(more.right, lessThan(pictureRight));
             expect(seek.left, greaterThan(pictureLeft));
@@ -673,11 +1033,13 @@ void main() {
           await drag.moveBy(const Offset(0, -60));
           await tester.pump();
           final onLeft = x < transportCenter.dx;
-          final feedback = tester.getCenter(find.byIcon(
-            onLeft && Platform.isAndroid
-                ? Icons.brightness_6_rounded
-                : Icons.volume_up_rounded,
-          ));
+          final feedback = tester.getCenter(
+            find.byIcon(
+              onLeft && Platform.isAndroid
+                  ? Icons.brightness_6_rounded
+                  : Icons.volume_up_rounded,
+            ),
+          );
           expect(feedback.dx < transportCenter.dx, onLeft);
           await drag.up();
           await tester.pump();
@@ -771,9 +1133,11 @@ void main() {
           await decoderReleased.future;
         };
         proxy.onStop = () => events.add('stream');
-        unawaited(music.releaseVideo!().then((_) {
-          releaseFinished = true;
-        }));
+        unawaited(
+          music.releaseVideo!().then((_) {
+            releaseFinished = true;
+          }),
+        );
         expect(
           await pumpUntil(() => surfacePresentAtDispose != null),
           isTrue,
@@ -788,13 +1152,19 @@ void main() {
           await tester.pumpWidget(const SizedBox.shrink());
         } finally {
           decoderReleased.complete();
-          unawaited(music.shutdown().then((_) {
-            shutdownFinished = true;
-          }));
+          unawaited(
+            music.shutdown().then((_) {
+              shutdownFinished = true;
+            }),
+          );
           await pumpUntil(() => shutdownFinished);
         }
       }
-      expect(shutdownFinished, isTrue, reason: 'Player shutdown did not finish.');
+      expect(
+        shutdownFinished,
+        isTrue,
+        reason: 'Player shutdown did not finish.',
+      );
       expect(releaseFinished, isTrue);
       expect(events, [if (Platform.isWindows) 'stop', 'decoder', 'stream']);
       expect(music.releaseVideo, isNull);
