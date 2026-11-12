@@ -15,32 +15,28 @@ class AppNavigation extends StatelessWidget {
     required this.onSelected,
     this.onHomeHold,
     this.libraryIcon = Icons.library_music_rounded,
-    this.browseChannels = false,
     this.homeHoldHint = 'Open Telegram Video',
   });
   final AppNavigationStyle style;
   final double radius;
   final int selected;
-  final bool reducedMotion, browseChannels;
+  final bool reducedMotion;
   final ValueChanged<int> onSelected;
   final VoidCallback? onHomeHold;
   final IconData libraryIcon;
   final String homeHoldHint;
-  static const labels = ['Home', 'Search', 'Library'];
+  static const labels = ['Home', 'Browse', 'Library'];
   static const icons = [
     Icons.home_rounded,
-    Icons.search_rounded,
+    Icons.explore_outlined,
     Icons.library_music_rounded,
   ];
 
   static List<({String label, IconData icon})> _tabs(
-    IconData libraryIcon, {
-    required bool browseChannels,
-  }) => [
+    IconData libraryIcon,
+  ) => [
     (label: labels[0], icon: icons[0]),
-    browseChannels
-        ? (label: 'Browse', icon: Icons.explore_outlined)
-        : (label: labels[1], icon: icons[1]),
+    (label: labels[1], icon: icons[1]),
     (label: labels[2], icon: libraryIcon),
   ];
 
@@ -52,7 +48,7 @@ class AppNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final tabs = _tabs(libraryIcon, browseChannels: browseChannels);
+    final tabs = _tabs(libraryIcon);
     if (style == AppNavigationStyle.fullWidth) {
       return NavigationBar(
         height: 80,
@@ -269,7 +265,6 @@ class AppSidebar extends StatelessWidget {
     required this.onHomeHold,
     this.homeHoldHint = 'Open Telegram Video',
     this.libraryIcon = Icons.library_music_rounded,
-    this.browseChannels = false,
     this.icon = Icons.graphic_eq_rounded,
     this.tagline = 'A LITTLE CLOSER TO MUSIC',
     this.caption = 'YOUR MUSIC. YOUR SPACE.\n\nIndependent. Open source.',
@@ -278,7 +273,7 @@ class AppSidebar extends StatelessWidget {
     this.telegramSelected = false,
     this.settingsSelected = false,
   });
-  final bool narrow, short, telegramSelected, settingsSelected, browseChannels;
+  final bool narrow, short, telegramSelected, settingsSelected;
   final int selected;
   final ValueChanged<int> onSelected;
   final VoidCallback onHomeHold;
@@ -289,7 +284,7 @@ class AppSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final tabs = AppNavigation._tabs(libraryIcon, browseChannels: browseChannels);
+    final tabs = AppNavigation._tabs(libraryIcon);
     Widget item(
       int index,
       IconData icon,
