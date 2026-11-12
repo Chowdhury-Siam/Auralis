@@ -375,8 +375,7 @@ extension _DiscoveryPages on _PlayerShellState {
                     if (channels.isNotEmpty)
                       discoveryLayoutButton(
                         list: _browseAsList,
-                        onPressed: () =>
-                            setState(() => _browseAsList = !_browseAsList),
+                        onPressed: _toggleBrowseLayout,
                       ),
                   ],
                 ),
