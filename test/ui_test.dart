@@ -69,6 +69,9 @@ void main() {
       final coverPng = File(photoPath).readAsBytesSync();
       final fileBytes = id3(coverPng);
       td.onRequest = (r) async {
+        if (r['@type'] == 'getChatMessageCount') {
+          return {'count': r['chat_id'] == -1 ? 3 : 1};
+        }
         if (r['@type'] == 'getFileDownloadedPrefixSize') {
           return {'size': fileBytes.length - (r['offset'] as int)};
         }
@@ -191,12 +194,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Search your Channel'), findsOneWidget);
       expect(find.text('Artists'), findsNothing);
+      expect(find.text('≈ 3 tracks'), findsOneWidget);
+      expect(find.text('≈ 1 track'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'channel -2');
       await tester.pumpAndSettle();
       expect(find.text('Channel -1'), findsNothing);
       await tester.tap(find.text('Channel -2'));
       await tester.pumpAndSettle();
-      expect(find.text('Selected in Library'), findsOneWidget);
+      expect(find.text('1 track'), findsOneWidget);
       await tester.tap(find.byTooltip('Clear search'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Show list'));
@@ -207,28 +212,33 @@ void main() {
       expect(find.byType(Image), findsNWidgets(2));
       await tester.tap(find.text('Channel -1'));
       await tester.pumpAndSettle();
-      expect(find.text('Selected in Library'), findsNWidgets(2));
+      expect(find.text('1 track'), findsNWidgets(2));
       expect(player.settings.selectedChannels, hasLength(2));
       await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Add Song -1 to queue'), findsOneWidget);
-      expect(find.byTooltip('Add Song -2 to queue'), findsOneWidget);
+      expect(find.byTooltip('Track actions for Song -1'), findsOneWidget);
+      expect(find.byTooltip('Track actions for Song -2'), findsOneWidget);
       expect(find.text('Choose audio files'), findsNothing);
-      expect(
-        tester.widget<Text>(find.byKey(const ValueKey('library-counts'))).data,
-        '2 tracks · 2 channels',
-      );
+      expect(find.text('2 tracks · 2 channels'), findsNothing);
+      expect(find.byTooltip('Add Song -1 to queue'), findsNothing);
+      expect(find.byTooltip('Refresh library'), findsNothing);
+      expect(find.byTooltip('Shuffle collection'), findsNothing);
       final scansBeforeRefresh = td.requests
           .where((r) => r['@type'] == 'searchChatMessages')
           .length;
+      await tester.tap(find.byTooltip('Browse'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('library-refresh')));
       await tester.pumpAndSettle();
       expect(
         td.requests.where((r) => r['@type'] == 'searchChatMessages').length,
         greaterThan(scansBeforeRefresh),
       );
-      expect(find.byTooltip('Add Song -1 to queue'), findsOneWidget);
-      expect(find.byTooltip('Add Song -2 to queue'), findsOneWidget);
+      expect(find.text('1 track'), findsNWidgets(2));
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Track actions for Song -1'), findsOneWidget);
+      expect(find.byTooltip('Track actions for Song -2'), findsOneWidget);
       await tester.tap(find.byTooltip('Sort Library'));
       await tester.pumpAndSettle();
       expectSortPosition();
@@ -253,11 +263,16 @@ void main() {
       );
       await tester.enterText(find.byType(TextField).first, 'Channel -2');
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Add Song -1 to queue'), findsNothing);
-      expect(find.byTooltip('Add Song -2 to queue'), findsOneWidget);
+      expect(find.byTooltip('Track actions for Song -1'), findsNothing);
+      expect(find.byTooltip('Track actions for Song -2'), findsOneWidget);
       await tester.tap(find.byTooltip('Clear search'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Add Song -1 to queue'));
+      await tester.tap(find.byTooltip('Track actions for Song -1'));
+      await tester.pumpAndSettle();
+      final addToQueue = find.byKey(const ValueKey('media-action-queue'));
+      await tester.ensureVisible(addToQueue);
+      await tester.tap(addToQueue);
+      await tester.pumpAndSettle();
       await tester.runAsync(() => player.playAt(0));
       await tester.pump();
       await tester.runAsync(() async {
@@ -359,7 +374,7 @@ void main() {
       await tester.enterText(find.byType(TextField), 'Song -2');
       await tester.pumpAndSettle();
       await tester.runAsync(() async {
-        await tester.tap(find.byTooltip('Shuffle collection'));
+        await tester.tap(find.text('Song -2'));
         for (var attempt = 0; attempt < 100 && player.loading; attempt++) {
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }
@@ -372,12 +387,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Channel -1').first);
       await tester.pumpAndSettle();
-      expect(find.text('Selected in Library'), findsOneWidget);
+      expect(find.text('1 track'), findsOneWidget);
       expect(player.settings.selectedChannels.map((channel) => channel.id), [-2]);
       await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Add Song -1 to queue'), findsNothing);
-      expect(find.byTooltip('Add Song -2 to queue'), findsOneWidget);
+      expect(find.byTooltip('Track actions for Song -1'), findsNothing);
+      expect(find.byTooltip('Track actions for Song -2'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       telegram.clearImageCache();
       // File completions run on the real clock; their Dart continuations must
@@ -469,7 +484,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Search your Channel'), findsOneWidget);
         expect(find.text('No Telegram channels available'), findsOneWidget);
-        expect(find.byTooltip('Load more channels'), findsOneWidget);
+        expect(find.byTooltip('Refresh library'), findsOneWidget);
         expect(tester.takeException(), isNull);
         telegram.state = 'disconnected';
         expect(find.byTooltip('Now playing'), findsNothing);
