@@ -631,7 +631,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   Widget _libraryActions(BuildContext context, Widget sortButton) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      if (_ready) _refreshButton(),
       if (widget.onSettings != null && MediaQuery.sizeOf(context).width < 900)
         IconButton(
           tooltip: 'Settings',
@@ -703,20 +702,13 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       key: const PageStorageKey('video-home-scroll'),
       padding: EdgeInsets.only(bottom: _bottomPadding(context)),
       children: [
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Auralis Video',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: colors.primary,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            if (_ready) _refreshButton(),
-          ],
+        Text(
+          'Auralis Video',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: colors.primary,
+            letterSpacing: 2,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         const SizedBox(height: 12),
         DiscoveryHero(
@@ -930,11 +922,18 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         if (_ready && showHeader) ...[
           _heading(
             query.isEmpty ? 'Browse channels' : 'Matching channels',
-            action: channels.isEmpty ? null : discoveryLayoutButton(
-              list: _browseChannelsAsList,
-              onPressed: () => setState(
-                () => _browseChannelsAsList = !_browseChannelsAsList,
-              ),
+            action: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _refreshButton(),
+                if (channels.isNotEmpty)
+                  discoveryLayoutButton(
+                    list: _browseChannelsAsList,
+                    onPressed: () => setState(
+                      () => _browseChannelsAsList = !_browseChannelsAsList,
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 8),
@@ -952,10 +951,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                       _emptyState(
                         context,
                         title: 'No Telegram channels available',
-                        action: TextButton(
-                          onPressed: () => _refreshChannels(reportError: true),
-                          child: const Text('Refresh channels'),
-                        ),
                       ),
                   ],
                 )
@@ -1064,6 +1059,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
+              _refreshButton(),
               sortButton,
             ],
           )
@@ -1105,9 +1101,11 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                           title: failed
                               ? 'Could not load videos'
                               : 'No playable videos found',
-                          description: failed
-                              ? 'Check your Telegram connection and try again.'
-                              : null,
+                          description: !failed
+                              ? null
+                              : searching
+                              ? 'Check your Telegram connection and refresh.'
+                              : 'Check your Telegram connection and refresh in Browse.',
                         ),
                 ),
               SliverList.separated(
@@ -1131,15 +1129,15 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                   );
                 },
               ),
-              if (!loading && failed && results != null)
+              if (!searching && !loading && failed)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Center(
                       child: OutlinedButton.icon(
-                        onPressed: () => _load(results),
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Retry loading videos'),
+                        onPressed: _showChannelSearch,
+                        icon: const Icon(Icons.explore_outlined),
+                        label: const Text('Open Browse'),
                       ),
                     ),
                   ),
