@@ -61,16 +61,10 @@ Future<void> reveal(WidgetTester tester, Finder finder) async {
 
 void main() {
   setUpAll(() async {
-    final font = File(
-      Platform.isWindows
-          ? 'C:/Windows/Fonts/segoeui.ttf'
-          : '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    );
-    if (await font.exists()) {
-      await (FontLoader(
-        'Segoe UI',
-      )..addFont(font.readAsBytes().then(ByteData.sublistView))).load();
-    }
+    // Match the bundled/Linux font metrics instead of depending on host fonts.
+    await (FontLoader(
+      'Segoe UI',
+    )..addFont(rootBundle.load('assets/fonts/DejaVuSans.ttf'))).load();
     await (FontLoader(
       'MaterialIcons',
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
@@ -187,6 +181,71 @@ void main() {
       variant: TargetPlatformVariant({
         TargetPlatform.android,
         TargetPlatform.windows,
+      }),
+    );
+  }
+
+  for (final scale in [1.0, 2.0]) {
+    testWidgets(
+      'every action is reachable at 360x480 with text scale $scale',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(360, 480);
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final oldFatal = WidgetController.hitTestWarningShouldBeFatal;
+        WidgetController.hitTestWarningShouldBeFatal = true;
+        addTearDown(
+          () => WidgetController.hitTestWarningShouldBeFatal = oldFatal,
+        );
+        String? choice;
+        await tester.pumpWidget(
+          host((context) async {
+            choice = await showMediaItemSheet(
+              context: context,
+              title: 'Evening waves',
+              subtitle: 'Original test artist · Music',
+              artwork: const ColoredBox(color: Colors.purple),
+              actions: actions,
+              details: mediaItemDetails(track, video: false),
+            );
+          }),
+        );
+        for (final action in actions) {
+          choice = null;
+          await tester.tap(find.text('Open actions'));
+          await tester.pumpAndSettle();
+          final button = find.byKey(ValueKey('media-action-${action.id}'));
+          if (action.id == 'remove' && scale > 1) {
+            expect(
+              button.hitTestable(),
+              findsNothing,
+              reason:
+                  'Large text must exercise scrolling to an off-screen action.',
+            );
+          }
+          await reveal(tester, button);
+          expect(button.hitTestable(), findsOneWidget);
+          final viewport = tester.getRect(
+            find.byKey(const ValueKey('media-item-sheet')),
+          );
+          final bounds = tester.getRect(button);
+          expect(bounds.top, greaterThanOrEqualTo(viewport.top - .01));
+          expect(bounds.bottom, lessThanOrEqualTo(viewport.bottom + .01));
+          expect(choice, isNull);
+          await tester.tap(button);
+          await tester.pumpAndSettle();
+          expect(choice, action.id);
+          expect(find.byKey(const ValueKey('media-item-sheet')), findsNothing);
+          expect(tester.takeException(), isNull);
+        }
+      },
+      variant: TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.windows,
+        TargetPlatform.linux,
       }),
     );
   }
