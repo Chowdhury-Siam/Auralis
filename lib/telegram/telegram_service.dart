@@ -104,6 +104,7 @@ class TelegramService extends ChangeNotifier {
   bool get ready => state == 'authorizationStateReady';
   String connection = 'Offline';
   final Map<int, Future<String?>> _images = {};
+  final _videoArtworkTracks = <String, Future<Track?>>{};
   int _imageGeneration = 0;
   final Map<int, Future<Uint8List?>> _covers = {};
   final Map<int, Uint8List> _coverBytes = {};
@@ -204,6 +205,7 @@ class TelegramService extends ChangeNotifier {
     ++_imageGeneration;
     _wakeCoverJobs();
     _images.clear();
+    _videoArtworkTracks.clear();
     _covers.clear();
     _coverBytes.clear();
     _coverSuccess.clear();
@@ -824,6 +826,7 @@ class TelegramService extends ChangeNotifier {
       state = 'disconnected';
     }
     if (!ready) {
+      _channelMediaCounts.clear();
       clearImageCache();
       if (state == 'authorizationStateLoggingOut' ||
           state == 'authorizationStateClosed') {
@@ -856,7 +859,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.185',
+          'application_version': '0.1.189',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -962,6 +965,35 @@ class TelegramService extends ChangeNotifier {
     return channel;
   }
 
+  final _channelMediaCounts = <(int, bool), Future<int?>>{};
+
+  void clearChannelMediaCounts({required bool video}) {
+    _channelMediaCounts.removeWhere((key, _) => key.$2 == video);
+  }
+
+  // Browse can show this estimate without scanning every document in a channel.
+  Future<int?> channelMediaCount(int chatId, {required bool video}) =>
+      _channelMediaCounts.putIfAbsent((chatId, video), () async {
+        final client = transport;
+        try {
+          final result = await client.request({
+            '@type': 'getChatMessageCount',
+            'chat_id': chatId,
+            'topic_id': null,
+            'filter': {
+              '@type': video
+                  ? 'searchMessagesFilterVideo'
+                  : 'searchMessagesFilterAudio',
+            },
+            'return_local': false,
+          });
+          if (!ready || !identical(client, transport)) return null;
+          return result['count'] as int?;
+        } catch (_) {
+          return null;
+        }
+      });
+
   Future<({List<Track> tracks, int nextMessageId})> music(
     int chatId,
     String title, {
@@ -1009,6 +1041,24 @@ class TelegramService extends ChangeNotifier {
         .map((message) => Track.fromVideoMessage(message, channel.title))
         .whereType<Track>()
         .toList();
+  }
+
+  Future<Track?> videoArtworkTrack(Track reference) {
+    if (!ready) return Future.value(null);
+    if (_videoArtworkTracks[reference.id] case final cached?) return cached;
+    if (_videoArtworkTracks.length >= 128) {
+      _videoArtworkTracks.remove(_videoArtworkTracks.keys.first);
+    }
+    final generation = _imageGeneration;
+    return _videoArtworkTracks[reference.id] = () async {
+      try {
+        final track = await restoreVideo(reference);
+        return generation == _imageGeneration ? track : null;
+      } catch (_) {
+        // Deleted posts and disconnected channels can still appear in History.
+        return null;
+      }
+    }();
   }
 
   Future<Track?> restoreVideo(Track reference) async {
@@ -1197,6 +1247,7 @@ class TelegramService extends ChangeNotifier {
       await restoreData();
       safeToRestart = true;
       _channels.clear();
+      _channelMediaCounts.clear();
     } catch (_) {
       if (installed) await database.delete(recursive: true);
       if (moved) await old.rename(database.path);
@@ -1256,6 +1307,7 @@ class TelegramService extends ChangeNotifier {
     }
     _secrets = {};
     _channels.clear();
+    _channelMediaCounts.clear();
     clearImageCache();
     credentialRecoveryRequired = false;
     state = 'disconnected';
@@ -1268,6 +1320,7 @@ class TelegramService extends ChangeNotifier {
     state = _clientClosed ? 'disconnected' : 'authorizationStateLoggingOut';
     connection = _clientClosed ? 'Offline' : 'Signing out';
     _channels.clear();
+    _channelMediaCounts.clear();
     clearImageCache();
     _secrets = {..._secrets}
       ..remove('apiId')
