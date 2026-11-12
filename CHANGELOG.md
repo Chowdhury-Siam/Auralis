@@ -1,5 +1,40 @@
 # Auralis changes
 
+## 0.1.164
+
+- Align video controls and the seek bar to the picture on desktop and mobile.
+- Tap Space to play or pause on desktop. Hold Space for 2× speed and release to restore the previous speed.
+
+## 0.1.163
+
+- Redesign the video queue with compact rows, a subtler highlight for the current video, and a visible shuffle toggle.
+
+## 0.1.162
+
+- Remove the chevron from unselected channel rows in Video Browse.
+
+## 0.1.161
+
+- Remove the Music shortcut from Video Home and Library and the Telegram shortcut from the desktop Video sidebar.
+
+## 0.1.160
+
+- Rename the Video Search tab to Browse on phones and desktop. Search channels within Browse.
+
+## 0.1.159
+
+- Dim watched video titles and show their thumbnails in grayscale while keeping the videos available for replay.
+
+## 0.1.158
+
+- Move Playlists, History, and Snapshots into the Video Library options menu.
+
+## 0.1.157
+
+- Open Android videos in landscape or portrait according to the video, with a per-video orientation override.
+- Keep Android playback responsive while Telegram buffers. Show Retry when startup stalls.
+- Interrupt pending video reads and wait for the Android decoder to shut down before releasing its surface.
+
 ## 0.1.156
 
 - Verify the Telegram backup switch by toggling it on phone and desktop layouts.
