@@ -100,9 +100,25 @@ class NativePlayer extends PlatformPlayer {
 
       disposed = true;
 
+      final joinAndroidVideo = Platform.isAndroid && isVideoControllerAttached;
+      if (joinAndroidVideo) {
+        // Keep the Android surface alive until mpv has stopped using it.
+        // Complete outstanding calls before removing the event handler.
+        await Future.wait<void>([
+          for (final request in _getPropertyRequests.values)
+            request.future.then<void>((_) {}),
+          for (final request in _setPropertyRequests.values)
+            request.future.then<void>((_) {}),
+          for (final request in _commandRequests.values)
+            request.future.then<void>((_) {}),
+        ]);
+        await Initializer(mpv).disposeAndDestroy(ctx);
+      }
       await super.dispose();
 
-      if (Platform.isWindows) {
+      if (joinAndroidVideo) {
+        return;
+      } else if (Platform.isWindows) {
         await InitializerNativeCallable(mpv).disposeAndDestroy(ctx);
       } else {
         Initializer(mpv).dispose(ctx);
@@ -1237,6 +1253,12 @@ class NativePlayer extends PlatformPlayer {
       await waitForPlayerInitialization;
       await waitForVideoControllerInitializationIfAttached;
     }
+    if (disposed) return;
+    if (Platform.isAndroid && isVideoControllerAttached) {
+      // The demuxer can be waiting on a loopback response from this isolate.
+      await _setPropertyString(property, value);
+      return;
+    }
 
     final name = property.toNativeUtf8();
     final data = value.toNativeUtf8();
@@ -1268,18 +1290,33 @@ class NativePlayer extends PlatformPlayer {
       await waitForPlayerInitialization;
       await waitForVideoControllerInitializationIfAttached;
     }
+    if (disposed) return '';
 
     final name = property.toNativeUtf8();
-    final value = mpv.mpv_get_property_string(ctx, name.cast());
-    if (value != nullptr) {
-      final result = value.cast<Utf8>().toDartString();
+    try {
+      if (Platform.isAndroid && isVideoControllerAttached && configuration.async) {
+        final requestNumber = _asyncRequestNumber++;
+        final reply = _getPropertyRequests[requestNumber] = Completer<String>();
+        final status = mpv.mpv_get_property_async(
+          ctx,
+          requestNumber,
+          name.cast(),
+          generated.mpv_format.MPV_FORMAT_STRING,
+        );
+        if (status >= 0) return await reply.future;
+        _getPropertyRequests.remove(requestNumber);
+        return '';
+      }
+      final value = mpv.mpv_get_property_string(ctx, name.cast());
+      if (value == nullptr) return '';
+      try {
+        return value.cast<Utf8>().toDartString();
+      } finally {
+        mpv.mpv_free(value.cast());
+      }
+    } finally {
       calloc.free(name);
-      mpv.mpv_free(value.cast());
-
-      return result;
     }
-
-    return "";
   }
 
   /// Observes property for the internal libmpv instance of this [Player].
@@ -1373,6 +1410,7 @@ class NativePlayer extends PlatformPlayer {
       await waitForPlayerInitialization;
       await waitForVideoControllerInitializationIfAttached;
     }
+    if (disposed) return;
 
     await _command(command, checkError: checkError);
   }
@@ -1454,6 +1492,22 @@ class NativePlayer extends PlatformPlayer {
             audioDevicesController.add(audioDevices);
           }
         }
+      }
+    }
+    if (event.ref.event_id ==
+        generated.mpv_event_id.MPV_EVENT_GET_PROPERTY_REPLY) {
+      final reply = _getPropertyRequests.remove(event.ref.reply_userdata);
+      if (reply != null) {
+        var value = '';
+        if (event.ref.error >= 0 && event.ref.data != nullptr) {
+          final property = event.ref.data.cast<generated.mpv_event_property>().ref;
+          if (property.format == generated.mpv_format.MPV_FORMAT_STRING &&
+              property.data != nullptr) {
+            final string = property.data.cast<Pointer<Utf8>>().value;
+            if (string != nullptr) value = string.toDartString();
+          }
+        }
+        reply.complete(value);
       }
     }
     if (event.ref.event_id ==
@@ -2554,37 +2608,34 @@ class NativePlayer extends PlatformPlayer {
   }
 
   int _asyncRequestNumber = 0;
+  final Map<int, Completer<String>> _getPropertyRequests = {};
   final Map<int, Completer<int>> _setPropertyRequests = {};
   final Map<int, Completer<int>> _commandRequests = {};
 
   Future<void> _setProperty(String name, int format, Pointer<Void> data) async {
-    final requestNumber = _asyncRequestNumber++;
-    final completer = _setPropertyRequests[requestNumber] = Completer<int>();
     final namePtr = name.toNativeUtf8();
-    if (configuration.async) {
-      final immediate = mpv.mpv_set_property_async(
-        ctx,
-        requestNumber,
-        namePtr.cast(),
-        format,
-        data,
-      );
-      final text = '_setProperty($name, $format)';
-      if (immediate < 0) {
-        // Sending failed.
-        _logError(immediate, text);
-        return;
+    try {
+      if (configuration.async) {
+        final requestNumber = _asyncRequestNumber++;
+        final completer = _setPropertyRequests[requestNumber] = Completer<int>();
+        final immediate = mpv.mpv_set_property_async(
+          ctx,
+          requestNumber,
+          namePtr.cast(),
+          format,
+          data,
+        );
+        if (immediate < 0) _setPropertyRequests.remove(requestNumber);
+        _logError(
+          immediate < 0 ? immediate : await completer.future,
+          '_setProperty($name, $format)',
+        );
+      } else {
+        mpv.mpv_set_property(ctx, namePtr.cast(), format, data);
       }
-      _logError(await completer.future, text);
-    } else {
-      mpv.mpv_set_property(
-        ctx,
-        namePtr.cast(),
-        format,
-        data,
-      );
+    } finally {
+      calloc.free(namePtr);
     }
-    calloc.free(namePtr);
   }
 
   Future<void> _setPropertyFlag(String name, bool value) async {
