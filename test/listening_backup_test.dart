@@ -871,6 +871,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byTooltip('Listening stats'), findsNothing);
+    await tester.tap(find.byTooltip('Library'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Settings').first);
     await tester.pumpAndSettle();
     await tester.enterText(
