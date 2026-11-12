@@ -1,6 +1,18 @@
 {
-  "current": "0.1.164",
+  "current": "0.1.166",
   "releases": [
+    {
+      "version": "0.1.166",
+      "changes": [
+        "Center video loading on play and pause, show brightness and volume on their gesture sides, and move seek feedback above the transport controls."
+      ]
+    },
+    {
+      "version": "0.1.165",
+      "changes": [
+        "Start Android videos in landscape in Match video mode. Switch to portrait once portrait playback is ready."
+      ]
+    },
     {
       "version": "0.1.164",
       "changes": [
