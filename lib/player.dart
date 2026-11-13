@@ -66,17 +66,23 @@ class MpvBackend extends AudioBackend {
     ]);
   }
   late final Player _player;
+  late final Future<void> _configuration = _configure();
   final AudioSession? session;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+
+  Future<void> _configure() async {
+    final native = _player.platform as NativePlayer;
+    // media_kit defaults to five seconds. An uncached Telegram seek can need
+    // longer before the loopback proxy receives its first bytes.
+    await native.setProperty('network-timeout', '60');
+    // Buffer before the first audible samples to avoid a start-then-stall.
+    await native.setProperty('cache-pause-initial', 'yes');
+  }
+
   @override
   Future<void> open(String uri) async {
     await _focus();
-    // media_kit defaults to five seconds. An uncached Telegram seek can need
-    // longer before the loopback proxy receives its first bytes.
-    await (_player.platform as NativePlayer).setProperty(
-      'network-timeout',
-      '60',
-    );
+    await _configuration;
     error = null;
     position = Duration.zero;
     duration = Duration.zero;
@@ -288,6 +294,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   late final StreamSubscription<String> _proxyErrors;
+  Future<void>? _openingAudio, _clearing;
   final List<Track> queue = [];
   int index = -1, _generation = 0;
   bool loading = false, _closed = false, _pauseAfterOpen = false;
@@ -401,12 +408,6 @@ class PlayerController extends ChangeNotifier {
     await _persist();
   }
 
-  Future<void> clearRecent() async {
-    settings.recentIds.clear();
-    notifyListeners();
-    await _persist();
-  }
-
   void playNext(Track track) {
     queue.insert(index + 1, track);
     notifyListeners();
@@ -452,8 +453,10 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _completed() async {
-    if (_closed) return;
+    if (_closed || _clearing != null || restoringData) return;
+    final generation = _generation;
     await flushListeningStats();
+    if (_closed || generation != _generation) return;
     _sessionListened = 0;
     _qualifiedPlay = false;
     if (sleepAfterTrack) {
@@ -461,7 +464,7 @@ class PlayerController extends ChangeNotifier {
     } else if (repeatMode == PlaybackRepeat.one && current != null) {
       try {
         await seek(Duration.zero);
-        if (!audio.playing) await audio.toggle();
+        if (generation == _generation && !audio.playing) await audio.toggle();
       } catch (_) {
         if (!_closed) {
           error = 'Could not repeat this track.';
@@ -474,7 +477,8 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> playAt(int target) async {
-    if (restoringData) return;
+    if (_clearing case final pending?) await pending;
+    if (_closed || restoringData) return;
     if (target < 0 || target >= queue.length) return;
     _pauseAfterOpen = false;
     index = target;
@@ -482,7 +486,8 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> play(Track track, {List<Track>? from}) async {
-    if (restoringData) return;
+    if (_clearing case final pending?) await pending;
+    if (_closed || restoringData) return;
     _pauseAfterOpen = false;
     if (from != null) {
       queue
@@ -512,8 +517,18 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
     try {
       final uri = (await proxy.uri(track)).toString();
-      if (generation != _generation) return;
-      await audio.open(uri);
+      if (generation != _generation || _closed) return;
+      final previous = _openingAudio;
+      final opening = Completer<void>();
+      _openingAudio = opening.future;
+      try {
+        if (previous != null) await previous;
+        if (generation != _generation || _closed) return;
+        await audio.open(uri);
+      } finally {
+        opening.complete();
+        if (identical(_openingAudio, opening.future)) _openingAudio = null;
+      }
       if (generation != _generation || _closed) return;
       if (_pauseAfterOpen && audio.playing) {
         _pauseAfterOpen = false;
@@ -622,15 +637,27 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
-  Future<void> clear() async {
+  Future<void> clear() => _clearing ??= _clear().whenComplete(() {
+    _clearing = null;
+  });
+
+  Future<void> _clear() async {
+    ++_generation;
     await flushListeningStats();
     _samplePlaying = false;
     _listeningTrack = null;
     cancelSleepTimer();
-    ++_generation;
     loading = false;
-    await audio.stop();
-    await proxy.stop();
+    // Cancel the stream so a pending native open can finish before Stop.
+    try {
+      if (_openingAudio case final pending?) {
+        await proxy.interrupt();
+        await pending;
+      }
+      await audio.stop();
+    } finally {
+      await proxy.stop();
+    }
     queue.clear();
     shuffleEnabled = false;
     _shuffleOrder = [];
@@ -647,8 +674,15 @@ class PlayerController extends ChangeNotifier {
     ++_generation;
     await _proxyErrors.cancel();
     audio.removeListener(_audioChanged);
-    await audio.shutdown();
-    await proxy.close();
+    try {
+      if (_openingAudio case final pending?) {
+        await proxy.interrupt();
+        await pending;
+      }
+      await audio.shutdown();
+    } finally {
+      await proxy.close();
+    }
     dispose();
   }
 }
