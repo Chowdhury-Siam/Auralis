@@ -305,7 +305,6 @@ class _PlayerShellState extends State<PlayerShell>
   _cacheReport;
   final search = TextEditingController();
   final _discoveryFocus = FocusNode();
-  final settingsSearch = TextEditingController();
   SettingsSection? _settingsSection;
   late final ChannelLibrary library;
   late final Listenable _shellUpdates;
@@ -614,7 +613,6 @@ class _PlayerShellState extends State<PlayerShell>
     }
     if (page == _Page.settings) {
       _settingsSection = null;
-      settingsSearch.clear();
     }
     if (page != destination && page != _Page.nowPlaying) {
       FocusManager.instance.primaryFocus?.unfocus();
@@ -665,7 +663,6 @@ class _PlayerShellState extends State<PlayerShell>
     widget.sync?.removeListener(_syncChanged);
     search.dispose();
     _discoveryFocus.dispose();
-    settingsSearch.dispose();
     super.dispose();
   }
 
@@ -3705,7 +3702,6 @@ class _PlayerShellState extends State<PlayerShell>
         key: const ValueKey('settings-page'),
         child: _settingsSection == null
             ? SettingsDirectory(
-                search: settingsSearch,
                 sections: [
                   for (final section in SettingsSection.values)
                     if (switch (section) {
@@ -3745,7 +3741,8 @@ class _PlayerShellState extends State<PlayerShell>
                     for (final child in _settingsContent(_settingsSection!))
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: PreferenceCard(child: child),
+                        child: _settingsSection == SettingsSection.video
+                            ? child : PreferenceCard(child: child),
                       ),
                   ],
                 ),
