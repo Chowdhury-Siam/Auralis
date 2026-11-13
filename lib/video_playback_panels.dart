@@ -475,6 +475,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
           maxHeight: 480,
           scrollable: false,
           content: ReorderableListView.builder(
+            physics: const ClampingScrollPhysics(),
             shrinkWrap: true,
             primary: false,
             padding: EdgeInsets.zero,
