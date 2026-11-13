@@ -5,8 +5,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'app_popups.dart';
+import 'preference_widgets.dart';
 import 'storage.dart';
 import 'video_playback_data.dart';
+import 'video_settings_widgets.dart';
+
+export 'video_settings_widgets.dart';
 
 enum VideoDiagnostic {
   decoder('Video decoder', Icons.memory_rounded),
@@ -35,13 +39,15 @@ void _saveVideoSettings(
   VoidCallback? onChanged,
 ) {
   onChanged?.call();
-  unawaited(settings.save().catchError((Object _) {
-    if (context.mounted) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(content: Text('Could not save video settings.')),
-      );
-    }
-  }));
+  unawaited(
+    settings.save().catchError((Object _) {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text('Could not save video settings.')),
+        );
+      }
+    }),
+  );
 }
 
 class VideoSettingsOptions extends StatelessWidget {
@@ -53,6 +59,7 @@ class VideoSettingsOptions extends StatelessWidget {
     this.onFrameRateChanged,
     this.onAutoPipChanged,
     this.diagnostics = const {},
+    this.inDialog = false,
   });
 
   final AppSettings settings;
@@ -61,48 +68,165 @@ class VideoSettingsOptions extends StatelessWidget {
       onFrameRateChanged,
       onAutoPipChanged;
   final Map<VideoDiagnostic, Future<void> Function(BuildContext)> diagnostics;
+  final bool inDialog;
   VideoPlaybackData get _data => settings.videoPlayback;
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      for (final (label, icon, open) in [
-        ('Player settings', Icons.settings_outlined, _settingsPanel),
+  Widget build(BuildContext context) => inDialog
+      ? _content(context, false)
+      : LayoutBuilder(
+          builder: (context, box) => _content(
+            context,
+            box.maxWidth >= 640 &&
+                MediaQuery.textScalerOf(context).scale(14) < 21,
+          ),
+        );
+
+  Widget _content(BuildContext context, bool twoColumns) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final actions = [
+      for (final (label, detail, icon, open) in [
+        (
+          'Player settings',
+          'Playback, gestures, audio and snapshots.',
+          Icons.tune_rounded,
+          _settingsPanel,
+        ),
         (
           'Player control layout',
+          'Arrange each area in portrait and landscape.',
           Icons.dashboard_customize_outlined,
           _layoutPanel,
         ),
-        ('Custom buttons', Icons.extension_outlined, _customControlsPanel),
-        ('mpv configuration', Icons.build_outlined, _configurationPanel),
+        (
+          'Custom buttons',
+          'Give your own mpv commands a place in the player.',
+          Icons.extension_outlined,
+          _customControlsPanel,
+        ),
+        (
+          'mpv configuration',
+          'Edit player options and keyboard shortcuts.',
+          Icons.code_rounded,
+          _configurationPanel,
+        ),
       ])
-        ListTile(
-          leading: Icon(icon),
-          title: Text(label),
-          trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+        VideoSettingsAction(
+          title: label,
+          description: detail,
+          icon: icon,
           onTap: () => open(context),
         ),
-      const Divider(),
-      if (diagnostics.isEmpty)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            'Open a video and choose More → Video settings to use playback diagnostics.',
+    ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!inDialog) ...[
+          Container(
+            key: const ValueKey('video-settings-intro'),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: colors.primaryContainer.withValues(alpha: .45),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const VideoSettingsIcon(icon: Icons.movie_outlined),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Your player, your way',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Personalize Video without changing Music settings.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      for (final diagnostic in VideoDiagnostic.values)
-        ListTile(
-          enabled: diagnostics.containsKey(diagnostic),
-          leading: Icon(diagnostic.icon),
-          title: Text(diagnostic.label),
-          onTap: diagnostics[diagnostic] == null
-              ? null
-              : () => diagnostics[diagnostic]!(context),
-        ),
-    ],
-  );
+          const SizedBox(height: 20),
+        ],
+        for (var index = 0; index < actions.length; index += twoColumns ? 2 : 1)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: twoColumns
+                ? IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: actions[index]),
+                        const SizedBox(width: 12),
+                        Expanded(child: actions[index + 1]),
+                      ],
+                    ),
+                  )
+                : actions[index],
+          ),
+        const SizedBox(height: 8),
+        if (diagnostics.isEmpty)
+          VideoSettingsGroup(
+            key: const ValueKey('video-diagnostics-idle'),
+            title: 'Live diagnostics',
+            description: 'Available while a video is open',
+            children: [
+              Text(
+                'Open a video, then choose More → Video settings for decoder controls, '
+                'playback information, the mpv console and player scripts.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ],
+          )
+        else ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Live diagnostics',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          for (final diagnostic in VideoDiagnostic.values)
+            if (diagnostics[diagnostic] case final open?)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: VideoSettingsAction(
+                  title: diagnostic.label,
+                  description: switch (diagnostic) {
+                    VideoDiagnostic.decoder =>
+                      'Choose hardware or software decoding.',
+                    VideoDiagnostic.information =>
+                      'Live codecs, frame rate and playback health.',
+                    VideoDiagnostic.console =>
+                      'Run a command and inspect recent player logs.',
+                    VideoDiagnostic.script =>
+                      'Load a local script for the current player.',
+                  },
+                  icon: diagnostic.icon,
+                  onTap: () => open(context),
+                ),
+              ),
+        ],
+      ],
+    );
+  }
 
   Future<T?> _choose<T>(
     BuildContext context,
@@ -110,16 +234,32 @@ class VideoSettingsOptions extends StatelessWidget {
     List<({T value, String label, bool selected})> choices,
   ) => showAuralisDialog<T>(
     context: context,
-    builder: (dialog) => AuralisDialog(
-      title: Text(title),
+    builder: (dialog) => VideoSettingsDialog(
+      title: title,
+      icon: title == 'mpv configuration'
+          ? Icons.code_rounded
+          : Icons.extension_outlined,
+      description: title == 'mpv configuration'
+          ? 'Choose a configuration file to edit. Changes apply when the player reopens.'
+          : 'Choose a slot to edit its name and command.',
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (final choice in choices)
-            AuralisChoiceTile(
-              title: Text(choice.label),
-              selected: choice.selected,
-              onTap: () => Navigator.pop(dialog, choice.value),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+                child: AuralisChoiceTile(
+                  title: Text(choice.label),
+                  subtitle: Text(
+                    choice.selected ? 'Configured' : 'Not configured yet',
+                  ),
+                  trailing: const Icon(Icons.edit_outlined, size: 20),
+                  onTap: () => Navigator.pop(dialog, choice.value),
+                ),
+              ),
             ),
         ],
       ),
@@ -133,10 +273,19 @@ class VideoSettingsOptions extends StatelessWidget {
         VideoControl.customTwo,
         VideoControl.customThree,
       ])
-        (value: slot, label: videoControlLabel(_data, slot), selected: false),
+        (
+          value: slot,
+          label: videoControlLabel(_data, slot),
+          selected: _data.commands.containsKey(slot),
+        ),
     ]);
     if (slot != null && context.mounted) {
-      await showVideoCommandEditor(context, settings, slot, onChanged: onChanged);
+      await showVideoCommandEditor(
+        context,
+        settings,
+        slot,
+        onChanged: onChanged,
+      );
     }
   }
 
@@ -147,101 +296,137 @@ class VideoSettingsOptions extends StatelessWidget {
         builder: (context, update) {
           Widget toggle(String label, bool value, ValueChanged<bool> setter) =>
               SwitchListTile(
+                dense: false,
                 contentPadding: EdgeInsets.zero,
-                title: Text(label),
+                title: Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
                 value: value,
                 onChanged: (next) {
                   update(() => setter(next));
                   _saveVideoSettings(context, settings, onChanged);
                 },
               );
-          return AuralisDialog(
-            title: const Text('Player settings'),
+          return VideoSettingsDialog(
+            title: 'Player settings',
+            icon: Icons.tune_rounded,
+            description: 'Fine-tune how Video plays and responds.',
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Seek interval · ${_data.seekSeconds} seconds'),
-                Slider(
-                  min: 5,
-                  max: 60,
-                  divisions: 11,
-                  value: _data.seekSeconds.toDouble().clamp(5, 60),
-                  onChanged: (value) =>
-                      update(() => _data.seekSeconds = value.round()),
-                  onChangeEnd: (_) =>
-                      _saveVideoSettings(context, settings, onChanged),
+                VideoSettingsGroup(
+                  title: 'Seeking & gestures',
+                  description:
+                      'Control how taps and swipes move through a video.',
+                  children: [
+                    Text('Seek interval · ${_data.seekSeconds} seconds'),
+                    Slider(
+                      min: 5,
+                      max: 60,
+                      divisions: 11,
+                      value: _data.seekSeconds.toDouble().clamp(5, 60),
+                      label: '${_data.seekSeconds} seconds',
+                      semanticFormatterCallback: (value) =>
+                          '${value.round()} seconds',
+                      onChanged: (value) =>
+                          update(() => _data.seekSeconds = value.round()),
+                      onChangeEnd: (_) =>
+                          _saveVideoSettings(context, settings, onChanged),
+                    ),
+                    toggle(
+                      'Tap and swipe gestures',
+                      _data.gestures,
+                      (value) => _data.gestures = value,
+                    ),
+                    toggle(
+                      'Require double tap for every seek',
+                      _data.strictDoubleTap,
+                      (value) => _data.strictDoubleTap = value,
+                    ),
+                    if (Platform.isAndroid)
+                      toggle(
+                        'Swap brightness and volume sides',
+                        _data.swapSides,
+                        (value) => _data.swapSides = value,
+                      ),
+                  ],
                 ),
-                toggle(
-                  'Tap and swipe gestures',
-                  _data.gestures,
-                  (value) => _data.gestures = value,
+                VideoSettingsGroup(
+                  title: 'Playback',
+                  description:
+                      'Choose what happens when a video opens or ends.',
+                  children: [
+                    toggle(
+                      'Play immediately when opened',
+                      _data.autoplay,
+                      (value) => _data.autoplay = value,
+                    ),
+                    toggle(
+                      'Play next video automatically',
+                      _data.autoAdvance,
+                      (value) => _data.autoAdvance = value,
+                    ),
+                    toggle(
+                      'Automatically skip saved segments',
+                      _data.autoSkip,
+                      (value) => _data.autoSkip = value,
+                    ),
+                    toggle(
+                      'Continue playing in the background',
+                      _data.background,
+                      (value) => _data.background = value,
+                    ),
+                  ],
                 ),
-                toggle(
-                  'Require double tap for every seek',
-                  _data.strictDoubleTap,
-                  (value) => _data.strictDoubleTap = value,
-                ),
-                if (Platform.isAndroid)
-                  toggle(
-                    'Swap brightness and volume sides',
-                    _data.swapSides,
-                    (value) => _data.swapSides = value,
-                  ),
-                toggle('Allow volume boost', _data.volumeBoost, (value) {
-                  _data.volumeBoost = value;
-                  if (!value) onVolumeBoostDisabled?.call();
-                }),
-                toggle(
-                  'Play immediately when opened',
-                  _data.autoplay,
-                  (value) => _data.autoplay = value,
-                ),
-                toggle(
-                  'Play next video automatically',
-                  _data.autoAdvance,
-                  (value) => _data.autoAdvance = value,
-                ),
-                toggle(
-                  'Automatically skip saved segments',
-                  _data.autoSkip,
-                  (value) => _data.autoSkip = value,
-                ),
-                toggle(
-                  'Include subtitles in snapshots',
-                  _data.snapshotSubtitles,
-                  (value) => _data.snapshotSubtitles = value,
-                ),
-                toggle(
-                  'Continue playing in the background',
-                  _data.background,
-                  (value) => _data.background = value,
+                VideoSettingsGroup(
+                  title: 'Audio & snapshots',
+                  children: [
+                    toggle('Allow volume boost', _data.volumeBoost, (value) {
+                      _data.volumeBoost = value;
+                      if (!value) onVolumeBoostDisabled?.call();
+                    }),
+                    toggle(
+                      'Include subtitles in snapshots',
+                      _data.snapshotSubtitles,
+                      (value) => _data.snapshotSubtitles = value,
+                    ),
+                  ],
                 ),
                 if (Platform.isAndroid) ...[
-                  toggle('GPU-next renderer (reopen video)', _data.gpuNext, (
-                    value,
-                  ) {
-                    _data.gpuNext = value;
-                  }),
-                  toggle('Match video frame rate', _data.matchRefreshRate, (
-                    value,
-                  ) {
-                    _data.matchRefreshRate = value;
-                    onFrameRateChanged?.call();
-                  }),
-                ],
-                if (Platform.isAndroid)
-                  toggle(
-                    'Picture in picture when leaving the app',
-                    _data.autoPip,
-                    (value) {
-                      _data.autoPip = value;
-                      onAutoPipChanged?.call();
-                    },
+                  VideoSettingsGroup(
+                    title: 'Device behavior',
+                    description:
+                        'Display and picture-in-picture options for Android.',
+                    children: [
+                      toggle(
+                        'GPU-next renderer (reopen video)',
+                        _data.gpuNext,
+                        (value) {
+                          _data.gpuNext = value;
+                        },
+                      ),
+                      toggle('Match video frame rate', _data.matchRefreshRate, (
+                        value,
+                      ) {
+                        _data.matchRefreshRate = value;
+                        onFrameRateChanged?.call();
+                      }),
+                      toggle(
+                        'Picture in picture when leaving the app',
+                        _data.autoPip,
+                        (value) {
+                          _data.autoPip = value;
+                          onAutoPipChanged?.call();
+                        },
+                      ),
+                    ],
                   ),
+                ],
               ],
             ),
             actions: [
-              TextButton(
+              FilledButton(
                 onPressed: () => Navigator.pop(dialog),
                 child: const Text('Done'),
               ),
@@ -268,86 +453,100 @@ class VideoSettingsOptions extends StatelessWidget {
               .controls(zone, wide: wide)
               .where(supportsVideoControl)
               .toList();
-          return AuralisDialog(
-            title: const Text('Player control layout'),
+          return VideoSettingsDialog(
+            title: 'Player control layout',
+            icon: Icons.dashboard_customize_outlined,
+            description: 'Design portrait and landscape layouts independently.',
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Wrap(
-                  spacing: 8,
+                VideoSettingsGroup(
+                  title: 'Layout & position',
                   children: [
-                    for (final landscape in [false, true])
-                      ChoiceChip(
-                        label: Text(landscape ? 'Landscape' : 'Portrait'),
-                        selected: wide == landscape,
-                        onSelected: (_) => update(() => wide = landscape),
-                      ),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final landscape in [false, true])
+                          ChoiceChip(
+                            label: Text(landscape ? 'Landscape' : 'Portrait'),
+                            selected: wide == landscape,
+                            onSelected: (_) => update(() => wide = landscape),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        for (final value in VideoControlZone.values)
+                          ChoiceChip(
+                            label: Text(value.label),
+                            selected: zone == value,
+                            onSelected: (_) => update(() => zone = value),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
+                VideoSettingsGroup(
+                  title: 'Buttons in this area · ${items.length}/${zone.limit}',
+                  description: 'Selected buttons appear in selection order. Each area has a fixed limit.',
                   children: [
-                    for (final value in VideoControlZone.values)
-                      ChoiceChip(
-                        label: Text(value.label),
-                        selected: zone == value,
-                        onSelected: (_) => update(() => zone = value),
-                      ),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 2,
+                      children: [
+                        for (final control in [
+                          ...items,
+                          ...VideoControl.values.where(
+                            (item) =>
+                                supportsVideoControl(item) &&
+                                !items.contains(item),
+                          ),
+                        ])
+                          FilterChip(
+                            label: Text(videoControlLabel(_data, control)),
+                            selected: items.contains(control),
+                            onSelected:
+                                items.contains(control) ||
+                                    items.length < zone.limit
+                                ? (enabled) => change(() {
+                                    _data.setControls(
+                                      zone,
+                                      wide: wide,
+                                      controls: [
+                                        ...items.where(
+                                          (item) => item != control,
+                                        ),
+                                        if (enabled) control,
+                                      ],
+                                    );
+                                  })
+                                : null,
+                          ),
+                      ],
+                    ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text('Buttons in this area · ${items.length}/${zone.limit}'),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 2,
+                VideoSettingsGroup(
+                  title: 'Appearance & motion',
                   children: [
-                    for (final control in [
-                      ...items,
-                      ...VideoControl.values.where(
-                        (item) => supportsVideoControl(item) && !items.contains(item),
-                      ),
-                    ])
-                      FilterChip(
-                        label: Text(videoControlLabel(_data, control)),
-                        selected: items.contains(control),
-                        onSelected:
-                            items.contains(control) || items.length < zone.limit
-                            ? (enabled) => change(() {
-                                _data.setControls(
-                                  zone,
-                                  wide: wide,
-                                  controls: [
-                                    ...items.where((item) => item != control),
-                                    if (enabled) control,
-                                  ],
-                                );
-                              })
-                            : null,
-                      ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Transparent button backgrounds'),
+                      value: _data.transparentControls,
+                      onChanged: (value) =>
+                          change(() => _data.transparentControls = value),
+                    ),
+                    PreferenceChoice<VideoControlAnimation>(
+                      title: 'Control animation',
+                      value: _data.animation,
+                      values: VideoControlAnimation.values,
+                      label: (style) => style.label,
+                      onSelected: (style) =>
+                          change(() => _data.animation = style),
+                    ),
                   ],
-                ),
-                const SizedBox(height: 10),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Transparent button backgrounds'),
-                  value: _data.transparentControls,
-                  onChanged: (value) =>
-                      change(() => _data.transparentControls = value),
-                ),
-                DropdownButton<VideoControlAnimation>(
-                  isExpanded: true,
-                  value: _data.animation,
-                  items: [
-                    for (final style in VideoControlAnimation.values)
-                      DropdownMenuItem(
-                        value: style,
-                        child: Text('Animation · ${style.label}'),
-                      ),
-                  ],
-                  onChanged: (style) {
-                    if (style != null) change(() => _data.animation = style);
-                  },
                 ),
               ],
             ),
@@ -357,7 +556,7 @@ class VideoSettingsOptions extends StatelessWidget {
                     change(() => _data.setControls(zone, wide: wide)),
                 child: const Text('Reset this area'),
               ),
-              TextButton(
+              FilledButton(
                 onPressed: () => Navigator.pop(dialog),
                 child: const Text('Done'),
               ),
@@ -384,17 +583,29 @@ class VideoSettingsOptions extends StatelessWidget {
     await showAuralisDialog<void>(
       context: context,
       builder: (dialog) => StatefulBuilder(
-        builder: (context, update) => AuralisDialog(
-          title: Text(filename),
+        builder: (context, update) => VideoSettingsDialog(
+          title: filename,
+          icon: Icons.code_rounded,
+          description:
+              'Advanced options. Changes load when you reopen the player.',
           content: TextFormField(
             initialValue: text,
             minLines: 3,
             maxLines: 8,
             maxLength: 32768,
             autocorrect: false,
+            enableSuggestions: false,
+            style: const TextStyle(fontFamily: 'monospace', height: 1.5),
             onChanged: (value) => text = value,
             decoration: InputDecoration(
               hintText: input ? 'Ctrl+j seek 10' : 'keep-open=yes',
+              labelText: filename,
+              alignLabelWithHint: true,
+              filled: true,
+              fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               errorText: error,
               helperText: 'Changes load when you reopen the player.',
             ),
@@ -442,23 +653,42 @@ Future<void> showVideoCommandEditor(
   await showAuralisDialog<void>(
     context: context,
     builder: (dialog) => StatefulBuilder(
-      builder: (context, update) => AuralisDialog(
-        title: Text(slot.label),
+      builder: (context, update) => VideoSettingsDialog(
+        title: slot.label,
+        icon: Icons.extension_outlined,
+        description:
+            'Name your shortcut and enter an mpv command as a JSON array.',
         content: Column(
           children: [
             TextFormField(
               initialValue: label,
               maxLength: 40,
-              decoration: const InputDecoration(labelText: 'Button name'),
+              decoration: InputDecoration(
+                labelText: 'Button name',
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
               onChanged: (value) => label = value,
             ),
             const SizedBox(height: 10),
             TextFormField(
               initialValue: command,
               maxLines: 3,
+              autocorrect: false,
+              enableSuggestions: false,
+              style: const TextStyle(fontFamily: 'monospace', height: 1.5),
               decoration: InputDecoration(
                 labelText: 'mpv command',
                 hintText: '["show-text", "Ready"]',
+                alignLabelWithHint: true,
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 errorText: error,
               ),
               onChanged: (value) => command = value,
