@@ -335,7 +335,9 @@ void main() {
       );
       await tester.tap(find.widgetWithText(ListTile, 'Newest first'));
       await tester.pumpAndSettle();
-      expect(settings.librarySort, LibrarySort.newest);
+      expect(settings.videoPlayback.librarySort, LibrarySort.newest);
+      expect(settings.librarySort, LibrarySort.title,
+          reason: 'Video sorting must not change Music sorting');
       expect(
         tester.getTopLeft(zebra).dy,
         lessThan(tester.getTopLeft(alpha).dy),
