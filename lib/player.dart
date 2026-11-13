@@ -352,6 +352,7 @@ class PlayerController extends ChangeNotifier {
       throw StateError('You can save up to 100 playlists.');
     }
     settings.playlists[name] = [];
+    settings.playlistPhotos.remove('music', settings.musicPhotoScope, name);
     notifyListeners();
     await _persist();
     return name;
@@ -366,6 +367,12 @@ class PlayerController extends ChangeNotifier {
       for (final entry in settings.playlists.entries)
         (entry.key == previous ? name : entry.key): entry.value,
     };
+    settings.playlistPhotos.rename(
+      'music',
+      settings.musicPhotoScope,
+      previous,
+      name,
+    );
     notifyListeners();
     await _persist();
     return name;
@@ -373,6 +380,7 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> deletePlaylist(String name) async {
     settings.playlists.remove(name);
+    settings.playlistPhotos.remove('music', settings.musicPhotoScope, name);
     notifyListeners();
     await _persist();
   }
