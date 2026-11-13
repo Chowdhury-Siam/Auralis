@@ -464,14 +464,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
               _positionReady = false;
               _saveSettings();
               widget.onWatched?.call();
-              if (!_repeatVideo && _data.autoAdvance) unawaited(_step(1));
+              if (!_repeatVideo) unawaited(_advanceOrResumeMusic());
             }
           }),
           player.stream.playing.listen((playing) {
             if (_closed) return;
-            if (playing && widget.music.audio.playing) {
-              unawaited(widget.music.audio.toggle());
-            }
             unawaited(_updatePip());
           }),
         ]);
@@ -495,15 +492,15 @@ class _VideoPlaybackState extends State<VideoPlayback>
       if (!_canPlay) return;
       await _native.setProperty('secondary-sid', 'no');
       if (!_canPlay) return;
-      if (widget.music.audio.playing) await widget.music.audio.toggle();
-      if (!_canPlay) return;
       if (Platform.isAndroid && _session == null) {
         final session = await AudioSession.instance;
         if (!_canPlay) return;
         _session = session;
         _subscriptions.add(
           session.interruptionEventStream.listen((event) {
-            if (event.begin) unawaited(_player?.pause());
+            if (event.begin && widget.music.videoOwnsAudio) {
+              unawaited(_player?.pause());
+            }
           }),
         );
       }
@@ -524,9 +521,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
       if (track == null) await widget.proxy.stop();
       final uri = track == null ? source.uri! : await widget.proxy.uri(track);
       if (!_canPlay) return;
-      if (await _session?.setActive(true) == false) {
-        throw StateError('Audio focus unavailable');
-      }
+      if (_data.autoplay) await _takeAudioFocus();
       if (!_canPlay) return;
       final start = _resumeSeek ? _data.positions[source.id] : null;
       // Manual track IDs (including Off) belong to the previous video only.
@@ -566,6 +561,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
               ? failure.message
               : 'Could not start the video.',
         );
+        await _releaseStep(_resumeMusic, 'restore music playback');
       }
     } finally {
       _opening = _loading = false;
@@ -664,6 +660,25 @@ class _VideoPlaybackState extends State<VideoPlayback>
     }
   }
 
+  Future<void> _advanceOrResumeMusic() async {
+    if (_data.autoAdvance &&
+        (_index + 1 < _queue.length || _shuffle && _queue.length > 1)) {
+      await _step(1);
+    }
+    if (_canPlay && _player?.state.completed == true) await _resumeMusic();
+  }
+
+  Future<void> _takeAudioFocus() async {
+    await widget.music.pauseForVideo();
+    if (_canPlay && await _session?.setActive(true) == false) {
+      throw StateError('Audio focus unavailable');
+    }
+  }
+
+  Future<void> _resumeMusic() => widget.music.finishVideo(() async {
+    await _session?.setActive(false);
+  });
+
   Future<void> _seek(Duration target) async {
     if (!_canPlay ||
         _player == null ||
@@ -679,12 +694,21 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   Future<void> _togglePlayback() async {
     if (!_canPlay || _opening || _player == null) return;
-    if (_player!.state.completed) {
+    final player = _player!;
+    if (player.state.playing) {
+      await player.pause();
+      return;
+    }
+    if (player.state.completed) {
       await _seek(Duration.zero);
-      if (!_canPlay) return;
-      await _player!.play();
-    } else {
-      await _player!.playOrPause();
+    }
+    if (!_canPlay) return;
+    try {
+      await _takeAudioFocus();
+      if (_canPlay) await player.play();
+    } catch (_) {
+      await _releaseStep(_resumeMusic, 'restore music playback');
+      rethrow;
     }
   }
 
@@ -829,9 +853,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
         await scripts.delete(recursive: true);
       }, 'remove script cache');
     }
-    await _releaseStep(() async {
-      if (!playback.music.audio.playing) await _session?.setActive(false);
-    }, 'release audio focus');
+    await _releaseStep(_resumeMusic, 'release audio focus');
     if (Platform.isAndroid) {
       await _releaseStep(_resetAndroidWindow, 'reset the Android video window');
     }
