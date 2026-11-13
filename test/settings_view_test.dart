@@ -41,18 +41,6 @@ void main() {
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
 
-  test(
-    'settings search matches individual features, providers and punctuation',
-    () {
-      expect(SettingsSection.data.matches('backup restore'), isTrue);
-      expect(SettingsSection.media.matches('translate'), isTrue);
-      expect(SettingsSection.media.matches('MyMemory fallback'), isTrue);
-      expect(SettingsSection.about.matches("What's new"), isTrue);
-      expect(SettingsSection.about.matches('What’s new'), isTrue);
-      expect(SettingsSection.appearance.matches('banana'), isFalse);
-    },
-  );
-
   testWidgets('themed settings cards and anchored menus retain real choices', (
     tester,
   ) async {
@@ -104,18 +92,13 @@ void main() {
     await tester.tap(find.byTooltip('Settings').first);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('settings-video')), findsNothing);
-    await tester.enterText(
-      find.byKey(const ValueKey('settings-search')),
-      'mpv console',
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('No matching settings'), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-search')), findsNothing);
+    expect(find.byType(TextField), findsNothing);
     for (final section in SettingsSection.values.where(
       (section) => section != SettingsSection.video,
     )) {
-      await tester.enterText(
-        find.byKey(const ValueKey('settings-search')),
-        section.title,
+      await tester.ensureVisible(
+        find.byKey(ValueKey('settings-${section.name}')),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(ValueKey('settings-${section.name}')));
@@ -144,8 +127,11 @@ void main() {
         await tester.tap(find.text('Oldest first'));
         await tester.pumpAndSettle();
         expect(settings.librarySort, LibrarySort.oldest);
-        expect(settings.videoPlayback.librarySort, LibrarySort.title,
-            reason: 'Music Settings must not change Video sorting');
+        expect(
+          settings.videoPlayback.librarySort,
+          LibrarySort.title,
+          reason: 'Music Settings must not change Video sorting',
+        );
         expect(settings.saves, greaterThan(0));
       }
       if (section == SettingsSection.about) {
@@ -191,7 +177,7 @@ void main() {
     const Size(320, 568),
   ]) {
     testWidgets(
-      'settings categories, search, Back and existing controls work at $size',
+      'settings categories without search, Back and existing controls work at $size',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = size;
@@ -247,9 +233,10 @@ void main() {
           isNull,
           reason: 'Settings with enlarged text',
         );
-        expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+        expect(find.byKey(const ValueKey('settings-search')), findsNothing);
+        expect(find.byType(TextField), findsNothing);
         expect(
-          tester.getTopLeft(find.byKey(const ValueKey('settings-search'))).dx,
+          tester.getTopLeft(find.byKey(const ValueKey('settings-general'))).dx,
           tester
               .getTopLeft(
                 find
@@ -277,13 +264,9 @@ void main() {
             image.dispose();
           });
         }
-        await tester.enterText(
-          find.byKey(const ValueKey('settings-search')),
-          'fallback',
-        );
-        await tester.pumpAndSettle();
         expect(find.text('Lyrics & artwork'), findsOneWidget);
-        expect(find.text('Data & sync'), findsNothing);
+        expect(find.text('Data & sync'), findsOneWidget);
+        await tester.ensureVisible(find.text('Lyrics & artwork'));
         await tester.tap(find.text('Lyrics & artwork'));
         await tester.pumpAndSettle();
         expect(find.text('Lyrics & translation'), findsOneWidget);
@@ -315,43 +298,31 @@ void main() {
         }
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
-        expect(
-          tester
-              .widget<TextField>(find.byKey(const ValueKey('settings-search')))
-              .controller!
-              .text,
-          'fallback',
-        );
-        await tester.tap(find.byTooltip('Clear settings search'));
-        await tester.pumpAndSettle();
-        await tester.enterText(
-          find.byKey(const ValueKey('settings-search')),
-          'no-such-setting',
-        );
-        await tester.pumpAndSettle();
-        expect(find.text('No matching settings'), findsOneWidget);
-        await tester.tap(find.text('Show all settings'));
-        await tester.pumpAndSettle();
-        await tester.enterText(
-          find.byKey(const ValueKey('settings-search')),
-          'backup',
-        );
-        await tester.pumpAndSettle();
+        expect(find.byType(TextField), findsNothing);
+        await tester.ensureVisible(find.text('Data & sync'));
         await tester.tap(find.text('Data & sync'));
         await tester.pumpAndSettle();
         expect(find.text('Listening stats'), findsOneWidget);
         expect(find.text('Backup & Restore'), findsOneWidget);
         await tester.tap(find.byTooltip('Back to Settings'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Clear settings search'));
-        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('Appearance'),
+          -200,
+          scrollable: find
+              .descendant(
+                of: find.byKey(const PageStorageKey('settings-directory')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
         await tester.tap(find.text('Appearance'));
         await tester.pumpAndSettle();
         expect(find.text('App navigation'), findsOneWidget);
         expect(find.text('Compact library navigation'), findsNothing);
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+        expect(find.byKey(const ValueKey('settings-search')), findsNothing);
         expect(
           tester.takeException(),
           isNull,
