@@ -519,6 +519,64 @@ void main() {
   );
 
   for (final size in [const Size(390, 844), const Size(1280, 714)]) {
+    testWidgets(
+      'opening reuses one origin page and retains its state at $size',
+      (tester) async {
+        final (audio, player) = await mount(
+          tester,
+          openPlayer: false,
+          size: size,
+        );
+        final origin = find.byKey(
+          const ValueKey('player-origin-page'),
+          skipOffstage: false,
+        );
+        final home = find.byKey(
+          const PageStorageKey('home-scroll'),
+          skipOffstage: false,
+        );
+        final originElement = tester.element(origin),
+            homeElement = tester.element(home);
+        final snapshotFinder = find.byKey(
+          const ValueKey('player-cached-blur'),
+          skipOffstage: false,
+        );
+        final controller = tester
+            .widget<SnapshotWidget>(snapshotFinder)
+            .controller;
+        expect(controller.allowSnapshotting, isFalse);
+        for (var attempt = 0; attempt < 3; attempt++) {
+          await tester.tap(find.byKey(const ValueKey('open-current-track')));
+          await tester.pump();
+          expect(
+            home,
+            findsOneWidget,
+            reason: 'No duplicate Home tree may be built for blur',
+          );
+          expect(identical(tester.element(home), homeElement), isTrue);
+          expect(identical(tester.element(origin), originElement), isTrue);
+          expect(
+            identical(
+              tester.widget<SnapshotWidget>(snapshotFinder).controller,
+              controller,
+            ),
+            isTrue,
+          );
+          expect(controller.allowSnapshotting, isTrue);
+          await tester.pump(const Duration(milliseconds: 120));
+          expect(home, findsOneWidget);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('close-now-playing')));
+          await tester.pumpAndSettle();
+          expect(controller.allowSnapshotting, isFalse);
+          expect(identical(tester.element(home), homeElement), isTrue);
+        }
+        expect(player.current?.id, 'first');
+        expect(audio.playing, isFalse);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('mini-player grows into Now Playing and reopens at $size', (
       tester,
     ) async {
@@ -558,7 +616,7 @@ void main() {
         expect(middle.height, greaterThan(start.height));
         expect(middle.top, lessThan(start.top));
         expect(
-          find.byKey(const ValueKey('player-transition-blur')),
+          find.byKey(const ValueKey('player-cached-blur')),
           findsOneWidget,
         );
         expect(
@@ -618,7 +676,6 @@ void main() {
         );
         await tester.tap(find.byKey(const ValueKey('close-now-playing')));
         await tester.pump();
-        var previousBlur = 1.0;
         var previewReachedDock = false;
         // Bound the tail as well as the visible travel: the old transition still
         // blocked the dock after it appeared to have reached its final position.
@@ -627,24 +684,21 @@ void main() {
           expect(identical(tester.element(origin), originElement), isTrue);
           expect(identical(tester.element(dock), dockElement), isTrue);
           expect(tester.getRect(dock), dockBounds);
-          final blur = find.byKey(
-            const ValueKey('player-transition-blur-opacity'),
-          );
-          if (blur.evaluate().isEmpty) break;
-          final opacity = tester.widget<Opacity>(blur).opacity;
-          expect(opacity, lessThanOrEqualTo(previousBlur));
-          previousBlur = opacity;
-          if (opacity == 0) {
+          final surface = find.byKey(const ValueKey('now-playing-container'));
+          if (surface.evaluate().isEmpty) break;
+          final preview = find.byKey(const ValueKey('player-dock-preview'));
+          if (preview.evaluate().isNotEmpty &&
+              tester.widget<Opacity>(preview).opacity == 1 &&
+              (tester.getRect(preview).top - dockBounds.top).abs() < 20) {
             previewReachedDock = true;
-            final preview = find.byKey(const ValueKey('player-dock-preview'));
-            expect(tester.widget<Opacity>(preview).opacity, 1);
             expect(tester.getRect(preview).top, closeTo(dockBounds.top, 20));
           }
         }
         expect(
           previewReachedDock,
           isTrue,
-          reason: 'The mini-player row is restored as the panel reaches the dock',
+          reason:
+              'The mini-player row is restored as the panel reaches the dock',
         );
         expect(
           find.byKey(const ValueKey('now-playing-container')),
@@ -708,13 +762,9 @@ void main() {
       await gesture.moveBy(const Offset(0, -30));
       await tester.pump();
       final start = tester.getRect(surface);
-      final blur = tester
-          .widget<ImageFiltered>(
-            find.byKey(const ValueKey('player-transition-blur')),
-          )
-          .imageFilter;
       final cachedBlur = find.byKey(const ValueKey('player-cached-blur'));
       final snapshot = tester.widget<SnapshotWidget>(cachedBlur);
+      final painter = snapshot.painter;
       expect(snapshot.controller.allowSnapshotting, isTrue);
       await gesture.moveBy(const Offset(0, -210));
       await tester.pump();
@@ -725,14 +775,7 @@ void main() {
         reason: 'The card follows the finger pixel for pixel without a second easing curve',
       );
       expect(
-        identical(
-          tester
-              .widget<ImageFiltered>(
-                find.byKey(const ValueKey('player-transition-blur')),
-              )
-              .imageFilter,
-          blur,
-        ),
+        identical(tester.widget<SnapshotWidget>(cachedBlur).painter, painter),
         isTrue,
       );
       expect(
@@ -828,7 +871,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('open-current-track')));
     await tester.pump();
-    final background = find.byKey(const ValueKey('player-collapse-background'));
+    final background = find.byKey(const ValueKey('player-origin-page'));
     expect(
       find.descendant(of: background, matching: find.text('Data & sync')),
       findsOneWidget,
@@ -908,9 +951,7 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 150));
         expect(tester.getTopLeft(artwork).dy, greaterThan(before.dy));
-        final background = find.byKey(
-          const ValueKey('player-collapse-background'),
-        );
+        final background = find.byKey(const ValueKey('player-origin-page'));
         expect(background, findsOneWidget);
         expect(
           find.descendant(of: background, matching: find.text('Your Mix')),
@@ -940,7 +981,20 @@ void main() {
         expect(audio.playing, isTrue, reason: 'Collapsing keeps music playing');
         await audio.toggle();
         await tester.pumpAndSettle();
-        expect(background, findsNothing);
+        expect(
+          background,
+          findsOneWidget,
+          reason: 'The same origin page resumes without a rebuilt copy.',
+        );
+        expect(
+          tester
+              .widget<SnapshotWidget>(
+                find.byKey(const ValueKey('player-cached-blur')),
+              )
+              .controller
+              .allowSnapshotting,
+          isFalse,
+        );
         expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
         expect(find.text('Your Mix'), findsOneWidget);
         expect(player.current?.id, 'first');
