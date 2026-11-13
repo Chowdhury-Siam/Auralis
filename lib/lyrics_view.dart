@@ -20,9 +20,6 @@ import 'player.dart';
 import 'wave_seek_bar.dart';
 import 'now_playing_effects.dart';
 
-const lyricsBackground = Color(0xFF111015);
-const lyricsHighlight = Color(0xFFC7B5FF);
-
 class LyricsView extends StatefulWidget {
   const LyricsView({
     super.key,
