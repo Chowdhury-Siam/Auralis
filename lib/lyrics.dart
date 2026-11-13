@@ -214,6 +214,7 @@ class LyricsRepository extends ChangeNotifier {
     createClient: _createClient,
     cache: cache,
   );
+  // Legacy API name retained; the default direction now auto-detects any language.
   Future<Lyrics> translateJapanese(
     Track track,
     Lyrics source, {
@@ -415,9 +416,13 @@ class LyricsRepository extends ChangeNotifier {
     return _lookups[key] = job;
   }
 
-  Future<List<LyricsSearchMatch>> search(Track track, LyricsSearchBy by) async {
+  Future<List<LyricsSearchMatch>> search(
+    Track track,
+    LyricsSearchBy by, {
+    String? query,
+  }) async {
     if (_closed) throw StateError('Lyrics lookup is closed.');
-    final query = (by == LyricsSearchBy.title ? track.title : track.artist)
+    query = (query ?? (by == LyricsSearchBy.title ? track.title : track.artist))
         .trim();
     if (query.isEmpty || query.length > 1000) {
       throw const FormatException(
