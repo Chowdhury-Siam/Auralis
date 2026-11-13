@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.190
+
+- Fix CI hangs in the video History thumbnail and combined music Library widget tests. Wait for the cache refresh summary before checking saved artwork and lyrics.
+
 ## 0.1.189
 
 - Load full Telegram thumbnails for video History, including entries saved before restarting. Release completed streaming reads throughout playback to prevent memory from growing with the amount streamed.
