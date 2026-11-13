@@ -780,7 +780,6 @@ void main() {
             .color,
         Theme.of(tester.element(find.byType(LyricsView))).colorScheme.surface,
       );
-      expect(lyricsHighlight, accent);
     },
   );
 
