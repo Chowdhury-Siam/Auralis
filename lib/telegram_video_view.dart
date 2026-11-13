@@ -388,7 +388,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     if (!_ready) return;
     final library = _library;
     final videos = library != null && library.videos.containsKey(video.id)
-        ? library.sortedVideos(widget.music.settings.librarySort)
+        ? library.sortedVideos(widget.music.settings.videoPlayback.librarySort)
         : [video];
     await _launchPlayer(
       videos.map(VideoSource.telegram).toList(),
@@ -527,12 +527,12 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
           (
             value: option,
             label: option.label,
-            selected: settings.librarySort == option,
+            selected: settings.videoPlayback.librarySort == option,
           ),
       ],
     );
-    if (!mounted || sort == null || sort == settings.librarySort) return;
-    setState(() => settings.librarySort = sort);
+    if (!mounted || sort == null || sort == settings.videoPlayback.librarySort) return;
+    setState(() => settings.videoPlayback.librarySort = sort);
     widget.music.refreshSettings();
     try {
       await settings.save();
@@ -1246,7 +1246,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     final searching = _tab == 1;
     final results = _library;
     final allVideos =
-        results?.sortedVideos(widget.music.settings.librarySort) ??
+        results?.sortedVideos(widget.music.settings.videoPlayback.librarySort) ??
         const <Track>[];
     final query = searching ? '' : _librarySearch.text.trim().toLowerCase();
     final videos = query.isEmpty
