@@ -15,9 +15,9 @@ class FakeAudio extends AudioBackend {
   String? uri;
   final volumes = <double>[];
   @override
-  Future<void> open(String uri) async {
+  Future<void> open(String uri, {bool play = true}) async {
     this.uri = uri;
-    playing = true;
+    playing = play;
     notifyListeners();
   }
 
