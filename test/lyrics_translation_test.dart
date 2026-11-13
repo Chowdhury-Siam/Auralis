@@ -6,6 +6,8 @@ import 'package:auralis/lyrics.dart';
 import 'package:auralis/lyrics_translation.dart';
 import 'package:auralis/media_cache.dart';
 import 'package:auralis/models.dart';
+import 'package:auralis/storage.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'updater_test.dart' show Client, Response, Request;
@@ -51,11 +53,150 @@ class PendingTranslation extends Client {
 }
 
 void main() {
+  for (final provider in TranslationSource.values) {
+    for (final (language, words) in [
+      ('Spanish', 'Hola mundo'),
+      ('French', 'Bonjour le monde'),
+      ('German', 'Guten Morgen'),
+      ('Bengali', 'আজ সুন্দর দিন'),
+      ('Hindi', 'आज अच्छा दिन है'),
+      ('Arabic', 'مرحبا بالعالم'),
+      ('Russian', 'Привет мир'),
+      ('Korean', '안녕하세요'),
+      ('Chinese', '你好世界'),
+      ('Japanese', '今日は晴れです。'),
+      ('Thai', 'สวัสดี'),
+      ('Greek', 'Καλημέρα'),
+    ]) {
+      test(
+        '$language lyrics auto-detect to English with ${provider.label}',
+        () async {
+          final source = Lyrics.parse('[00:01]$words\n[00:03]$words');
+          final client = Client([
+            provider == TranslationSource.google
+                ? google('English translation')
+                : myMemory('English translation'),
+          ]);
+          final translator = LyricsTranslator(createClient: () => client);
+          addTearDown(translator.close);
+          expect(LyricsTranslator.supports(source), isTrue);
+          final result = await translator.translate(
+            track,
+            source,
+            active: () => true,
+            first: provider,
+            fallback: null,
+          );
+          final query = client.requests.single.queryParameters;
+          if (provider == TranslationSource.google) {
+            expect(query['sl'], 'auto');
+            expect(query['tl'], 'en');
+          } else {
+            expect(query['langpair'], 'autodetect|en');
+          }
+          expect(query['q'], words, reason: 'Deduplicate repeated choruses');
+          expect(
+            result.lines.map((line) => line.time),
+            source.lines.map((line) => line.time),
+          );
+          expect(result.lines.first.text, '$words\nEnglish translation');
+          expect(result.lines.last.text, result.lines.first.text);
+          expect(source.lines.first.text, words);
+        },
+      );
+    }
+  }
+
+  test(
+    'English-only auto-detection does not duplicate original lyrics',
+    () async {
+      final source = Lyrics.parse('[00:01]Good morning\n[00:02]Good night');
+      final client = Client([google('Good morning\nGood night')]);
+      final translator = LyricsTranslator(createClient: () => client);
+      addTearDown(translator.close);
+      expect(
+        LyricsTranslator.supports(source),
+        isTrue,
+        reason: 'ASCII alone cannot distinguish English from other languages',
+      );
+      final translated = await translator.translate(
+        track,
+        source,
+        active: () => true,
+      );
+      expect(translated.plain, source.plain);
+      expect(source.lines.first.text, 'Good morning');
+    },
+  );
+
+  test('existing Japanese-to-English preference upgrades without resetting other settings', () {
+    final settings = AppSettings(File('unused'));
+    settings.applyJson({
+      ...settings.toJson(),
+      'translationDirection': 'japaneseEnglish',
+      'translationFirst': 'myMemory',
+      'automaticTranslation': false,
+    });
+    expect(settings.translationDirection.label, 'Any language → English');
+    expect(settings.translationDirection.source, 'auto');
+    expect(settings.translationDirection.target, 'en');
+    expect(settings.translationFirst, TranslationSource.myMemory);
+    expect(settings.automaticTranslation, isFalse);
+    expect(
+      settings.toJson()['translationDirection'],
+      'japaneseEnglish',
+      reason: 'Keep backup and Worker Sync compatibility',
+    );
+  });
+
+  test(
+    'auto-detected translations never reuse old Japanese-only disk caches',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'auralis-auto-translation-',
+      );
+      final disk = MediaCache(dir);
+      final source = Lyrics.parse('[00:01]你好世界');
+      final fingerprint = sha256.convert(
+        utf8.encode(
+          jsonEncode([
+            'free-ja-en-v1',
+            source.plain,
+            for (final line in source.lines)
+              [line.time.inMilliseconds, line.text],
+          ]),
+        ),
+      );
+      await disk.write(
+        track,
+        'translation-en-$fingerprint',
+        utf8.encode(jsonEncode(['Incorrect old translation'])),
+      );
+      final client = Client([google('Hello world')]);
+      final translator = LyricsTranslator(
+        createClient: () => client,
+        cache: () => disk,
+      );
+      addTearDown(() async {
+        translator.close();
+        await MediaCache.drain(dir);
+        await dir.delete(recursive: true);
+      });
+      final result = await translator.translate(
+        track,
+        source,
+        active: () => true,
+      );
+      expect(result.lines.single.text, '你好世界\nHello world');
+      expect(client.requests, hasLength(1));
+    },
+  );
+
   test('bilingual lyrics keep timestamps, breaks, English and deduplicated choruses; restart is offline', () async {
     final dir = await Directory.systemTemp.createTemp('auralis-translation-');
     var disk = MediaCache(Directory('${dir.path}/alice'));
     final client = Client([
-      google('It is sunny today.\nI will walk tomorrow.'),
+      google('It is sunny today.\nI will walk tomorrow.\nGood night'),
     ]);
     final translator = LyricsTranslator(
       createClient: () => client,
@@ -81,7 +222,12 @@ void main() {
     expect(result.lines[4].text, 'Good night');
     expect(japanese.lines.first.text, '今日は晴れです。');
     expect(client.requests.single.host, 'translate.googleapis.com');
-    expect(client.requests.single.queryParameters['q'], '今日は晴れです。\n明日も歩きます。');
+    expect(
+      client.requests.single.queryParameters['q'],
+      '今日は晴れです。\n明日も歩きます。\nGood night',
+    );
+    expect(client.requests.single.queryParameters['sl'], 'auto');
+    expect(client.requests.single.queryParameters['tl'], 'en');
     expect(client.requests.single.queryParameters.keys.toSet(), {
       'client',
       'sl',
@@ -147,7 +293,9 @@ void main() {
     '429 falls back to documented no-key API and decodes entities',
     () async {
       final googleClient = Client([Response([], statusCode: 429)]);
-      final fallback = Client([myMemory('It&#39;s sunny.\nWalk &amp; smile.')]);
+      final fallback = Client([
+        myMemory('It&#39;s sunny.\nWalk &amp; smile.\nGood night'),
+      ]);
       final clients = [googleClient, fallback];
       final translator = LyricsTranslator(
         createClient: () => clients.removeAt(0),
@@ -162,7 +310,10 @@ void main() {
       expect(result.lines[1].text, '明日も歩きます。\nWalk & smile.');
       expect(fallback.requests.single.host, 'api.mymemory.translated.net');
       expect(fallback.requests.single.path, '/get');
-      expect(fallback.requests.single.queryParameters['langpair'], 'ja|en');
+      expect(
+        fallback.requests.single.queryParameters['langpair'],
+        'autodetect|en',
+      );
       expect(
         utf8.encode(fallback.requests.single.queryParameters['q']!).length,
         lessThanOrEqualTo(500),
@@ -180,7 +331,7 @@ void main() {
         Client([myMemory('LIMIT', quota: true)]),
         Client([google('One merged line')]),
         Client([myMemory('One merged line')]),
-        Client([google('First\nSecond')]),
+        Client([google('First\nSecond\nGood night')]),
       ];
       final translator = LyricsTranslator(
         createClient: () => clients.removeAt(0),
@@ -258,9 +409,9 @@ void main() {
       createClient: () => throw StateError('No HTTP'),
     );
     addTearDown(none.close);
-    expect(LyricsTranslator.supports(Lyrics.parse('Only English')), isFalse);
+    expect(LyricsTranslator.supports(Lyrics.parse('♪ ... 123')), isFalse);
     await expectLater(
-      none.translate(track, Lyrics.parse('Only English'), active: () => true),
+      none.translate(track, Lyrics.parse('♪ ... 123'), active: () => true),
       throwsA(isA<TranslationFailure>()),
     );
   });
