@@ -419,23 +419,33 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
   }) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final foreground = second
-        ? colors.onTertiaryContainer
-        : colors.onPrimaryContainer;
+    final foreground = colors.onSurface;
+    final accent = second ? colors.tertiary : colors.primary;
     return _StatsPanel(
-      color: second ? colors.tertiaryContainer : colors.primaryContainer,
+      color: colors.surfaceContainerLow,
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: foreground, size: 20),
-          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: accent, size: 22),
+          ),
+          const SizedBox(height: 16),
           Text(
             label,
-            style: theme.textTheme.labelLarge?.copyWith(color: foreground),
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
           ),
+          const SizedBox(height: 4),
           Text(
             value,
-            style: theme.textTheme.headlineSmall?.copyWith(
+            style: theme.textTheme.headlineMedium?.copyWith(
               color: foreground,
               fontWeight: FontWeight.w800,
             ),
@@ -512,7 +522,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _section('Listening timeline', subtitle: _range.description),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 6,
             children: [
@@ -528,16 +538,43 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
           if (points.isEmpty)
-            const Text('Your listening timeline will appear here.')
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                'Your listening timeline will appear here.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
           else
             ListeningBars(points: points, plays: _chartPlays, showValues: true),
           if (peak != null) ...[
-            const Divider(height: 20),
-            Text(
-              'Peak · ${peak.label} · ${_chartPlays ? '${amount(peak)} plays' : listeningTime(amount(peak))}',
-              style: Theme.of(context).textTheme.labelLarge,
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer
+                    .withValues(alpha: .4),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.trending_up_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Peak · ${peak.label} · ${_chartPlays ? '${amount(peak)} plays' : listeningTime(amount(peak))}',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -586,15 +623,24 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
               ),
           ])
             ListTile(
-              dense: true,
+              dense: false,
               contentPadding: EdgeInsets.zero,
               leading: Icon(
                 icon,
                 size: 20,
                 color: Theme.of(context).colorScheme.primary,
               ),
-              title: Text(label),
-              subtitle: Text(value),
+              title: Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              subtitle: Text(
+                value,
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
             ),
         ],
       ),
@@ -624,8 +670,8 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _section(
-            'Top categories',
-            subtitle: 'All-time listening by track or artist',
+            'Your most played',
+            subtitle: 'All-time ranking by listening time',
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -647,21 +693,25 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
           const SizedBox(height: 6),
           for (final (index, (name, detail, time)) in rows.indexed)
             Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
               child: _StatsPanel(
                 radius: 16,
                 color: index == 0
-                    ? colors.secondaryContainer
-                    : colors.surfaceContainerHigh,
-                padding: const EdgeInsets.all(9),
+                    ? colors.primaryContainer.withValues(alpha: .4)
+                    : colors.surfaceContainer,
+                padding: const EdgeInsets.all(14),
                 child: Column(
                   children: [
                     Row(
                       children: [
                         CircleAvatar(
                           radius: 14,
-                          backgroundColor: colors.primaryContainer,
-                          foregroundColor: colors.onPrimaryContainer,
+                          backgroundColor: index == 0
+                              ? colors.primary
+                              : colors.surfaceContainerHighest,
+                          foregroundColor: index == 0
+                              ? colors.onPrimary
+                              : colors.onSurfaceVariant,
                           child: Text(
                             '${index + 1}',
                             style: const TextStyle(fontSize: 11),
@@ -709,7 +759,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
                       borderRadius: BorderRadius.circular(8),
                       child: LinearProgressIndicator(
                         value: time / math.max(1, rows.first.$3),
-                        minHeight: 4,
+                        minHeight: 3,
                         backgroundColor: colors.surfaceContainerHighest,
                       ),
                     ),
@@ -792,7 +842,24 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         : days.values.fold(0, (sum, day) => sum + day.plays);
     final ranking = tracks.isEmpty
         ? _StatsPanel(
-            child: const Text('Play some music to build your listening stats.'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.headphones_rounded,
+                    size: 36,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  _section(
+                    'Your story starts with a song',
+                    subtitle: 'Play some music to build your listening stats.',
+                  ),
+                ],
+              ),
+            ),
           )
         : _ranking(tracks, _stats.topArtists);
     final timeline = _timeline(points);
@@ -803,7 +870,44 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Container(
+          key: const ValueKey('stats-intro'),
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer
+                .withValues(alpha: .4),
+            borderRadius: BorderRadius.circular(26),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'YOUR LISTENING',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  letterSpacing: 1.6,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Your music, in numbers.',
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Listening time, favorite tracks and everyday rhythms.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
         Wrap(
+          key: const ValueKey('stats-range-tabs'),
           spacing: 6,
           runSpacing: 4,
           children: [
@@ -815,11 +919,13 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
               ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
         _overview(milliseconds, plays),
-        const SizedBox(height: 12),
+        const SizedBox(height: 20),
         LayoutBuilder(
-          builder: (context, box) => box.maxWidth >= 730
+          builder: (context, box) =>
+              box.maxWidth >= 730 &&
+                  MediaQuery.textScalerOf(context).scale(14) < 21
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -837,7 +943,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 20),
                     Expanded(child: ranking),
                   ],
                 )
@@ -1027,7 +1133,8 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         if (_busy && !_confirming) const LinearProgressIndicator(minHeight: 2),
         Flexible(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+            key: const ValueKey('stats-content-scroll'),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -1063,7 +1170,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
           body: SafeArea(
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1040),
+                constraints: const BoxConstraints(maxWidth: 1120),
                 child: SizedBox.expand(child: content),
               ),
             ),
@@ -1074,8 +1181,8 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     return PopScope<Object?>(
       canPop: !_busy,
       child: AuralisDialog(
-        width: 680,
-        maxWidth: 720,
+        width: 960,
+        maxWidth: 1000,
         scrollable: false,
         title: AuralisDialogTitle(title, actions: [refresh, close]),
         content: content,
@@ -1308,7 +1415,7 @@ class _StatsPanel extends StatelessWidget {
     required this.child,
     this.color,
     this.radius = 24,
-    this.padding = const EdgeInsets.all(14),
+    this.padding = const EdgeInsets.all(20),
   });
   final Widget child;
   final Color? color;
@@ -1318,7 +1425,13 @@ class _StatsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: color ?? Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: BorderRadius.circular(radius),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radius),
+      side: BorderSide(
+        color: Theme.of(context).colorScheme.outlineVariant
+            .withValues(alpha: .3),
+      ),
+    ),
     child: Padding(padding: padding, child: child),
   );
 }
