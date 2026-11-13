@@ -2269,15 +2269,6 @@ class _PlayerShellState extends State<PlayerShell>
                         ),
                       ],
                     ),
-                  if (collection == 'Recently played' &&
-                      player.settings.recentIds.isNotEmpty)
-                    Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: TextButton(
-                        onPressed: player.clearRecent,
-                        child: const Text('Clear history'),
-                      ),
-                    ),
                   if (collection == 'Playlists' && selectedPlaylist != null)
                     Row(
                       children: [
@@ -3566,12 +3557,20 @@ class _PlayerShellState extends State<PlayerShell>
             _savePreferences(() => player.settings.repeatMode = mode),
       ),
       PreferenceChoice<LibrarySort>(
+        key: ValueKey(_videoMode ? 'video-sort-preference' : 'music-sort-preference'),
         title: 'Library sort order',
-        value: player.settings.librarySort,
+        value: _videoMode
+            ? player.settings.videoPlayback.librarySort
+            : player.settings.librarySort,
         values: LibrarySort.values,
         label: (sort) => sort.label,
-        onSelected: (sort) =>
-            _savePreferences(() => player.settings.librarySort = sort),
+        onSelected: (sort) => _savePreferences(() {
+          if (_videoMode) {
+            player.settings.videoPlayback.librarySort = sort;
+          } else {
+            player.settings.librarySort = sort;
+          }
+        }),
       ),
     ],
     SettingsSection.appearance => [
