@@ -168,41 +168,48 @@ void main() {
       TelegramStreamProxy(telegram.request),
       settings,
     );
-    addTearDown(() async {
-      await tester.pumpWidget(const SizedBox());
-      await player.shutdown();
-      await telegram.shutdown();
-    });
+    try {
+      await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+      await tester.pumpAndSettle();
+      final navigation = find.byKey(const ValueKey('video-navigation'));
+      await tester.tap(find.descendant(
+        of: navigation,
+        matching: find.byIcon(Icons.video_library_rounded),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('video-library-collection-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('History'));
+      await tester.pumpAndSettle();
 
-    await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
-    await tester.pumpAndSettle();
-    final navigation = find.byKey(const ValueKey('video-navigation'));
-    await tester.tap(find.descendant(
-      of: navigation,
-      matching: find.byIcon(Icons.video_library_rounded),
-    ));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('video-library-collection-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('History'));
-    await tester.pumpAndSettle();
-
-    expect(td.requests.where((r) => r['@type'] == 'getMessage'), hasLength(1));
-    expect(
-      td.requests.where((r) => r['@type'] == 'downloadFile' && r['file_id'] == 90),
-      hasLength(1),
-    );
-    await tester.runAsync(() => telegram.image(90));
-    await tester.pumpAndSettle();
-    expect(
-      find.descendant(
+      expect(td.requests.where((r) => r['@type'] == 'getMessage'), hasLength(1));
+      expect(
+        td.requests.where((r) => r['@type'] == 'downloadFile' && r['file_id'] == 90),
+        hasLength(1),
+      );
+      final thumbnail = find.descendant(
         of: find.byKey(ValueKey(saved.id)),
         matching: find.byType(Image),
-      ),
-      findsOneWidget,
-    );
-    expect(saved.telegram!.coverFileId, isNull);
-    expect(tester.takeException(), isNull);
+      );
+      // File I/O runs in real time. Pump the widget clock so its completion
+      // can reach the FutureBuilder instead of awaiting its cached future.
+      for (var attempt = 0; attempt < 100 && thumbnail.evaluate().isEmpty;
+          attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      expect(thumbnail, findsOneWidget);
+      expect(saved.telegram!.coverFileId, isNull);
+      expect(tester.takeException(), isNull);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(() async {
+        await player.shutdown();
+        await telegram.shutdown();
+      });
+    }
   });
 
   testWidgets(
