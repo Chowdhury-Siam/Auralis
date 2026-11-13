@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.191
+
+- Remove song-row duration labels from Music lists and the separate add-to-queue shortcut from Daily Mix. Keep the three-dot Options / Info menu, its queue actions, duration details and existing playback behavior.
+
 ## 0.1.190
 
 - Fix CI hangs in the video History thumbnail and combined music Library widget tests. Wait for the cache refresh summary before checking saved artwork and lyrics.
