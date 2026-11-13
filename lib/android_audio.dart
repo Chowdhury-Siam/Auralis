@@ -120,12 +120,15 @@ class AndroidAudioHandler extends BaseAudioHandler {
     await publish(await safeCover);
   }
 
-  void handleInterruptions(AudioSession session) {
+  void handleInterruptions(
+    Stream<AudioInterruptionEvent> interruptions,
+    Stream<void> becomingNoisy,
+  ) {
     _subscriptions.addAll([
-      session.interruptionEventStream.listen((event) {
-        if (event.begin) unawaited(pause());
-      }),
-      session.becomingNoisyEventStream.listen((_) => unawaited(pause())),
+      interruptions.listen(
+        (event) => unawaited(player.handleAudioInterruption(event)),
+      ),
+      becomingNoisy.listen((_) => unawaited(pause())),
     ]);
   }
 
@@ -207,16 +210,12 @@ class AndroidAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> play() async {
-    if (player.current != null &&
-        !player.restoringData &&
-        !player.audio.playing) {
-      await player.audio.toggle();
-    }
+    if (!player.audio.playing) await player.setPlayback(true);
   }
 
   @override
   Future<void> pause() async {
-    if (player.audio.playing) await player.audio.toggle();
+    await player.setPlayback(false);
     await player.flushListeningStats();
   }
 
