@@ -120,7 +120,8 @@ void main() {
       expect(tester.getRect(navigation), navBounds);
       await tester.tap(find.byTooltip('Settings').first);
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-search')), findsNothing);
+      expect(find.byKey(const ValueKey('settings-general')), findsOneWidget);
       await tester.tap(find.byTooltip('Library').first);
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Browse'));
