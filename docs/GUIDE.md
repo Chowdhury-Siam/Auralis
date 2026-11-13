@@ -38,7 +38,7 @@ The database encryption key is retained, and Auralis does not recursively delete
 
 ## Favorites, playlists and recent music
 
-Use the **All songs**, **Favorites**, **Playlists** and **Recently played** chips in Library. Track actions use the playlist/play icon beside the existing queue-add button: favorite/unfavorite, Play next, or Add to playlist. Now Playing also has a favorite button and Add to playlist shortcut. Favorites persist locally. Recent music records the last 100 unique successfully opened tracks, newest first; Clear history removes those references.
+Use the **All songs**, **Favorites**, **Playlists** and **Recently played** chips in Library. Track actions use the playlist/play icon beside the existing queue-add button: favorite/unfavorite, Play next, or Add to playlist. Now Playing also has a favorite button and Add to playlist shortcut. Favorites persist locally. Recent music records the last 100 unique successfully opened tracks, newest first.
 
 Create a playlist in Library → Playlists or while adding a track. Open a playlist and click a track to play its saved order. Rename and Delete are explicit buttons; track actions inside a playlist can remove that entry. Duplicate entries are ignored. Names are trimmed, case-insensitively unique and limited to 60 characters. There are limits of 100 playlists, 5000 tracks per playlist and 10000 favorites. Saved playlists keep their order; Library sort does not reorder them or Recent music. Delete removes the playlist only, never the Telegram files.
 
@@ -50,7 +50,7 @@ The repeat button cycles **Off → Queue → One track → Off** and remembers t
 
 Open the moon icon in Now Playing or the playback bar. Choose **15, 30, 45, 60 or 90 minutes**, or **End of current track**. The active icon is highlighted and the dialog shows the pause time. Cancel timer removes it. Expiry pauses playback without clearing the queue or resuming already paused audio. End-of-track sleep takes priority over repeat. Clearing the queue or shutting down cancels the timer; it is not restored after restart and cannot wake a sleeping/closed PC.
 
-The Library header shows compact track/channel counts with icon-only Refresh and Sort controls. Narrow windows and enlarged text place counts beneath the title; the full value remains available as a tooltip. The former bordered summary card below the collection filters has been removed. Refresh rescans selected channels and retries artwork when Telegram is connected and the Library is not busy. Recently played still offers Clear history alongside the collection choices.
+The Library header shows compact track/channel counts with icon-only Refresh and Sort controls. Narrow windows and enlarged text place counts beneath the title; the full value remains available as a tooltip. The former bordered summary card below the collection filters has been removed. Refresh rescans selected channels and retries artwork when Telegram is connected and the Library is not busy.
 
 ## Listening stats, export and backups
 
