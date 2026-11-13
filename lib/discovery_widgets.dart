@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
+import 'app_motion.dart';
 import 'models.dart';
 
 (Color, Color) discoveryColors(int index, ColorScheme colors) =>
@@ -195,8 +196,7 @@ class ChannelMediaCount extends StatelessWidget {
     return FutureBuilder<int?>(
       future: estimate(),
       builder: (context, snapshot) {
-        final approximate =
-            snapshot.connectionState == ConnectionState.done
+        final approximate = snapshot.connectionState == ConnectionState.done
             ? snapshot.data
             : null;
         return builder(
@@ -241,100 +241,107 @@ class DiscoveryTile extends StatelessWidget {
     final isSelected = selected == true;
     return Semantics(
       selected: selected,
-      child: Material(
-        color: background,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(list ? 16 : 22),
-          side: isSelected ? BorderSide(color: foreground) : BorderSide.none,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: list
-            ? ListTile(
-                leading: leading ?? Icon(icon, color: foreground),
-                title: Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: detail == null ? null : Text(detail),
-                textColor: foreground,
-                trailing: selected == false
-                    ? null
-                    : Icon(
-                        isSelected
-                            ? Icons.check_circle_rounded
-                            : Icons.chevron_right_rounded,
-                        color: foreground,
-                      ),
-                onTap: onTap,
-              )
-            : InkWell(
-                onTap: onTap,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Positioned(
-                      right: -10,
-                      bottom: -20,
-                      child: ExcludeSemantics(
-                        child: Transform.rotate(
-                          angle: -.18,
-                          child: Icon(
-                            icon,
-                            size: 98,
-                            color: foreground.withValues(alpha: .2),
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (isSelected)
-                      PositionedDirectional(
-                        top: 10,
-                        end: 10,
-                        child: Icon(
-                          Icons.check_circle_rounded,
-                          size: 18,
+      child: AuralisPressFeedback(
+        builder: (context, states) => Material(
+          color: background,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(list ? 16 : 22),
+            side: isSelected ? BorderSide(color: foreground) : BorderSide.none,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: list
+              ? ListTile(
+                  statesController: states,
+                  leading: leading ?? Icon(icon, color: foreground),
+                  title: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: detail == null ? null : Text(detail),
+                  textColor: foreground,
+                  trailing: selected == false
+                      ? null
+                      : Icon(
+                          isSelected
+                              ? Icons.check_circle_rounded
+                              : Icons.chevron_right_rounded,
                           color: foreground,
                         ),
-                      ),
-                    Padding(
-                      padding: EdgeInsetsDirectional.fromSTEB(
-                        12,
-                        12,
-                        isSelected ? 34 : 12,
-                        12,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: foreground,
-                                fontSize: 17,
-                                height: 1.12,
-                                fontWeight: FontWeight.w800,
-                              ),
+                  onTap: onTap,
+                )
+              : InkWell(
+                  statesController: states,
+                  onTap: onTap,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Positioned(
+                        right: -10,
+                        bottom: -20,
+                        child: ExcludeSemantics(
+                          child: Transform.rotate(
+                            angle: -.18,
+                            child: Icon(
+                              icon,
+                              size: 98,
+                              color: foreground.withValues(alpha: .2),
                             ),
                           ),
-                          if (detail != null) ...[
-                            const SizedBox(height: 5),
-                            Text(
-                              detail,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: foreground, fontSize: 12),
-                            ),
-                          ],
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                      if (isSelected)
+                        PositionedDirectional(
+                          top: 10,
+                          end: 10,
+                          child: Icon(
+                            Icons.check_circle_rounded,
+                            size: 18,
+                            color: foreground,
+                          ),
+                        ),
+                      Padding(
+                        padding: EdgeInsetsDirectional.fromSTEB(
+                          12,
+                          12,
+                          isSelected ? 34 : 12,
+                          12,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: foreground,
+                                  fontSize: 17,
+                                  height: 1.12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            if (detail != null) ...[
+                              const SizedBox(height: 5),
+                              Text(
+                                detail,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: foreground,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }
