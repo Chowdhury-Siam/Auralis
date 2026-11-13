@@ -1,6 +1,12 @@
 {
-  "current": "0.1.189",
+  "current": "0.1.190",
   "releases": [
+    {
+      "version": "0.1.190",
+      "changes": [
+        "Fix CI hangs in the video History thumbnail and combined music Library widget tests. Wait for the cache refresh summary before checking saved artwork and lyrics."
+      ]
+    },
     {
       "version": "0.1.189",
       "changes": [
