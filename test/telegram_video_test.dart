@@ -172,19 +172,28 @@ void main() {
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
       final navigation = find.byKey(const ValueKey('video-navigation'));
-      await tester.tap(find.descendant(
-        of: navigation,
-        matching: find.byIcon(Icons.video_library_rounded),
-      ));
+      await tester.tap(
+        find.descendant(
+          of: navigation,
+          matching: find.byIcon(Icons.video_library_rounded),
+        ),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('video-library-collection-menu')));
+      await tester.tap(
+        find.byKey(const ValueKey('video-library-collection-menu')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('History'));
       await tester.pumpAndSettle();
 
-      expect(td.requests.where((r) => r['@type'] == 'getMessage'), hasLength(1));
       expect(
-        td.requests.where((r) => r['@type'] == 'downloadFile' && r['file_id'] == 90),
+        td.requests.where((r) => r['@type'] == 'getMessage'),
+        hasLength(1),
+      );
+      expect(
+        td.requests.where(
+          (r) => r['@type'] == 'downloadFile' && r['file_id'] == 90,
+        ),
         hasLength(1),
       );
       final thumbnail = find.descendant(
@@ -193,8 +202,11 @@ void main() {
       );
       // File I/O runs in real time. Pump the widget clock so its completion
       // can reach the FutureBuilder instead of awaiting its cached future.
-      for (var attempt = 0; attempt < 100 && thumbnail.evaluate().isEmpty;
-          attempt++) {
+      for (
+        var attempt = 0;
+        attempt < 100 && thumbnail.evaluate().isEmpty;
+        attempt++
+      ) {
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 10)),
         );
@@ -590,13 +602,15 @@ void main() {
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('settings-media')), findsNothing);
-      final search = find.byKey(const ValueKey('settings-search'));
-      await tester.enterText(search, 'mpv console');
-      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-search')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('settings-video')));
       await tester.pumpAndSettle();
       final decoder = find.widgetWithText(ListTile, 'Video decoder');
-      expect(tester.widget<ListTile>(decoder).enabled, isFalse);
+      expect(decoder, findsNothing);
+      expect(
+        find.byKey(const ValueKey('video-diagnostics-idle')),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Player settings'));
       await tester.pumpAndSettle();
       final gestures = find.widgetWithText(
@@ -611,11 +625,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byType(BackButton));
       await tester.pumpAndSettle();
-      await tester.enterText(search, 'mymemory');
-      await tester.pumpAndSettle();
-      expect(find.text('No matching settings'), findsOneWidget);
-      await tester.tap(find.byTooltip('Clear settings search'));
-      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-media')), findsNothing);
       await tester.tap(find.text('General'));
       await tester.pumpAndSettle();
       expect(find.text('Open on startup'), findsOneWidget);
