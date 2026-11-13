@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:media_kit_video/media_kit_video.dart' show Wakelock;
 
 import 'app_popups.dart';
 import 'preference_widgets.dart';
@@ -47,7 +48,46 @@ class LyricsView extends StatefulWidget {
   State<LyricsView> createState() => _LyricsViewState();
 }
 
-class _LyricsViewState extends State<LyricsView> {
+class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
+  final _screenAwake = Wakelock();
+  bool _visible = false, _viewFocused = true;
+  int? _viewId;
+  AppLifecycleState? _lifecycle;
+
+  // Independent of playback, lyrics loading, translation and scrolling.
+  void _updateScreenAwake() {
+    if (_visible &&
+        _viewFocused &&
+        (_lifecycle == null || _lifecycle == AppLifecycleState.resumed)) {
+      _screenAwake.enable();
+    } else {
+      _screenAwake.disable();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _viewId = View.of(context).viewId;
+    _visible =
+        TickerMode.valuesOf(context).enabled &&
+        (ModalRoute.isCurrentOf(context) ?? true);
+    _updateScreenAwake();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycle = state;
+    _updateScreenAwake();
+  }
+
+  @override
+  void didChangeViewFocus(ui.ViewFocusEvent event) {
+    if (event.viewId != _viewId) return;
+    _viewFocused = event.state == ui.ViewFocusState.focused;
+    _updateScreenAwake();
+  }
+
   ColorScheme get _colors => Theme.of(context).colorScheme;
   Track? _track;
   Lyrics? _lyrics, _translation;
@@ -61,6 +101,8 @@ class _LyricsViewState extends State<LyricsView> {
   @override
   void initState() {
     super.initState();
+    _lifecycle = WidgetsBinding.instance.lifecycleState;
+    WidgetsBinding.instance.addObserver(this);
     widget.repository.addListener(_repositoryChanged);
     _reset();
   }
@@ -134,6 +176,8 @@ class _LyricsViewState extends State<LyricsView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _screenAwake.disable();
     ++_generation;
     widget.repository.removeListener(_repositoryChanged);
     super.dispose();
@@ -348,92 +392,138 @@ class _LyricsViewState extends State<LyricsView> {
     final lyrics = await showAuralisDialog<Lyrics>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, update) => FutureBuilder(
-          future: request,
-          builder: (context, snapshot) {
-            final waiting = snapshot.connectionState == ConnectionState.waiting;
-            final matches = snapshot.data ?? const <LyricsSearchMatch>[];
-            return AuralisDialog(
-              title: const Text('Search lyrics by'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final MapEntry(key: by, value: query) in queries.entries)
-                    AuralisChoiceTile(
-                      leading: Icon(
-                        by == LyricsSearchBy.title
-                            ? Icons.music_note_rounded
-                            : Icons.person_rounded,
-                      ),
-                      title: Text(
-                        by == LyricsSearchBy.title ? 'Song name' : 'Artist',
-                      ),
-                      subtitle: Text(
-                        query.isEmpty ? 'Unavailable for this track' : query,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      enabled:
-                          !waiting && query.isNotEmpty && query.length <= 1000,
-                      selected: selected == by,
-                      onTap: () => update(() {
-                        selected = by;
-                        request = repository.search(track, by);
-                      }),
+        builder: (context, update) {
+          void search(LyricsSearchBy by) {
+            final query = queries[by]!.trim();
+            if (query.isEmpty || query.length > 1000) return;
+            FocusScope.of(context).unfocus();
+            update(() {
+              selected = by;
+              request = repository.search(track, by, query: query);
+            });
+          }
+
+          return FutureBuilder(
+            future: request,
+            builder: (context, snapshot) {
+              final waiting =
+                  snapshot.connectionState == ConnectionState.waiting;
+              final matches = snapshot.data ?? const <LyricsSearchMatch>[];
+              return AuralisDialog(
+                title: const Text('Search lyrics by'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Edit a field, then search by song name or artist.',
                     ),
-                  if (selected != null) ...[
-                    const Divider(),
-                    if (waiting)
-                      const LinearProgressIndicator(
-                        semanticsLabel: 'Searching for lyrics',
-                      )
-                    else if (snapshot.hasError)
-                      const Text(
-                        'Could not search LRCLIB. Choose a search option to retry.',
-                      )
-                    else if (matches.isEmpty)
-                      const Text('No matches. Try the other search option.')
-                    else ...[
-                      const Text('Choose a match to use its lyrics.'),
-                      for (final match in matches)
-                        AuralisChoiceTile(
-                          title: Text(
-                            match.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            [
-                              match.artist,
-                              if (match.album.isNotEmpty) match.album,
-                              if (match.duration case final duration?)
-                                '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}',
-                              if (match.lyrics.instrumental)
-                                'Instrumental'
-                              else
-                                match.lyrics.lines.isEmpty
-                                    ? 'Plain lyrics'
-                                    : 'Synced lyrics',
-                            ].join(' · '),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () => Navigator.pop(context, match.lyrics),
+                    const SizedBox(height: 16),
+                    for (final MapEntry(key: by, value: query)
+                        in queries.entries)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                key: ValueKey('lyrics-search-${by.name}'),
+                                initialValue: query,
+                                textInputAction: TextInputAction.search,
+                                maxLength: 1000,
+                                decoration: InputDecoration(
+                                  labelText: by == LyricsSearchBy.title
+                                      ? 'Song name'
+                                      : 'Artist',
+                                  counterText: '',
+                                  prefixIcon: Icon(
+                                    by == LyricsSearchBy.title
+                                        ? Icons.music_note_rounded
+                                        : Icons.person_rounded,
+                                  ),
+                                ),
+                                onChanged: (value) => update(() {
+                                  queries[by] = value;
+                                  // Edited queries invalidate even pending results.
+                                  selected = null;
+                                  request = null;
+                                }),
+                                onFieldSubmitted: (_) => search(by),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton.filledTonal(
+                              key: ValueKey('lyrics-search-submit-${by.name}'),
+                              tooltip: by == LyricsSearchBy.title
+                                  ? 'Search by song name'
+                                  : 'Search by artist',
+                              onPressed:
+                                  !waiting &&
+                                      query.trim().isNotEmpty &&
+                                      query.trim().length <= 1000
+                                  ? () => search(by)
+                                  : null,
+                              icon: const Icon(Icons.search_rounded),
+                            ),
+                          ],
                         ),
+                      ),
+                    if (selected != null) ...[
+                      const Divider(),
+                      if (waiting)
+                        const LinearProgressIndicator(
+                          semanticsLabel: 'Searching for lyrics',
+                        )
+                      else if (snapshot.hasError)
+                        const Text(
+                          'Could not search LRCLIB. Edit your search or try again.',
+                        )
+                      else if (matches.isEmpty)
+                        const Text(
+                          'No matches. Edit your search or try the other field.',
+                        )
+                      else ...[
+                        const Text('Choose a match to use its lyrics.'),
+                        for (final match in matches)
+                          AuralisChoiceTile(
+                            title: Text(
+                              match.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              [
+                                match.artist,
+                                if (match.album.isNotEmpty) match.album,
+                                if (match.duration case final duration?)
+                                  '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                                if (match.lyrics.instrumental)
+                                  'Instrumental'
+                                else
+                                  match.lyrics.lines.isEmpty
+                                      ? 'Plain lyrics'
+                                      : 'Synced lyrics',
+                              ].join(' · '),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => Navigator.pop(context, match.lyrics),
+                          ),
+                      ],
                     ],
                   ],
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
                 ),
-              ],
-            );
-          },
-        ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
     if (!mounted ||
@@ -525,7 +615,7 @@ class _LyricsViewState extends State<LyricsView> {
         generation == _generation &&
         identical(source, _lyrics) &&
         identical(track, widget.player.current);
-    var direction = 'ja/en';
+    var direction = 'auto/en';
     final selected = await showAuralisDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -543,9 +633,9 @@ class _LyricsViewState extends State<LyricsView> {
               PreferenceChoice<String>(
                 title: 'Translation direction',
                 value: direction,
-                values: const ['ja/en', 'en/ja'],
-                label: (value) => value == 'ja/en'
-                    ? 'Japanese → English'
+                values: const ['auto/en', 'en/ja'],
+                label: (value) => value == 'auto/en'
+                    ? 'Any language → English'
                     : 'English → Japanese',
                 onSelected: (value) => update(() => direction = value),
               ),
@@ -572,7 +662,7 @@ class _LyricsViewState extends State<LyricsView> {
       if (!active()) return;
       final url = selected == 'en/ja'
           ? 'https://www.deepl.com/en/translator/l/en/ja'
-          : 'https://www.deepl.com/en/translator/l/ja/en';
+          : 'https://www.deepl.com/en/translator/l/auto/en';
       await widget.openLink(url);
       if (!mounted || !active()) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1138,18 +1228,37 @@ class _LyricsViewState extends State<LyricsView> {
       color: widget.backgroundColor ?? _colors.surface,
       child: LayoutBuilder(
         builder: (context, box) {
-          final short = box.maxHeight < 620;
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1080),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  short ? 8 : 16,
-                  16,
-                  short ? 8 : 16,
+          // A dialog owns keyboard avoidance. Keep the covered player at its
+          // original height instead of squeezing its header and transport.
+          // Scaffold removes consumed insets from its body's MediaQuery.
+          final view = View.of(context);
+          final keyboard = view.viewInsets.bottom / view.devicePixelRatio;
+          final height =
+              keyboard > 0 && !(ModalRoute.isCurrentOf(context) ?? true)
+              ? math.min(
+                  MediaQuery.sizeOf(context).height,
+                  box.maxHeight + keyboard,
+                )
+              : box.maxHeight;
+          final short = height < 620;
+          return ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.topCenter,
+              minHeight: height,
+              maxHeight: height,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1080),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      short ? 8 : 16,
+                      16,
+                      short ? 8 : 16,
+                    ),
+                    child: _layout(reduced: reduced),
+                  ),
                 ),
-                child: _layout(reduced: reduced),
               ),
             ),
           );
