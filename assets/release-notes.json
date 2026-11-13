@@ -1,6 +1,12 @@
 {
-  "current": "0.1.190",
+  "current": "0.1.191",
   "releases": [
+    {
+      "version": "0.1.191",
+      "changes": [
+        "Remove song-row duration labels from Music lists and the separate add-to-queue shortcut from Daily Mix. Keep the three-dot Options / Info menu, its queue actions, duration details and existing playback behavior."
+      ]
+    },
     {
       "version": "0.1.190",
       "changes": [
