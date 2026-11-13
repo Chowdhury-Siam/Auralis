@@ -17,6 +17,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:media_kit_video/media_kit_video.dart' show Wakelock;
+import 'package:wakelock_plus/wakelock_plus.dart' as wakelock;
+import 'package:wakelock_plus_platform_interface/wakelock_plus_platform_interface.dart';
 
 import 'fakes.dart';
 import 'updater_test.dart' show Client, Response;
@@ -27,6 +30,17 @@ const song = Track(
   artist: 'Auralis test artist',
   source: 'Music channel',
 );
+
+class TestScreenAwake extends WakelockPlusPlatformInterface {
+  final requests = <bool>[];
+  bool awake = false;
+  @override
+  Future<void> toggle({required bool enable}) async {
+    awake = enable;
+    requests.add(enable);
+  }
+}
+
 const second = Track(
   id: 'two',
   title: 'Morning light',
@@ -45,6 +59,39 @@ class PendingLyrics extends LyricsRepository {
     calls++;
     return track.id == song.id ? pending.future : other.future;
   }
+}
+
+class EditableSearchLyrics extends LyricsRepository {
+  final searches = <({Track track, LyricsSearchBy by, String? query})>[];
+  final pending = <Completer<List<LyricsSearchMatch>>>[];
+  @override
+  Future<List<LyricsSearchMatch>> search(
+    Track track,
+    LyricsSearchBy by, {
+    String? query,
+  }) {
+    searches.add((track: track, by: by, query: query));
+    final result = Completer<List<LyricsSearchMatch>>();
+    pending.add(result);
+    return result.future;
+  }
+}
+
+LyricsSearchMatch searchMatch(String title, String words) => (
+  title: title,
+  artist: 'Search artist',
+  album: '',
+  duration: null,
+  lyrics: Lyrics.parse(words),
+);
+
+Future<void> openEditableLyricsSearch(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Lyrics options'));
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(find.text('Find lyrics online'));
+  await tester.pumpAndSettle();
+  await tester.longPress(find.text('Find lyrics online'));
+  await tester.pumpAndSettle();
 }
 
 class TranslationLyrics extends LyricsRepository {
@@ -134,6 +181,203 @@ Widget view(
 );
 
 void main() {
+  late TestScreenAwake screenAwake;
+  late WakelockPlusPlatformInterface originalScreenAwake;
+  setUp(() {
+    originalScreenAwake = wakelock.wakelockPlusPlatformInstance;
+    wakelock.wakelockPlusPlatformInstance = screenAwake = TestScreenAwake();
+  });
+  tearDown(() {
+    wakelock.wakelockPlusPlatformInstance = originalScreenAwake;
+  });
+
+  testWidgets(
+    'paused Lyrics stays awake through idle time and repeated visits',
+    (tester) async {
+      final player = controller();
+      final repository = LyricsRepository()
+        ..save(song, Lyrics.parse('Static lyrics'));
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      for (var visit = 0; visit < 3; visit++) {
+        await tester.pumpWidget(view(player, repository));
+        await tester.pumpAndSettle();
+        expect(player.audio.playing, isFalse);
+        expect(screenAwake.awake, isTrue);
+        final requests = screenAwake.requests.length;
+        await tester.pump(const Duration(minutes: 20));
+        player.notifyListeners();
+        await tester.pump();
+        expect(screenAwake.awake, isTrue);
+        expect(
+          screenAwake.requests.length,
+          requests,
+          reason: 'One ownership per visit',
+        );
+        await tester.pumpWidget(const SizedBox());
+        expect(screenAwake.awake, isFalse);
+      }
+      expect(screenAwake.requests, [true, false, true, false, true, false]);
+    },
+  );
+
+  testWidgets(
+    'Lyrics releases on background and focus loss, reacquires on return',
+    (tester) async {
+      final player = controller();
+      final repository = LyricsRepository()
+        ..save(song, Lyrics.parse('[00:00]Synced line'));
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      await tester.pumpWidget(view(player, repository));
+      await tester.pumpAndSettle();
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+        await tester.pump();
+        expect(screenAwake.awake, isFalse);
+      }
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(screenAwake.awake, isTrue);
+      void focus(bool focused, {int? id}) =>
+          tester.binding.handleViewFocusChanged(
+            ui.ViewFocusEvent(
+              viewId: id ?? tester.view.viewId,
+              state: focused
+                  ? ui.ViewFocusState.focused
+                  : ui.ViewFocusState.unfocused,
+              direction: ui.ViewFocusDirection.undefined,
+            ),
+          );
+      focus(false, id: tester.view.viewId + 1);
+      expect(screenAwake.awake, isTrue, reason: 'Ignore other windows');
+      focus(false);
+      expect(screenAwake.awake, isFalse);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      expect(screenAwake.awake, isFalse, reason: 'Focus is also required');
+      focus(true);
+      expect(screenAwake.awake, isTrue);
+      await tester.pumpWidget(const SizedBox());
+      focus(false);
+      focus(true);
+      expect(
+        screenAwake.awake,
+        isFalse,
+        reason: 'Disposed page cannot reacquire',
+      );
+    },
+  );
+
+  testWidgets('Lyrics does not acquire while mounted in the background', (
+    tester,
+  ) async {
+    final player = controller();
+    final repository = LyricsRepository()
+      ..save(song, Lyrics.parse('Static lyrics'));
+    addTearDown(player.shutdown);
+    addTearDown(repository.close);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pumpWidget(view(player, repository));
+    expect(screenAwake.awake, isFalse);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(screenAwake.awake, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    expect(screenAwake.awake, isFalse);
+  });
+
+  testWidgets('covered routes and disabled Lyrics surfaces release ownership', (
+    tester,
+  ) async {
+    final player = controller();
+    final repository = LyricsRepository()
+      ..save(song, Lyrics.parse('Static lyrics'));
+    addTearDown(player.shutdown);
+    addTearDown(repository.close);
+    final navigator = GlobalKey<NavigatorState>();
+    late StateSetter update;
+    var visible = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigator,
+        home: StatefulBuilder(
+          builder: (_, setState) {
+            update = setState;
+            return TickerMode(
+              enabled: visible,
+              child: LyricsView(
+                player: player,
+                repository: repository,
+                artwork: const Icon(Icons.album),
+                onBack: () {},
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(screenAwake.awake, isTrue);
+    update(() => visible = false);
+    await tester.pump();
+    expect(screenAwake.awake, isFalse);
+    update(() => visible = true);
+    await tester.pump();
+    expect(screenAwake.awake, isTrue);
+    navigator.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('Another page')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(screenAwake.awake, isFalse);
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(screenAwake.awake, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    expect(screenAwake.awake, isFalse);
+  });
+
+  testWidgets(
+    'Lyrics and video share independent reference-counted wake ownership',
+    (tester) async {
+      final player = controller();
+      final repository = LyricsRepository()
+        ..save(song, Lyrics.parse('Static lyrics'));
+      final video = Wakelock();
+      addTearDown(video.disable);
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      video.enable();
+      await tester.pumpWidget(view(player, repository));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      expect(
+        screenAwake.awake,
+        isTrue,
+        reason: 'Leaving Lyrics must not release video',
+      );
+      video.disable();
+      expect(screenAwake.awake, isFalse);
+      await tester.pumpWidget(view(player, repository));
+      await tester.pumpAndSettle();
+      video.enable();
+      video.disable();
+      video.disable();
+      expect(
+        screenAwake.awake,
+        isTrue,
+        reason: 'Stopping video must not release Lyrics',
+      );
+      await tester.pumpWidget(const SizedBox());
+      expect(screenAwake.awake, isFalse);
+    },
+  );
+
   setUpAll(() async {
     final font = File(
       Platform.isWindows
@@ -169,6 +413,36 @@ void main() {
       expect(find.text('今日は晴れです。\nIt is sunny today.'), findsOneWidget);
       expect(repository.cached(song)!.plain, '今日は晴れです。');
       expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'non-Japanese lyrics translate automatically with an English-target menu label',
+    (tester) async {
+      final player = controller()..settings.automaticTranslation = true;
+      final repository = TranslationLyrics()
+        ..save(song, Lyrics.parse('[00:00]আজ সুন্দর দিন'));
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      await tester.pumpWidget(view(player, repository));
+      await tester.pump();
+      expect(repository.translations, 1);
+      repository.result.complete(
+        Lyrics.parse('[00:00]আজ সুন্দর দিন\n[00:00]Today is a beautiful day'),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('আজ সুন্দর দিন\nToday is a beautiful day'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('lyrics-translate')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Any language → English'), findsOneWidget);
+      await tester.tap(find.text('Show original lyrics'));
+      await tester.pumpAndSettle();
+      expect(find.text('আজ সুন্দর দিন'), findsOneWidget);
+      expect(repository.cached(song)!.plain, 'আজ সুন্দর দিন');
       await tester.pumpWidget(const SizedBox());
     },
   );
@@ -318,13 +592,13 @@ void main() {
         await chooseTranslation(tester, 'Translate with DeepL');
         await tester.tap(find.text('Copy lyrics & open DeepL'));
         await tester.pumpAndSettle();
-        expect(opened.last, 'https://www.deepl.com/en/translator/l/ja/en');
+        expect(opened.last, 'https://www.deepl.com/en/translator/l/auto/en');
         expect(copied, '[00:00.000]今日は晴れです。\n[00:02.000]明日も歩きます。');
         expect(repository.cached(song)!.plain, '今日は晴れです。\n明日も歩きます。');
         expect(find.text('今日は晴れです。'), findsOneWidget);
         await chooseTranslation(tester, 'Translate with DeepL');
         await tester.tap(
-          find.byTooltip('Translation direction: Japanese → English'),
+          find.byTooltip('Translation direction: Any language → English'),
         );
         await tester.pumpAndSettle();
         await tester.tap(find.text('English → Japanese').last);
@@ -594,7 +868,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Search lyrics by'), findsOneWidget);
     expect(client.requests, isEmpty);
-    await tester.tap(find.text('Song name'));
+    await tester.tap(find.byTooltip('Search by song name'));
     await tester.pumpAndSettle();
     expect(client.requests.single.path, '/api/search');
     expect(client.requests.single.queryParameters, {'track_name': song.title});
@@ -612,7 +886,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Search lyrics by'), findsOneWidget);
-    await tester.tap(find.text('Artist'));
+    await tester.tap(find.byTooltip('Search by artist'));
     await tester.pumpAndSettle();
     expect(client.requests[1].queryParameters, {
       'q': song.artist,
@@ -630,6 +904,223 @@ void main() {
     expect(repository.cached(song)!.plain, 'Standard lookup words');
     expect(tester.takeException(), isNull);
   });
+
+  for (final (size, scale) in [
+    (const Size(390, 844), 1.0),
+    (const Size(1280, 800), 1.0),
+    (const Size(360, 480), 2.0),
+  ]) {
+    testWidgets(
+      'type song and artist searches without changing metadata at $size / $scale',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = size;
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetViewInsets);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final player = controller();
+        final client = Client([
+          Response(utf8.encode('[]')),
+          Response(
+            utf8.encode(
+              jsonEncode([
+                {
+                  'trackName': 'Found song',
+                  'artistName': 'Edited artist',
+                  'plainLyrics': 'Chosen edited-search words',
+                },
+              ]),
+            ),
+          ),
+        ]);
+        final original = Lyrics.parse('Original saved lyrics');
+        final repository = LyricsRepository(createClient: () => client)
+          ..save(song, original);
+        addTearDown(player.shutdown);
+        addTearDown(repository.close);
+        await tester.pumpWidget(view(player, repository));
+        await tester.pumpAndSettle();
+        await openEditableLyricsSearch(tester);
+        final title = find.byKey(const ValueKey('lyrics-search-title'));
+        final artist = find.byKey(const ValueKey('lyrics-search-artist'));
+        expect(tester.widget<TextFormField>(title).initialValue, song.title);
+        expect(tester.widget<TextFormField>(artist).initialValue, song.artist);
+        await tester.enterText(title, '  JEOPARDY & 光?  ');
+        await tester.pumpAndSettle();
+        expect(
+          client.requests,
+          isEmpty,
+          reason: 'Typing does not send requests',
+        );
+        if (size.width < 900) {
+          tester.view.viewInsets = FakeViewPadding(
+            bottom: size.height < 500 ? 220 : 300,
+          );
+          await tester.pumpAndSettle();
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: 'Dialog fits above keyboard',
+          );
+        }
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await tester.pumpAndSettle();
+        expect(client.requests.single.queryParameters, {
+          'track_name': 'JEOPARDY & 光?',
+        });
+        expect(repository.cached(song), same(original));
+        tester.view.resetViewInsets();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(repository.cached(song), same(original));
+        await openEditableLyricsSearch(tester);
+        expect(
+          tester.widget<TextFormField>(title).initialValue,
+          song.title,
+          reason: 'Search edits are not song metadata',
+        );
+        await tester.ensureVisible(artist);
+        await tester.enterText(artist, '  Edited artist  ');
+        await tester.pumpAndSettle();
+        final search = find.byTooltip('Search by artist');
+        await tester.ensureVisible(search);
+        await tester.pumpAndSettle();
+        await tester.tap(search);
+        await tester.pumpAndSettle();
+        expect(client.requests.last.queryParameters, {
+          'q': 'Edited artist',
+          'artist_name': 'Edited artist',
+        });
+        final result = find.text('Found song');
+        await tester.ensureVisible(result);
+        await tester.pumpAndSettle();
+        await tester.tap(result);
+        await tester.pumpAndSettle();
+        expect(repository.cached(song)!.plain, 'Chosen edited-search words');
+        expect(player.current, same(song));
+        expect(player.current!.title, song.title);
+        expect(player.current!.artist, song.artist);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+
+  testWidgets(
+    'editing invalidates pending search results and song changes reject selection',
+    (tester) async {
+      final player = controller();
+      final saved = Lyrics.parse('Saved lyrics');
+      final repository = EditableSearchLyrics()
+        ..save(song, saved)
+        ..save(second, saved);
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      await tester.pumpWidget(view(player, repository));
+      await tester.pumpAndSettle();
+      await openEditableLyricsSearch(tester);
+      final title = find.byKey(const ValueKey('lyrics-search-title'));
+      final search = find.byTooltip('Search by song name');
+      await tester.enterText(title, '   ');
+      await tester.pump();
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('lyrics-search-submit-title')),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pump();
+      expect(repository.searches, isEmpty);
+      await tester.enterText(title, 'First query');
+      await tester.pump();
+      await tester.tap(search);
+      await tester.pump();
+      expect(repository.searches.single.query, 'First query');
+      await tester.enterText(title, 'New query');
+      await tester.pump();
+      repository.pending.first.complete([
+        searchMatch('Old result', 'Stale words'),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('Old result'), findsNothing);
+      await tester.tap(search);
+      await tester.pump();
+      expect(repository.searches.last.query, 'New query');
+      repository.pending.last.complete([
+        searchMatch('Current result', 'Chosen words'),
+      ]);
+      await tester.pumpAndSettle();
+      player.queue.add(second);
+      player.index = 1;
+      player.notifyListeners();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Current result'));
+      await tester.pumpAndSettle();
+      expect(repository.cached(song), same(saved));
+      expect(repository.cached(second), same(saved));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'missing metadata can be typed and failed searches can be edited and retried',
+    (tester) async {
+      final player = controller();
+      const unnamed = Track(
+        id: 'unnamed',
+        title: '',
+        artist: '',
+        source: 'Music',
+      );
+      player.queue[0] = unnamed;
+      final saved = Lyrics.parse('Saved words');
+      final repository = EditableSearchLyrics()..save(unnamed, saved);
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      await tester.pumpWidget(view(player, repository));
+      await tester.pumpAndSettle();
+      await openEditableLyricsSearch(tester);
+      final artist = find.byKey(const ValueKey('lyrics-search-artist'));
+      final search = find.byTooltip('Search by artist');
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('lyrics-search-submit-artist')),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.enterText(artist, 'Typed artist');
+      await tester.pump();
+      await tester.tap(search);
+      await tester.pump();
+      repository.pending.single.completeError(StateError('Offline'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Could not search LRCLIB.'), findsOneWidget);
+      expect(repository.cached(unnamed), same(saved));
+      await tester.enterText(artist, 'Corrected artist');
+      await tester.pump();
+      await tester.tap(search);
+      await tester.pump();
+      repository.pending.last.complete([
+        searchMatch('Found result', 'New words'),
+      ]);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Found result'));
+      await tester.pumpAndSettle();
+      expect(repository.cached(unnamed)!.plain, 'New words');
+      expect(player.current, same(unnamed));
+      expect(repository.searches.last.query, 'Corrected artist');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('cached pasted lyrics take precedence over embedded tags', (
     tester,
@@ -1177,11 +1668,26 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(
+        screenAwake.awake,
+        isFalse,
+        reason: 'Home keeps normal screen timeout',
+      );
       await tester.tap(find.byKey(const ValueKey('open-current-track')));
       await tester.pumpAndSettle();
+      expect(
+        screenAwake.awake,
+        isFalse,
+        reason: 'The cover page does not hold a wake lock',
+      );
       await tester.tap(find.byTooltip('Lyrics'));
       await tester.pumpAndSettle();
       expect(find.byType(LyricsView), findsOneWidget);
+      expect(
+        screenAwake.awake,
+        isTrue,
+        reason: 'Even the empty Lyrics page stays awake',
+      );
       final backdrop = find.byKey(const ValueKey('now-playing-backdrop'));
       expect(backdrop, findsOneWidget);
       expect(
@@ -1256,6 +1762,11 @@ void main() {
       await tester.tap(find.byTooltip('Back to cover'));
       await tester.pumpAndSettle();
       expect(find.byType(LyricsView), findsNothing);
+      expect(
+        screenAwake.awake,
+        isFalse,
+        reason: 'Back to cover releases Lyrics ownership',
+      );
       expect(find.byType(NavigationBar), findsNothing);
       expect(find.byKey(const ValueKey('player-bar')), findsNothing);
       expect(
