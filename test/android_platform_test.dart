@@ -12,12 +12,25 @@ import 'package:auralis/android_storage.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yaml/yaml.dart';
 
 import 'fakes.dart';
+
+class _FocusAudio extends FakeAudio {
+  final changes = <(bool, bool)>[];
+  Completer<void>? pauseGate;
+
+  @override
+  Future<void> setPlaying(bool value, {bool keepFocus = false}) async {
+    changes.add((value, keepFocus));
+    if (!value) await pauseGate?.future;
+    await super.setPlaying(value, keepFocus: keepFocus);
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -310,6 +323,65 @@ void main() {
       );
     },
   );
+
+  test('temporary audio focus loss resumes at the same playback position', () async {
+    const song = Track(id: 'song', title: 'Song', artist: '', source: 'Music',
+        fileId: 1, size: 100);
+    final audio = _FocusAudio();
+    final player = PlayerController(
+      audio,
+      TelegramStreamProxy((_) async => {}),
+      MemorySettings(),
+    );
+    final handler = AndroidAudioHandler(player);
+    final interruptions = StreamController<AudioInterruptionEvent>();
+    final becomingNoisy = StreamController<void>();
+    handler.handleInterruptions(interruptions.stream, becomingNoisy.stream);
+    addTearDown(() async {
+      await handler.close();
+      await interruptions.close();
+      await becomingNoisy.close();
+      await player.shutdown();
+    });
+    const position = Duration(seconds: 14);
+    final lost = AudioInterruptionEvent(true, AudioInterruptionType.pause);
+    final gained = AudioInterruptionEvent(false, AudioInterruptionType.pause);
+    Future<void> deliver(AudioInterruptionEvent event) async {
+      interruptions.add(event);
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    await player.play(song);
+    await player.seek(position);
+    final uri = audio.uri;
+    audio.pauseGate = Completer<void>();
+    await deliver(lost);
+    await deliver(gained);
+    expect(audio.changes, [(false, true)]);
+    audio.pauseGate!.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(audio.changes, [(false, true), (true, false)]);
+    expect(audio.playing, isTrue);
+    expect(audio.position, position);
+    expect(audio.uri, uri);
+
+    await deliver(lost);
+    await handler.pause();
+    await deliver(gained);
+    expect(audio.playing, isFalse);
+    await handler.play();
+    await deliver(lost);
+    becomingNoisy.add(null);
+    await Future<void>.delayed(Duration.zero);
+    await deliver(gained);
+    expect(audio.playing, isFalse);
+    await handler.play();
+    await deliver(
+      AudioInterruptionEvent(true, AudioInterruptionType.unknown),
+    );
+    await deliver(gained);
+    expect(audio.playing, isFalse);
+  });
 
   test('system artwork upgrades previews, retries and ignores stale tracks and disposal', () async {
     final dir = await Directory.systemTemp.createTemp('auralis-media-art');
