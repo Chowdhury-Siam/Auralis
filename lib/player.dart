@@ -17,9 +17,15 @@ abstract class AudioBackend extends ChangeNotifier {
       duration = Duration.zero,
       buffered = Duration.zero;
   String? error;
+  bool get starting => false;
+  bool get completed => false;
   VoidCallback? onCompleted;
-  Future<void> open(String uri);
+  Future<void> open(String uri, {bool play = true});
   Future<void> toggle();
+  Future<void> setPlaying(bool value, {bool keepFocus = false}) async {
+    if (playing != value) await toggle();
+  }
+
   Future<void> seek(Duration value);
   Future<void> volume(double value);
   Future<void> stop();
@@ -45,6 +51,7 @@ class MpvBackend extends AudioBackend {
         notifyListeners();
       }),
       _player.stream.position.listen((v) {
+        if (v > Duration.zero) _starting = false;
         position = v;
         notifyListeners();
       }),
@@ -57,11 +64,12 @@ class MpvBackend extends AudioBackend {
         notifyListeners();
       }),
       _player.stream.error.listen((_) {
+        _starting = false;
         error = 'Audio could not be decoded or the source is unavailable.';
         notifyListeners();
       }),
       _player.stream.completed.listen((v) {
-        if (v) onCompleted?.call();
+        if (v && _player.state.completed) onCompleted?.call();
       }),
     ]);
   }
@@ -69,36 +77,54 @@ class MpvBackend extends AudioBackend {
   late final Future<void> _configuration = _configure();
   final AudioSession? session;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+  bool _starting = false;
+
+  @override
+  bool get starting => _starting && playing;
+  @override
+  bool get completed => _player.state.completed;
 
   Future<void> _configure() async {
     final native = _player.platform as NativePlayer;
     // media_kit defaults to five seconds. An uncached Telegram seek can need
     // longer before the loopback proxy receives its first bytes.
     await native.setProperty('network-timeout', '60');
-    // Buffer before the first audible samples to avoid a start-then-stall.
+    // Music artwork is handled by the app, so mpv only needs the audio track.
+    await native.setProperty('vid', 'no');
+    // Give a cold Telegram stream enough lead time to survive its first refill.
+    await native.setProperty('cache-pause-wait', '3');
     await native.setProperty('cache-pause-initial', 'yes');
   }
 
   @override
-  Future<void> open(String uri) async {
-    await _focus();
+  Future<void> open(String uri, {bool play = true}) async {
     await _configuration;
+    if (play) await _focus();
     error = null;
     position = Duration.zero;
     duration = Duration.zero;
-    await _player.open(Media(uri));
+    _starting = true;
+    try {
+      await _player.open(Media(uri), play: play);
+    } catch (_) {
+      _starting = false;
+      rethrow;
+    }
   }
 
   @override
-  Future<void> toggle() async {
+  Future<void> toggle() => setPlaying(!_player.state.playing);
+
+  @override
+  Future<void> setPlaying(bool value, {bool keepFocus = false}) async {
     try {
       error = null;
-      if (_player.state.playing) {
-        await _player.pause();
-        await session?.setActive(false);
-      } else {
-        await _focus();
+      if (value) {
+        if (!keepFocus) await _focus();
         await _player.play();
+      } else {
+        await _player.pause();
+        if (!keepFocus) await session?.setActive(false);
       }
     } catch (_) {
       error =
@@ -126,6 +152,7 @@ class MpvBackend extends AudioBackend {
   );
   @override
   Future<void> stop() async {
+    _starting = false;
     await _player.stop();
     await session?.setActive(false);
   }
@@ -298,6 +325,96 @@ class PlayerController extends ChangeNotifier {
   final List<Track> queue = [];
   int index = -1, _generation = 0;
   bool loading = false, _closed = false, _pauseAfterOpen = false;
+  bool _focusInterrupted = false,
+      _videoInterrupted = false,
+      _resumeAfterInterruption = false;
+  Future<void>? _pausingForInterruption;
+  bool get videoOwnsAudio => _videoInterrupted;
+  bool get _startingTrack => loading || audio.starting;
+
+  Future<void> togglePlayback() => setPlayback(!audio.playing);
+
+  Future<void> setPlayback(bool play) async {
+    if (_closed || (play && (restoringData || loading || current == null))) {
+      return;
+    }
+    final generation = _generation;
+    _resumeAfterInterruption = false;
+    _pauseAfterOpen = loading && !play;
+    if (play && _focusInterrupted) {
+      _resumeAfterInterruption = true;
+      return;
+    }
+    _focusInterrupted = false;
+    if (play) _videoInterrupted = false;
+    if (!play && _openingAudio != null) return;
+    await _pausingForInterruption;
+    if (_closed || generation != _generation) return;
+    await audio.setPlaying(play, keepFocus: _videoInterrupted);
+  }
+
+  Future<void> handleAudioInterruption(AudioInterruptionEvent event) async {
+    if (_closed) return;
+    if (event.begin) {
+      if (event.type == AudioInterruptionType.unknown) {
+        await setPlayback(false);
+      } else {
+        _focusInterrupted = true;
+        await _pauseForInterruption();
+      }
+    } else {
+      _focusInterrupted = false;
+      await _resumeInterruptedPlayback();
+    }
+  }
+
+  Future<void> pauseForVideo() async {
+    _videoInterrupted = true;
+    await _pauseForInterruption();
+    if (_openingAudio case final pending?) {
+      await pending;
+      if (_videoInterrupted && audio.playing) {
+        await audio.setPlaying(false, keepFocus: true);
+      }
+    }
+  }
+
+  Future<void> finishVideo(Future<void> Function() releaseFocus) async {
+    if (!_videoInterrupted) return;
+    _videoInterrupted = false;
+    if (!_focusInterrupted && !_resumeAfterInterruption && !audio.playing) {
+      await releaseFocus();
+    }
+    await _resumeInterruptedPlayback();
+  }
+
+  Future<void> _pauseForInterruption() async {
+    if (_closed || restoringData || current == null) return;
+    if (!_pauseAfterOpen && (audio.playing || loading)) {
+      _resumeAfterInterruption = true;
+    }
+    if (audio.playing && _openingAudio == null) {
+      await (_pausingForInterruption ??= audio
+          .setPlaying(false, keepFocus: true)
+          .whenComplete(() => _pausingForInterruption = null));
+    }
+  }
+
+  Future<void> _resumeInterruptedPlayback() async {
+    await _pausingForInterruption;
+    if (_closed ||
+        restoringData ||
+        loading ||
+        current == null ||
+        _focusInterrupted ||
+        _videoInterrupted ||
+        !_resumeAfterInterruption) {
+      return;
+    }
+    _resumeAfterInterruption = false;
+    if (!audio.playing) await audio.setPlaying(true);
+  }
+
   bool shuffleEnabled = false;
   List<Track> _shuffleOrder = [];
   Timer? _sleepTimer;
@@ -441,9 +558,8 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> _finishSleep() async {
     cancelSleepTimer();
-    _pauseAfterOpen = loading;
     try {
-      if (audio.playing) await audio.toggle();
+      await setPlayback(false);
     } catch (_) {
       if (!_closed) {
         error = 'Could not pause playback when the sleep timer ended.';
@@ -453,7 +569,9 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _completed() async {
-    if (_closed || _clearing != null || restoringData) return;
+    if (_closed || loading || _clearing != null || restoringData) {
+      return;
+    }
     final generation = _generation;
     await flushListeningStats();
     if (_closed || generation != _generation) return;
@@ -464,7 +582,9 @@ class PlayerController extends ChangeNotifier {
     } else if (repeatMode == PlaybackRepeat.one && current != null) {
       try {
         await seek(Duration.zero);
-        if (generation == _generation && !audio.playing) await audio.toggle();
+        if (generation == _generation && !audio.playing) {
+          await setPlayback(true);
+        }
       } catch (_) {
         if (!_closed) {
           error = 'Could not repeat this track.';
@@ -480,7 +600,10 @@ class PlayerController extends ChangeNotifier {
     if (_clearing case final pending?) await pending;
     if (_closed || restoringData) return;
     if (target < 0 || target >= queue.length) return;
+    if (_startingTrack && target == index) return;
     _pauseAfterOpen = false;
+    _videoInterrupted = false;
+    _resumeAfterInterruption = _focusInterrupted;
     index = target;
     await _open(queue[target]);
   }
@@ -488,7 +611,10 @@ class PlayerController extends ChangeNotifier {
   Future<void> play(Track track, {List<Track>? from}) async {
     if (_clearing case final pending?) await pending;
     if (_closed || restoringData) return;
+    if (_startingTrack && track.id == current?.id) return;
     _pauseAfterOpen = false;
+    _videoInterrupted = false;
+    _resumeAfterInterruption = _focusInterrupted;
     if (from != null) {
       queue
         ..clear()
@@ -524,15 +650,19 @@ class PlayerController extends ChangeNotifier {
       try {
         if (previous != null) await previous;
         if (generation != _generation || _closed) return;
-        await audio.open(uri);
+        await audio.open(
+          uri,
+          play: !_pauseAfterOpen && !_focusInterrupted && !_videoInterrupted,
+        );
       } finally {
         opening.complete();
         if (identical(_openingAudio, opening.future)) _openingAudio = null;
       }
       if (generation != _generation || _closed) return;
-      if (_pauseAfterOpen && audio.playing) {
-        _pauseAfterOpen = false;
-        await audio.toggle();
+      if (_pauseAfterOpen) {
+        await audio.setPlaying(false, keepFocus: _videoInterrupted);
+      } else if ((_focusInterrupted || _videoInterrupted) && audio.playing) {
+        await _pauseForInterruption();
       }
       await saving;
       if (generation != _generation || _closed) return;
@@ -543,10 +673,14 @@ class PlayerController extends ChangeNotifier {
       ].take(100).toList();
       await _persist();
     } catch (_) {
-      if (generation == _generation) error = 'Could not open this track. Check the Telegram connection and native libraries.';
+      if (generation == _generation) {
+        error =
+            'Could not open this track. Check the Telegram connection and native libraries.';
+      }
     } finally {
       if (generation == _generation) {
         loading = false;
+        _pauseAfterOpen = false;
         if (opened) {
           _listeningTrack = track;
           _sessionListened = 0;
@@ -555,8 +689,14 @@ class PlayerController extends ChangeNotifier {
           _samplePosition = audio.position;
           _samplePlaying =
               audio.playing && !audio.buffering && audio.error == null;
+          await _resumeInterruptedPlayback();
+        } else {
+          _resumeAfterInterruption = false;
         }
-        notifyListeners();
+        if (generation == _generation && !_closed) {
+          notifyListeners();
+          if (opened && audio.completed) unawaited(_completed());
+        }
       }
     }
   }
@@ -643,6 +783,7 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> _clear() async {
     ++_generation;
+    _resumeAfterInterruption = _focusInterrupted = false;
     await flushListeningStats();
     _samplePlaying = false;
     _listeningTrack = null;
@@ -650,6 +791,7 @@ class PlayerController extends ChangeNotifier {
     loading = false;
     // Cancel the stream so a pending native open can finish before Stop.
     try {
+      await _pausingForInterruption;
       if (_openingAudio case final pending?) {
         await proxy.interrupt();
         await pending;
@@ -666,15 +808,16 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> shutdown() async {
-    await releaseVideo?.call();
     await flushListeningStats();
     _closed = true;
+    await releaseVideo?.call();
     _watch.stop();
     cancelSleepTimer();
     ++_generation;
     await _proxyErrors.cancel();
     audio.removeListener(_audioChanged);
     try {
+      await _pausingForInterruption;
       if (_openingAudio case final pending?) {
         await proxy.interrupt();
         await pending;
