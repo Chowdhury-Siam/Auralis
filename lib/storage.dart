@@ -164,7 +164,14 @@ class AppSettings {
   Future<void> load() async {
     if (!await file.exists()) return;
     final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-    videoPlayback = VideoPlaybackData.fromJson(json['_videoPlayback']);
+    videoPlayback = VideoPlaybackData.fromJson(
+      json['_videoPlayback'],
+      // Before independent Video sorting, both modes used the Music value.
+      fallbackSort: LibrarySort.values.firstWhere(
+        (sort) => sort.name == json['librarySort'],
+        orElse: () => defaultLibrarySort,
+      ),
+    );
     playlistPhotos.load(json['_playlistPhotos']);
     applyJson(json);
     syncState = json['_sync'] is Map<String, dynamic>
