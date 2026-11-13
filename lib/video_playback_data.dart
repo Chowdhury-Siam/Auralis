@@ -277,6 +277,7 @@ enum VideoHdrProfile {
 }
 
 class VideoPlaybackData {
+  LibrarySort librarySort = LibrarySort.title;
   final playlists = <String, List<VideoSource>>{};
   final history = <String, VideoHistoryEntry>{};
   final _watched = <String>{};
@@ -518,9 +519,16 @@ class VideoPlaybackData {
       ? Duration(milliseconds: value)
       : null;
 
-  factory VideoPlaybackData.fromJson(Object? json) {
-    final data = VideoPlaybackData();
+  factory VideoPlaybackData.fromJson(
+    Object? json, {
+    LibrarySort fallbackSort = LibrarySort.title,
+  }) {
+    final data = VideoPlaybackData()..librarySort = fallbackSort;
     if (json is! Map) return data;
+    data.librarySort = LibrarySort.values.firstWhere(
+      (sort) => sort.name == json['librarySort'],
+      orElse: () => fallbackSort,
+    );
     if (json['watched'] case final List watched) {
       data._watched.addAll(watched.whereType<String>()
           .where(TelegramVideoActivity.isMessage).take(TelegramVideoActivity.watchedLimit));
@@ -666,6 +674,7 @@ class VideoPlaybackData {
       value is String && value.length <= 32768 ? value : '';
 
   Map<String, dynamic> toJson() => {
+    'librarySort': librarySort.name,
     'watched': _watched.toList(),
     'ambientMode': ambientMode,
     'snapshotSubtitles': snapshotSubtitles,
