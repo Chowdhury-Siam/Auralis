@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.198
+
+- Refresh Video Settings & diagnostics with responsive action cards, descriptive groups, rounded pop-ups, clearer player/layout controls and dedicated configuration/custom-command editors. Replace inactive diagnostics rows with guidance; keep working diagnostics inside the video player and refresh playback information and console surfaces.
+- Remove the Settings search box in Music and Video. Keep categories directly accessible without changing library, channel or lyrics searches.
+- Refresh Listening stats with a new overview, clearer metric cards, timeline highlights, rankings and listening habits. Preserve period filters, chart/ranking switches, saved listening data, and separate backup/restore actions.
+
 ## 0.1.197
 
 - Make Song name and Artist editable in the Music Search lyrics by dialog, prefilled from the current track. Search either field with its search button or the keyboard Search action, including tracks with missing metadata. Keep edits search-only, preserve lyrics until a match is chosen, and discard outdated results after editing or switching songs. Keep the covered player layout stable while the dialog handles the keyboard on compact screens.
