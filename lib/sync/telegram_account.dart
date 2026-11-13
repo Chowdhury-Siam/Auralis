@@ -6,7 +6,6 @@ part of 'controller.dart';
 extension TelegramAccountSync on SyncController {
   bool get telegramSyncAvailable => telegram != null && signedIn;
   bool get telegramIncluded => _telegramIncluded;
-  bool get telegramWorking => _telegramPolling || _telegramOperating;
   Map<String, dynamic>? get linkedTelegram => _telegramProfile == null
       ? null
       : {
