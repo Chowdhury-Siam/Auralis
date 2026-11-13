@@ -32,9 +32,9 @@ const song = Track(
 
 class SampleAudio extends FakeAudio {
   @override
-  Future<void> open(String uri) async {
+  Future<void> open(String uri, {bool play = true}) async {
     position = Duration.zero;
-    await super.open(uri);
+    await super.open(uri, play: play);
   }
 
   void sample({
