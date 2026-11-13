@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_motion.dart';
+
 RoundedRectangleBorder auralisSurfaceShape(
   ColorScheme colors, {
   double radius = 24,
@@ -45,7 +47,10 @@ ThemeData auralisTheme(ColorScheme colors) {
   final controlShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(16),
   );
-  final buttonStyle = ButtonStyle(shape: WidgetStatePropertyAll(controlShape));
+  final buttonStyle = ButtonStyle(
+    shape: WidgetStatePropertyAll(controlShape),
+    foregroundBuilder: auralisButtonFeedback,
+  );
   final theme = ThemeData(
     useMaterial3: true,
     colorScheme: colors,
@@ -111,6 +116,9 @@ ThemeData auralisTheme(ColorScheme colors) {
     filledButtonTheme: FilledButtonThemeData(style: buttonStyle),
     outlinedButtonTheme: OutlinedButtonThemeData(style: buttonStyle),
     textButtonTheme: TextButtonThemeData(style: buttonStyle),
+    iconButtonTheme: const IconButtonThemeData(
+      style: ButtonStyle(foregroundBuilder: auralisButtonFeedback),
+    ),
     chipTheme: theme.chipTheme.copyWith(
       shape: controlShape,
       side: BorderSide(color: colors.outlineVariant),
