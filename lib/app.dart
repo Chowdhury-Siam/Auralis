@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 
 import 'models.dart';
 import 'media_item_sheet.dart';
+import 'music_playlist_widgets.dart';
 import 'library_widgets.dart';
 import 'lyrics.dart';
 import 'lyrics_view.dart';
@@ -1983,57 +1984,40 @@ class _PlayerShellState extends State<PlayerShell>
               entry.key.toLowerCase().contains(search.text.toLowerCase()),
         )
         .toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () async {
-              final name = await _editPlaylist();
-              if (mounted && name != null) {
-                setState(() {
-                  selectedPlaylist = name;
-                  search.clear();
-                });
-              }
-            },
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Create playlist'),
+    final byId = {for (final track in library.tracks) track.id: track};
+    return MusicPlaylistsView(
+      playlists: [
+        for (final entry in entries)
+          MusicPlaylistPreview(
+            name: entry.key,
+            songCount: entry.value.length,
+            tracks: [
+              for (final id in entry.value)
+                if (byId[id] case final Track track) track,
+            ],
           ),
-        ),
-        Expanded(
-          child: entries.isEmpty
-              ? _empty(
-                  Icons.playlist_play_rounded,
-                  'Your playlists live here',
-                  search.text.isEmpty
-                      ? 'Create a playlist, then add music using a track’s actions.'
-                      : 'No playlists match this search.',
-                )
-               : ListView.builder(
-                  key: const PageStorageKey('music-playlists'),
-                  padding: EdgeInsets.only(bottom: _dockPadding),
-                  itemCount: entries.length,
-                  itemBuilder: (context, i) => ListTile(
-                    leading: Icon(
-                      Icons.playlist_play_rounded,
-                      color: _colors.primary,
-                    ),
-                    title: Text(
-                      entries[i].key,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => setState(() {
-                      selectedPlaylist = entries[i].key;
-                      search.clear();
-                    }),
-                  ),
-                ),
-        ),
       ],
+      searching: search.text.isNotEmpty,
+      bottomPadding: _dockPadding,
+      artwork: (track) => Artwork(
+        seed: track.title,
+        small: true,
+        telegram: telegram,
+        track: track,
+      ),
+      onCreate: () async {
+        final name = await _editPlaylist();
+        if (mounted && name != null) {
+          setState(() {
+            selectedPlaylist = name;
+            search.clear();
+          });
+        }
+      },
+      onOpen: (name) => setState(() {
+        selectedPlaylist = name;
+        search.clear();
+      }),
     );
   }
 
