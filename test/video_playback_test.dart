@@ -286,6 +286,50 @@ void main() {
     expect(restored.playlists['Queue']!.length, 2);
   });
 
+  test('adding to a full Video playlist reports the limit without losing entries', () {
+    VideoSource video(int id) => VideoSource.file(Uri.file('/movies/$id.mp4'), 'Video $id');
+    final data = VideoPlaybackData();
+    final items = List.generate(1000, video);
+    data.putPlaylist('Full', items);
+    expect(() => data.putPlaylist('Full', [...items, video(1000)]), throwsFormatException);
+    expect(data.playlists['Full'], items);
+    data.putPlaylist('Full', [...items, items.first]);
+    expect(data.playlists['Full'], items);
+  });
+
+  test('local and Telegram resume points survive each other’s history limit', () {
+    final data = VideoPlaybackData();
+    const position = Duration(seconds: 18);
+    final local = VideoSource.file(Uri.file('/movies/local.mp4'), 'Local');
+    data.recordVideo(local);
+    data.remember(local.id, position, Duration.zero);
+
+    for (var i = 1; i <= 301; i++) {
+      final episode = VideoSource.telegram(
+        Track(id: '-100:$i', title: 'Episode $i', artist: '', source: 'TV'),
+      );
+      data.recordVideo(episode);
+      data.remember(episode.id, position, Duration.zero);
+    }
+    final reloaded = VideoPlaybackData.fromJson(data.toJson());
+    reloaded.applyTelegramActivity(data.telegramActivity());
+    expect(reloaded.positions[local.id], position);
+    expect(reloaded.positions['telegram:-100:1'], isNull);
+    expect(reloaded.positions['telegram:-100:2'], position);
+
+    for (var i = 1; i <= 300; i++) {
+      final source = VideoSource.file(Uri.file('/movies/$i.mp4'), 'Video $i');
+      reloaded.recordVideo(source);
+      reloaded.remember(source.id, position, Duration.zero);
+    }
+    expect(reloaded.positions[local.id], isNull);
+    expect(reloaded.positions['telegram:-100:2'], position);
+    expect(reloaded.positions, hasLength(600));
+    final restored = VideoPlaybackData.fromJson(reloaded.toJson());
+    restored.applyTelegramActivity(reloaded.telegramActivity());
+    expect(restored.positions, reloaded.positions);
+  });
+
   test('skip chapter import respects boundaries and known labels', () {
     final segments = videoChapterSegments(const [
       VideoBookmark(Duration.zero, 'Intro'),
