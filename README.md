@@ -55,6 +55,10 @@ Auralis has two interfaces: **Music** combines audio from selected Telegram chan
 
 The charcoal and violet interface adapts from phone navigation to a desktop sidebar. Music and Video share playlist cards, custom playlist photos, swipeable Library collections, and consistent search panels. Artwork, lyrics, and playback controls remain specific to each mode.
 
+Music and Video keep independent Library sort choices, including in Settings.
+Changing one mode's order does not change the other. Video sorting is saved with
+its device-local settings; Music sorting keeps its existing backup and sync behavior.
+
 Playback uses **libmpv**, and Telegram connectivity uses **TDLib**. Auralis streams the original file bytes without re-encoding; the source file and your audio device determine the resulting quality.
 
 ---
@@ -77,7 +81,18 @@ Add and reorder tracks, use Play next, shuffle upcoming songs, and repeat the qu
 
 ### 📝 Lyrics with the Music
 
-Follow line-synced lyrics with the highlighted line sharp and all other lines softly blurred. Line advances retain a brief motion-blur transition; reduced motion skips that animation. Click a line to seek, or switch to Static for clear selectable lyrics. Lyrics load automatically when playback starts, preferring saved or embedded words before the configured online sources. In-app translation follows the selected Japanese–English direction; provider order is configurable in Settings. You can also import an `.lrc` file or paste lyrics.
+Follow line-synced lyrics with the highlighted line sharp and all other lines softly blurred. Line advances retain a brief motion-blur transition; reduced motion skips that animation. Click a line to seek, or switch to Static for clear selectable lyrics. Lyrics load automatically when playback starts, preferring saved or embedded words before the configured online sources. Translation auto-detects the source language and adds English alongside the original words, preserving timestamps. Provider order is configurable in Settings; the optional English-to-Japanese direction remains available. You can also import an `.lrc` file or paste lyrics.
+
+On Android and Windows, the screen stays awake while Music Lyrics is visible and the app is focused, even when paused or reading Static lyrics. Normal screen timeout resumes when you leave Lyrics, cover the page, minimize the app or switch away; video playback keeps its independent screen-awake ownership.
+
+Hold or right-click **Find lyrics online** to open **Search lyrics by**.
+Edit the prefilled **Song name** or **Artist**, then use that field's search
+button or the keyboard Search action. These edits only change the search, not
+the track's metadata; existing lyrics stay in place until you choose a match.
+
+Google Translate, MyMemory and the DeepL browser shortcut support automatic
+source-language detection for English translation. Actual language coverage,
+availability and free-service limits depend on the provider.
 
 ### 🖼️ Artwork Where It Belongs
 
@@ -179,7 +194,7 @@ Use **Refresh library** in Browse to discover more accessible channels, scan sel
 | **Artists** | Tracks grouped by artist from the selected channels |
 | **Favorites** | Tracks you have marked with the heart action |
 | **Playlists** | Named, ordered collections you can create, rename, and delete |
-| **Recently played** | The last 100 unique successfully opened tracks |
+| **Recently played** | The last 100 unique successfully opened tracks; Music has no Clear history button |
 
 Swipe between Library collections, tap a page indicator, or use the collection dropdown. Sort sits in the header; Browse owns channel counts and refresh. Music Home shows Daily Mix, recent songs and listening stats. Open Browse to search/select channels in a grid or list. On phones, open Settings from Library.
 
@@ -358,7 +373,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive contains source version **0.1.194+195**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
+Auralis is under active development. This archive contains source version **0.1.197+198**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
