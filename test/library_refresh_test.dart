@@ -196,15 +196,14 @@ void main() {
         counts.clear();
         final scans = telegram.scans, checks = telegram.checks;
         await refresh();
+        final total = tracks.length;
+        final summary = find.text('Artwork $total/$total · Lyrics $total/$total');
         await until(
           () =>
               telegram.scans > scans &&
-              telegram.checks >= checks + tracks.length,
+              telegram.checks >= checks + total &&
+              summary.evaluate().isNotEmpty,
         );
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
-        );
-        await tester.pump(const Duration(milliseconds: 100));
         expect(counts.where((text) => text.startsWith('Caching')), isEmpty);
         expect(telegram.artworkRequests, ['40', '42']);
         expect(telegram.lyricRequests, ['41', '42']);
