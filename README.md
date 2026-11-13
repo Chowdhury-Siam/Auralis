@@ -100,7 +100,7 @@ See Telegram covers, channel avatars, and supported embedded MP3, FLAC, and M4A 
 
 ### 📊 Listening Stats
 
-View listening time and play counts by period, with Tracks and Artists rankings. Use Backup & Restore in Settings to save a restorable copy.
+View listening time and play counts by period in a responsive dashboard, with clearer overview cards, timeline highlights, listening habits, and all-time Tracks and Artists rankings. Use Backup & Restore in Settings to save a restorable copy.
 
 ### 💾 Backup & Restore
 
@@ -285,6 +285,14 @@ See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for val
 
 ## ⚙️ Settings and Privacy
 
+Settings opens directly to its categories in Music and Video; there is no
+Settings search box. Library, channel and lyrics searches are unchanged.
+
+Video's **Settings & diagnostics** uses responsive cards and grouped pop-ups for
+player behavior, portrait/landscape control layouts, custom buttons and mpv
+configuration. Live decoder controls, playback information, console and scripts
+remain available from an open video's **More → Video settings** panel.
+
 | Setting or action | Purpose |
 | --- | --- |
 | **General** | Choose playback repeat and library sort order |
@@ -373,7 +381,7 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive contains source version **0.1.197+198**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
+Auralis is under active development. This archive contains source version **0.1.198+199**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
