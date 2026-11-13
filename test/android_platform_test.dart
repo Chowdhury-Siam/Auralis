@@ -287,6 +287,11 @@ void main() {
       await handler.seek(const Duration(seconds: 8));
       expect(audio.position.inSeconds, 8);
       expect(handler.playbackState.value.updatePosition.inSeconds, 8);
+      await handler.pause();
+      const shortSeek = Duration(milliseconds: 8250);
+      await handler.seek(shortSeek);
+      expect(handler.playbackState.value.updatePosition, shortSeek);
+      await handler.play();
       await handler.skipToNext();
       expect(player.current, b);
       audio.position = Duration.zero;
