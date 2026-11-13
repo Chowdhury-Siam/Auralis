@@ -9,6 +9,7 @@ import 'package:ffi/ffi.dart';
 import 'video_playback_data.dart';
 import 'models.dart';
 import 'listening.dart';
+import 'playlist_photo_data.dart';
 
 final class _Blob extends Struct {
   @Uint32()
@@ -142,6 +143,9 @@ class AppSettings {
   List<MusicChat> selectedChannels = [];
   Set<String> favoriteIds = {};
   Map<String, List<String>> playlists = {};
+  final playlistPhotos = PlaylistPhotos();
+  String get musicPhotoScope =>
+      syncState['scope'] is String ? syncState['scope'] as String : 'local';
   List<String> recentIds = [];
   PlaybackRepeat repeatMode = PlaybackRepeat.off;
   ListeningStats listening = ListeningStats();
@@ -161,6 +165,7 @@ class AppSettings {
     if (!await file.exists()) return;
     final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     videoPlayback = VideoPlaybackData.fromJson(json['_videoPlayback']);
+    playlistPhotos.load(json['_playlistPhotos']);
     applyJson(json);
     syncState = json['_sync'] is Map<String, dynamic>
         ? json['_sync'] as Map<String, dynamic>
@@ -174,6 +179,7 @@ class AppSettings {
     ...snapshot,
     '_sync': syncState,
     '_videoPlayback': videoPlayback.toJson(),
+    '_playlistPhotos': playlistPhotos.toJson(),
     '_lastSeenRelease': lastSeenRelease,
     '_setupComplete': setupComplete,
   };
