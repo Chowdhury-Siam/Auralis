@@ -544,6 +544,8 @@ void main() {
         final controller = tester
             .widget<SnapshotWidget>(snapshotFinder)
             .controller;
+        final capturesOrigin =
+            Theme.of(tester.element(origin)).platform != TargetPlatform.android;
         expect(controller.allowSnapshotting, isFalse);
         for (var attempt = 0; attempt < 3; attempt++) {
           await tester.tap(find.byKey(const ValueKey('open-current-track')));
@@ -562,7 +564,7 @@ void main() {
             ),
             isTrue,
           );
-          expect(controller.allowSnapshotting, isTrue);
+          expect(controller.allowSnapshotting, capturesOrigin);
           await tester.pump(const Duration(milliseconds: 120));
           expect(home, findsOneWidget);
           await tester.pumpAndSettle();
@@ -575,6 +577,10 @@ void main() {
         expect(audio.playing, isFalse);
         expect(tester.takeException(), isNull);
       },
+      variant: TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.windows,
+      }),
     );
 
     testWidgets('mini-player grows into Now Playing and reopens at $size', (
@@ -765,7 +771,7 @@ void main() {
       final cachedBlur = find.byKey(const ValueKey('player-cached-blur'));
       final snapshot = tester.widget<SnapshotWidget>(cachedBlur);
       final painter = snapshot.painter;
-      expect(snapshot.controller.allowSnapshotting, isTrue);
+      expect(snapshot.controller.allowSnapshotting, isFalse);
       await gesture.moveBy(const Offset(0, -210));
       await tester.pump();
       expect(tester.getRect(surface).height, greaterThan(start.height));
@@ -833,6 +839,7 @@ void main() {
       expect(audio.playing, isFalse);
       expect(tester.takeException(), isNull);
     },
+    variant: TargetPlatformVariant({TargetPlatform.android}),
   );
 
   testWidgets(
