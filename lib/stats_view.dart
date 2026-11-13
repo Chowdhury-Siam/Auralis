@@ -298,7 +298,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         final password = await _password(creating: true);
         if (password == null) return;
         // Pause streaming before closing TDLib to take a consistent snapshot.
-        if (player.audio.playing) await player.audio.toggle();
+        await player.setPlayback(false);
         final account = await telegram!.backupAccount();
         text = await encryptAccountBackup(data, account, password);
       }
