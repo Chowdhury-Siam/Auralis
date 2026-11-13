@@ -144,6 +144,8 @@ void main() {
         await tester.tap(find.text('Oldest first'));
         await tester.pumpAndSettle();
         expect(settings.librarySort, LibrarySort.oldest);
+        expect(settings.videoPlayback.librarySort, LibrarySort.title,
+            reason: 'Music Settings must not change Video sorting');
         expect(settings.saves, greaterThan(0));
       }
       if (section == SettingsSection.about) {
