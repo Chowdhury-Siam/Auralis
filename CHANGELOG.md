@@ -1,5 +1,19 @@
 # Auralis changes
 
+## 0.1.197
+
+- Make Song name and Artist editable in the Music Search lyrics by dialog, prefilled from the current track. Search either field with its search button or the keyboard Search action, including tracks with missing metadata. Keep edits search-only, preserve lyrics until a match is chosen, and discard outdated results after editing or switching songs. Keep the covered player layout stable while the dialog handles the keyboard on compact screens.
+- Auto-detect lyric languages for translation to English, including Latin and non-Latin scripts, with Google Translate or MyMemory. Keep original text, timestamps, provider choices, fallback and the optional English-to-Japanese direction. Update DeepL to detect the source language too, and keep new translations separate from old Japanese-only caches. Provider language support and free-service limits still apply.
+
+## 0.1.196
+
+- Remove the Clear history button from Music's Recently played collection. Preserve saved listening history, browsing, search and playback; leave Video history controls unchanged.
+- Keep Music and Video Library sort choices independent in their sort menus and Settings. Preserve the previous shared choice on upgrade, then save Video sorting with its separate device-local settings without changing Music backups or Worker Sync.
+
+## 0.1.195
+
+- Keep the Android and Windows screen awake while the Music Lyrics page is visible and focused, including paused playback, Static lyrics and loading/empty states. Restore normal timeout on leaving Lyrics, covering the page, minimizing or switching away. Share reference-counted ownership with video playback so neither releases the other's wake lock.
+
 ## 0.1.194
 
 - Reduce mini-player opening work by snapshotting the existing page instead of building a duplicate Home or Library tree for the transition blur. Cache the bounded blur once per snapshot, reuse it across animation frames, and release transition textures when fully expanded or returned. Keep the same expansion timing, gestures, reduced-motion behavior and uninterrupted playback.
