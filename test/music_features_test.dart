@@ -44,10 +44,10 @@ class PendingAudio extends FakeAudio {
   final started = Completer<void>();
   final opening = Completer<void>();
   @override
-  Future<void> open(String uri) async {
+  Future<void> open(String uri, {bool play = true}) async {
     started.complete();
     await opening.future;
-    await super.open(uri);
+    await super.open(uri, play: play);
   }
 }
 
@@ -260,6 +260,21 @@ void main() {
     expect(player.queue, isEmpty);
     expect(audio.playing, isFalse);
     expect(player.proxy.hasActiveSource, isFalse);
+  });
+
+  test('a repeated selection and stale completion do not restart an opening song', () async {
+    final audio = PendingAudio();
+    final player = makePlayer(audio: audio)..queue.addAll([a, b]);
+    addTearDown(player.shutdown);
+    final playing = player.playAt(0);
+    await audio.started.future;
+    await player.play(a);
+    await player.playAt(0);
+    audio.onCompleted!();
+    audio.opening.complete();
+    await playing;
+    expect(player.current, a);
+    expect(audio.playing, isTrue);
   });
 
   testWidgets(
