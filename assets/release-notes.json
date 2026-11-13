@@ -1,6 +1,26 @@
 {
-  "current": "0.1.194",
+  "current": "0.1.197",
   "releases": [
+    {
+      "version": "0.1.197",
+      "changes": [
+        "Make Song name and Artist editable in the Music Search lyrics by dialog, prefilled from the current track. Search either field with its search button or the keyboard Search action, including tracks with missing metadata. Keep edits search-only, preserve lyrics until a match is chosen, and discard outdated results after editing or switching songs. Keep the covered player layout stable while the dialog handles the keyboard on compact screens.",
+        "Auto-detect lyric languages for translation to English, including Latin and non-Latin scripts, with Google Translate or MyMemory. Keep original text, timestamps, provider choices, fallback and the optional English-to-Japanese direction. Update DeepL to detect the source language too, and keep new translations separate from old Japanese-only caches. Provider language support and free-service limits still apply."
+      ]
+    },
+    {
+      "version": "0.1.196",
+      "changes": [
+        "Remove the Clear history button from Music's Recently played collection. Preserve saved listening history, browsing, search and playback; leave Video history controls unchanged.",
+        "Keep Music and Video Library sort choices independent in their sort menus and Settings. Preserve the previous shared choice on upgrade, then save Video sorting with its separate device-local settings without changing Music backups or Worker Sync."
+      ]
+    },
+    {
+      "version": "0.1.195",
+      "changes": [
+        "Keep the Android and Windows screen awake while the Music Lyrics page is visible and focused, including paused playback, Static lyrics and loading/empty states. Restore normal timeout on leaving Lyrics, covering the page, minimizing or switching away. Share reference-counted ownership with video playback so neither releases the other's wake lock."
+      ]
+    },
     {
       "version": "0.1.194",
       "changes": [
