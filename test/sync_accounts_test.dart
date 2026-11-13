@@ -485,6 +485,34 @@ void main() {
     automatic: false,
   ).toJson();
 
+  test('sync reports a Worker page that claims more without advancing its cursor', () async {
+    var syncRequests = 0;
+    final client = AccountClient()
+      ..syncReply = (_, data) => Response(utf8.encode(jsonEncode({
+        'cursor': data['cursor'],
+        // Recover on a later request so a regression fails quickly.
+        'more': ++syncRequests == 2,
+        'records': <String, dynamic>{},
+      })));
+    await HttpOverrides.runZoned(() async {
+      final settings = AccountSettings();
+      var paused = false;
+      final sync = SyncController(settings, AccountVault(), onApplied: () {}, paused: () => paused);
+      try {
+        await sync.connect('https://sync.example', 'd' * 64);
+        expect(syncRequests, 2);
+        expect(sync.error, contains('could not apply the sync data'));
+        expect(sync.document.dirty, isNotEmpty);
+        await sync.sync();
+        expect(sync.error, isNull);
+        expect(sync.document.dirty, isEmpty);
+      } finally {
+        paused = true;
+        await sync.close();
+      }
+    }, createHttpClient: (_) => client);
+  });
+
   test('an unclaimed Worker guides the user to owner registration', () async {
     final client = AccountClient()
       ..owner = true
