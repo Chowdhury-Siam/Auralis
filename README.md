@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="docs/images/auralis-readme-banner.svg" alt="Auralis — your music, your space. A Telegram music player for Android and Windows." width="900">
+<img src="docs/images/auralis-readme-banner.svg" alt="Auralis — a Telegram music and video player for Android and Windows." width="900">
 
 **Your music. Your space.**
 
-A compact music player for **Android and Windows**, built with Flutter.<br>
-Bring music from your Telegram channels into one library, build playlists, and follow along with lyrics.
+A music and video player for **Android and Windows**, built with Flutter.<br>
+Browse your Telegram media, build playlists with custom photos, follow lyrics, or watch Telegram and local video files.
 
 <p>
   <a href="https://github.com/Chowdhury-Siam/Auralis/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Chowdhury-Siam/Auralis?style=for-the-badge&color=BFA5F5&label=Latest"></a>
@@ -22,7 +22,7 @@ Bring music from your Telegram channels into one library, build playlists, and f
 </div>
 
 > [!TIP]
-> **Sign in with your own Telegram account.** Select channels you already have access to, then open Library to browse their music together. Local music importing is not included.
+> **Use your own Telegram account.** Select accessible channels in Music, or choose a channel in Video Browse. Music and Video keep separate collections and settings. Local video files are supported; local music importing is not included.
 
 ---
 
@@ -34,6 +34,8 @@ Bring music from your Telegram channels into one library, build playlists, and f
 - [Get started](#get-started)
 - [Library and collections](#library-and-collections)
 - [Playback and lyrics](#playback-and-lyrics)
+- [Video mode](#video-mode)
+- [Playlist photos and motion](#playlist-photos-and-motion)
 - [Stats, exports, and backups](#stats-exports-and-backups)
 - [Settings and privacy](#settings-and-privacy)
 - [Development](#development)
@@ -49,9 +51,9 @@ Bring music from your Telegram channels into one library, build playlists, and f
 
 ## ✨ Meet Auralis
 
-Auralis brings music from your selected Telegram channels into a single, searchable library. Find a song, add it to your queue, save it to a playlist, or open the lyrics while it plays.
+Auralis has two interfaces: **Music** combines audio from selected Telegram channels; **Video** browses Telegram video posts and opens local video files. Hold **Home** to switch modes, or choose the startup interface in Settings.
 
-The charcoal and violet interface adapts from compact bottom navigation to a desktop sidebar. Album artwork, a wave seek bar, and a focused Now Playing view keep the music close without filling the screen with controls.
+The charcoal and violet interface adapts from phone navigation to a desktop sidebar. Music and Video share playlist cards, custom playlist photos, swipeable Library collections, and consistent search panels. Artwork, lyrics, and playback controls remain specific to each mode.
 
 Playback uses **libmpv**, and Telegram connectivity uses **TDLib**. Auralis streams the original file bytes without re-encoding; the source file and your audio device determine the resulting quality.
 
@@ -67,7 +69,7 @@ Select multiple Telegram channels, search by title, artist, or channel, and sort
 
 ### 💜 Favorites & Playlists
 
-Keep favorites, create ordered playlists, and return to recently played music. Collections save locally between launches and can be included in a backup.
+Keep favorites, create ordered playlists, and return to recently played music. Music and Video use the same rounded playlist cards and photo controls, but their entries stay separate. Music collections save locally and can be included in a backup; custom playlist photos stay on the device.
 
 ### 🎧 A Queue That Follows You
 
@@ -91,7 +93,7 @@ Back up stats, collections, selected channels, and preferences. Preview a restor
 
 ### Everyday details
 
-- Responsive layouts for phones and desktop windows, with a reduced-motion preference.
+- Responsive layouts, gentle vertical scroll elasticity and spring feedback on suitable buttons/cards. The system's reduced-motion/remove-animations preference disables these effects; seeking, sliders, horizontal paging and reordering retain precise behavior.
 - Android background playback with notification, lock-screen, and headset controls.
 - Android audio interruption handling and pause on headphone removal.
 - Desktop Up/Down volume keys, temporary volume feedback, and focused media-key controls.
@@ -121,7 +123,7 @@ Back up stats, collections, selected channels, and preferences. Preview a restor
   </tr>
 </table>
 
-<p align="center"><sub>Automated Flutter test frames with synthetic tracks and original fixture artwork; these are not live Telegram account captures.</sub></p>
+<p align="center"><sub>Automated Flutter reference frames with synthetic tracks and original fixture artwork, not live account captures. Some frames predate the current playlist and Library header styling.</sub></p>
 
 ---
 
@@ -179,9 +181,9 @@ Use **Refresh library** in Browse to discover more accessible channels, scan sel
 | **Playlists** | Named, ordered collections you can create, rename, and delete |
 | **Recently played** | The last 100 unique successfully opened tracks |
 
-Sort sits in the Library header. Browse shows per-channel media counts and the refresh action. Home shows your Daily Mix, recent music, and listening stats. Open Browse to search and select channels in a grid or list. Use the Library collection menu to switch to Artists and search by name. On phones, open Settings from Library.
+Swipe between Library collections, tap a page indicator, or use the collection dropdown. Sort sits in the header; Browse owns channel counts and refresh. Music Home shows Daily Mix, recent songs and listening stats. Open Browse to search/select channels in a grid or list. On phones, open Settings from Library.
 
-Use a track's actions to favorite it, play it next, or add it to a playlist. Library sorting leaves saved playlist order unchanged. Deleting a playlist removes the collection, not files from Telegram.
+Song rows keep only their three-dot actions menu: use **Options** for favorite, queue, Play next and playlist actions, or **Info** for duration and file details. The standalone row durations/queue shortcuts are removed. Sorting leaves saved playlist order unchanged; deleting a playlist does not delete Telegram media.
 
 Saved collections hold channel/message references. To play those tracks later, sign into the appropriate account, select the source channels, and load their messages. Optional private multi-device sync shares these collection references; the playback queue remains session-only.
 
@@ -193,7 +195,7 @@ See the [collection guide](docs/GUIDE.md#favorites-playlists-and-recent-music) f
 
 ## 🎧 Playback and Lyrics
 
-Open **Now Playing** from navigation or the floating player’s artwork/title. The player shows an Up Next preview where space allows.
+Open **Now Playing** from the floating player’s artwork/title, or swipe the mini-player upward. The player shows an Up Next preview where space allows.
 
 | Control | Behavior |
 | --- | --- |
@@ -210,6 +212,39 @@ Embedded lyrics load when supported tags are available. Use **Lyrics options** t
 Favorites, playlists, listening statistics, recent music, channels and shared preferences can sync across Android and Windows through your own Cloudflare Worker and Turso database. Open Settings → Data & sync → Account & sync to deploy, sign in with a username, switch accounts or recover access. Owner credentials enable automatic updates when an app bundles a newer Worker. See [multi-device sync setup](docs/SYNC.md). Artwork, original lyrics and translations have an account-scoped device cache and are excluded from backups. In-app translation runs automatically by default; choose Japanese → English or English → Japanese and Google Translate/MyMemory provider order in Settings. DeepL’s website option remains available from Lyrics. Word-level karaoke is not included.
 
 See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality notes](docs/GUIDE.md#streaming-audio-quality).
+
+---
+
+<a id="video-mode"></a>
+
+## 🎬 Video Mode
+
+| Collection | What you can do |
+| --- | --- |
+| **All videos** | Browse the selected Telegram channel, search titles, sort, open item Options / Info, and mark episodes watched |
+| **Playlists** | Use the same artwork-card layout as Music; create, rename, remove and customize playlists; add local video files or save player queue entries |
+| **History** | Resume opened videos, see Telegram thumbnails, toggle watched status, remove entries or clear history |
+| **Snapshots** | Preview, export or delete saved PNG frames; search by frame title or filename |
+
+Every Video Library collection has the same rounded search-and-content panel. Filters are separate for each section. Playlist searches match names and video titles; History also matches the channel. Clear a video playlist filter to restore drag-to-reorder handles. Filtering does not change saved queues or playback indices.
+
+The full player supports audio/subtitle track selection, external and secondary subtitles, chapters/bookmarks, speed, sleep timer, snapshots, video sizing, and picture-processing options. Japanese audio and English subtitles are preferred when available; manual choices apply to the current video. Android supports immersive full-player controls and picture in picture where the device permits it. Video settings and playback diagnostics stay separate from Music's Lyrics & artwork settings.
+
+Telegram videos and local files play their **original sources**. There is no quality selector or alternate-stream switching. Picture processing does not create new source resolutions. Telegram history/resume/watched metadata can sync; local file access, video playlists, snapshots and playlist photos remain device-local.
+
+See [Video mode](docs/VIDEO_PORT.md) and [the playback guide](docs/GUIDE.md#telegram-video). Hardware decoding, HDR and platform integration depend on the device and native build.
+
+---
+
+<a id="playlist-photos-and-motion"></a>
+
+## 🖼️ Playlist Photos and Motion
+
+In either interface, open **Library → Playlists → the card's three-dot menu → Change playlist photo**. Choose a PNG, JPEG or WebP image (up to 12 MiB). Android's image picker can supply other decodable formats. Auralis keeps a normalized PNG copy, bounded to 512 pixels on its longest side, rather than depending on the original file path. Animated inputs use their first frame.
+
+**Reset photo** restores the automatic artwork/fallback. Cancelling the picker or choosing an invalid image leaves the existing photo unchanged. Photos follow playlist renames. Music and Video photo references are separate; Music photo references are scoped to the local sync-account namespace. Custom photos and their file references are not uploaded or included in portable backups.
+
+Long lists and grids have a gentle bounce for direct vertical drags. Mouse-wheel scrolling, horizontal paging, seek bars and sliders remain precise; reorderable video lists retain clamping. Tappable playlist/discovery cards and themed buttons have subtle spring press feedback without changing layout or touch targets. The system's **Reduce Motion / Remove animations** setting disables the added effects; there is no separate app-specific motion toggle.
 
 ---
 
@@ -239,6 +274,7 @@ See the [backup guide](docs/GUIDE.md#listening-stats-export-and-backups) for val
 | --- | --- |
 | **General** | Choose playback repeat and library sort order |
 | **Appearance** | Choose phone navigation style and corner radius |
+| **Video settings** | Configure video playback and picture/subtitle options; open live diagnostics from the player |
 | **Lyrics & artwork → Lyrics & translation** | Automatic lookup/translation, direction, and primary/fallback providers |
 | **Data & sync → Listening stats** | Review listening activity and rankings |
 | **Data & sync → Backup & Restore** | Save and recover your Telegram account, collections, stats, and preferences |
@@ -249,7 +285,7 @@ API credentials and the TDLib database key are encrypted with **Windows DPAPI** 
 
 Current audio uses temporary playback buffering. Extracted artwork and lyrics remain in the device cache; artwork is kept automatically. Logout does not promise secure erasure of cached media or backups.
 
-Artwork uses Telegram or embedded metadata. Automatic lookup contacts the selected lyric sources during playback if saved/embedded lyrics are unavailable; only the displayed song title, artist and duration are sent, with no Telegram credentials or message/file IDs. Automatic in-app translation sends original lyric text to the selected translators. Android media controls receive the current cover and use the monochrome Auralis logo. Optional multi-device sync shares collection/listening metadata and can include your linked Telegram account. Its application connection values are encrypted in your private Worker; A password sign-in on a new device can connect the linked Telegram account automatically while Auralis is open on an already connected device. Telegram auth keys, session databases and music stay on their own devices. See the [storage notes](docs/GUIDE.md#storage-and-architecture).
+Song artwork uses Telegram or embedded metadata; playlist photos are explicitly chosen local images. Automatic lookup contacts the selected lyric sources during playback if saved/embedded lyrics are unavailable; only song metadata is sent, not Telegram credentials or message/file IDs. Translation sends original lyric text to the selected translator. Optional Worker Sync shares supported collection/listening metadata and can link Telegram connection values, but never uploads playlist photos, original media or Telegram session databases. See [sync setup](docs/SYNC.md) and [storage notes](docs/GUIDE.md#storage-and-architecture).
 
 ---
 
@@ -265,6 +301,8 @@ cd Auralis
 flutter pub get --enforce-lockfile
 flutter analyze --no-pub --fatal-infos
 flutter test --no-pub --reporter expanded
+python3 tool/release-notes.py
+python3 tool/verify-android.py --source-only
 ```
 
 | Target | Additional requirements | Build guide |
@@ -301,6 +339,9 @@ See [build/publish/cleanup and release notes](docs/RELEASE_PIPELINE.md), [sync s
 | --- | --- |
 | Library is empty | Sign in, select accessible channels, and wait for audio indexing; try Refresh |
 | A saved playlist track will not play | Select its source channel and reload its messages using the appropriate account |
+| A playlist photo is missing on another device | Custom playlist photos are device-local; choose the photo on that device |
+| A photo cannot be imported | Try a decodable PNG/JPEG/WebP below 12 MiB; extremely large image dimensions are rejected |
+| Elastic effects do not appear | Check the system accessibility motion setting; mouse-wheel scrolling and short pages intentionally do not bounce |
 | Cover or embedded lyrics are missing | The file may lack supported tags, or metadata may not be buffered yet; retry after more of the track downloads |
 | Lyrics lookup finds no match | Check title/artist metadata, import `.lrc`, or paste lyrics |
 | Seeking into uncached music buffers | The new position fetches its own byte range; update older versions that block new seeks behind abandoned requests |
@@ -317,11 +358,11 @@ When [reporting a bug](https://github.com/Chowdhury-Siam/Auralis/issues), includ
 
 ## 🚧 Project Status
 
-Auralis is under active development. This archive contains source version **0.1.192+193**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
+Auralis is under active development. This archive contains source version **0.1.194+195**, with [Video mode](docs/VIDEO_PORT.md), [multi-device sync](docs/SYNC.md), and [separate build, publish, and cleanup actions](docs/RELEASE_PIPELINE.md).
 
 Automated tests cover UI layouts, player/queue behavior, storage, metadata readers, and simulated Telegram responses. Existing native smoke and CI results are recorded in [VERIFICATION.md](docs/VERIFICATION.md). **Live account authentication, real Telegram music playback, Android device behavior, and fresh-machine installation remain unverified in that record.**
 
-Current limits include no local music importer, equalizer, crossfade, persistent queue, cloud playlist sync, a standalone camera QR scanner, or automatic cache eviction. Windows global media controls and tray mode are not included. Native dependency licensing/source review and hardware, accessibility, and performance checks remain outstanding before claiming production readiness.
+Current limits include no local music importer, equalizer, crossfade, persistent playback queue, standalone camera QR scanner, or automatic cache eviction. Music playlist references can sync; custom playlist photos and local Video collections cannot. Network/IPTV browsing, saved web media, AI video tools, Android TV and external-display support are not included. Windows global media controls and tray mode are not included. Native licensing/source review, hardware, accessibility and performance checks remain outstanding.
 
 ---
 
@@ -335,6 +376,8 @@ Current limits include no local music importer, equalizer, crossfade, persistent
 | --- | --- |
 | `lib/app.dart` | Responsive navigation, Library, collections, player screens, and Telegram forms |
 | `lib/player.dart` | Native audio backend, queue, and playback state |
+| `lib/music_playlist_widgets.dart` / `lib/playlist_photos.dart` | Shared Music/Video playlist cards and device-local custom photos |
+| `lib/app_motion.dart` | Accessibility-aware scrolling and spring press feedback |
 | `lib/lyrics.dart` / `lib/lyrics_view.dart` | Lyrics loading, parsing, and display |
 | `lib/telegram/` | TDLib transport, channel indexing, metadata extraction, and streaming proxy |
 | `lib/storage.dart` | Settings and platform credential storage |
