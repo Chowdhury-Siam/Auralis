@@ -75,6 +75,8 @@ Future<void> saveVideoPlaylist(
     data.putPlaylist(name, [...?data.playlists[name], ...sources]);
     await save();
     if (context.mounted) _message(context, 'Saved to $name.');
+  } on FormatException catch (error) {
+    if (context.mounted) _message(context, error.message);
   } catch (_) {
     if (context.mounted) _message(context, 'Could not save the playlist.');
   }
@@ -265,6 +267,8 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
     try {
       setState(update);
       await widget.save();
+    } on FormatException catch (error) {
+      if (mounted) _message(context, error.message);
     } catch (_) {
       if (mounted) _message(context, 'Could not save changes.');
     }
