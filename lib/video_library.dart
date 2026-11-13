@@ -200,6 +200,7 @@ class VideoLibraryPage extends StatefulWidget {
     this.onPlay,
     this.controller,
     this.bottomPadding = 28,
+    this.query = '',
   });
 
   final VideoPlaybackData data;
@@ -212,6 +213,7 @@ class VideoLibraryPage extends StatefulWidget {
   final ValueChanged<VideoSelection>? onPlay;
   final VideoLibraryPageController? controller;
   final double bottomPadding;
+  final String query;
 
   @override
   State<VideoLibraryPage> createState() => _VideoLibraryPageState();
@@ -360,12 +362,30 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
 
   Widget _build() {
     final name = _selected;
+    final query = widget.query.trim().toLowerCase();
+    bool matches(VideoSource source) =>
+        '${source.title} ${source.telegram?.source ?? ''}'
+            .toLowerCase()
+            .contains(query);
     final list = _data.playlists[name] ?? const <VideoSource>[];
-    final history = _data.history.values.toList()
-      ..sort((a, b) => b.playedAt.compareTo(a.playedAt));
+    final visibleIndices = [
+      for (var index = 0; index < list.length; index++)
+        if ((name?.toLowerCase().contains(query) ?? false) ||
+            matches(list[index]))
+          index,
+    ];
+    final history =
+        _data.history.values.where((entry) => matches(entry.source)).toList()
+          ..sort((a, b) => b.playedAt.compareTo(a.playedAt));
     final inPlaylist =
         widget.playlists && name != null && _data.playlists.containsKey(name);
-    final entries = _data.playlists.entries.toList();
+    final entries = _data.playlists.entries
+        .where(
+          (entry) =>
+              entry.key.toLowerCase().contains(query) ||
+              entry.value.any(matches),
+        )
+        .toList();
     final watchedCount = history
         .where((entry) => _data.isWatched(entry.source))
         .length;
@@ -394,6 +414,47 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
           : (position.inMilliseconds / source.duration.inMilliseconds)
                 .clamp(0, 1)
                 .toDouble();
+    }
+
+    Widget playlistItem(int index, {required bool reorder}) {
+      final item = list[index];
+      final watched = _data.isWatched(item);
+      return _VideoEntryCard(
+        key: ValueKey(item.id),
+        source: item,
+        status: status(item),
+        progress: progress(item),
+        onTap: () => _play(list, index),
+        actions: [
+          if (item.telegram != null)
+            VideoWatchButton(
+              watched: watched,
+              onPressed: () => _change(() => _data.setWatched(item, !watched)),
+            ),
+          IconButton(
+            tooltip: 'Remove video',
+            icon: const Icon(Icons.close),
+            onPressed: () => _change(() => list.remove(item)),
+          ),
+          _itemActions(
+            item,
+            play: () => _play(list, index),
+            remove: () => list.remove(item),
+            removeLabel: 'Remove from playlist',
+          ),
+          if (reorder)
+            ReorderableDragStartListener(
+              index: index,
+              child: const Tooltip(
+                message: 'Reorder video',
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Icon(Icons.drag_handle_rounded),
+                ),
+              ),
+            ),
+        ],
+      );
     }
 
     final page = _VideoCollectionPage(
@@ -438,7 +499,7 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
             label: const Text('Play playlist'),
           ),
         if (!widget.playlists &&
-            (history.isNotEmpty || _data.positions.isNotEmpty))
+            (_data.history.isNotEmpty || _data.positions.isNotEmpty))
           OutlinedButton.icon(
             onPressed: () async {
               if (await _confirm(
@@ -456,7 +517,15 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
       ],
       slivers: [
         if (inPlaylist)
-          if (list.isEmpty)
+          if (list.isNotEmpty && visibleIndices.isEmpty)
+            const SliverToBoxAdapter(
+              child: _VideoEmptyCollection(
+                'No videos found',
+                'Try another title or clear your search.',
+                Icons.search_off_rounded,
+              ),
+            )
+          else if (list.isEmpty)
             const SliverToBoxAdapter(
               child: _VideoEmptyCollection(
                 'Your playlist starts here',
@@ -464,59 +533,32 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                 Icons.playlist_add_rounded,
               ),
             )
+          else if (query.isNotEmpty)
+            SliverList.builder(
+              itemCount: visibleIndices.length,
+              itemBuilder: (_, index) =>
+                  playlistItem(visibleIndices[index], reorder: false),
+            )
           else
             SliverReorderableList(
               itemCount: list.length,
               onReorderItem: (from, to) =>
                   _change(() => list.insert(to, list.removeAt(from))),
-              itemBuilder: (_, index) {
-                final item = list[index];
-                final watched = _data.isWatched(item);
-                return _VideoEntryCard(
-                  key: ValueKey(item.id),
-                  source: item,
-                  status: status(item),
-                  progress: progress(item),
-                  onTap: () => _play(list, index),
-                  actions: [
-                    if (item.telegram != null)
-                      VideoWatchButton(
-                        watched: watched,
-                        onPressed: () =>
-                            _change(() => _data.setWatched(item, !watched)),
-                      ),
-                    IconButton(
-                      tooltip: 'Remove video',
-                      icon: const Icon(Icons.close),
-                      onPressed: () => _change(() => list.remove(item)),
-                    ),
-                    _itemActions(
-                      item,
-                      play: () => _play(list, index),
-                      remove: () => list.remove(item),
-                      removeLabel: 'Remove from playlist',
-                    ),
-                    ReorderableDragStartListener(
-                      index: index,
-                      child: const Tooltip(
-                        message: 'Reorder video',
-                        child: Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Icon(Icons.drag_handle_rounded),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
+              itemBuilder: (_, index) => playlistItem(index, reorder: true),
             )
         else if (widget.playlists)
           if (entries.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: _VideoEmptyCollection(
-                'Make room for your favorites',
-                'Create your first playlist to collect videos for later.',
-                Icons.video_library_outlined,
+                query.isEmpty
+                    ? 'Make room for your favorites'
+                    : 'No playlists found',
+                query.isEmpty
+                    ? 'Create your first playlist to collect videos for later.'
+                    : 'Try another name or clear your search.',
+                query.isEmpty
+                    ? Icons.video_library_outlined
+                    : Icons.search_off_rounded,
               ),
             )
           else
@@ -532,11 +574,13 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
               );
             })
         else if (history.isEmpty)
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: _VideoEmptyCollection(
-              'A fresh start',
-              'Videos you open will appear here, with watched status and saved resume points.',
-              Icons.history_rounded,
+              query.isEmpty ? 'A fresh start' : 'No videos found',
+              query.isEmpty
+                  ? 'Videos you open will appear here, with watched status and saved resume points.'
+                  : 'Try another title or clear your search.',
+              query.isEmpty ? Icons.history_rounded : Icons.search_off_rounded,
             ),
           )
         else
@@ -650,11 +694,13 @@ class VideoSnapshotsPage extends StatefulWidget {
     this.embedded = false,
     this.active = true,
     this.bottomPadding = 28,
+    this.query = '',
   });
 
   final bool embedded;
   final bool active;
   final double bottomPadding;
+  final String query;
 
   @visibleForTesting
   final Future<List<File>> Function()? loadSnapshots;
@@ -757,7 +803,14 @@ class _VideoSnapshotsPageState extends State<VideoSnapshotsPage> {
   Widget build(BuildContext context) => FutureBuilder<List<File>>(
     future: _files,
     builder: (_, snapshot) {
-      final files = snapshot.data;
+      final query = widget.query.trim().toLowerCase();
+      final files = snapshot.data
+          ?.where(
+            (file) => '${_snapshotTitle(file)} ${_snapshotName(file)}'
+                .toLowerCase()
+                .contains(query),
+          )
+          .toList();
       return _VideoCollectionPage(
         embedded: widget.embedded,
         bottomPadding: widget.bottomPadding,
@@ -794,11 +847,15 @@ class _VideoSnapshotsPageState extends State<VideoSnapshotsPage> {
               ),
             )
           else if (files.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: _VideoEmptyCollection(
-                'Keep a favorite frame',
-                'Use Snapshot in the video player to build your own gallery.',
-                Icons.add_photo_alternate_outlined,
+                query.isEmpty ? 'Keep a favorite frame' : 'No snapshots found',
+                query.isEmpty
+                    ? 'Use Snapshot in the video player to build your own gallery.'
+                    : 'Try another title or clear your search.',
+                query.isEmpty
+                    ? Icons.add_photo_alternate_outlined
+                    : Icons.search_off_rounded,
               ),
             )
           else
