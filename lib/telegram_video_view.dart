@@ -102,6 +102,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   TelegramService get _telegram => widget.telegram;
   final _search = TextEditingController();
   final _librarySearch = TextEditingController();
+  final _collectionSearch = List.generate(3, (_) => TextEditingController());
   final _videoSources = <int>{};
   final _videoCounts = <int, int>{};
   late final TelegramStreamProxy _proxy;
@@ -190,6 +191,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         _showSearchChannel = false;
         _search.clear();
         _librarySearch.clear();
+        for (final controller in _collectionSearch) {
+          controller.clear();
+        }
         _videoSources.clear();
         _videoCounts.clear();
       });
@@ -213,7 +217,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         library != null &&
         library.channel.id == post.chatId &&
         !library.videos.containsKey(post.video.id);
-    final invalidateCount = library?.channel.id != post.chatId &&
+    final invalidateCount =
+        library?.channel.id != post.chatId &&
         _videoCounts.containsKey(post.chatId);
     if (known && !showPost && !invalidateCount) return;
     setState(() {
@@ -487,6 +492,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     unawaited(_playbackRelease.whenComplete(_proxy.close));
     _search.dispose();
     _librarySearch.dispose();
+    for (final controller in _collectionSearch) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -763,27 +771,43 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             count: _collections.length,
             reducedMotion: settings.reducedMotion,
             onChanged: _selectVideoCollection,
-            itemBuilder: (context, index) => switch (index) {
-              0 => _browser(context),
-              1 || 2 => VideoLibraryPage(
-                key: ValueKey(('video-collection', index)),
-                data: settings.videoPlayback,
-                save: settings.save,
-                pickFiles: pickVideoFiles,
-                playlists: index == 1,
-                historyArtwork: _historyArtwork,
-                embedded: true,
-                changes: widget.music,
-                controller: index == 1 ? _playlistPageController : null,
-                bottomPadding: _bottomPadding(context),
-                onPlay: (selected) =>
-                    unawaited(_playLibrarySelection(selected)),
-              ),
-              _ => VideoSnapshotsPage(
-                embedded: true,
-                active: _libraryCollection == 3,
-                bottomPadding: _bottomPadding(context),
-              ),
+            itemBuilder: (context, index) {
+              if (index == 0) return _browser(context);
+              final search = _collectionSearch[index - 1];
+              final page = index < 3
+                  ? VideoLibraryPage(
+                      key: ValueKey(('video-collection', index)),
+                      data: settings.videoPlayback,
+                      save: settings.save,
+                      pickFiles: pickVideoFiles,
+                      playlists: index == 1,
+                      historyArtwork: _historyArtwork,
+                      embedded: true,
+                      changes: widget.music,
+                      controller: index == 1 ? _playlistPageController : null,
+                      bottomPadding: _bottomPadding(context),
+                      query: search.text,
+                      onPlay: (selected) =>
+                          unawaited(_playLibrarySelection(selected)),
+                    )
+                  : VideoSnapshotsPage(
+                      embedded: true,
+                      active: _libraryCollection == 3,
+                      bottomPadding: _bottomPadding(context),
+                      query: search.text,
+                    );
+              return _libraryBrowser(
+                context,
+                list: page,
+                searchController: search,
+                searchHint: switch (index) {
+                  1 => 'Search playlists and their videos',
+                  2 => 'Search video history',
+                  _ => 'Search snapshots',
+                },
+                searchKey: ValueKey(('video-collection-search', index)),
+                panelKey: ValueKey(('video-library-panel', index)),
+              );
             },
           ),
         ),
@@ -793,11 +817,17 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
 
   Widget _libraryBrowser(
     BuildContext context, {
-    required bool loading,
+    bool loading = false,
     required Widget list,
+    TextEditingController? searchController,
+    String searchHint = 'Search your videos',
+    Key searchKey = const ValueKey('video-library-search'),
+    Key panelKey = const ValueKey(('video-library-panel', 0)),
   }) {
     final colors = Theme.of(context).colorScheme;
+    final search = searchController ?? _librarySearch;
     return Material(
+      key: panelKey,
       color: colors.surfaceContainerLowest,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
       child: Padding(
@@ -806,20 +836,20 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextField(
-              key: const ValueKey('video-library-search'),
-              controller: _librarySearch,
+              key: searchKey,
+              controller: search,
               textInputAction: TextInputAction.search,
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => FocusScope.of(context).unfocus(),
               decoration: InputDecoration(
-                hintText: 'Search your videos',
+                hintText: searchHint,
                 prefixIcon: const Icon(Icons.search_rounded, size: 20),
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                suffixIcon: _librarySearch.text.isEmpty
+                suffixIcon: search.text.isEmpty
                     ? null
                     : IconButton(
                         tooltip: 'Clear search',
-                        onPressed: () => setState(_librarySearch.clear),
+                        onPressed: () => setState(search.clear),
                         icon: const Icon(Icons.close_rounded, size: 18),
                       ),
               ),
@@ -1128,7 +1158,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                   padding: padding,
                   itemCount: channels.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (_, index) => _browseChannelTile(channels[index], index),
+                  itemBuilder: (_, index) =>
+                      _browseChannelTile(channels[index], index),
                 )
               : GridView.builder(
                   key: ValueKey(query),
@@ -1247,9 +1278,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                     title: failed
                         ? 'Could not load videos'
                         : 'No playable videos found',
-                    description: !failed
-                        ? null
-                        : 'Check your Telegram connection and refresh in Browse.',
+                    description: !failed ? null : 'Check your Telegram connection and refresh in Browse.',
                   ),
           ),
         SliverList.separated(
@@ -1293,11 +1322,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       ],
     );
     if (!searching) {
-      return _libraryBrowser(
-        context,
-        loading: loading,
-        list: list,
-      );
+      return _libraryBrowser(context, loading: loading, list: list);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
