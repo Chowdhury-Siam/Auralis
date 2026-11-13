@@ -824,9 +824,12 @@ extension _PlaybackPanels on _VideoPlaybackState {
   Future<void> _videoSettingsPanel(BuildContext context) =>
       showAuralisDialog<void>(
         context: context,
-        builder: (dialog) => AuralisDialog(
-          title: const Text('Settings & diagnostics'),
+        builder: (dialog) => VideoSettingsDialog(
+          title: 'Settings & diagnostics',
+          icon: Icons.tune_rounded,
+          description: 'Personalize Video and inspect the current playback.',
           content: VideoSettingsOptions(
+            inDialog: true,
             settings: widget.music.settings,
             onChanged: _changed,
             onVolumeBoostDisabled: () {
@@ -943,8 +946,10 @@ extension _PlaybackPanels on _VideoPlaybackState {
     final statistics = _playbackStatistics();
     await showAuralisDialog<void>(
       context: context,
-      builder: (dialog) => AuralisDialog(
-        title: const Text('Playback information'),
+      builder: (dialog) => VideoSettingsDialog(
+        title: 'Playback information',
+        icon: Icons.monitor_heart_outlined,
+        description: 'Live details from the current video.',
         content: StreamBuilder<List<(String, String)>>(
           stream: statistics,
           builder: (context, snapshot) => Column(
@@ -957,8 +962,23 @@ extension _PlaybackPanels on _VideoPlaybackState {
               else if (!snapshot.hasData)
                 const LinearProgressIndicator()
               else
-                for (final (label, value) in snapshot.data!)
-                  Text('$label  ·  $value'),
+                VideoSettingsGroup(
+                  title: 'Playback health',
+                  children: [
+                    for (final (label, value) in snapshot.data!)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: Text(label, style: Theme.of(context).textTheme.bodySmall)),
+                            const SizedBox(width: 16),
+                            Flexible(child: SelectableText(value,
+                              textAlign: TextAlign.end,
+                              style: Theme.of(context).textTheme.bodyMedium)),
+                          ]),
+                      ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -1038,22 +1058,41 @@ extension _PlaybackPanels on _VideoPlaybackState {
             }
           }
 
-          return AuralisDialog(
-            title: const Text('mpv console'),
+          return VideoSettingsDialog(
+            title: 'mpv console',
+            icon: Icons.terminal_rounded,
+            description: 'Run a JSON command for this player. Recent logs appear below.',
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 TextField(
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  style: const TextStyle(fontFamily: 'monospace', height: 1.5),
                   onChanged: (value) => input = value,
                   onSubmitted: (_) => unawaited(run()),
                   decoration: InputDecoration(
                     hintText: '["show-text", "Ready"]',
+                    labelText: 'Command',
+                    filled: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                     errorText: error,
                   ),
                 ),
                 const SizedBox(height: 10),
-                for (final entry in _log.reversed.take(16))
-                  Text(entry, maxLines: 2, overflow: TextOverflow.ellipsis),
+                VideoSettingsGroup(
+                  title: 'Recent logs',
+                  children: [
+                    if (_log.isEmpty) const Text('No log entries yet.'),
+                    for (final entry in _log.reversed.take(16))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: SelectableText(entry,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(fontFamily: 'monospace', height: 1.5)),
+                      ),
+                  ],
+                ),
               ],
             ),
             actions: [
