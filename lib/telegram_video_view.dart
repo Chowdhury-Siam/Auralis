@@ -786,7 +786,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                       changes: widget.music,
                       controller: index == 1 ? _playlistPageController : null,
                       bottomPadding: _bottomPadding(context),
-                      query: search.text,
+                    query: search.text,
+                    playlistPhotos: settings.playlistPhotos,
                       onPlay: (selected) =>
                           unawaited(_playLibrarySelection(selected)),
                     )
