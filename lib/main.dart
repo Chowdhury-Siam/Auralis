@@ -84,7 +84,12 @@ Future<void> main() async {
             ),
           )
         : null;
-    if (session != null) handler?.handleInterruptions(session);
+    if (session != null) {
+      handler?.handleInterruptions(
+        session.interruptionEventStream,
+        session.becomingNoisyEventStream,
+      );
+    }
     final package = await PackageInfo.fromPlatform();
     final syncVault = Platform.isAndroid
         ? AndroidSecretVault(File(p.join(root.path, 'sync-credentials.aesgcm')))
