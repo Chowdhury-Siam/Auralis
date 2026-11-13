@@ -1072,7 +1072,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
                 ? null
                 : () async {
                     try {
-                      await audio.toggle();
+                      await player.togglePlayback();
                     } catch (_) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
