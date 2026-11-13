@@ -389,12 +389,12 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('media-action-remove')));
       await tester.pumpAndSettle();
       expect(data.history.containsKey(second.id), isFalse);
-      await tester.tap(find.text('Clear history'));
+      await tester.tap(find.byTooltip('Clear history'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(data.history, isNotEmpty);
-      await tester.tap(find.text('Clear history'));
+      await tester.tap(find.byTooltip('Clear history'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
       await tester.pumpAndSettle();
@@ -553,7 +553,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Could not load snapshots'), findsOneWidget);
-    await tester.tap(find.text('Try again'));
+    await tester.tap(find.byTooltip('Try again'));
     await tester.pumpAndSettle();
     expect(find.text('Keep a favorite frame'), findsOneWidget);
   });
