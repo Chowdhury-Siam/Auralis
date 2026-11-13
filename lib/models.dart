@@ -186,7 +186,8 @@ enum TranslationSource {
 }
 
 enum TranslationDirection {
-  japaneseEnglish('Japanese → English', 'ja', 'en'),
+  // Keep the stored name compatible with existing settings, backups and sync.
+  japaneseEnglish('Any language → English', 'auto', 'en'),
   englishJapanese('English → Japanese', 'en', 'ja');
 
   const TranslationDirection(this.label, this.source, this.target);
