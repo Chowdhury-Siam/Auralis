@@ -406,9 +406,8 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
             matches(list[index]))
           index,
     ];
-    final history =
-        _data.history.values.where((entry) => matches(entry.source)).toList()
-          ..sort((a, b) => b.playedAt.compareTo(a.playedAt));
+    final history = _data.history.values.toList()
+      ..sort((a, b) => b.playedAt.compareTo(a.playedAt));
     final inPlaylist =
         widget.playlists && name != null && _data.playlists.containsKey(name);
     final entries = _data.playlists.entries
@@ -538,6 +537,7 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
             );
     }
     final page = _VideoCollectionPage(
+      compact: !widget.playlists,
       embedded: widget.embedded,
       bottomPadding: widget.bottomPadding,
       onBack: widget.embedded && !inPlaylist ? null : back,
@@ -560,7 +560,24 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
           ? inPlaylist
                 ? 'Your next viewing session, in your order. Drag the handles to rearrange videos.'
                 : 'Keep favorite episodes and movie nights together. Your files stay where they are.'
-          : 'Pick up where you left off, or revisit something you loved.',
+          : null,
+      trailing: !widget.playlists &&
+              (_data.history.isNotEmpty || _data.positions.isNotEmpty)
+          ? IconButton(
+              tooltip: 'Clear history',
+              onPressed: () async {
+                if (await _confirm(
+                      context,
+                      'Clear video history?',
+                      'This also clears saved resume positions.',
+                    ) &&
+                    mounted) {
+                  await _change(_data.clearHistory);
+                }
+              },
+              icon: const Icon(Icons.delete_sweep_outlined),
+            )
+          : null,
       actions: [
         if (widget.playlists)
           FilledButton.icon(
@@ -577,22 +594,6 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
             onPressed: () => _play(list, 0),
             icon: const Icon(Icons.play_arrow_rounded),
             label: const Text('Play playlist'),
-          ),
-        if (!widget.playlists &&
-            (_data.history.isNotEmpty || _data.positions.isNotEmpty))
-          OutlinedButton.icon(
-            onPressed: () async {
-              if (await _confirm(
-                    context,
-                    'Clear video history?',
-                    'This also clears saved resume positions.',
-                  ) &&
-                  mounted) {
-                await _change(_data.clearHistory);
-              }
-            },
-            icon: const Icon(Icons.delete_sweep_outlined),
-            label: const Text('Clear history'),
           ),
       ],
       slivers: [
@@ -627,13 +628,12 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
               itemBuilder: (_, index) => playlistItem(index, reorder: true),
             )
         else if (history.isEmpty)
-          SliverToBoxAdapter(
+          const SliverToBoxAdapter(
             child: _VideoEmptyCollection(
-              query.isEmpty ? 'A fresh start' : 'No videos found',
-              query.isEmpty
-                  ? 'Videos you open will appear here, with watched status and saved resume points.'
-                  : 'Try another title or clear your search.',
-              query.isEmpty ? Icons.history_rounded : Icons.search_off_rounded,
+              'A fresh start',
+              'Videos you open will appear here, with watched status and saved resume points.',
+              Icons.history_rounded,
+              compact: true,
             ),
           )
         else
@@ -647,6 +647,7 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
               final watched = _data.isWatched(source);
               return _VideoEntryCard(
                 key: ValueKey(source.id),
+                compact: true,
                 source: source,
                 date: date,
                 artwork: widget.historyArtwork?.call(source),
@@ -747,13 +748,11 @@ class VideoSnapshotsPage extends StatefulWidget {
     this.embedded = false,
     this.active = true,
     this.bottomPadding = 28,
-    this.query = '',
   });
 
   final bool embedded;
   final bool active;
   final double bottomPadding;
-  final String query;
 
   @visibleForTesting
   final Future<List<File>> Function()? loadSnapshots;
@@ -856,15 +855,9 @@ class _VideoSnapshotsPageState extends State<VideoSnapshotsPage> {
   Widget build(BuildContext context) => FutureBuilder<List<File>>(
     future: _files,
     builder: (_, snapshot) {
-      final query = widget.query.trim().toLowerCase();
-      final files = snapshot.data
-          ?.where(
-            (file) => '${_snapshotTitle(file)} ${_snapshotName(file)}'
-                .toLowerCase()
-                .contains(query),
-          )
-          .toList();
+      final files = snapshot.data;
       return _VideoCollectionPage(
+        compact: true,
         embedded: widget.embedded,
         bottomPadding: widget.bottomPadding,
         title: 'Video snapshots',
@@ -874,15 +867,13 @@ class _VideoSnapshotsPageState extends State<VideoSnapshotsPage> {
             : files == null
             ? 'Loading saved frames…'
             : '${files.length} ${files.length == 1 ? 'snapshot' : 'snapshots'} · Saved on this device',
-        description: 'Little moments worth keeping. Open a frame to see it full size or export the original PNG.',
-        actions: [
-          if (snapshot.hasError)
-            OutlinedButton.icon(
+        trailing: snapshot.hasError
+          ? IconButton(
+              tooltip: 'Try again',
               onPressed: _reload,
               icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try again'),
-            ),
-        ],
+            )
+          : null,
         slivers: [
           if (snapshot.hasError)
             const SliverToBoxAdapter(
@@ -890,6 +881,7 @@ class _VideoSnapshotsPageState extends State<VideoSnapshotsPage> {
                 'Could not load snapshots',
                 'Your saved frames have not been removed. Try loading them again.',
                 Icons.broken_image_outlined,
+                compact: true,
               ),
             )
           else if (files == null)
@@ -900,15 +892,12 @@ class _VideoSnapshotsPageState extends State<VideoSnapshotsPage> {
               ),
             )
           else if (files.isEmpty)
-            SliverToBoxAdapter(
+            const SliverToBoxAdapter(
               child: _VideoEmptyCollection(
-                query.isEmpty ? 'Keep a favorite frame' : 'No snapshots found',
-                query.isEmpty
-                    ? 'Use Snapshot in the video player to build your own gallery.'
-                    : 'Try another title or clear your search.',
-                query.isEmpty
-                    ? Icons.add_photo_alternate_outlined
-                    : Icons.search_off_rounded,
+                'Keep a favorite frame',
+                'Use Snapshot in the video player to build your own gallery.',
+                Icons.add_photo_alternate_outlined,
+                compact: true,
               ),
             )
           else
