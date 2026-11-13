@@ -2424,7 +2424,6 @@ class _PlayerShellState extends State<PlayerShell>
       itemBuilder: (context, i) => _trackTile(
         visible[i],
         onPlay: () => player.play(visible[i], from: visible),
-        showQueueShortcut: false,
       ),
     );
   }
@@ -2432,7 +2431,6 @@ class _PlayerShellState extends State<PlayerShell>
   Widget _trackTile(
     Track track, {
     required VoidCallback onPlay,
-    bool showQueueShortcut = true,
   }) {
     final active = player.current?.id == track.id;
     return Padding(
@@ -2477,29 +2475,7 @@ class _PlayerShellState extends State<PlayerShell>
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 11, color: _colors.onSurfaceVariant),
           ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (track.duration > Duration.zero)
-                Text(
-                  clockText(track.duration),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: _colors.onSurfaceVariant,
-                  ),
-                ),
-              if (showQueueShortcut)
-                IconButton(
-                  tooltip: 'Add ${track.title} to queue',
-                  onPressed: () {
-                    player.enqueue(track);
-                    _notice('Added to queue');
-                  },
-                  icon: const Icon(Icons.playlist_add_rounded, size: 20),
-                ),
-              _trackActions(track, onPlay: onPlay),
-            ],
-          ),
+          trailing: _trackActions(track, onPlay: onPlay),
         ),
       ),
     );
