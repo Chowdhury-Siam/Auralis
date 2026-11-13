@@ -131,14 +131,7 @@ void main() {
           ),
         );
         expect(icon.color, colors.primary);
-        final search = tester.widget<TextField>(
-          find.byKey(const ValueKey('settings-search')),
-        );
-        expect(search.decoration!.fillColor, colors.surfaceContainerHigh);
-        expect(
-          search.decoration!.focusedBorder!.borderSide.color,
-          colors.primary,
-        );
+        expect(find.byKey(const ValueKey('settings-search')), findsNothing);
         final back = tester.widget<IconButton>(
           find
               .ancestor(
