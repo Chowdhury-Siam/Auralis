@@ -254,6 +254,31 @@ void main() {
     expect(saves, 1);
   });
 
+  testWidgets('a sync refresh leaves the photo picker active for an unchanged playlist', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+    final settings = MemorySettings()..playlists['One'] = ['song'];
+    final list = settings.playlists['One'];
+    final files = _PhotoFiles()..pending = Completer<Uint8List?>();
+    final editing = editPlaylistPhoto(
+      context: tester.element(find.byType(Scaffold)),
+      photos: settings.playlistPhotos,
+      mode: 'music',
+      scope: settings.musicPhotoScope,
+      name: 'One',
+      reset: false,
+      valid: () => identical(settings.playlists['One'], list),
+      store: files,
+      save: settings.save,
+      refresh: () {},
+    );
+    settings.applyJson(jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>);
+    files.pending!.complete(Uint8List.fromList([1]));
+    await editing;
+    expect(settings.playlistPhotos.photo('music', 'local', 'One'), newPhoto);
+    settings.applyJson({...settings.toJson(), 'playlists': {'One': ['other song']}});
+    expect(identical(settings.playlists['One'], list), isFalse);
+  });
+
   testWidgets(
     'Music and Video share card geometry and independent photo actions',
     (tester) async {
