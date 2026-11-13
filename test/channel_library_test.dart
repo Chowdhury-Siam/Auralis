@@ -10,6 +10,13 @@ import 'package:auralis/telegram/telegram_service.dart';
 
 import 'fakes.dart';
 
+class PendingChannelSettings extends MemorySettings {
+  final write = Completer<void>();
+
+  @override
+  Future<void> save() => write.future;
+}
+
 Json message(
   int channel,
   int id, {
@@ -250,6 +257,48 @@ void main() {
     await first;
     expect(library.tracks, isEmpty);
     expect(settings.selectedChannels.single.id, -1);
+  });
+
+  test('a failed channel edit keeps the previously loaded music', () async {
+    final fallback = td.onRequest!;
+    td.onRequest = (r) async {
+      if (r['@type'] == 'searchChatMessages' && r['chat_id'] == -1) {
+        return {'messages': [message(-1, 9)], 'next_from_message_id': 0};
+      }
+      return fallback(r);
+    };
+    await library.select(const MusicChat(-1, 'One'), true);
+    final requests = td.requests.length;
+    await Directory('${settings.file.path}.tmp').create();
+    await library.select(const MusicChat(-1, 'One'), false);
+
+    expect(settings.selectedChannels.single.id, -1);
+    expect(library.tracks.single.id, '-1:9');
+    expect(library.trackCount(-1), 1);
+    expect(library.error, contains('Could not save'));
+    expect(td.requests, hasLength(requests));
+  });
+
+  test('the Library loads after reconnecting during a channel save', () async {
+    final fallback = td.onRequest!;
+    td.onRequest = (r) async {
+      if (r['@type'] == 'searchChatMessages' && r['chat_id'] == -1) {
+        return {'messages': [message(-1, 9)], 'next_from_message_id': 0};
+      }
+      return fallback(r);
+    };
+    final pending = PendingChannelSettings();
+    final reconnecting = ChannelLibrary(telegram, pending);
+    addTearDown(reconnecting.dispose);
+    final selection = reconnecting.select(const MusicChat(-1, 'One'), true);
+    td.auth('authorizationStateWaitPhoneNumber');
+    td.auth('authorizationStateReady');
+    pending.write.complete();
+    await selection;
+
+    expect(reconnecting.tracks.single.id, '-1:9');
+    expect(reconnecting.saving, isFalse);
+    expect(reconnecting.loading, isFalse);
   });
 
   test(
