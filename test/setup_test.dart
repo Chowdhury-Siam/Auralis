@@ -478,9 +478,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Recently played').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Clear history'));
-      await tester.pumpAndSettle();
-      expect(settings.recentIds, isEmpty);
+      expect(find.text('Clear history'), findsNothing);
+      expect(settings.recentIds, ['saved']);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
