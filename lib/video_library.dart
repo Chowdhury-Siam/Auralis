@@ -8,6 +8,9 @@ import 'package:path_provider/path_provider.dart';
 
 import 'app_popups.dart';
 import 'app_theme.dart';
+import 'app_motion.dart';
+import 'music_playlist_widgets.dart';
+import 'playlist_photos.dart';
 import 'models.dart';
 import 'media_item_sheet.dart';
 import 'video_playback_data.dart';
@@ -201,6 +204,7 @@ class VideoLibraryPage extends StatefulWidget {
     this.controller,
     this.bottomPadding = 28,
     this.query = '',
+    this.playlistPhotos,
   });
 
   final VideoPlaybackData data;
@@ -214,6 +218,7 @@ class VideoLibraryPage extends StatefulWidget {
   final VideoLibraryPageController? controller;
   final double bottomPadding;
   final String query;
+  final PlaylistPhotos? playlistPhotos;
 
   @override
   State<VideoLibraryPage> createState() => _VideoLibraryPageState();
@@ -221,6 +226,8 @@ class VideoLibraryPage extends StatefulWidget {
 
 class _VideoLibraryPageState extends State<VideoLibraryPage> {
   String? _selected;
+  late final _localPhotos = PlaylistPhotos();
+  PlaylistPhotos get _photos => widget.playlistPhotos ?? _localPhotos;
   VideoPlaybackData get _data => widget.data;
 
   @override
@@ -274,8 +281,10 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
       if (old != null) {
         final items = _data.playlists.remove(old);
         if (items != null) _data.putPlaylist(name, items);
+        _photos.rename('video', 'device', old, name);
         if (_selected == old) _selected = name;
       } else {
+        _photos.remove('video', 'device', name);
         _data.putPlaylist(name, const []);
         _selected = name;
       }
@@ -307,6 +316,7 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
     }
     await _change(() {
       _data.playlists.remove(name);
+      _photos.remove('video', 'device', name);
       if (_selected == name) _selected = null;
     });
   }
@@ -318,6 +328,24 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
     } else {
       Navigator.pop(context, selection);
     }
+  }
+
+  Future<void> _changePhoto(String name, {required bool reset}) async {
+    final list = _data.playlists[name];
+    if (list == null) return;
+    await editPlaylistPhoto(
+      context: context,
+      photos: _photos,
+      mode: 'video',
+      scope: 'device',
+      name: name,
+      reset: reset,
+      valid: () => identical(_data.playlists[name], list),
+      save: widget.save,
+      refresh: () {
+        if (mounted) setState(() {});
+      },
+    );
   }
 
   Widget _itemActions(
@@ -457,6 +485,54 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
       );
     }
 
+    if (widget.playlists && !inPlaylist) {
+      final overview = MusicPlaylistsView(
+        video: true,
+        playlists: [
+          for (final entry in entries)
+            MusicPlaylistPreview(
+              name: entry.key,
+              songCount: entry.value.length,
+              tracks: entry.value
+                  .map((source) => source.telegram)
+                  .whereType<Track>()
+                  .toList(),
+              photo: _photos.photo('video', 'device', entry.key),
+            ),
+        ],
+        artwork: (track) => _VideoSourcePreview(VideoSource.telegram(track)),
+        onCreate: () => _rename(null),
+        onOpen: (name) => setState(() => _selected = name),
+        searching: query.isNotEmpty,
+        bottomPadding: widget.bottomPadding,
+        actionsBuilder: (playlist) => PlaylistCardMenu(
+          name: playlist.name,
+          hasPhoto: playlist.photo != null,
+          onChangePhoto: () => _changePhoto(playlist.name, reset: false),
+          onResetPhoto: () => _changePhoto(playlist.name, reset: true),
+          onRename: () => _rename(playlist.name),
+          onRemove: () => _removePlaylist(playlist.name),
+        ),
+      );
+      return widget.embedded
+          ? overview
+          : Scaffold(
+              body: SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: BackButton(
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                    Expanded(child: overview),
+                  ],
+                ),
+              ),
+            );
+    }
     final page = _VideoCollectionPage(
       embedded: widget.embedded,
       bottomPadding: widget.bottomPadding,
@@ -546,33 +622,6 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                   _change(() => list.insert(to, list.removeAt(from))),
               itemBuilder: (_, index) => playlistItem(index, reorder: true),
             )
-        else if (widget.playlists)
-          if (entries.isEmpty)
-            SliverToBoxAdapter(
-              child: _VideoEmptyCollection(
-                query.isEmpty
-                    ? 'Make room for your favorites'
-                    : 'No playlists found',
-                query.isEmpty
-                    ? 'Create your first playlist to collect videos for later.'
-                    : 'Try another name or clear your search.',
-                query.isEmpty
-                    ? Icons.video_library_outlined
-                    : Icons.search_off_rounded,
-              ),
-            )
-          else
-            _collectionGrid(context, entries.length, (_, index) {
-              final entry = entries[index];
-              return _VideoPlaylistCard(
-                name: entry.key,
-                sources: entry.value,
-                showCount: !widget.embedded,
-                onOpen: () => setState(() => _selected = entry.key),
-                onRename: () => _rename(entry.key),
-                onRemove: () => _removePlaylist(entry.key),
-              );
-            })
         else if (history.isEmpty)
           SliverToBoxAdapter(
             child: _VideoEmptyCollection(
