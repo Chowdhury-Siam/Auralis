@@ -1344,7 +1344,7 @@ class _PlayerShellState extends State<PlayerShell>
               const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () =>
                   player.restoringData
                   ? null
-                  : unawaited(player.audio.toggle()),
+                  : unawaited(player.togglePlayback()),
               const SingleActivator(LogicalKeyboardKey.mediaTrackNext): () =>
                   unawaited(player.next()),
               const SingleActivator(
@@ -2846,7 +2846,7 @@ class _PlayerShellState extends State<PlayerShell>
                     tooltip: audio.playing ? 'Pause' : 'Play',
                     onPressed: track == null || player.loading
                         ? null
-                        : audio.toggle,
+                        : player.togglePlayback,
                     style: IconButton.styleFrom(
                       padding: EdgeInsets.zero,
                       backgroundColor: _colors.primary,
@@ -3253,7 +3253,7 @@ class _PlayerShellState extends State<PlayerShell>
         ),
         const SizedBox(width: 3),
         IconButton.filled(
-          onPressed: player.loading ? null : audio.toggle,
+          onPressed: player.loading ? null : player.togglePlayback,
           tooltip: audio.playing ? 'Pause' : 'Play',
           style: IconButton.styleFrom(
             backgroundColor: colors.primary,
