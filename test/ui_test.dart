@@ -275,9 +275,6 @@ void main() {
       await tester.pumpAndSettle();
       await tester.runAsync(() => player.playAt(0));
       await tester.pump();
-      await tester.runAsync(() async {
-        await telegram.image(90);
-      });
       await tester.pumpAndSettle();
       expect(audio.uri, startsWith('http://127.0.0.1:'));
       expect(player.current?.title, 'Song -1');
@@ -374,7 +371,7 @@ void main() {
       await tester.enterText(find.byType(TextField), 'Song -2');
       await tester.pumpAndSettle();
       await tester.runAsync(() async {
-        await tester.tap(find.text('Song -2'));
+        await tester.tap(find.byKey(const ValueKey('track-title--2:1')));
         for (var attempt = 0; attempt < 100 && player.loading; attempt++) {
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }
