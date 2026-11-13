@@ -239,9 +239,9 @@ See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality note
 | **All videos** | Browse the selected Telegram channel, search titles, sort, open item Options / Info, and mark episodes watched |
 | **Playlists** | Use the same artwork-card layout as Music; create, rename, remove and customize playlists; add local video files or save player queue entries |
 | **History** | Resume opened videos, see Telegram thumbnails, toggle watched status, remove entries or clear history |
-| **Snapshots** | Preview, export or delete saved PNG frames; search by frame title or filename |
+| **Snapshots** | Preview, export or delete saved PNG frames |
 
-Every Video Library collection has the same rounded search-and-content panel. Filters are separate for each section. Playlist searches match names and video titles; History also matches the channel. Clear a video playlist filter to restore drag-to-reorder handles. Filtering does not change saved queues or playback indices.
+All videos and Playlists have separate search filters. Playlist searches match names and video titles. Clear a video playlist filter to restore drag-to-reorder handles. Filtering does not change saved queues or playback indices.
 
 The full player supports audio/subtitle track selection, external and secondary subtitles, chapters/bookmarks, speed, sleep timer, snapshots, video sizing, and picture-processing options. Japanese audio and English subtitles are preferred when available; manual choices apply to the current video. Android supports immersive full-player controls and picture in picture where the device permits it. Video settings and playback diagnostics stay separate from Music's Lyrics & artwork settings.
 
