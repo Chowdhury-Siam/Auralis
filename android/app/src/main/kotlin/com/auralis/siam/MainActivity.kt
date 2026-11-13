@@ -58,7 +58,7 @@ class MainActivity : AudioServiceActivity() {
                         val save = call.method == "createDocument"
                         val intent = Intent(if (save) Intent.ACTION_CREATE_DOCUMENT else Intent.ACTION_OPEN_DOCUMENT)
                             .addCategory(Intent.CATEGORY_OPENABLE)
-                        intent.type = if (save) call.argument<String>("mime") ?: "application/json" else "*/*"
+                        intent.type = call.argument<String>("mime") ?: if (save) "application/json" else "*/*"
                         if (save) intent.putExtra(Intent.EXTRA_TITLE, call.argument<String>("name"))
                         try {
                             pending = result
