@@ -28,6 +28,10 @@ class _TestPlayerCore extends mpv.PlatformPlayer {
   void seeked(Duration position) => positionController.add(position);
   void rateChanged(double rate) => rateController.add(rate);
   void bufferingChanged(bool buffering) => bufferingController.add(buffering);
+  void completed() {
+    playingController.add(false);
+    completedController.add(true);
+  }
   void tracksChanged(mpv.Tracks tracks) => tracksController.add(tracks);
   void trackChanged(mpv.Track track) => trackController.add(track);
 }
@@ -81,6 +85,7 @@ class _NativeVideo implements mpv.NativePlayer {
     const duration = Duration(minutes: 2);
     state = state.copyWith(
       playing: play,
+      completed: false,
       position: media.start ?? Duration.zero,
       duration: duration,
       tracks: availableTracks,
@@ -143,6 +148,23 @@ class _NativeVideo implements mpv.NativePlayer {
   }) async {
     state = state.copyWith(playing: !state.playing);
     _core.opened(state.playing, state.duration);
+  }
+
+  @override
+  Future<void> play({bool synchronized = true}) async {
+    state = state.copyWith(playing: true, completed: false);
+    _core.opened(true, state.duration);
+  }
+
+  @override
+  Future<void> pause({bool synchronized = true}) async {
+    state = state.copyWith(playing: false);
+    _core.opened(false, state.duration);
+  }
+
+  void complete() {
+    state = state.copyWith(playing: false, completed: true);
+    _core.completed();
   }
 
   @override
@@ -422,6 +444,72 @@ void main() {
       const Duration(minutes: 2),
     );
     expect(restored.videoPlayback.positions, isEmpty);
+  });
+
+  testWidgets('finishing and closing a video resume the interrupted song', (
+    tester,
+  ) async {
+    final native = _NativeVideo();
+    final proxy = _RecordingVideoProxy();
+    final audio = FakeAudio();
+    final music = PlayerController(
+      audio,
+      TelegramStreamProxy((_) async => {}),
+      MemorySettings(),
+    );
+    final telegram = TelegramService(
+      Directory('unused'),
+      MemoryVault(),
+      transport: FakeTd(),
+    );
+    const song = Track(id: 'song', title: 'Song', artist: '', source: 'Music',
+        fileId: 1, size: 100);
+    final video = VideoSource.file(Uri.file('/movies/one.mp4'), 'One video');
+    addTearDown(proxy.close);
+    addTearDown(telegram.shutdown);
+    addTearDown(music.shutdown);
+    await tester.runAsync(() => music.play(song));
+    const position = Duration(seconds: 28);
+    await music.seek(position);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VideoPlayback(
+          sources: [video],
+          initialIndex: 0,
+          telegram: telegram,
+          music: music,
+          proxy: proxy,
+          onOpened: (_) {},
+          createController: () => _VideoController(native),
+          minimized: true,
+          onBack: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(native.state.playing, isTrue);
+    expect(audio.playing, isFalse);
+    native.complete();
+    await tester.pumpAndSettle();
+    expect(audio.playing, isTrue);
+    expect(audio.position, position);
+
+    await tester.tap(find.byTooltip('Play video'));
+    await tester.pumpAndSettle();
+    expect(native.state.playing, isTrue);
+    expect(audio.playing, isFalse);
+    final release = music.releaseVideo!();
+    await tester.pumpWidget(const SizedBox.shrink());
+    var released = false;
+    unawaited(release.then((_) => released = true));
+    for (var frame = 0; frame < 30 && !released; frame++) {
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(released, isTrue);
+    expect(audio.playing, isTrue);
+    expect(audio.position, position);
   });
 
   for (final size in [const Size(390, 844), const Size(1280, 720)]) {
