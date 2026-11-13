@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart' show DragStartBehavior;
@@ -15,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'models.dart';
 import 'media_item_sheet.dart';
 import 'music_playlist_widgets.dart';
+import 'playlist_photos.dart';
 import 'library_widgets.dart';
 import 'lyrics.dart';
 import 'lyrics_view.dart';
@@ -30,6 +30,7 @@ import 'updater.dart';
 import 'update_widgets.dart';
 import 'wave_seek_bar.dart';
 import 'now_playing_effects.dart';
+import 'player_origin_snapshot.dart';
 import 'data_files.dart';
 import 'stats_view.dart';
 import 'listening.dart';
@@ -38,6 +39,7 @@ import 'sync/settings_view.dart';
 import 'release_notes.dart';
 import 'app_navigation.dart';
 import 'app_theme.dart';
+import 'app_motion.dart';
 import 'setup_view.dart';
 import 'settings_view.dart';
 import 'preference_widgets.dart';
@@ -198,6 +200,14 @@ class _AuralisAppState extends State<AuralisApp> {
           : 350,
     ),
     theme: auralisTheme(_scheme),
+    scrollBehavior: const AuralisScrollBehavior(),
+    builder: (context, child) => ListenableBuilder(
+      listenable: widget.player,
+      builder: (_, _) => AuralisMotion(
+        disabled: widget.player.settings.reducedMotion,
+        child: child!,
+      ),
+    ),
     home: _settingUp
         ? SetupView(
             player: widget.player,
@@ -303,7 +313,6 @@ class _PlayerShellState extends State<PlayerShell>
   late final _playerHeaderOpacity = ReverseAnimation(_dismissPlayer).drive(
     CurveTween(curve: const Interval(.32, .83)),
   );
-  final _transitionBlur = SnapshotController(allowSnapshotting: true);
   final _dockKey = GlobalKey();
   final _surfaceKey = GlobalKey();
   static const _miniPlayerRadius = 24.0;
@@ -651,7 +660,6 @@ class _PlayerShellState extends State<PlayerShell>
     telegram.removeListener(_prepareMedia);
     library.removeListener(_prepareMedia);
     _dismissPlayer.dispose();
-    _transitionBlur.dispose();
     lyrics.close();
     library.dispose();
     widget.sync?.removeListener(_syncChanged);
@@ -979,36 +987,6 @@ class _PlayerShellState extends State<PlayerShell>
               ),
             )
           : null;
-      // Reuse the blurred page without drawing a second dock behind the panel.
-      final background = expanded
-          ? SnapshotWidget(
-              key: const ValueKey('player-cached-blur'),
-              controller: _transitionBlur,
-              mode: SnapshotMode.permissive,
-              autoresize: true,
-              child: ImageFiltered(
-                key: const ValueKey('player-transition-blur'),
-                imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                child: TickerMode(
-                  enabled: false,
-                  child: ExcludeFocus(
-                    child: ExcludeSemantics(
-                      child: IgnorePointer(
-                        child: Material(
-                          key: const ValueKey('player-collapse-background'),
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                          child: SafeArea(
-                            bottom: false,
-                            child: _originContent(transitionCopy: true),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            )
-          : null;
       final dockPreview = expanded && track != null
           ? TickerMode(
               enabled: false,
@@ -1021,15 +999,17 @@ class _PlayerShellState extends State<PlayerShell>
         animation: _dismissPlayer,
         child: RepaintBoundary(
           key: const ValueKey('player-origin-page'),
-          child: child,
+          child: PlayerOriginSnapshot(
+            enabled: expanded && !_reducedPlayerMotion,
+            dismissal: _dismissPlayer,
+            child: child,
+          ),
         ),
         builder: (context, origin) {
           final progress = 1 - _dismissPlayer.value;
           // Geometry follows the controller directly, including during a drag.
           // The release simulation supplies the easing exactly once.
           final bounds = Rect.lerp(mini, full, progress)!;
-          final blurOpacity = const Interval(.025, .24, curve: Curves.easeOut)
-              .transform(progress);
           final dockOpacity = 1 - const Interval(.12, .48).transform(progress);
           final transitioning =
               expanded && (_dismissPlayer.value > 0 || _closingPlayer);
@@ -1050,12 +1030,6 @@ class _PlayerShellState extends State<PlayerShell>
                     ),
                   ),
                 ),
-                if (transitioning)
-                  Opacity(
-                    key: const ValueKey('player-transition-blur-opacity'),
-                    opacity: blurOpacity,
-                    child: background,
-                  ),
                 if (expanded)
                   Positioned.fromRect(
                     rect: bounds,
@@ -1991,6 +1965,8 @@ class _PlayerShellState extends State<PlayerShell>
           MusicPlaylistPreview(
             name: entry.key,
             songCount: entry.value.length,
+            photo: player.settings.playlistPhotos.photo(
+                'music', player.settings.musicPhotoScope, entry.key),
             tracks: [
               for (final id in entry.value)
                 if (byId[id] case final Track track) track,
@@ -1999,6 +1975,20 @@ class _PlayerShellState extends State<PlayerShell>
       ],
       searching: search.text.isNotEmpty,
       bottomPadding: _dockPadding,
+      actionsBuilder: (playlist) => PlaylistCardMenu(
+        name: playlist.name, hasPhoto: playlist.photo != null,
+        onChangePhoto: () => _changeMusicPlaylistPhoto(playlist.name, reset: false),
+        onResetPhoto: () => _changeMusicPlaylistPhoto(playlist.name, reset: true),
+        onRename: () async {
+          final name = await _editPlaylist(previous: playlist.name);
+          if (mounted && name != null) {
+            setState(() {
+              if (selectedPlaylist == playlist.name) selectedPlaylist = name;
+            });
+          }
+        },
+        onRemove: () => _deletePlaylist(playlist.name),
+      ),
       artwork: (track) => Artwork(
         seed: track.title,
         small: true,
@@ -2019,6 +2009,19 @@ class _PlayerShellState extends State<PlayerShell>
         search.clear();
       }),
     );
+  }
+
+  Future<void> _changeMusicPlaylistPhoto(String name, {required bool reset}) async {
+    final settings = player.settings;
+    final scope = settings.musicPhotoScope;
+    final list = settings.playlists[name];
+    if (list == null) return;
+    await editPlaylistPhoto(context: context, photos: settings.playlistPhotos,
+      mode: 'music', scope: scope, name: name, reset: reset,
+      valid: () => settings.musicPhotoScope == scope &&
+          identical(settings.playlists[name], list),
+      save: settings.save,
+      refresh: () { if (mounted) setState(() {}); });
   }
 
   Widget _libraryCacheStatus() {
