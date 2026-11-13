@@ -151,6 +151,24 @@ void main() {
       expect(audio.playing, isFalse);
       checkRows();
       expect(tester.takeException(), isNull);
+      settings.recentIds = tracks.map((track) => track.id).toList();
+      player.refreshSettings();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('library-collection-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Recently played').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Clear history'), findsNothing);
+      expect(settings.recentIds, tracks.map((track) => track.id).toList());
+      checkRows();
+      await tester.enterText(find.byType(TextField), tracks.first.title);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(ValueKey('track-title-${tracks.first.id}')),
+        findsOneWidget,
+      );
+      expect(find.text('Clear history'), findsNothing);
+      expect(settings.recentIds, tracks.map((track) => track.id).toList());
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
