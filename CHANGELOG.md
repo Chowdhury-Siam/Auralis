@@ -1,5 +1,36 @@
 # Auralis changes
 
+## 0.1.205
+
+- Remove unused Music history, transition, lyrics and sync code, and discard outdated delivery instructions.
+
+## 0.1.204
+
+- Keep a pending Music playlist photo selection open when sync refreshes an unchanged playlist.
+- Show the 1,000-video playlist limit when an addition would exceed it, and preserve the existing playlist.
+- Stop retrying the same sync page when a Worker reports more data without advancing its cursor. Keep local changes queued for the next sync.
+
+## 0.1.203
+
+- Keep separate limits for local and Telegram video resume points so watching videos from one source does not displace saved progress from the other.
+
+## 0.1.202
+
+- Keep loaded music and channel counts if a channel-selection change cannot be saved, and reload the Music Library when Telegram reconnects during a channel-selection save.
+
+## 0.1.201
+
+- Keep a song selected manually when the previous song finishes at the same time, and prevent a pending song from starting after Stop.
+- Refresh the playback position immediately after seeking from Android system media controls, including short jumps.
+
+## 0.1.200
+
+- Avoid a potential Android rendering crash when opening Now Playing by animating over the live page without capturing or blurring it.
+
+## 0.1.199
+
+- Buffer Telegram music before playback begins to avoid a short burst of audio followed by a gap when starting or switching songs.
+
 ## 0.1.198
 
 - Refresh Video Settings & diagnostics with responsive action cards, descriptive groups, rounded pop-ups, clearer player/layout controls and dedicated configuration/custom-command editors. Replace inactive diagnostics rows with guidance; keep working diagnostics inside the video player and refresh playback information and console surfaces.
