@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.192
+
+- Match Music Playlists to the rest of the app with rounded artwork cards, song counts, empty states and a prominent Create playlist action. Keep playlist search, editing and saved song order.
+- Give Video Playlists, History and Snapshots the same rounded search-and-content panel as All videos. Keep separate section filters, existing cards and actions, original playback queue indices and unfiltered playlist reordering.
+
 ## 0.1.191
 
 - Remove song-row duration labels from Music lists and the separate add-to-queue shortcut from Daily Mix. Keep the three-dot Options / Info menu, its queue actions, duration details and existing playback behavior.
