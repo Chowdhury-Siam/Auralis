@@ -255,6 +255,7 @@ class AppSettings {
       (value) => value.name == json['repeatMode'],
       orElse: () => PlaybackRepeat.off,
     );
+    final previousPlaylists = playlists;
     playlists = {};
     final saved = json['playlists'];
     if (saved is Map) {
@@ -265,7 +266,17 @@ class AppSettings {
             name.trim().isNotEmpty &&
             name.length <= 60 &&
             names.add(name.trim().toLowerCase())) {
-          playlists[name.trim()] = _ids(entry.value, 5000);
+          final key = name.trim();
+          final ids = _ids(entry.value, 5000);
+          final previous = previousPlaylists[key];
+          // An unchanged sync snapshot must not invalidate a pending photo edit.
+          playlists[key] = previous != null &&
+                  previous.length == ids.length &&
+                  Iterable<int>.generate(ids.length).every(
+                    (index) => previous[index] == ids[index],
+                  )
+              ? previous
+              : ids;
         }
       }
     }
