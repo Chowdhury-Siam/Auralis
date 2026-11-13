@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, listEquals;
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 
@@ -48,9 +48,7 @@ import 'discovery_widgets.dart';
 
 part 'discovery_view.dart';
 
-const accent = Color(0xFFC7B5FF),
-    surface = Color(0xFF19171E),
-    muted = Color(0xFFAAA4B5);
+const accent = Color(0xFFC7B5FF), surface = Color(0xFF19171E);
 
 class AuralisApp extends StatefulWidget {
   const AuralisApp({
@@ -768,7 +766,7 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Widget _originContent({bool transitionCopy = false}) => LayoutBuilder(
+  Widget _originContent() => LayoutBuilder(
     builder: (context, box) {
       final viewport = MediaQuery.sizeOf(context);
       final page = destination == _Page.nowPlaying
@@ -790,7 +788,7 @@ class _PlayerShellState extends State<PlayerShell>
                 child: _pageContent(page, narrow: narrow, short: short),
               ),
               if (compact && !floatingNavigation)
-                _bottomNavigation(page: page, transitionCopy: transitionCopy),
+                _bottomNavigation(page: page),
             ],
           ),
           if (floatingNavigation)
@@ -798,12 +796,9 @@ class _PlayerShellState extends State<PlayerShell>
               left: 0,
               right: 0,
               bottom: 0,
-              child: _bottomNavigation(
-                page: page,
-                transitionCopy: transitionCopy,
-              ),
+              child: _bottomNavigation(page: page),
             ),
-          if (!transitionCopy && !_keyboardOpen && player.current != null)
+          if (!_keyboardOpen && player.current != null)
             Positioned(
               left: 0,
               right: 0,
@@ -997,7 +992,12 @@ class _PlayerShellState extends State<PlayerShell>
         child: RepaintBoundary(
           key: const ValueKey('player-origin-page'),
           child: PlayerOriginSnapshot(
-            enabled: expanded && !_reducedPlayerMotion,
+            // Keep the origin live on Android to avoid capturing the page and
+            // rasterizing a second, blurred image on the native render thread.
+            enabled:
+                defaultTargetPlatform != TargetPlatform.android &&
+                expanded &&
+                !_reducedPlayerMotion,
             dismissal: _dismissPlayer,
             child: child,
           ),
@@ -1443,9 +1443,9 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _bottomNavigation({required _Page page, bool transitionCopy = false}) {
+  Widget _bottomNavigation({required _Page page}) {
     return AppNavigation(
-      key: transitionCopy ? null : const ValueKey('app-navigation'),
+      key: const ValueKey('app-navigation'),
       style: player.settings.navigationStyle,
       radius: player.settings.navigationRadius,
       reducedMotion: _reducedPlayerMotion,
@@ -1453,7 +1453,7 @@ class _PlayerShellState extends State<PlayerShell>
         _mainPages.contains(page) ? page : _primaryPage,
       ),
       onSelected: (i) => _navigate(_mainPages[i]),
-      onHomeHold: transitionCopy ? null : _openVideos,
+      onHomeHold: _openVideos,
     );
   }
 
