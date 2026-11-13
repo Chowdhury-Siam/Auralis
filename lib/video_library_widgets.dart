@@ -32,6 +32,9 @@ class _VideoCollectionPage extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 1120),
           child: CustomScrollView(
             key: const ValueKey('video-collection-scroll'),
+            physics: slivers.any((sliver) => sliver is SliverReorderableList)
+                ? const ClampingScrollPhysics()
+                : null,
             slivers: [
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
@@ -235,12 +238,8 @@ Widget _collectionGrid(
 );
 
 class _VideoSourcePreview extends StatelessWidget {
-  const _VideoSourcePreview(
-    this.source, {
-    this.icon = Icons.play_arrow_rounded,
-  });
+  const _VideoSourcePreview(this.source);
   final VideoSource? source;
-  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -254,7 +253,11 @@ class _VideoSourcePreview extends StatelessWidget {
         ),
       ),
       child: Center(
-        child: Icon(icon, size: 32, color: colors.onPrimaryContainer),
+        child: Icon(
+          Icons.play_arrow_rounded,
+          size: 32,
+          color: colors.onPrimaryContainer,
+        ),
       ),
     );
     final preview = source?.telegram?.coverPreview;
@@ -265,130 +268,6 @@ class _VideoSourcePreview extends StatelessWidget {
             fit: BoxFit.cover,
             errorBuilder: (_, _, _) => fallback,
           );
-  }
-}
-
-class _VideoPlaylistCard extends StatelessWidget {
-  const _VideoPlaylistCard({
-    required this.name,
-    required this.sources,
-    required this.showCount,
-    required this.onOpen,
-    required this.onRename,
-    required this.onRemove,
-  });
-  final String name;
-  final List<VideoSource> sources;
-  final bool showCount;
-  final VoidCallback onOpen, onRename, onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final previews = sources
-        .where((source) => source.telegram?.coverPreview != null)
-        .take(3)
-        .toList();
-    return Material(
-      color: colors.surfaceContainerLow,
-      shape: auralisSurfaceShape(colors, radius: 24, borderOpacity: .35),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              height: 112,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Row(
-                    children: [
-                      for (final source in <VideoSource?>[
-                        if (previews.isEmpty) null else ...previews,
-                      ])
-                        Expanded(
-                          child: _VideoSourcePreview(
-                            source,
-                            icon: Icons.playlist_play_rounded,
-                          ),
-                        ),
-                    ],
-                  ),
-                  PositionedDirectional(
-                    top: 8,
-                    end: 8,
-                    child: Material(
-                      color: colors.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(14),
-                      child: AuralisPopupMenu<String>(
-                        tooltip: 'Playlist options: $name',
-                        icon: const Icon(Icons.more_horiz_rounded),
-                        onSelected: (action) =>
-                            action == 'rename' ? onRename() : onRemove(),
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: 'rename',
-                            child: AuralisMenuRow(
-                              title: 'Rename',
-                              icon: Icons.edit_outlined,
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'remove',
-                            child: AuralisMenuRow(
-                              title: 'Remove',
-                              icon: Icons.delete_outline_rounded,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        if (showCount)
-                          Expanded(
-                            child: Text(
-                              '${sources.length} ${sources.length == 1 ? 'video' : 'videos'}',
-                              style: TextStyle(color: colors.onSurfaceVariant),
-                            ),
-                          )
-                        else
-                          const Spacer(),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          color: colors.primary,
-                          size: 20,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -526,108 +405,111 @@ class _VideoSnapshotCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final position = _snapshotPosition(file);
-    return Material(
-      color: colors.surfaceContainerLow,
-      shape: auralisSurfaceShape(colors, radius: 24, borderOpacity: .35),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.file(
-                    file,
-                    fit: BoxFit.cover,
-                    cacheWidth: 720,
-                    frameBuilder: (_, child, frame, _) => frame != null
-                        ? child
-                        : ColoredBox(
-                            color: colors.secondaryContainer,
-                            child: Icon(
-                              Icons.photo_outlined,
-                              color: colors.onSecondaryContainer,
-                              size: 40,
-                            ),
-                          ),
-                    errorBuilder: (_, _, _) => ColoredBox(
-                      color: colors.secondaryContainer,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        color: colors.onSecondaryContainer,
-                        size: 40,
-                      ),
-                    ),
-                  ),
-                  PositionedDirectional(
-                    top: 10,
-                    end: 10,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.scrim.withValues(alpha: .6),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Icon(
-                          Icons.open_in_full_rounded,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 8, 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return AuralisPressFeedback(
+      builder: (context, states) => Material(
+        color: colors.surfaceContainerLow,
+        shape: auralisSurfaceShape(colors, radius: 24, borderOpacity: .35),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          statesController: states,
+          onTap: onOpen,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Text(
-                      _snapshotTitle(file),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            position == null
-                                ? 'PNG image'
-                                : 'Frame at ${clockText(position)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: colors.onSurfaceVariant,
-                              fontSize: 12,
+                    Image.file(
+                      file,
+                      fit: BoxFit.cover,
+                      cacheWidth: 720,
+                      frameBuilder: (_, child, frame, _) => frame != null
+                          ? child
+                          : ColoredBox(
+                              color: colors.secondaryContainer,
+                              child: Icon(
+                                Icons.photo_outlined,
+                                color: colors.onSecondaryContainer,
+                                size: 40,
+                              ),
                             ),
+                      errorBuilder: (_, _, _) => ColoredBox(
+                        color: colors.secondaryContainer,
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: colors.onSecondaryContainer,
+                          size: 40,
+                        ),
+                      ),
+                    ),
+                    PositionedDirectional(
+                      top: 10,
+                      end: 10,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: colors.scrim.withValues(alpha: .6),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.open_in_full_rounded,
+                            color: Colors.white,
+                            size: 18,
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Delete snapshot',
-                          onPressed: onDelete,
-                          icon: const Icon(
-                            Icons.delete_outline_rounded,
-                            size: 20,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 8, 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _snapshotTitle(file),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              position == null
+                                  ? 'PNG image'
+                                  : 'Frame at ${clockText(position)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: colors.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Delete snapshot',
+                            onPressed: onDelete,
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 20,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
