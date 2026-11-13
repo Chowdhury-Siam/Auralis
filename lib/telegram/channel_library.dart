@@ -18,6 +18,7 @@ class ChannelLibrary extends ChangeNotifier {
   final _trackCounts = <int, int>{};
 
   bool loading = false, saving = false, _disposed = false, _ready;
+  bool _refreshAfterSave = false;
   int _generation = 0;
   String? error;
 
@@ -28,33 +29,33 @@ class ChannelLibrary extends ChangeNotifier {
   Future<void> select(MusicChat channel, bool selected) async {
     if (saving || _disposed) return;
     final previous = settings.selectedChannels;
-    settings.selectedChannels = [
+    final selection = [
       for (final c in previous)
         if (c.id != channel.id) c,
       if (selected) channel,
     ];
-    final generation = ++_generation;
-    tracks.clear();
-    _trackCounts.clear();
-    loading = false;
+    settings.selectedChannels = selection;
     saving = true;
     error = null;
     notifyListeners();
+    String? saveError;
     try {
       await settings.save();
     } catch (_) {
-      settings.selectedChannels = previous;
-      if (!_disposed && generation == _generation) {
-        error = 'Could not save your channel selection. Please try again.';
+      // Sign-out or sync may already have replaced this selection.
+      if (identical(settings.selectedChannels, selection)) {
+        settings.selectedChannels = previous;
       }
+      saveError = 'Could not save your channel selection. Please try again.';
     } finally {
       saving = false;
     }
-    if (_disposed || generation != _generation) return;
-    if (error != null) {
-      notifyListeners();
+    if (_disposed) return;
+    if (saveError == null || _refreshAfterSave) {
+      await _refresh(selectionError: saveError);
     } else {
-      await refresh();
+      error = saveError;
+      notifyListeners();
     }
   }
 
@@ -73,12 +74,20 @@ class ChannelLibrary extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh() async {
-    if (_disposed || saving) return;
+  Future<void> refresh() => _refresh();
+
+  Future<void> _refresh({String? selectionError}) async {
+    if (_disposed) return;
+    if (saving) {
+      // Reconnect and sync can request a refresh while selection is saving.
+      _refreshAfterSave = true;
+      return;
+    }
+    _refreshAfterSave = false;
     final generation = ++_generation;
     tracks.clear();
     _trackCounts.clear();
-    error = null;
+    error = selectionError;
     final channels = List<MusicChat>.of(settings.selectedChannels);
     loading = telegram.ready && channels.isNotEmpty;
     notifyListeners();
