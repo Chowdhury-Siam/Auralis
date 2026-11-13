@@ -277,6 +277,8 @@ enum VideoHdrProfile {
 }
 
 class VideoPlaybackData {
+  static const playlistItemLimit = 1000;
+
   LibrarySort librarySort = LibrarySort.title;
   final playlists = <String, List<VideoSource>>{};
   final history = <String, VideoHistoryEntry>{};
@@ -413,7 +415,7 @@ class VideoPlaybackData {
       recordVideo(source, at: DateTime.fromMillisecondsSinceEpoch(record['openedAt'] as int, isUtc: true));
       final ms = record['position'] as int;
       if (ms > 0 && !isWatched(source)) {
-        positions[source.id] = Duration(milliseconds: ms);
+        _storePosition(source.id, Duration(milliseconds: ms));
       } else {
         positions.remove(source.id);
       }
@@ -440,7 +442,9 @@ class VideoPlaybackData {
     for (final item in items) {
       if (!item.canPlay) continue;
       entries.putIfAbsent(item.id, () => item);
-      if (entries.length == 1000) break;
+      if (entries.length > playlistItemLimit) {
+        throw const FormatException('A video playlist can hold up to 1,000 videos.');
+      }
     }
     playlists[name] = entries.values.toList();
   }
@@ -450,9 +454,19 @@ class VideoPlaybackData {
     if (position >= const Duration(seconds: 3) &&
         (duration == Duration.zero ||
             duration - position >= const Duration(seconds: 3))) {
-      positions[id] = position;
-      if (positions.length > _limit) positions.remove(positions.keys.first);
+      _storePosition(id, position);
     }
+  }
+
+  void _storePosition(String id, Duration position) {
+    positions[id] = position;
+    if (positions.length <= _limit) return;
+    // History has separate limits for local files and Telegram videos.
+    final telegram = id.startsWith('telegram:');
+    final sameKind = positions.keys.where(
+      (key) => key.startsWith('telegram:') == telegram,
+    );
+    if (sameKind.length > _limit) positions.remove(sameKind.first);
   }
 
   void setOrientation(String id, String value) {
@@ -550,7 +564,7 @@ class VideoPlaybackData {
         if (entry.key case final String name
             when name.trim().isNotEmpty && name.length <= 80) {
           if (entry.value case final List items) {
-            data.putPlaylist(name, items.take(1000).map(VideoSource.restore)
+            data.putPlaylist(name, items.take(playlistItemLimit).map(VideoSource.restore)
                 .whereType<VideoSource>());
           }
         }
@@ -612,7 +626,7 @@ class VideoPlaybackData {
       for (final entry in positions.entries.take(_limit * 2)) {
         if (entry.key is! String) continue;
         if (_duration(entry.value) case final Duration value) {
-          data.positions[entry.key as String] = value;
+          data._storePosition(entry.key as String, value);
         }
       }
     }
