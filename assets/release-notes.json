@@ -1,6 +1,14 @@
 {
-  "current": "0.1.197",
+  "current": "0.1.198",
   "releases": [
+    {
+      "version": "0.1.198",
+      "changes": [
+        "Refresh Video Settings & diagnostics with responsive action cards, descriptive groups, rounded pop-ups, clearer player/layout controls and dedicated configuration/custom-command editors. Replace inactive diagnostics rows with guidance; keep working diagnostics inside the video player and refresh playback information and console surfaces.",
+        "Remove the Settings search box in Music and Video. Keep categories directly accessible without changing library, channel or lyrics searches.",
+        "Refresh Listening stats with a new overview, clearer metric cards, timeline highlights, rankings and listening habits. Preserve period filters, chart/ranking switches, saved listening data, and separate backup/restore actions."
+      ]
+    },
     {
       "version": "0.1.197",
       "changes": [
