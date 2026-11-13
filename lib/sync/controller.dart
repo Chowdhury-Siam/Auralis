@@ -250,6 +250,9 @@ class SyncController extends ChangeNotifier {
         result['records'] is! Map<String, dynamic>) {
       throw const FormatException('Invalid sync response.');
     }
+    if (result['more'] == true && (result['cursor'] as int) <= (data['cursor'] as int)) {
+      throw const FormatException('Sync cursor did not advance.');
+    }
     return result;
   }
 
@@ -455,29 +458,6 @@ class SyncController extends ChangeNotifier {
       const Duration(seconds: 10),
       () => unawaited(_connectLive(generation)),
     );
-  }
-
-  Future<void> disconnect() async {
-    if (_account != null) {
-      await signOut();
-      return;
-    }
-    // Clear the protected credentials first. A failure keeps the current account.
-    await vault.write({});
-    _generation++;
-    _url = null;
-    _key = null;
-    _debounce?.cancel();
-    _poll?.cancel();
-    _retry?.cancel();
-    await _live?.cancel();
-    unawaited(_socket?.close());
-    _socket = null;
-    settings.syncState = {};
-    await settings.save();
-    status = 'Disconnected. Your local library is kept.';
-    error = null;
-    _changed();
   }
 
   Future<String> connectionDetails() async {
