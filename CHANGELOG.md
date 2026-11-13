@@ -1,5 +1,14 @@
 # Auralis changes
 
+## 0.1.207
+
+- Give music more time to buffer at startup and keep repeated selections and stale completion events from restarting an opening song.
+- Resume music at the same position when Android restores temporary audio focus or when an Auralis video finishes or closes.
+
+## 0.1.206
+
+- Make the Video History and Snapshots banners more compact, remove their search bars, and tighten History episode cards while keeping their playback status and actions.
+
 ## 0.1.205
 
 - Remove unused Music history, transition, lyrics and sync code, and discard outdated delivery instructions.
