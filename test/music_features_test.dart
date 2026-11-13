@@ -41,12 +41,21 @@ PlayerController makePlayer({AudioBackend? audio, AppSettings? settings}) =>
     );
 
 class PendingAudio extends FakeAudio {
+  final started = Completer<void>();
   final opening = Completer<void>();
   @override
   Future<void> open(String uri) async {
+    started.complete();
     await opening.future;
     await super.open(uri);
   }
+}
+
+class PendingListeningSave extends MemorySettings {
+  var saving = Completer<void>();
+
+  @override
+  Future<void> save() => saving.future;
 }
 
 class UnwritableSettings extends MemorySettings {
@@ -125,11 +134,10 @@ void main() {
     expect(restored.repeatMode, PlaybackRepeat.one);
     await player.removeFromPlaylist('Evening', b);
     await player.toggleFavorite(a);
-    await player.clearRecent();
     await player.deletePlaylist('Evening');
     await restored.load();
     expect(restored.favoriteIds, isEmpty);
-    expect(restored.recentIds, isEmpty);
+    expect(restored.recentIds, [a.id, b.id]);
     expect(restored.playlists, isEmpty);
   });
 
@@ -206,6 +214,53 @@ void main() {
       expect(player.repeatMode, PlaybackRepeat.off);
     },
   );
+
+  test('a delayed track completion cannot skip a manually selected song', () async {
+    final audio = FakeAudio();
+    final settings = PendingListeningSave();
+    var elapsed = Duration.zero;
+    final player = PlayerController(
+      audio,
+      TelegramStreamProxy((_) async => {}),
+      settings,
+      elapsed: () => elapsed,
+    )..queue.addAll([a, b, a]);
+    addTearDown(() async {
+      if (!settings.saving.isCompleted) settings.saving.complete();
+      await player.shutdown();
+    });
+    // The initial history save must finish. Block the listening checkpoint
+    // separately so an old completion overlaps a new manual selection.
+    settings.saving.complete();
+    await player.playAt(0);
+    settings.saving = Completer<void>();
+    elapsed = const Duration(seconds: 1);
+    audio.position = elapsed;
+    audio.notifyListeners();
+    audio.playing = false;
+    audio.onCompleted!();
+    final selected = player.playAt(1);
+    settings.saving.complete();
+    await selected;
+    await Future<void>.delayed(Duration.zero);
+    expect(player.index, 1);
+    expect(player.current, b);
+  });
+
+  test('stopping while a track opens leaves playback stopped', () async {
+    final audio = PendingAudio();
+    final player = makePlayer(audio: audio)..enqueue(a);
+    addTearDown(player.shutdown);
+    final playing = player.playAt(0);
+    await audio.started.future;
+    final stopping = player.clear();
+    await Future<void>.delayed(Duration.zero);
+    audio.opening.complete();
+    await Future.wait([playing, stopping]);
+    expect(player.queue, isEmpty);
+    expect(audio.playing, isFalse);
+    expect(player.proxy.hasActiveSource, isFalse);
+  });
 
   testWidgets(
     'sleep timer pauses, never resumes paused audio, cancels and overrides repeat one',
