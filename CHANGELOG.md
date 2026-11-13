@@ -1,5 +1,15 @@
 # Auralis changes
 
+## 0.1.194
+
+- Reduce mini-player opening work by snapshotting the existing page instead of building a duplicate Home or Library tree for the transition blur. Cache the bounded blur once per snapshot, reuse it across animation frames, and release transition textures when fully expanded or returned. Keep the same expansion timing, gestures, reduced-motion behavior and uninterrupted playback.
+
+## 0.1.193
+
+- Use the same playlist card layout, spacing, artwork and menus in Music and Video. Add Change playlist photo and Reset photo, with bounded device-local image copies, rename support and safe cancellation/error handling.
+- Add gentle vertical scroll elasticity and spring press feedback to suitable buttons and cards. Respect reduced-motion accessibility settings; preserve precise horizontal paging, seeking, sliders and video reordering.
+- Refresh the README for current Music/Video workflows, playlist photos, motion behavior, sync boundaries and feature limits.
+
 ## 0.1.192
 
 - Match Music Playlists to the rest of the app with rounded artwork cards, song counts, empty states and a prominent Create playlist action. Keep playlist search, editing and saved song order.
