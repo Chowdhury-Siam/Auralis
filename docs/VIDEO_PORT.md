@@ -4,6 +4,7 @@ Auralis 0.1.144+145 builds on the Video mode port from the supplied Auralis 0.1.
 
 ## Using the additions
 
+- Music and Video use the same playlist artwork cards and option menus. Use **Change playlist photo** or **Reset photo** in a card's menu; custom photos stay on the device and are not included in portable backups or Worker Sync.
 - All Library collections share the rounded search-and-content panel. Playlists can be found by their name or video titles, History by video title or channel, and Snapshots by frame title or filename. Each section keeps its own filter. Searching does not change saved queues, history or frame files; clear a playlist filter to restore drag-to-reorder handles.
 - **Playlists** creates named video lists and lets you add files, reorder entries, rename lists, and remove items. Save the current queue to a named playlist. Telegram entries store chat and message IDs and resolve again through TDLib when reopened. Access to an Android document depends on the provider's persisted read grant.
 - **Save video frame** adds a PNG to **Snapshots**, where it can be previewed, exported, or deleted. **Player settings** controls whether the capture includes rendered subtitles.
