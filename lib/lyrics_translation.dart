@@ -26,9 +26,12 @@ class LyricsTranslator {
   bool _closed = false;
   static final _japanese = RegExp(r'[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]');
   static final _english = RegExp(r'[A-Za-z]');
+  static final _letters = RegExp(r'\p{L}', unicode: true);
   static bool _needsTranslation(String text, TranslationDirection direction) =>
       direction == TranslationDirection.japaneseEnglish
-      ? _japanese.hasMatch(text)
+      // ASCII-only French, Spanish, etc. cannot be ruled out as English locally.
+      // Let the provider detect the language; identical output is not duplicated.
+      ? _letters.hasMatch(text)
       : _english.hasMatch(text) && !_japanese.hasMatch(text);
   static bool supports(
     Lyrics lyrics, {
@@ -69,7 +72,7 @@ class LyricsTranslator {
           utf8.encode(
             jsonEncode([
               direction == TranslationDirection.japaneseEnglish
-                  ? 'free-ja-en-v1'
+                  ? 'free-auto-en-v2'
                   : 'free-en-ja-v1',
               if (first != TranslationSource.google ||
                   fallback != TranslationSource.myMemory)
@@ -148,7 +151,8 @@ class LyricsTranslator {
                   })
                 : Uri.https('api.mymemory.translated.net', '/get', {
                     'q': text,
-                    'langpair': '${direction.source}|${direction.target}',
+                    'langpair':
+                        '${direction.source == 'auto' ? 'autodetect' : direction.source}|${direction.target}',
                     'mt': '1',
                   }),
           );
