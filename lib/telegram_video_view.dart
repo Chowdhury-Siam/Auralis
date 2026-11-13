@@ -102,7 +102,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   TelegramService get _telegram => widget.telegram;
   final _search = TextEditingController();
   final _librarySearch = TextEditingController();
-  final _collectionSearch = List.generate(3, (_) => TextEditingController());
+  final _playlistSearch = TextEditingController();
   final _videoSources = <int>{};
   final _videoCounts = <int, int>{};
   late final TelegramStreamProxy _proxy;
@@ -191,9 +191,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         _showSearchChannel = false;
         _search.clear();
         _librarySearch.clear();
-        for (final controller in _collectionSearch) {
-          controller.clear();
-        }
+        _playlistSearch.clear();
         _videoSources.clear();
         _videoCounts.clear();
       });
@@ -492,9 +490,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     unawaited(_playbackRelease.whenComplete(_proxy.close));
     _search.dispose();
     _librarySearch.dispose();
-    for (final controller in _collectionSearch) {
-      controller.dispose();
-    }
+    _playlistSearch.dispose();
     super.dispose();
   }
 
@@ -773,21 +769,21 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             onChanged: _selectVideoCollection,
             itemBuilder: (context, index) {
               if (index == 0) return _browser(context);
-              final search = _collectionSearch[index - 1];
+              final playlists = index == 1;
               final page = index < 3
                   ? VideoLibraryPage(
                       key: ValueKey(('video-collection', index)),
                       data: settings.videoPlayback,
                       save: settings.save,
                       pickFiles: pickVideoFiles,
-                      playlists: index == 1,
+                      playlists: playlists,
                       historyArtwork: _historyArtwork,
                       embedded: true,
                       changes: widget.music,
-                      controller: index == 1 ? _playlistPageController : null,
+                      controller: playlists ? _playlistPageController : null,
                       bottomPadding: _bottomPadding(context),
-                    query: search.text,
-                    playlistPhotos: settings.playlistPhotos,
+                      query: playlists ? _playlistSearch.text : '',
+                      playlistPhotos: settings.playlistPhotos,
                       onPlay: (selected) =>
                           unawaited(_playLibrarySelection(selected)),
                     )
@@ -795,17 +791,13 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                       embedded: true,
                       active: _libraryCollection == 3,
                       bottomPadding: _bottomPadding(context),
-                      query: search.text,
                     );
               return _libraryBrowser(
                 context,
                 list: page,
-                searchController: search,
-                searchHint: switch (index) {
-                  1 => 'Search playlists and their videos',
-                  2 => 'Search video history',
-                  _ => 'Search snapshots',
-                },
+                showSearch: playlists,
+                searchController: _playlistSearch,
+                searchHint: 'Search playlists and their videos',
                 searchKey: ValueKey(('video-collection-search', index)),
                 panelKey: ValueKey(('video-library-panel', index)),
               );
@@ -819,6 +811,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   Widget _libraryBrowser(
     BuildContext context, {
     bool loading = false,
+    bool showSearch = true,
     required Widget list,
     TextEditingController? searchController,
     String searchHint = 'Search your videos',
@@ -836,26 +829,28 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
-              key: searchKey,
-              controller: search,
-              textInputAction: TextInputAction.search,
-              onChanged: (_) => setState(() {}),
-              onSubmitted: (_) => FocusScope.of(context).unfocus(),
-              decoration: InputDecoration(
-                hintText: searchHint,
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                suffixIcon: search.text.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: 'Clear search',
-                        onPressed: () => setState(search.clear),
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                      ),
+            if (showSearch) ...[
+              TextField(
+                key: searchKey,
+                controller: search,
+                textInputAction: TextInputAction.search,
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                decoration: InputDecoration(
+                  hintText: searchHint,
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  suffixIcon: search.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          onPressed: () => setState(search.clear),
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                        ),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
+            ],
             if (loading) const LinearProgressIndicator(minHeight: 2),
             Expanded(child: list),
           ],
