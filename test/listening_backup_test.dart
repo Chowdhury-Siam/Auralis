@@ -536,6 +536,8 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('Listened'), findsOneWidget);
+        await tester.ensureVisible(find.text('7 days'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('7 days'));
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('Play count'));
@@ -875,11 +877,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Settings').first);
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('settings-search')),
-      'backup',
-    );
-    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-search')), findsNothing);
     await tester.tap(find.text('Data & sync'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Listening stats'));
