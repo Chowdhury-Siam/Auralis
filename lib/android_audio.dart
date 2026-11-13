@@ -141,7 +141,7 @@ class AndroidAudioHandler extends BaseAudioHandler {
         : track.duration,
   );
 
-  void _sync() {
+  void _sync({bool forcePlaybackState = false}) {
     if (_closed) return;
     _syncArtwork();
     if (!listEquals(_tracks, player.queue)) {
@@ -172,7 +172,8 @@ class AndroidAudioHandler extends BaseAudioHandler {
     final old = playbackState.value;
     final index = track == null ? null : player.index;
     // The system projects the position between updates; don't rebuild its notification each tick.
-    if (old.processingState == processing &&
+    if (!forcePlaybackState &&
+        old.processingState == processing &&
         old.playing == audio.playing &&
         old.queueIndex == index &&
         (old.position - audio.position).inMilliseconds.abs() < 500 &&
@@ -220,7 +221,10 @@ class AndroidAudioHandler extends BaseAudioHandler {
   }
 
   @override
-  Future<void> seek(Duration position) => player.seek(position);
+  Future<void> seek(Duration position) async {
+    await player.seek(position);
+    _sync(forcePlaybackState: true);
+  }
   @override
   Future<void> skipToNext() => player.next();
   @override
