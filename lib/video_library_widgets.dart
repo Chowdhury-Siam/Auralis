@@ -4,21 +4,24 @@ class _VideoCollectionPage extends StatelessWidget {
   const _VideoCollectionPage({
     required this.title,
     required this.summary,
-    required this.description,
+    this.description,
     required this.icon,
     required this.slivers,
     this.onBack,
     this.actions = const [],
+    this.trailing,
+    this.compact = false,
     this.embedded = false,
     this.bottomPadding = 28,
   });
 
-  final String title, description;
-  final String? summary;
+  final String title;
+  final String? summary, description;
   final IconData icon;
   final VoidCallback? onBack;
   final List<Widget> actions, slivers;
-  final bool embedded;
+  final Widget? trailing;
+  final bool embedded, compact;
   final double bottomPadding;
 
   @override
@@ -41,7 +44,7 @@ class _VideoCollectionPage extends StatelessWidget {
                   embedded ? 8 : 16,
                   embedded ? 4 : 12,
                   embedded ? 8 : 16,
-                  20,
+                  compact ? 8 : 20,
                 ),
                 sliver: SliverToBoxAdapter(
                   child: Column(
@@ -69,9 +72,11 @@ class _VideoCollectionPage extends StatelessWidget {
                       ],
                       Container(
                         key: const ValueKey('video-collection-header'),
-                        padding: const EdgeInsets.all(20),
+                        padding: EdgeInsets.all(compact ? 8 : 20),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(28),
+                          borderRadius: BorderRadius.circular(
+                            compact ? 16 : 28,
+                          ),
                           border: Border.all(
                             color: colors.outlineVariant.withValues(alpha: .35),
                           ),
@@ -88,21 +93,25 @@ class _VideoCollectionPage extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: compact
+                                  ? CrossAxisAlignment.center
+                                  : CrossAxisAlignment.start,
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(14),
+                                  padding: EdgeInsets.all(compact ? 8 : 14),
                                   decoration: BoxDecoration(
                                     color: colors.primaryContainer,
-                                    borderRadius: BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.circular(
+                                      compact ? 10 : 20,
+                                    ),
                                   ),
                                   child: Icon(
                                     icon,
                                     color: colors.onPrimaryContainer,
-                                    size: 28,
+                                    size: compact ? 18 : 28,
                                   ),
                                 ),
-                                const SizedBox(width: 16),
+                                SizedBox(width: compact ? 10 : 16),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -110,20 +119,20 @@ class _VideoCollectionPage extends StatelessWidget {
                                     children: [
                                       Text(
                                         title,
-                                        style: const TextStyle(
-                                          fontSize: 28,
+                                        style: TextStyle(
+                                          fontSize: compact ? 18 : 28,
                                           fontWeight: FontWeight.w800,
                                           letterSpacing: -.7,
                                           height: 1.15,
                                         ),
                                       ),
                                       if (summary case final label?) ...[
-                                        const SizedBox(height: 8),
+                                        SizedBox(height: compact ? 3 : 8),
                                         Text(
                                           label,
                                           style: TextStyle(
                                             color: colors.primary,
-                                            fontSize: 13,
+                                            fontSize: compact ? 12 : 13,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
@@ -131,15 +140,20 @@ class _VideoCollectionPage extends StatelessWidget {
                                     ],
                                   ),
                                 ),
+                                ?trailing,
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            Text(
-                              description,
-                              style: TextStyle(color: colors.onSurfaceVariant),
-                            ),
+                            if (description case final detail?) ...[
+                              const SizedBox(height: 16),
+                              Text(
+                                detail,
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                             if (actions.isNotEmpty) ...[
-                              const SizedBox(height: 18),
+                              SizedBox(height: compact ? 6 : 18),
                               Wrap(
                                 spacing: 10,
                                 runSpacing: 10,
@@ -168,41 +182,70 @@ class _VideoCollectionPage extends StatelessWidget {
 }
 
 class _VideoEmptyCollection extends StatelessWidget {
-  const _VideoEmptyCollection(this.title, this.description, this.icon);
+  const _VideoEmptyCollection(
+    this.title,
+    this.description,
+    this.icon, {
+    this.compact = false,
+  });
   final String title, description;
   final IconData icon;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final titleStyle =
+        (compact
+                ? Theme.of(context).textTheme.titleMedium
+                : Theme.of(context).textTheme.titleLarge)
+            ?.copyWith(fontWeight: FontWeight.w700);
     return Container(
       key: const ValueKey('video-collection-empty'),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : 24,
+        vertical: compact ? 12 : 36,
+      ),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(compact ? 16 : 24),
       ),
-      child: Column(
-        children: [
-          Icon(icon, size: 44, color: colors.primary),
-          const SizedBox(height: 18),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Text(
-              description,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: colors.onSurfaceVariant),
+      child: compact
+          ? Row(
+              children: [
+                Icon(icon, size: 24, color: colors.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: titleStyle),
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                Icon(icon, size: 44, color: colors.primary),
+                const SizedBox(height: 18),
+                Text(title, textAlign: TextAlign.center, style: titleStyle),
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: Text(
+                    description,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colors.onSurfaceVariant),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -281,6 +324,7 @@ class _VideoEntryCard extends StatelessWidget {
     this.date,
     this.progress,
     this.artwork,
+    this.compact = false,
   });
   final VideoSource source;
   final String status;
@@ -289,15 +333,20 @@ class _VideoEntryCard extends StatelessWidget {
   final Widget? artwork;
   final List<Widget> actions;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: compact ? 6 : 12),
       child: Material(
         color: colors.surfaceContainerLow,
-        shape: auralisSurfaceShape(colors, radius: 22, borderOpacity: .35),
+        shape: auralisSurfaceShape(
+          colors,
+          radius: compact ? 14 : 22,
+          borderOpacity: .35,
+        ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -307,12 +356,20 @@ class _VideoEntryCard extends StatelessWidget {
                   box.maxWidth >= 620 &&
                   MediaQuery.textScalerOf(context).scale(14) <= 20;
               final controls = Wrap(
-                spacing: 4,
+                spacing: compact ? 0 : 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: actions,
               );
+              final statusLabel = Text(
+                status,
+                style: TextStyle(
+                  color: colors.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              );
               return Padding(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(compact ? 8 : 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -320,14 +377,16 @@ class _VideoEntryCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(
+                            compact ? 10 : 14,
+                          ),
                           child: SizedBox(
-                            width: wide ? 112 : 64,
-                            height: wide ? 78 : 56,
+                            width: compact ? 44 : (wide ? 112 : 64),
+                            height: compact ? 44 : (wide ? 78 : 56),
                             child: artwork ?? _VideoSourcePreview(source),
                           ),
                         ),
-                        const SizedBox(width: 14),
+                        SizedBox(width: compact ? 8 : 14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,10 +395,17 @@ class _VideoEntryCard extends StatelessWidget {
                                 source.title,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
+                                style:
+                                    (compact
+                                            ? Theme.of(context)
+                                                  .textTheme
+                                                  .titleSmall
+                                            : Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium)
+                                        ?.copyWith(fontWeight: FontWeight.w700),
                               ),
-                              const SizedBox(height: 4),
+                              SizedBox(height: compact ? 2 : 4),
                               Text(
                                 [
                                   source.telegram?.source ?? 'On your device',
@@ -352,31 +418,33 @@ class _VideoEntryCard extends StatelessWidget {
                                   fontSize: 12,
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                status,
-                                style: TextStyle(
-                                  color: colors.primary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                              if (!compact || wide) ...[
+                                SizedBox(height: compact ? 3 : 8),
+                                statusLabel,
+                              ],
                             ],
                           ),
                         ),
                         if (wide) ...[const SizedBox(width: 16), controls],
                       ],
                     ),
-                    if (!wide)
+                    if (!wide && compact)
+                      Row(
+                        children: [
+                          Expanded(child: statusLabel),
+                          controls,
+                        ],
+                      )
+                    else if (!wide)
                       Align(
                         alignment: AlignmentDirectional.centerEnd,
                         child: controls,
                       ),
                     if (progress case final double value) ...[
-                      const SizedBox(height: 12),
+                      SizedBox(height: compact ? 3 : 12),
                       LinearProgressIndicator(
                         value: value,
-                        minHeight: 3,
+                        minHeight: compact ? 2 : 3,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ],
