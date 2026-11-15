@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.210
+
+- Keep Lyrics import and paste actions ahead of the longer help text so taller fallback fonts do not push them below the visible content panel.
+
 ## 0.1.209
 
 - Add offline Spectrum and Butterchurn visualizer panels on Android and Windows alongside the redesigned Lyrics page, which remains the default.
