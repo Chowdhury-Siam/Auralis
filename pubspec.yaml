@@ -1,7 +1,7 @@
 name: auralis
 description: Independent, compact Android and Windows music player with TDLib Telegram browsing.
 publish_to: none
-version: 0.1.210+211
+version: 0.1.211+212
 environment:
   sdk: ^3.13.1
 dependencies:
