@@ -737,6 +737,47 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
+  /// Temporarily release TDLib's download offset for an explicit song export.
+  Future<T> withAudioReleased<T>(
+    Track track,
+    Future<T> Function() action,
+  ) async {
+    final id = track.fileId;
+    if (id == null || !proxy.isStreaming(id)) return action();
+    if (_closed || loading || restoringData || current?.fileId != id) {
+      throw StateError(
+        'Wait until this song finishes opening, then try again.',
+      );
+    }
+    final generation = ++_generation;
+    final position = audio.position;
+    final wasPlaying = audio.playing || _resumeAfterInterruption;
+    await flushListeningStats();
+    await audio.stop();
+    if (generation != _generation || _closed) {
+      throw StateError('The current song changed. Try again.');
+    }
+    await proxy.stop();
+    try {
+      return await action();
+    } finally {
+      if (generation == _generation && !_closed) {
+        final uri = await proxy.uri(track);
+        if (generation == _generation && !_closed) {
+          await audio.open(uri.toString(), play: false);
+          if (generation == _generation && !_closed) await audio.seek(position);
+          if (wasPlaying &&
+              generation == _generation &&
+              !_closed &&
+              !_focusInterrupted &&
+              !_videoInterrupted) {
+            await audio.setPlaying(true);
+          }
+        }
+      }
+    }
+  }
+
   void enqueue(Track track) {
     queue.add(track);
     notifyListeners();
