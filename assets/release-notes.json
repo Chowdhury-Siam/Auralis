@@ -1,6 +1,12 @@
 {
-  "current": "0.1.210",
+  "current": "0.1.211",
   "releases": [
+    {
+      "version": "0.1.211",
+      "changes": [
+        "Fix Windows visualizer compilation by avoiding a PCM variable name reserved by Windows SDK RPC headers."
+      ]
+    },
     {
       "version": "0.1.210",
       "changes": [
