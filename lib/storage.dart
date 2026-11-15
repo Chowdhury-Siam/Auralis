@@ -10,6 +10,7 @@ import 'video_playback_data.dart';
 import 'models.dart';
 import 'listening.dart';
 import 'playlist_photo_data.dart';
+import 'music_visualizer_data.dart';
 
 final class _Blob extends Struct {
   @Uint32()
@@ -124,6 +125,7 @@ class AppSettings {
   AppInterface defaultInterface = AppInterface.music;
   int? videoChannelId;
   VideoPlaybackData videoPlayback = VideoPlaybackData();
+  MusicVisualizerSettings musicVisualizer = MusicVisualizerSettings();
   void Function(Map<String, dynamic>)? captureSync;
   void Function()? onSaved;
   bool reducedMotion = false;
@@ -164,6 +166,7 @@ class AppSettings {
   Future<void> load() async {
     if (!await file.exists()) return;
     final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    musicVisualizer = MusicVisualizerSettings.fromJson(json['_musicVisualizer']);
     videoPlayback = VideoPlaybackData.fromJson(
       json['_videoPlayback'],
       // Before independent Video sorting, both modes used the Music value.
@@ -186,6 +189,7 @@ class AppSettings {
     ...snapshot,
     '_sync': syncState,
     '_videoPlayback': videoPlayback.toJson(),
+    '_musicVisualizer': musicVisualizer.toJson(),
     '_playlistPhotos': playlistPhotos.toJson(),
     '_lastSeenRelease': lastSeenRelease,
     '_setupComplete': setupComplete,
