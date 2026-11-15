@@ -16,6 +16,8 @@
   let song='', take=0, order=[], cursor=0, songInitialized=false;
   let lastTransform='', lastOpacity='', audioRevision=0, silent=true;
   let lastBeat=-Infinity, energyAverage=0, bassAverage=0, highAverage=0;
+  const beatsPerPreset=12;
+  let presetBeats=0;
   let energyRms=0, lastEnergyRender=0;
   let outputEnergy=0, outputPulse=0;
   const bandRms=new Float32Array(3), bandAverage=new Float32Array(3);
@@ -146,6 +148,7 @@
     energyRms=energy=Math.sqrt(energy/1024);
     const bass=bandRms[0], high=Math.hypot(bandRms[1],bandRms[2]);
     const elapsed=Number.isFinite(lastAudio)?Math.max(0,time-lastAudio):33;
+    let strongOnset=false;
     for (let i=0;i<3;i++) {
       impulses[i]*=Math.exp(-Math.min(elapsed,250)/110);
       // Positive spectral change catches drum attacks even under compressed
@@ -156,13 +159,18 @@
           time-impulseAt[i]>100) {
         impulses[i]=Math.max(impulses[i],Math.min(1,novelty));
         impulseAt[i]=time;
-        if (novelty>.2) lastBeat=time;
+        if (novelty>.2) strongOnset=true;
       }
     }
     const attack=Math.max(energy/(energyAverage+.008),bass/(bassAverage+.004),
       high/(highAverage+.008));
-    if (energy>.012 && attack>1.35 && time-lastBeat>120) {
+    if ((strongOnset || (energy>.012 && attack>1.35)) && time-lastBeat>=120) {
       lastBeat=time;
+      // Count fresh musical attacks. The first buffer after a gap only
+      // establishes audio levels and cannot make a preset change due.
+      if (options.songMotion && options.cycle && time-lastAudio<=250) {
+        presetBeats=Math.min(beatsPerPreset,presetBeats+1);
+      }
     }
     const weight=1-Math.exp(-Math.min(elapsed,100)/300);
     const established=energyAverage>0;
@@ -362,6 +370,7 @@
       visualizer.loadPreset(preset,blend);
     }
     lastCycle=performance.now();
+    presetBeats=0;
     send({type:'preset',name:names[presetIndex]});
   }
   function resize() {
@@ -423,10 +432,18 @@
     lastFrame+=Math.max(1,Math.floor((elapsed+.5)/interval))*interval;
     try {
       if (time-lastAudio>250) clearWaveform();
-      const due=options.cycleSeconds*1000;
-      if (options.cycle && time-lastCycle>due &&
-          (time-lastBeat<120 || time-lastCycle>due+1500)) {
-        nextPreset(time-lastBeat<120?(options.mobile?.2:.35):options.mobile?.42:1.2);
+      const onBeat=time-lastBeat<120;
+      if (options.cycle) {
+        if (options.songMotion) {
+          if (presetBeats>=beatsPerPreset && onBeat && energyRms>.008) {
+            nextPreset(options.mobile?.2:.35);
+          }
+        } else {
+          const due=options.cycleSeconds*1000;
+          if (time-lastCycle>due && (onBeat || time-lastCycle>due+1500)) {
+            nextPreset(onBeat?(options.mobile?.2:.35):options.mobile?.42:1.2);
+          }
+        }
       }
       const started=performance.now();
       const elapsedTime=Math.min(.1,Math.max(.001,
@@ -451,6 +468,10 @@
         const modeChanged=options.mode!==previous.mode;
         const activityChanged=options.active!==previous.active;
         const songChanged=options.song!==previous.song;
+        if (options.cycle!==previous.cycle) {
+          presetBeats=0;
+          lastCycle=performance.now();
+        }
         if (songChanged && !Object.prototype.hasOwnProperty.call(next,'preset')) options.preset='';
         if (modeChanged || activityChanged || songChanged) stop();
         if (!options.songMotion && previous.songMotion)
