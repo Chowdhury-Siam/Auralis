@@ -541,12 +541,9 @@ void main() {
           const ValueKey('player-cached-blur'),
           skipOffstage: false,
         );
-        final controller = tester
-            .widget<SnapshotWidget>(snapshotFinder)
-            .controller;
         final capturesOrigin =
             Theme.of(tester.element(origin)).platform != TargetPlatform.android;
-        expect(controller.allowSnapshotting, isFalse);
+        expect(tester.widget<ImageFiltered>(snapshotFinder).enabled, isFalse);
         for (var attempt = 0; attempt < 3; attempt++) {
           await tester.tap(find.byKey(const ValueKey('open-current-track')));
           await tester.pump();
@@ -558,19 +555,23 @@ void main() {
           expect(identical(tester.element(home), homeElement), isTrue);
           expect(identical(tester.element(origin), originElement), isTrue);
           expect(
-            identical(
-              tester.widget<SnapshotWidget>(snapshotFinder).controller,
-              controller,
+            find.descendant(
+              of: origin,
+              matching: find.byType(SnapshotWidget, skipOffstage: false),
+              skipOffstage: false,
             ),
-            isTrue,
+            findsNothing,
           );
-          expect(controller.allowSnapshotting, capturesOrigin);
           await tester.pump(const Duration(milliseconds: 120));
+          expect(
+            tester.widget<ImageFiltered>(snapshotFinder).enabled,
+            capturesOrigin,
+          );
           expect(home, findsOneWidget);
           await tester.pumpAndSettle();
           await tester.tap(find.byKey(const ValueKey('close-now-playing')));
           await tester.pumpAndSettle();
-          expect(controller.allowSnapshotting, isFalse);
+          expect(tester.widget<ImageFiltered>(snapshotFinder).enabled, isFalse);
           expect(identical(tester.element(home), homeElement), isTrue);
         }
         expect(player.current?.id, 'first');
@@ -769,9 +770,10 @@ void main() {
       await tester.pump();
       final start = tester.getRect(surface);
       final cachedBlur = find.byKey(const ValueKey('player-cached-blur'));
-      final snapshot = tester.widget<SnapshotWidget>(cachedBlur);
-      final painter = snapshot.painter;
-      expect(snapshot.controller.allowSnapshotting, isFalse);
+      final filter = tester.widget<ImageFiltered>(cachedBlur);
+      final retained = filter.child;
+      final filterElement = tester.element(cachedBlur);
+      expect(filter.enabled, isFalse);
       await gesture.moveBy(const Offset(0, -210));
       await tester.pump();
       expect(tester.getRect(surface).height, greaterThan(start.height));
@@ -781,13 +783,10 @@ void main() {
         reason: 'The card follows the finger pixel for pixel without a second easing curve',
       );
       expect(
-        identical(tester.widget<SnapshotWidget>(cachedBlur).painter, painter),
+        identical(tester.widget<ImageFiltered>(cachedBlur).child, retained),
         isTrue,
       );
-      expect(
-        identical(tester.widget<SnapshotWidget>(cachedBlur), snapshot),
-        isTrue,
-      );
+      expect(identical(tester.element(cachedBlur), filterElement), isTrue);
       final body = find.byKey(const ValueKey('now-playing-content-opacity'));
       await gesture.moveBy(Offset(0, -tester.getTopLeft(surface).dy * .45));
       await tester.pump();
@@ -995,11 +994,10 @@ void main() {
         );
         expect(
           tester
-              .widget<SnapshotWidget>(
+              .widget<ImageFiltered>(
                 find.byKey(const ValueKey('player-cached-blur')),
               )
-              .controller
-              .allowSnapshotting,
+              .enabled,
           isFalse,
         );
         expect(find.byKey(const ValueKey('player-bar')), findsOneWidget);
