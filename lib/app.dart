@@ -718,6 +718,7 @@ class _PlayerShellState extends State<PlayerShell>
                       seed: player.current?.title ?? 'Auralis',
                       telegram: telegram,
                       track: player.current,
+                      cornerRadius: 0,
                     ),
                     onBack: () => setState(() => showLyrics = false),
                   )
@@ -958,6 +959,7 @@ class _PlayerShellState extends State<PlayerShell>
                             track == null ? null : telegram.cachedCover(track),
                           ),
                           reducedMotion: player.settings.reducedMotion,
+                          lyrics: showLyrics,
                           artwork: Artwork(
                             seed: track?.title ?? 'Auralis',
                             telegram: telegram,
@@ -4036,6 +4038,7 @@ class Artwork extends StatelessWidget {
     required this.seed,
     this.small = false,
     this.decodeWidth,
+    this.cornerRadius,
     this.telegram,
     this.fileId,
     this.track,
@@ -4044,6 +4047,7 @@ class Artwork extends StatelessWidget {
   final String seed;
   final bool small;
   final int? decodeWidth;
+  final double? cornerRadius;
   final TelegramService? telegram;
   final int? fileId;
   final Track? track;
@@ -4095,7 +4099,7 @@ class Artwork extends StatelessWidget {
       );
     }
     return ClipRRect(
-      borderRadius: BorderRadius.circular(small ? 12 : 30),
+      borderRadius: BorderRadius.circular(cornerRadius ?? (small ? 12 : 30)),
       child: child,
     );
   }
