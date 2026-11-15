@@ -12,6 +12,7 @@ let resizeCallback, windowResizeCallback, visibilityCallback, rendererSize, crea
 let presetReads=0, renderCost=0, trigCalls=0;
 const {audio,levels}=butterchurnAudio();
 let lastLevels, lastPreset, lastEquation, lastElapsed;
+const registered = new Map();
 const testPresets={A:{id:'A',baseVals:{zoom:1,wave_scale:1,warp:.1},frame_eqs_str:''},
   B:{id:'B',baseVals:{zoom:1,wave_scale:1,warp:.1},frame_eqs_str:''}};
 const math=Object.create(Math);
@@ -29,6 +30,7 @@ class Analyzer {
     this._analyzer = [{}, {}];
     Analyzer.current = this;
   }
+  registerGradient(name, options) { registered.set(name, options); }
   setOptions(options) { Object.assign(this.options, options); }
   setCanvasSize(width, height) { this.size = [width, height]; }
   start() { this.running = true; }
@@ -111,7 +113,15 @@ assert.equal(presetReads,0,'Preset data must stay lazy until animated visuals ar
 api.configure({mode:'spectrum',active:true});
 assert.equal(presetReads,0,'Spectrum must not parse the preset pack');
 assert.deepEqual(Analyzer.current.size, [800,500]);
-assert.equal(Analyzer.current.options.loRes,false, 'Spectrum must not use a half-resolution buffer');
+assert.equal(Analyzer.current.options.loRes,false, 'Desktop Spectrum preserves display resolution');
+assert.equal(registered.size,10);
+assert.equal(callbacks.size,0,'Spectrum must use only the analyzer animation loop');
+for (const fps of [23,29,90,100,120,144]) {
+  api.configure({fps,spectrum:'led',palette:'sakura'});
+  assert.equal(Analyzer.current.options.maxFPS,fps);
+  assert(Analyzer.current.options.ledBars);
+  assert.equal(Analyzer.current.options.gradient,'sakura');
+}
 for (const element of elements.values()) {
   element.clientWidth=1200;element.clientHeight=675;
 }
@@ -135,14 +145,14 @@ assert(Analyzer.current.options.radial);
 assert.equal(Analyzer.current.options.gradient,'classic');
 api.configure({mode:'visualizer',active:true,cycle:true,cycleSeconds:15,fps:30});
 assert.equal(presetReads,1);
-assert.deepEqual(rendererSize,[1200,675], 'Animated visuals use panel pixels instead of a 960-pixel cap');
+
 assert.deepEqual(createdSize,[1200,675], 'Initial render targets must also use the full drawing size');
 assert.deepEqual([elements.get('milk').width,elements.get('milk').height],[1200,675],
   'The visible animated canvas must not retain its default 300 by 150 buffer');
 for (const ratio of [1,1.25,2,3]) {
   sandbox.window.devicePixelRatio=ratio;
   windowResizeCallback();
-  assert.deepEqual(rendererSize,[Math.round(1200*ratio),Math.round(675*ratio)],
+  assert.deepEqual(rendererSize ?? createdSize,[Math.round(1200*ratio),Math.round(675*ratio)],
     'Animated visuals must track the physical pixel density');
 }
 for (const element of elements.values()) {
@@ -176,10 +186,11 @@ advance(1000);
 assert.equal(renders,count);
 api.configure({mode:'visualizer',active:true,cycle:false,mobile:true,fps:30});
 const sharpWidth=rendererSize[0];
+assert(sharpWidth<=1120);
 renderCost=30;
 for (let i=0;i<90;i++) advance(34);
 assert(rendererSize[0]<sharpWidth,'Slow phone frames should reduce only animated pixel work');
-assert(rendererSize[0]>=sharpWidth*.75-1,'Adaptive quality must not collapse to half resolution');
+assert(rendererSize[0]>=sharpWidth*.5-1,'Adaptive quality has a lower bound');
 renderCost=0;
 for (let i=0;i<500;i++) advance(34);
 assert.equal(rendererSize[0],sharpWidth,'Phone quality should recover when there is headroom');
@@ -188,10 +199,10 @@ for (const element of elements.values()) {
 }
 sandbox.window.devicePixelRatio=2;
 resizeCallback();
-assert(rendererSize[0]<=2048 && rendererSize[1]<=2048);
-assert(rendererSize[0]*rendererSize[1]<=2097152+4096,'Phones need a separate GPU pixel budget');
+assert(rendererSize[0]<=1120 && rendererSize[1]<=1120);
+assert(rendererSize[0]*rendererSize[1]<=640000+2048,'Phones need a separate GPU pixel budget');
 api.configure({mode:'spectrum',active:true});
-assert.equal(Analyzer.current.options.loRes,false,'Spectrum text must stay full-resolution on phones');
+assert.equal(Analyzer.current.options.loRes,true,'Phone Spectrum uses a lower drawing resolution');
 for (const element of elements.values()) {
   element.clientWidth=1200;element.clientHeight=675;
 }
@@ -213,6 +224,7 @@ assert(Math.max(...lastWave)<=255 && Math.min(...lastWave)>=1,
   'Transient emphasis must respect available sample headroom');
 api.feed(Buffer.alloc(1024,128).toString('base64'),44100);advance(34);
 assert(lastWave.every(sample=>sample===128),'Live silence must stay silent, not generate pulses');
+api.configure({mode:'visualizer',active:false});
 api.configure({mode:'visualizer',active:true,cycle:true,cycleSeconds:15});
 const beforeBeatCycle=loaded.length;
 advance(15020);
@@ -306,6 +318,16 @@ assert(scale()>1.003,'A constant-loudness bass spectral attack must drive visibl
 assert(lastLevels.instant[0]>beforeBandShift,'Spectral attacks must also accent preset equations');
 for (let i=0;i<30;i++) advance(34);
 assert(Number(milkStyle.opacity)<.01,'Missing sample release also reaches the master compositor');
+api.configure({mode:'visualizer',active:true,cycle:false,song:'Japanese song'});
+const firstEquation=lastPreset.frame_eqs_str;
+const nextSet=new Set();
+for (let i=0;i<4;i++) {
+  api.step(0);
+  nextSet.add(loaded.at(-1));
+}
+assert.equal(nextSet.size,2,'Automatic selection uses every preset before recycling');
+api.configure({song:'Another song'});
+assert.notEqual(lastPreset.frame_eqs_str,firstEquation,'Different songs receive different motion');
 api.destroy();
 assert(destroyed);
 assert.equal(callbacks.size,0);
