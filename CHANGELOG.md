@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.213
+
+- Render Spectrum at full display resolution and give animated visualizers native-DPI drawing buffers instead of stretching half-resolution or 960-pixel output.
+- Start visualizers automatically when their panel is selected, without an extra Enable button. Keep Lyrics as the default, respect Android system permission, and retain all pause, visibility and reduced-motion protections.
+- Reduce phone visualizer overhead with lazy engine/preset startup, cached FFT tables, renderer reuse, backpressure and bounded audio reads. Adapt animated pixel work under frame pressure without removing presets, frame limits or full-resolution Spectrum.
+- Follow real song transients more closely with faster Spectrum attack, headroom-limited animated beat emphasis and beat-aware preset cycling, without changing playback or generating a fixed beat clock.
+- Keep Windows Spectrum and Visualizer running behind other apps instead of stopping on focus loss. Still stop when Auralis is minimized/hidden, covered by an in-app page or dialog, paused or using reduced motion; retain Android background protections.
+
 ## 0.1.212
 
 - Make Spectrum fill its panel at every pixel density, size the animated visualizer canvas to the panel's aspect ratio, and refresh both renderers when resizing or switching modes.
