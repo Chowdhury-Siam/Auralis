@@ -1,6 +1,12 @@
 {
-  "current": "0.1.209",
+  "current": "0.1.210",
   "releases": [
+    {
+      "version": "0.1.210",
+      "changes": [
+        "Keep Lyrics import and paste actions ahead of the longer help text so taller fallback fonts do not push them below the visible content panel."
+      ]
+    },
     {
       "version": "0.1.209",
       "changes": [
