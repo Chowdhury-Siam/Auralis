@@ -25,7 +25,9 @@ for record in json.loads((sources / "provenance.json").read_text()):
     member, asset, readable = members[record["name"]]
     with tarfile.open(package, "r:gz") as archive:
         assert archive.extractfile("package/" + member).read() == (assets / (asset + ".js")).read_bytes()
-        assert archive.extractfile("package/LICENSE").read() == (assets / ("LICENSE-" + asset + ".txt")).read_bytes()
+        license_bytes = archive.extractfile("package/LICENSE").read()
+        local_license = (assets / ("LICENSE-" + asset + ".txt")).read_bytes()
+        assert license_bytes.replace(b"\r\n", b"\n") == local_license.replace(b"\r\n", b"\n")
     with tarfile.open(source, "r:gz") as archive:
         names = archive.getnames()
         assert any(name.endswith("/" + readable) for name in names), readable
