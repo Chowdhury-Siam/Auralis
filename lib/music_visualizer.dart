@@ -11,6 +11,11 @@ import 'music_visualizer_webview.dart';
 import 'player.dart';
 import 'preference_widgets.dart';
 
+typedef MusicVisualizerRendererBuilder = Widget Function(
+  ValueChanged<Map<String, dynamic>> onMessage,
+  ValueChanged<String> onError,
+);
+
 class MusicVisualizerPane extends StatefulWidget {
   const MusicVisualizerPane({
     super.key,
@@ -26,11 +31,7 @@ class MusicVisualizerPane extends StatefulWidget {
   final bool fullscreen;
   final VoidCallback onFullscreen;
   final MusicVisualizerWebController? webController;
-  final Widget Function(
-    ValueChanged<Map<String, dynamic>> onMessage,
-    ValueChanged<String> onError,
-  )?
-  rendererBuilder;
+  final MusicVisualizerRendererBuilder? rendererBuilder;
 
   @override
   State<MusicVisualizerPane> createState() => _MusicVisualizerPaneState();
@@ -40,6 +41,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     with WidgetsBindingObserver {
   late final _web = widget.webController ?? MusicVisualizerWebController();
   late final _capture = MusicVisualizerCapture(
+    canRead: () => !_sending && _ready && _active,
     onFrame: (samples, rate) {
       if (!_ready || !_active || _sending) return;
       _sending = true;
@@ -56,8 +58,11 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     },
     onError: _failed,
   );
-  bool _consented = false, _ready = false, _visible = true;
+  bool _ready = false, _visible = true;
   bool _focused = true, _sending = false, _lastActive = false, _reduced = false;
+  bool _systemReduced = false, _mobile = false, _windows = false;
+  Object? _lastPlaybackState;
+  Widget? _renderer;
   int? _viewId;
   AppLifecycleState? _lifecycle;
   String? _error;
@@ -66,13 +71,14 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   MusicVisualizerSettings get _settings =>
       widget.player.settings.musicVisualizer;
   bool get _active =>
-      _consented &&
       _ready &&
       _error == null &&
       _visible &&
-      _focused &&
+      (_windows || _focused) &&
       !_reduced &&
-      (_lifecycle == null || _lifecycle == AppLifecycleState.resumed) &&
+      (_lifecycle == null ||
+          _lifecycle == AppLifecycleState.resumed ||
+          (_windows && _lifecycle == AppLifecycleState.inactive)) &&
       widget.player.audio.playing &&
       !widget.player.audio.buffering;
 
@@ -82,6 +88,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     _lifecycle = WidgetsBinding.instance.lifecycleState;
     WidgetsBinding.instance.addObserver(this);
     widget.player.addListener(_playback);
+    _watchReady();
   }
 
   @override
@@ -91,9 +98,11 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     _visible =
         TickerMode.valuesOf(context).enabled &&
         (ModalRoute.isCurrentOf(context) ?? true);
-    _reduced =
-        MediaQuery.disableAnimationsOf(context) ||
-        widget.player.settings.reducedMotion;
+    _systemReduced = MediaQuery.disableAnimationsOf(context);
+    _mobile = Theme.of(context).platform == TargetPlatform.android;
+    _windows = Theme.of(context).platform == TargetPlatform.windows;
+    _reduced = _systemReduced || widget.player.settings.reducedMotion;
+    _lastPlaybackState = _playbackState;
     _sync();
   }
 
@@ -104,6 +113,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
       oldWidget.player.removeListener(_playback);
       widget.player.addListener(_playback);
     }
+    if (oldWidget.rendererBuilder != widget.rendererBuilder) _renderer = null;
     if (oldWidget.mode != widget.mode) _sync(force: true);
   }
 
@@ -121,9 +131,20 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   }
 
   void _playback() {
+    _reduced = _systemReduced || widget.player.settings.reducedMotion;
+    final state = _playbackState;
+    if (state == _lastPlaybackState) return;
+    _lastPlaybackState = state;
     _sync();
     if (mounted) setState(() {});
   }
+
+  Object get _playbackState => (
+    widget.player.audio.playing,
+    widget.player.audio.buffering,
+    widget.player.settings.reducedMotion,
+    _settings.fps,
+  );
 
   void _failed(String message) {
     if (!mounted) return;
@@ -139,13 +160,17 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
 
   void _sync({bool force = false}) {
     final active = _active;
-    _capture.setActive(active, fps: _settings.fps);
+    // Animation FPS stays user-selectable. Native waveform reads do not need
+    // to cross Android's platform/WebView bridges more than 30 times a second.
+    final captureFps = _mobile && _settings.fps > 30 ? 30 : _settings.fps;
+    _capture.setActive(active, fps: captureFps);
     if (!_ready || (!force && active == _lastActive)) return;
     _lastActive = active;
     final value = {
       ..._settings.toJson(),
       'mode': widget.mode == MusicPanel.spectrum ? 'spectrum' : 'visualizer',
       'active': active,
+      'mobile': _mobile,
     };
     unawaited(
       _web
@@ -169,6 +194,14 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
           .toList();
       setState(() => _ready = true);
       _sync(force: true);
+    } else if (message['type'] == 'presets' && message['presets'] is List) {
+      setState(
+        () => _presets = (message['presets'] as List)
+            .whereType<String>()
+            .where((name) => name.length <= 300)
+            .take(1000)
+            .toList(),
+      );
     } else if (message['type'] == 'preset' && message['name'] is String) {
       final name = message['name'] as String;
       if (_presets.contains(name)) {
@@ -181,12 +214,16 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     }
   }
 
-  void _enable() {
+  void _retry() {
     setState(() {
       _error = null;
-      _consented = true;
       _ready = false;
+      _renderer = null;
     });
+    _watchReady();
+  }
+
+  void _watchReady() {
     _readyTimeout?.cancel();
     _readyTimeout = Timer(const Duration(seconds: 20), () {
       if (!_ready) {
@@ -294,8 +331,12 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Audio stays on this device. Visualizers stop when paused, '
-                  'covered or in the background. Animated visuals may flash; use Lyrics if sensitive.',
+                  'Selecting Spectrum or Visualizer starts device-output analysis automatically. '
+                  'Other apps sharing the output may appear. Android requires the permission '
+                  'labeled “microphone”, but no microphone is opened and nothing is recorded or uploaded. '
+                  'Visualizers stop when paused, minimized, or covered by an in-app page/dialog. '
+                  'Windows keeps running behind other apps; Android stops in the background. '
+                  'Animated visuals may flash; use Lyrics if sensitive.',
                 ),
               ],
             ),
@@ -370,7 +411,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    if (!_consented || _error != null) {
+    if (_error != null) {
       return Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -380,7 +421,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
               Icon(Icons.graphic_eq_rounded, size: 44, color: colors.primary),
               const SizedBox(height: 16),
               Text(
-                _error ?? 'Visualize your music',
+                _error!,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
@@ -394,11 +435,9 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
               ),
               const SizedBox(height: 20),
               FilledButton.icon(
-                onPressed: _enable,
+                onPressed: _retry,
                 icon: const Icon(Icons.graphic_eq_rounded),
-                label: Text(
-                  _error == null ? 'Enable visualizer' : 'Retry visualizer',
-                ),
+                label: const Text('Retry visualizer'),
               ),
             ],
           ),
@@ -412,14 +451,15 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
           key: const ValueKey('music-visualizer-surface'),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child:
-                widget.rendererBuilder?.call(_message, _failed) ??
-                MusicVisualizerWebView(
-                  key: ValueKey(_error),
-                  controller: _web,
-                  onMessage: _message,
-                  onError: _failed,
-                ),
+            child: _renderer ??= RepaintBoundary(
+              child:
+                  widget.rendererBuilder?.call(_message, _failed) ??
+                  MusicVisualizerWebView(
+                    controller: _web,
+                    onMessage: _message,
+                    onError: _failed,
+                  ),
+            ),
           ),
         ),
         if (_ready && !widget.player.audio.playing)
