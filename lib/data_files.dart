@@ -18,6 +18,25 @@ class DataFiles {
     ],
   ))?.path;
 
+  Future<String?> saveAudioPath(String name, String mime) async =>
+      (await getSaveLocation(
+        suggestedName: name,
+        acceptedTypeGroups: [
+          XTypeGroup(label: 'Audio file', extensions: [name.split('.').last]),
+        ],
+      ))?.path;
+
+  Future<void> saveAudio(File source, String path) async {
+    final destination = File(path);
+    final staging = await destination.parent.createTemp('.auralis-song-');
+    try {
+      final copy = await source.copy('${staging.path}/audio');
+      await copy.rename(destination.path);
+    } finally {
+      await staging.delete(recursive: true);
+    }
+  }
+
   Future<String?> openBackup() async => (await openFile(
     acceptedTypeGroups: const [
       XTypeGroup(label: 'Auralis backup', extensions: ['json']),
@@ -60,6 +79,21 @@ class AndroidDataFiles extends DataFiles {
     'createDocument',
     {'name': name, 'mime': 'application/json'},
   );
+  @override
+  Future<String?> saveAudioPath(String name, String mime) => _channel
+      .invokeMethod<String>('createDocument', {'name': name, 'mime': mime});
+
+  @override
+  Future<void> saveAudio(File source, String path) async {
+    if (Uri.tryParse(path)?.scheme != 'content') {
+      return super.saveAudio(source, path);
+    }
+    await _channel.invokeMethod<void>('writeAudioDocument', {
+      'uri': path,
+      'source': source.path,
+    });
+  }
+
   @override
   Future<String?> openBackup() => _channel.invokeMethod<String>('openDocument');
   @override
