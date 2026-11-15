@@ -46,6 +46,31 @@ void expectCenteredRows(WidgetTester tester, Finder group, Finder children) {
   }
 }
 
+class ReadyVisualizer extends StatefulWidget {
+  const ReadyVisualizer(this.onMessage, {super.key});
+  final ValueChanged<Map<String, dynamic>> onMessage;
+  @override
+  State<ReadyVisualizer> createState() => _ReadyVisualizerState();
+}
+
+class _ReadyVisualizerState extends State<ReadyVisualizer> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.onMessage({
+          'type': 'ready',
+          'presets': ['A', 'B'],
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
@@ -155,6 +180,215 @@ void main() {
   });
 
   testWidgets(
+    'capture skips native reads while the renderer is backpressured',
+    (tester) async {
+      var available = false, reads = 0, frames = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'read') {
+          reads++;
+          return {'samples': Uint8List(1024), 'rate': 44100};
+        }
+        return null;
+      });
+      final capture = MusicVisualizerCapture(
+        canRead: () => available,
+        onFrame: (_, _) => frames++,
+        onError: (_) => fail('No capture error expected'),
+      );
+      capture.setActive(true);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reads, 0);
+      available = true;
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(reads, 1);
+      expect(frames, 1);
+      available = false;
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reads, 1);
+      await capture.dispose();
+    },
+  );
+
+  testWidgets(
+    'phone capture stays below 30 Hz at 60 FPS and reuses the renderer on ticks',
+    (tester) async {
+      final audio = FakeAudio()..playing = true;
+      final settings = MemorySettings()..musicVisualizer.fps = 60;
+      final player = PlayerController(
+        audio,
+        TelegramStreamProxy((_) async => {}),
+        settings,
+      );
+      addTearDown(player.shutdown);
+      var reads = 0, builds = 0, feeds = 0;
+      final scripts = <String>[];
+      Completer<void>? feedGate;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'read') {
+          reads++;
+          return {'samples': Uint8List(1024), 'rate': 44100};
+        }
+        return null;
+      });
+      final web = MusicVisualizerWebController(
+        runScript: (script) async {
+          scripts.add(script);
+          if (script.contains('.feed(')) {
+            feeds++;
+            await feedGate?.future;
+          }
+        },
+      );
+      Widget renderer(
+        ValueChanged<Map<String, dynamic>> message,
+        ValueChanged<String> _,
+      ) {
+        builds++;
+        return ReadyVisualizer(message);
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.android),
+          home: Scaffold(
+            body: AnimatedBuilder(
+              animation: player,
+              builder: (_, _) => MusicVisualizerPane(
+                player: player,
+                mode: MusicPanel.visualizer,
+                fullscreen: false,
+                onFullscreen: () {},
+                webController: web,
+                rendererBuilder: renderer,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(builds, 1);
+      expect(scripts.first, contains('"fps":60'));
+      expect(scripts.first, contains('"mobile":true'));
+      for (var i = 0; i < 100; i++) {
+        audio.position = Duration(milliseconds: i * 10);
+        player.notifyListeners();
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+      expect(reads, 29);
+      expect(feeds, reads);
+      expect(
+        builds,
+        1,
+        reason: 'Playback position must not recreate the WebView.',
+      );
+      expect(
+        scripts.where((value) => value.contains('.configure(')),
+        hasLength(1),
+      );
+      feedGate = Completer<void>();
+      await tester.pump(const Duration(milliseconds: 40));
+      final blockedReads = reads;
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        reads,
+        blockedReads,
+        reason: 'Do not read samples a busy renderer cannot consume.',
+      );
+      feedGate.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(reads, blockedReads + 1);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'hidden Lyrics stays frozen across playback ticks and retains manual reading position',
+    (tester) async {
+      final audio = FakeAudio()..playing = true;
+      final settings = MemorySettings()
+        ..automaticTranslation = false
+        ..automaticLyrics = false;
+      final player =
+          PlayerController(
+              audio,
+              TelegramStreamProxy((_) async => {}),
+              settings,
+            )
+            ..queue.add(song)
+            ..index = 0;
+      final repository = LyricsRepository()
+        ..save(
+          song,
+          Lyrics.parse(
+            List.generate(
+              80,
+              (i) =>
+                  '[${(i ~/ 60).toString().padLeft(2, '0')}:${(i % 60).toString().padLeft(2, '0')}]Line $i',
+            ).join('\n'),
+          ),
+        );
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      messenger.setMockMethodCallHandler(channel, (_) async => null);
+      Widget renderer(
+        ValueChanged<Map<String, dynamic>> message,
+        ValueChanged<String> _,
+      ) => ReadyVisualizer(message);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AnimatedBuilder(
+              animation: player,
+              builder: (_, _) => LyricsView(
+                player: player,
+                repository: repository,
+                artwork: const Icon(Icons.album),
+                onBack: () {},
+                visualizerRendererBuilder: renderer,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final list = find.byKey(const ValueKey('synced-lyrics'));
+      await tester.drag(list, const Offset(0, -250));
+      await tester.pumpAndSettle();
+      final controller = tester.widget<ListView>(list).controller!;
+      final offset = controller.offset;
+      expect(offset, greaterThan(150));
+      await tester.tap(find.byKey(const ValueKey('music-panel-spectrum')));
+      await tester.pumpAndSettle();
+      final hidden = find.byKey(
+        const ValueKey('synced-lyrics'),
+        skipOffstage: false,
+      );
+      final frozen = tester.widget<ListView>(hidden);
+      for (var i = 1; i <= 10; i++) {
+        audio.position = Duration(seconds: i * 4);
+        player.notifyListeners();
+        await tester.pump(const Duration(milliseconds: 40));
+        expect(tester.widget<ListView>(hidden), same(frozen));
+        expect(controller.offset, closeTo(offset, .1));
+      }
+      await tester.tap(find.byKey(const ValueKey('music-panel-lyrics')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<ListView>(list).controller, same(controller));
+      expect(controller.offset, closeTo(offset, .1));
+      expect(player.current, same(song));
+      expect(audio.playing, isTrue);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'denied output permission keeps playback running and can be retried',
     (tester) async {
       final errors = <String>[];
@@ -187,9 +421,111 @@ void main() {
     },
   );
 
+  testWidgets(
+    'automatic start respects denied permission and retries only on request',
+    (tester) async {
+      final audio = FakeAudio()..playing = true;
+      final player = PlayerController(
+        audio,
+        TelegramStreamProxy((_) async => {}),
+        MemorySettings(),
+      );
+      addTearDown(player.shutdown);
+      var starts = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'start' && ++starts == 1) {
+          throw PlatformException(
+            code: 'permission',
+            message: 'Permission denied',
+          );
+        }
+        return null;
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MusicVisualizerPane(
+              player: player,
+              mode: MusicPanel.spectrum,
+              fullscreen: false,
+              onFullscreen: () {},
+              rendererBuilder: (message, _) => ReadyVisualizer(message),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(starts, 1);
+      expect(find.text('Enable visualizer'), findsNothing);
+      expect(find.text('Permission denied'), findsOneWidget);
+      expect(find.text('Retry visualizer'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+      expect(
+        starts,
+        1,
+        reason: 'Do not repeatedly request a denied system permission.',
+      );
+      expect(audio.playing, isTrue);
+      await tester.tap(find.text('Retry visualizer'));
+      await tester.pumpAndSettle();
+      expect(starts, 2);
+      expect(find.text('Permission denied'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'automatic visualizers wait for playback and buffering to finish',
+    (tester) async {
+      final audio = FakeAudio();
+      final player = PlayerController(
+        audio,
+        TelegramStreamProxy((_) async => {}),
+        MemorySettings(),
+      );
+      addTearDown(player.shutdown);
+      var starts = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'start') starts++;
+        return null;
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MusicVisualizerPane(
+              player: player,
+              mode: MusicPanel.visualizer,
+              fullscreen: false,
+              onFullscreen: () {},
+              rendererBuilder: (message, _) => ReadyVisualizer(message),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(starts, 0);
+      expect(find.text('Paused'), findsOneWidget);
+      audio
+        ..playing = true
+        ..buffering = true;
+      player.notifyListeners();
+      await tester.pump();
+      expect(starts, 0);
+      audio.buffering = false;
+      player.notifyListeners();
+      await tester.pump();
+      expect(starts, 1);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final size in [const Size(390, 844), const Size(1280, 800)]) {
     testWidgets(
-      'Lyrics remains the default, switches back intact, and never captures without consent at $size',
+      'Lyrics remains the default; selecting a visualizer starts automatically and returning stops it at $size',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = size;
@@ -224,6 +560,8 @@ void main() {
                 repository: repository,
                 artwork: const Icon(Icons.album),
                 onBack: () {},
+                visualizerRendererBuilder: (message, _) =>
+                    ReadyVisualizer(message),
               ),
             ),
           ),
@@ -237,15 +575,18 @@ void main() {
           find.descendant(of: selector, matching: find.byType(ChoiceChip)),
         );
         expect(find.byType(MusicVisualizerWebView), findsNothing);
+        expect(calls.where((call) => call == 'start'), isEmpty);
         for (final mode in ['spectrum', 'visualizer']) {
+          final starts = calls.where((call) => call == 'start').length;
           await tester.tap(find.byKey(ValueKey('music-panel-$mode')));
           await tester.pumpAndSettle();
-          expect(find.text('Enable visualizer'), findsOneWidget);
-          expect(find.byType(MusicVisualizerWebView), findsNothing);
-          expect(calls.where((call) => call == 'start'), isEmpty);
+          expect(find.text('Enable visualizer'), findsNothing);
+          expect(find.byType(ReadyVisualizer), findsOneWidget);
+          expect(calls.where((call) => call == 'start').length, starts + 1);
           await tester.tap(find.byKey(const ValueKey('music-panel-lyrics')));
           await tester.pumpAndSettle();
           expect(find.text('Original words'), findsOneWidget);
+          expect(calls.last, 'stop');
         }
         expect(player.current, same(song));
         expect(audio.playing, isTrue);
@@ -256,8 +597,119 @@ void main() {
     );
   }
 
+  for (final mode in [MusicPanel.spectrum, MusicPanel.visualizer]) {
+    testWidgets(
+      'Windows $mode keeps sampling behind another app but stops when minimized',
+      (tester) async {
+        final audio = FakeAudio()..playing = true;
+        final player = PlayerController(
+          audio,
+          TelegramStreamProxy((_) async => {}),
+          MemorySettings(),
+        );
+        addTearDown(player.shutdown);
+        final calls = <String>[], scripts = <String>[];
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          calls.add(call.method);
+          if (call.method == 'read') {
+            return {'samples': Uint8List(1024), 'rate': 44100};
+          }
+          return null;
+        });
+        final navigator = GlobalKey<NavigatorState>();
+        await tester.pumpWidget(
+          MaterialApp(
+            navigatorKey: navigator,
+            theme: ThemeData(platform: TargetPlatform.windows),
+            home: Scaffold(
+              body: MusicVisualizerPane(
+                player: player,
+                mode: mode,
+                fullscreen: false,
+                onFullscreen: () {},
+                webController: MusicVisualizerWebController(
+                  runScript: (script) async => scripts.add(script),
+                ),
+                rendererBuilder: (message, _) => ReadyVisualizer(message),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(calls.where((call) => call == 'start'), hasLength(1));
+        final initialStops = calls.where((call) => call == 'stop').length;
+        void focus(bool focused) => tester.binding.handleViewFocusChanged(
+          ui.ViewFocusEvent(
+            viewId: tester.view.viewId,
+            state: focused
+                ? ui.ViewFocusState.focused
+                : ui.ViewFocusState.unfocused,
+            direction: ui.ViewFocusDirection.undefined,
+          ),
+        );
+        focus(false);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        await tester.pump(const Duration(milliseconds: 40));
+        final reads = calls.where((call) => call == 'read').length;
+        expect(reads, greaterThan(0));
+        expect(scripts.last, contains('.feed('));
+        expect(calls.where((call) => call == 'stop'), hasLength(initialStops));
+        // Minimize the front app: Auralis regains focus without restarting capture.
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        focus(true);
+        await tester.pump(const Duration(milliseconds: 40));
+        expect(calls.where((call) => call == 'start'), hasLength(1));
+        expect(
+          calls.where((call) => call == 'read').length,
+          greaterThan(reads),
+        );
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        await tester.pump();
+        expect(calls.last, 'stop');
+        final hiddenReads = calls.where((call) => call == 'read').length;
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(calls.where((call) => call == 'read'), hasLength(hiddenReads));
+        // Restore Auralis while still unfocused: visible Windows animation resumes.
+        focus(false);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        await tester.pump();
+        expect(calls.last, 'start');
+        unawaited(
+          showDialog<void>(
+            context: navigator.currentContext!,
+            builder: (_) => const AlertDialog(title: Text('In-app dialog')),
+          ),
+        );
+        await tester.pump();
+        expect(calls.last, 'stop');
+        navigator.currentState!.pop();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump();
+        expect(calls.last, 'start');
+        audio.playing = false;
+        player.notifyListeners();
+        await tester.pump();
+        expect(calls.last, 'stop');
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        focus(true);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
-    'enabled visualizers stop for pause, background, focus, dialogs and reduced motion',
+    'Android visualizers stop for pause, background, focus, dialogs and reduced motion',
     (tester) async {
       final audio = FakeAudio()..playing = true;
       final player = PlayerController(
@@ -315,11 +767,9 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
-      expect(calls.where((call) => call == 'start'), isEmpty);
-      await tester.tap(find.text('Enable visualizer'));
       await tester.pump();
       await tester.pump();
+      expect(find.text('Enable visualizer'), findsNothing);
       await tester.pump(const Duration(milliseconds: 40));
       expect(calls, contains('start'));
       expect(scripts.any((script) => script.contains('.feed(')), isTrue);
@@ -384,7 +834,7 @@ void main() {
   );
 
   testWidgets(
-    'mode changes and expansion retain consent; renderer failures stop capture and allow retry',
+    'mode changes and expansion stay automatic; renderer failures stop capture and allow retry',
     (tester) async {
       final audio = FakeAudio()..playing = true;
       final player = PlayerController(
@@ -439,7 +889,6 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.text('Enable visualizer'));
       await tester.pump();
       await tester.pump();
       final starts = calls.where((call) => call == 'start').length;
@@ -514,6 +963,14 @@ void main() {
     );
   });
 
+  test('Windows native capture stops on minimize/hide, not application deactivation', () {
+    final host = File('windows/runner/flutter_window.cpp').readAsStringSync();
+    expect(host, isNot(contains('message == WM_ACTIVATEAPP')));
+    expect(host, contains('message == WM_SIZE && wparam == SIZE_MINIMIZED'));
+    expect(host, contains('message == WM_SHOWWINDOW && !wparam'));
+    expect(host, contains('music_visualizer_->Stop()'));
+  });
+
   test('bundled renderers are offline, licensed and do not open microphone or media sources', () {
     final html = File('assets/visualizer/index.html').readAsStringSync();
     final bridge = File('assets/visualizer/bridge.js').readAsStringSync();
@@ -524,8 +981,9 @@ void main() {
         RegExp(r'#spectrum canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%'),
       ),
     );
-    expect(bridge, contains('timeByteArray:waveform'));
+    expect(bridge, contains('timeByteArray:milkWaveform'));
     expect(bridge, contains('analyzer._analyzer'));
+    expect(bridge, contains('loRes:false'));
     for (final forbidden in [
       'getUserMedia',
       'getDisplayMedia',
