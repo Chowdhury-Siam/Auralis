@@ -10,11 +10,13 @@ class MusicVisualizerCapture {
     MethodChannel? channel,
     required this.onFrame,
     required this.onError,
+    this.canRead,
   }) : _channel = channel ?? const MethodChannel('app.auralis/visualizer');
 
   final MethodChannel _channel;
   final void Function(Uint8List samples, int sampleRate) onFrame;
   final void Function(String message) onError;
+  final bool Function()? canRead;
   Timer? _timer;
   Future<void> _pending = Future.value();
   bool _desired = false, _disposed = false, _reading = false;
@@ -37,7 +39,7 @@ class MusicVisualizerCapture {
           return;
         }
         _timer = Timer.periodic(
-          Duration(milliseconds: (1000 / _fps).round()),
+          Duration(microseconds: (1000000 / _fps).ceil()),
           (_) => unawaited(_read(generation)),
         );
       } catch (error) {
@@ -54,7 +56,7 @@ class MusicVisualizerCapture {
   }
 
   Future<void> _read(int generation) async {
-    if (_reading || !_desired || _disposed) return;
+    if (_reading || !_desired || _disposed || canRead?.call() == false) return;
     _reading = true;
     try {
       final frame = await _channel.invokeMapMethod<String, dynamic>('read');
