@@ -92,7 +92,10 @@ void main() {
             expect(query['sl'], 'auto');
             expect(query['tl'], 'en');
           } else {
-            expect(query['langpair'], 'autodetect|en');
+            expect(
+              query['langpair'],
+              language == 'Japanese' ? 'ja|en' : 'autodetect|en',
+            );
           }
           expect(query['q'], words, reason: 'Deduplicate repeated choruses');
           expect(
@@ -310,10 +313,7 @@ void main() {
       expect(result.lines[1].text, '明日も歩きます。\nWalk & smile.');
       expect(fallback.requests.single.host, 'api.mymemory.translated.net');
       expect(fallback.requests.single.path, '/get');
-      expect(
-        fallback.requests.single.queryParameters['langpair'],
-        'autodetect|en',
-      );
+      expect(fallback.requests.single.queryParameters['langpair'], 'ja|en');
       expect(
         utf8.encode(fallback.requests.single.queryParameters['q']!).length,
         lessThanOrEqualTo(500),
@@ -322,43 +322,67 @@ void main() {
     },
   );
 
-  test(
-    'quota and changed line breaks never cache an error or replace originals',
-    () async {
-      final dir = await Directory.systemTemp.createTemp('auralis-quota-');
-      final clients = [
-        Client([Response([], statusCode: 429)]),
-        Client([myMemory('LIMIT', quota: true)]),
-        Client([google('One merged line')]),
-        Client([myMemory('One merged line')]),
-        Client([google('First\nSecond\nGood night')]),
-      ];
-      final translator = LyricsTranslator(
-        createClient: () => clients.removeAt(0),
-        cache: () => MediaCache(dir),
-      );
-      addTearDown(() async {
-        translator.close();
-        await MediaCache.drain(dir);
-        await dir.delete(recursive: true);
-      });
-      await expectLater(
-        translator.translate(track, japanese, active: () => true),
-        throwsA(isA<TranslationFailure>()),
-      );
-      expect(await dir.list().length, 0);
-      await expectLater(
-        translator.translate(track, japanese, active: () => true),
-        throwsA(isA<TranslationFailure>()),
-      );
-      expect(await dir.list().length, 0);
-      expect(
-        (await translator.translate(track, japanese, active: () => true)).plain,
-        contains('First'),
-      );
-      expect(japanese.lines.first.text, '今日は晴れです。');
-    },
-  );
+  test('quota failures never cache an error or replace originals', () async {
+    final dir = await Directory.systemTemp.createTemp('auralis-quota-');
+    final clients = [
+      Client([Response([], statusCode: 429)]),
+      Client([myMemory('LIMIT', quota: true)]),
+      Client([google('First\nSecond\nGood night')]),
+    ];
+    final translator = LyricsTranslator(
+      createClient: () => clients.removeAt(0),
+      cache: () => MediaCache(dir),
+    );
+    addTearDown(() async {
+      translator.close();
+      await MediaCache.drain(dir);
+      await dir.delete(recursive: true);
+    });
+    await expectLater(
+      translator.translate(track, japanese, active: () => true),
+      throwsA(isA<TranslationFailure>()),
+    );
+    expect(await dir.list().length, 0);
+    expect(
+      (await translator.translate(track, japanese, active: () => true)).plain,
+      contains('First'),
+    );
+    expect(japanese.lines.first.text, '今日は晴れです。');
+  });
+
+  test('MyMemory retries merged Japanese lyrics line by line', () async {
+    const firstLine = '今日は晴れです。', secondLine = '明日も歩きます。';
+    final lyrics = Lyrics.parse(
+      '[00:01]$firstLine\n[00:04]$secondLine\n[00:08]$firstLine',
+    );
+    final clients = [
+      Client([myMemory('Combined lines')]),
+      Client([myMemory('It is sunny today.')]),
+      Client([myMemory('I will walk tomorrow, too.')]),
+    ];
+    var next = 0;
+    final translator = LyricsTranslator(createClient: () => clients[next++]);
+    addTearDown(translator.close);
+    final result = await translator.translate(
+      track,
+      lyrics,
+      active: () => true,
+      first: TranslationSource.myMemory,
+      fallback: null,
+    );
+    expect(
+      result.lines.map((line) => line.time),
+      lyrics.lines.map((line) => line.time),
+    );
+    expect(result.lines.first.text, '$firstLine\nIt is sunny today.');
+    expect(result.lines.last.text, result.lines.first.text);
+    expect(
+      clients.map(
+        (client) => client.requests.single.queryParameters['langpair'],
+      ),
+      ['ja|en', 'ja|en', 'ja|en'],
+    );
+  });
 
   test(
     'late response after account change is discarded before disk write',
