@@ -374,12 +374,14 @@ class NowPlayingBackdrop extends StatefulWidget {
     required this.artwork,
     required this.identity,
     required this.reducedMotion,
+    this.lyrics = false,
     this.artworkUpdates,
   });
 
   final Widget artwork;
   final Object identity;
   final bool reducedMotion;
+  final bool lyrics;
   final Listenable? artworkUpdates;
 
   @override
@@ -414,6 +416,7 @@ class _NowPlayingBackdropState extends State<NowPlayingBackdrop> {
     }
     if (oldWidget.identity != widget.identity ||
         oldWidget.reducedMotion != widget.reducedMotion ||
+        oldWidget.lyrics != widget.lyrics ||
         oldWidget.artworkUpdates != widget.artworkUpdates) {
       _cachedBackdrop = null;
     }
@@ -462,19 +465,33 @@ class _NowPlayingBackdropState extends State<NowPlayingBackdrop> {
               ),
               DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Theme.of(context).colorScheme.surface
-                          .withValues(alpha: .60),
-                      Theme.of(context).colorScheme.surface
-                          .withValues(alpha: .70),
-                      Theme.of(context).colorScheme.surface
-                          .withValues(alpha: .92),
-                    ],
-                    stops: [0, .55, 1],
-                  ),
+                  gradient: widget.lyrics
+                      ? LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Theme.of(context).colorScheme.primaryContainer
+                                .withValues(alpha: .72),
+                            Theme.of(context).colorScheme.surface
+                                .withValues(alpha: .77),
+                            Theme.of(context).colorScheme.surface
+                                .withValues(alpha: .98),
+                          ],
+                          stops: const [0, .64, 1],
+                        )
+                      : LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Theme.of(context).colorScheme.surface
+                                .withValues(alpha: .60),
+                            Theme.of(context).colorScheme.surface
+                                .withValues(alpha: .70),
+                            Theme.of(context).colorScheme.surface
+                                .withValues(alpha: .92),
+                          ],
+                          stops: [0, .55, 1],
+                        ),
                 ),
               ),
             ],
