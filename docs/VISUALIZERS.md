@@ -1,6 +1,6 @@
 # Music visualizers: implementation and verification
 
-Version: **0.1.211+212**, retaining the **0.1.210+211** Lyrics fix, **0.1.209+210** visualizers and supplied **0.1.208+209** Lyrics redesign.
+Version: **0.1.212+213**, retaining the **0.1.211+212** Windows SDK fix, **0.1.210+211** Lyrics fix, **0.1.209+210** visualizers and supplied **0.1.208+209** Lyrics redesign.
 
 ## Scope
 
@@ -38,6 +38,35 @@ distribution hashes and build materials are retained under
   Sync. The enable decision itself is not persisted.
 
 ## Automated checks
+
+Version 0.1.212 fixes renderer sizing and panel alignment. audioMotion's low-
+resolution buffer had no explicit CSS width/height, so at devicePixelRatio 1
+a 1000x700 panel displayed only a 500x350 spectrum in its upper-left corner.
+The spectrum canvas now fills its containing panel regardless of buffer
+resolution. Butterchurn's caller-owned canvas now receives the same bounded
+dimensions/aspect as its internal renderer instead of retaining 300x150.
+Mode switches and the surface ResizeObserver refresh the active engine
+immediately. Selectors, control rows and wrapped preset titles are centered;
+the renderer widget stretches across the available panel width.
+
+The actual bundled engines were checked in Chromium across simulated pixel
+ratios 1, 1.25, 2 and 3, with panel sizes 592x420, 320x240 and 1200x660,
+rendering synthetic input and switching Spectrum/Visualizer/Spectrum. All 12
+mode/size checks filled the CSS panel; animated canvas aspect matched the
+panel (bounded to 960 pixels on its longest side), with no renderer errors.
+Node bridge checks now cover both renderers' dimensions, expanded resizing and
+mode-switch restoration; Flutter regressions check centered selector rows,
+centered control rows and full-width renderer layout.
+
+Final 0.1.212 local validation: **535 Flutter tests passed** with
+`--concurrency=2`, followed by a fresh **10/10 visualizer test** pass after
+centering pause/reduced-motion labels; analyzer **no issues**. An initial
+parallel run ended before producing a completion summary; orphan test
+processes from this workspace were released before the successful rerun.
+Node renderer/resize checks, release-note validation, Android source checks,
+and upstream distribution/source hashes passed. Browser console reported no
+errors during the sizing checks. Native WebView embedding and device output
+capture were not reverified locally; the native hosts are unchanged.
 
 The 0.1.210 Windows CI build exposed a native source collision: Windows SDK
 RPC headers define `small` as `char`, so the 16-bit PCM local declaration
