@@ -88,6 +88,21 @@ class MainActivity : AudioServiceActivity() {
                         output.toByteArray()
                     }
                 }
+                "writeAudioDocument" -> work(result) {
+                    val uri = Uri.parse(call.argument<String>("uri"))
+                    require(uri == selectedWrite) { "Choose the destination first" }
+                    val source = java.io.File(call.argument<String>("source")!!).canonicalFile
+                    val root = cacheDir.canonicalFile
+                    require(source.isFile && source.parentFile?.parentFile == root &&
+                        source.parentFile!!.name.startsWith("auralis-song-")) { "Invalid audio export" }
+                    source.inputStream().use { input ->
+                        val output = contentResolver.openOutputStream(uri, "wt")
+                            ?: throw java.io.IOException("Document provider is unavailable")
+                        output.use { input.copyTo(it); it.flush() }
+                    }
+                    selectedWrite = null
+                    null
+                }
                 "writeDocument" -> work(result) {
                     val uri = Uri.parse(call.argument<String>("uri"))
                     require(uri == selectedWrite) { "Choose the destination first" }
