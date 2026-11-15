@@ -117,8 +117,13 @@ class LrcFiles extends DataFiles {
   );
   Completer<String?>? pending;
   int? limit;
+  int opens = 0;
   @override
-  Future<String?> openLyrics() => pending?.future ?? Future.value(path);
+  Future<String?> openLyrics() {
+    opens++;
+    return pending?.future ?? Future.value(path);
+  }
+
   @override
   Future<Uint8List> readBytes(
     String path, {
@@ -379,16 +384,11 @@ void main() {
   );
 
   setUpAll(() async {
-    final font = File(
-      Platform.isWindows
-          ? 'C:/Windows/Fonts/segoeui.ttf'
-          : '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    );
-    if (font.existsSync()) {
-      await (FontLoader('Segoe UI')
-            ..addFont(font.readAsBytes().then((b) => ByteData.sublistView(b))))
-          .load();
-    }
+    // Use the same metrics on Windows and Linux CI. Previously the same font
+    // alias loaded Segoe UI locally but the taller DejaVu Sans on the runner.
+    await (FontLoader(
+      'Segoe UI',
+    )..addFont(rootBundle.load('assets/fonts/DejaVuSans.ttf'))).load();
     await (FontLoader(
       'MaterialIcons',
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
@@ -702,9 +702,14 @@ void main() {
       addTearDown(player.shutdown);
       addTearDown(repository.close);
       await tester.pumpWidget(view(player, repository, files: files));
+      expect(
+        find.widgetWithText(TextButton, 'Import .lrc file').hitTestable(),
+        findsOneWidget,
+      );
       await tester.tap(find.widgetWithText(TextButton, 'Import .lrc file'));
       await tester.pumpAndSettle();
       expect(find.text('Original imported line'), findsOneWidget);
+      expect(files.opens, 1);
       expect(find.text('Imported LRC · session only'), findsNothing);
       expect(repository.cached(song)!.imported, isTrue);
       expect(files.limit, Lyrics.maxFileBytes);
@@ -732,8 +737,14 @@ void main() {
     addTearDown(player.shutdown);
     addTearDown(repository.close);
     await tester.pumpWidget(view(player, repository, files: files));
+    expect(
+      find.widgetWithText(TextButton, 'Import .lrc file').hitTestable(),
+      findsOneWidget,
+    );
     await tester.tap(find.widgetWithText(TextButton, 'Import .lrc file'));
     await tester.pump();
+    expect(files.opens, 1);
+    expect(files.pending!.isCompleted, isFalse);
     player.queue.add(second);
     player.index = 1;
     player.notifyListeners();
@@ -744,6 +755,34 @@ void main() {
     expect(repository.cached(second), isNull);
     expect(files.limit, isNull);
   });
+
+  testWidgets(
+    'empty Lyrics actions scroll into reach with large text on a short phone',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 480);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final player = controller();
+      final repository = LyricsRepository()..save(song, null);
+      final files = LrcFiles();
+      addTearDown(player.shutdown);
+      addTearDown(repository.close);
+      await tester.pumpWidget(view(player, repository, files: files));
+      await tester.pumpAndSettle();
+      final import = find.widgetWithText(TextButton, 'Import .lrc file');
+      await tester.ensureVisible(import);
+      await tester.pumpAndSettle();
+      expect(import.hitTestable(), findsOneWidget);
+      await tester.tap(import);
+      await tester.pumpAndSettle();
+      expect(repository.cached(song)!.plain, 'Original imported line');
+      expect(find.text('Original imported line'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'embedded lyrics load automatically and late songs cannot overwrite',
@@ -1773,7 +1812,8 @@ void main() {
           find.byKey(const ValueKey('lyric-2')).hitTestable(),
           findsOneWidget,
         );
-        final previewDirectory = Platform.environment['AURALIS_LYRICS_PREVIEWS'];
+        final previewDirectory =
+            Platform.environment['AURALIS_LYRICS_PREVIEWS'];
         if (previewDirectory == null && size.width == 1920) continue;
         await tester.runAsync(() async {
           final render =
