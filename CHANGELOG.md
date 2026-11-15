@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.208
+
+- Give Lyrics a split artwork and lyric layout on desktop, a compact phone header, centered lyric lines, and a full-width playback bar.
+
 ## 0.1.207
 
 - Give music more time to buffer at startup and keep repeated selections and stale completion events from restarting an opening song.
