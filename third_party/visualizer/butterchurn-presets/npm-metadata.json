@@ -1,0 +1,77 @@
+{
+  "dist": {
+    "shasum": "41e4e37cd3af2aec124fa8062352816100956c29",
+    "tarball": "https://registry.npmjs.org/butterchurn-presets/-/butterchurn-presets-2.4.7.tgz",
+    "fileCount": 1765,
+    "integrity": "sha512-4MdM8ripz/VfH1BCldrIKdAc/1ryJFBDvqlyow6Ivo1frwj0H3duzvSMFC7/wIjAjxb1QpwVHVqGqS9uAFKhpg==",
+    "signatures": [
+      {
+        "sig": "MEUCIH80ckAZCoFs053f4kj1VKBYjkG977s0VyxNL0Izv2YOAiEA9JkkOnZRjbIxLk7JzLp9niAgj1dc9yM5LBR1HyjGg5o=",
+        "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+      }
+    ],
+    "unpackedSize": 11894293,
+    "npm-signature": "-----BEGIN PGP SIGNATURE-----\r\nVersion: OpenPGP.js v3.0.4\r\nComment: https://openpgpjs.org\r\n\r\nwsFcBAEBCAAQBQJbGyYECRA9TVsSAnZWagAAOPgP/1QaH6X5CzdZC7PuoMWY\nEQzMwfSnEz1BfSDQHApuR1R0FDHM1qjEGijsAqVjnl9v8RzmWLxsmILLLC7F\nj53mXuqBbtaRRIDDNZ9LRlYY3yAQfyPn9u3XFF+CDWA0Bj1ckeWUP5HaN6JR\n3pAaiCnMgCfC42OqJ8or/sIxFMQerhTS2fw2adCa1IX6g8yjqzDGaHFZ9IGI\n8uFg6bAoTWG3aWVF2pTDedZEjvuEN3wUH9z239ox+MKu+GW8p44GB7BPHaMx\n0AzsqCn9/2/MUDBIP+PNp2FnNnOoSZPQvzUBtcsjj0dTVvX/XLUYAqDAK3f7\nNgGQ3fvx1EZg06Peddxp60YFIXV3IaSOtkO3RPf6ylYzne8vyWkSOaA3l7vq\nd2szxr2ChsioMUJ4ATA7qCDYTzPBYxAM3K+ABbWeGq8aIqH6cZe1JrEvBJYl\nsRrEKpppYLYwV4KLDMhA1K1fxRsAxuwKOKJwakFcOedv/4LVCw+3l8S554if\ne3zCLipUb/0/Mjg7pXdhjD1FJGUsgKYWmv3AUhbKlQXsMH6nz9X6mF5PlG+d\nFqPeIaGgjG+oSO0hJvfmb7bWp09vLBqFYDp6JWSSvp0KDiMqxHYCWu3D6Jp+\nIFELRfKMGNXiihPEqmZXIHL5tZZLd2i8r4wbj8TXzJnz3c5+tlZxGBGFpi39\nKzaL\r\n=4Xbe\r\n-----END PGP SIGNATURE-----\r\n"
+  },
+  "main": "lib/butterchurnPresets.min.js",
+  "name": "butterchurn-presets",
+  "files": [
+    "lib/butterchurnPresets.min.js",
+    "lib/butterchurnPresetsExtra.min.js",
+    "lib/butterchurnPresetsExtra2.min.js",
+    "lib/butterchurnPresetsMD1.min.js",
+    "lib/butterchurnPresetsMinimal.min.js",
+    "lib/butterchurnPresetsNonMinimal.min.js",
+    "lib/butterchurnPresetPackMeta.min.js",
+    "presets/converted/"
+  ],
+  "unpkg": "lib/butterchurnPresets.min.js",
+  "author": {
+    "name": "Jordan Berg",
+    "email": "jordannealberg@gmail.com"
+  },
+  "gitHead": "d19bf03f8930e391a98cc502342ab7658a33af3c",
+  "license": "MIT",
+  "scripts": {
+    "dev": "webpack  --config config/webpack.config.js --progress --colors --watch --env dev",
+    "build": "webpack  --config config/webpack.config.js --env prod"
+  },
+  "_npmUser": {
+    "name": "jberg",
+    "email": "jordannealberg@gmail.com"
+  },
+  "homepage": "https://butterchurnviz.com",
+  "_npmVersion": "5.8.0",
+  "description": "Butterchurn preset packs",
+  "directories": {},
+  "maintainers": [
+    {
+      "name": "jberg",
+      "email": "jordannealberg@gmail.com"
+    }
+  ],
+  "_nodeVersion": "8.9.4",
+  "dependencies": {
+    "lodash": "^4.17.4",
+    "babel-runtime": "^6.26.0",
+    "ecma-proposal-math-extensions": "0.0.2"
+  },
+  "_hasShrinkwrap": false,
+  "devDependencies": {
+    "babel": "^6.23.0",
+    "yargs": "^11.0.0",
+    "webpack": "^3.10.0",
+    "babel-core": "^6.26.0",
+    "babel-loader": "^7.1.2",
+    "babel-preset-env": "^1.6.1",
+    "uglifyjs-webpack-plugin": "^1.1.8",
+    "babel-plugin-transform-runtime": "^6.23.0",
+    "babel-plugin-add-module-exports": "^0.2.1"
+  },
+  "_npmOperationalInternal": {
+    "tmp": "tmp/butterchurn-presets_2.4.7_1528505859861_0.6018795359706686",
+    "host": "s3://npm-registry-packages"
+  },
+  "_id": "butterchurn-presets@2.4.7",
+  "version": "2.4.7"
+}
