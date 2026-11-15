@@ -1,6 +1,6 @@
 # Music visualizers: implementation and verification
 
-Version: **0.1.210+211**, retaining the **0.1.209+210** visualizers and the supplied **0.1.208+209** Lyrics redesign.
+Version: **0.1.211+212**, retaining the **0.1.210+211** Lyrics fix, **0.1.209+210** visualizers and supplied **0.1.208+209** Lyrics redesign.
 
 ## Scope
 
@@ -38,6 +38,21 @@ distribution hashes and build materials are retained under
   Sync. The enable decision itself is not persisted.
 
 ## Automated checks
+
+The 0.1.210 Windows CI build exposed a native source collision: Windows SDK
+RPC headers define `small` as `char`, so the 16-bit PCM local declaration
+expanded into invalid C++. Version 0.1.211 renames it to `pcm_sample`, retaining
+the same decoding and normalization. A source regression test rejects these
+SDK-reserved names in PCM declarations even on hosts without native compilers.
+It failed on the previous source before the rename. This is a source guard,
+not a substitute for a successful MSVC build. The plugin CMP0175 messages
+reported by CI are development warnings, not the fatal compilation error;
+unrelated plugin build scripts are unchanged.
+
+Final 0.1.211 local checks: **535 Flutter tests passed**, analyzer **no issues**,
+and release-note, Android source, visualizer bridge and source-integrity checks
+passed. MSVC and the Windows SDK remain unavailable locally, so the actual
+Windows release build must be rerun in CI; no native-build success is claimed.
 
 The 0.1.209 Windows delivery passed 533 Flutter tests, but Linux CI exposed
 an offscreen empty-Lyrics Import button with taller DejaVu Sans metrics.
