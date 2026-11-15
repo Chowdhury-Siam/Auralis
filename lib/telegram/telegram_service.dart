@@ -594,6 +594,154 @@ class TelegramService extends ChangeNotifier {
     }
   }
 
+  Future<bool> hasCompleteSong(Track track) async {
+    final id = track.fileId;
+    if (!ready || id == null) return false;
+    final file = await transport.request({'@type': 'getFile', 'file_id': id});
+    return _completeSong(file, track.size) != null;
+  }
+
+  File? _completeSong(Json file, int size) {
+    final local = file['local'] as Json?;
+    final path = local?['path'];
+    if (local?['is_downloading_completed'] != true ||
+        path is! String ||
+        path.isEmpty) {
+      return null;
+    }
+    final song = File(path);
+    return song.existsSync() && (size <= 0 || song.lengthSync() == size)
+        ? song
+        : null;
+  }
+
+  Future<File> songWithLyrics(
+    Track track,
+    Lyrics lyrics,
+    Directory output, {
+    String? name,
+  }) async {
+    final id = track.fileId, generation = _imageGeneration;
+    if (!ready || id == null || lyrics.instrumental) {
+      throw StateError(
+        'This song must be available in Telegram and have lyrics.',
+      );
+    }
+    final client = transport;
+    final result = await _withAudioMetadata(id, generation, (_) async {
+      var source = _completeSong(
+        await client.request({'@type': 'getFile', 'file_id': id}),
+        track.size,
+      );
+      if (source == null) {
+        if (isStreaming(id)) {
+          throw StateError('Stop the current song download and try again.');
+        }
+        final downloaded = await client.request({
+          '@type': 'downloadFile',
+          'file_id': id,
+          'priority': 16,
+          'offset': 0,
+          'limit': 0,
+          'synchronous': true,
+        }, timeout: const Duration(minutes: 5));
+        source = _completeSong(downloaded, track.size);
+      }
+      if (source == null || !ready || generation != _imageGeneration) {
+        return null;
+      }
+      final safeName = (name ?? track.title)
+          .replaceAll(RegExp(r'[\x00-\x1f<>:"/\\|?*]'), '_')
+          .trim()
+          .replaceFirst(RegExp(r'[. ]+$'), '');
+      final shortened = String.fromCharCodes(safeName.runes.take(96));
+      return File(
+        await writeEmbeddedLyrics(
+          source,
+          output,
+          lyrics.timestampedText,
+          name: shortened.isEmpty ? 'Auralis song' : shortened,
+        ),
+      );
+    });
+    if (result == null || !ready || generation != _imageGeneration) {
+      throw StateError(
+        'The complete song is unavailable. Check Telegram and try again.',
+      );
+    }
+    return result;
+  }
+
+  Future<({Json message, String? fileName})> editableSong(Track track) async {
+    final parts = track.id.split(':').map(int.tryParse).toList();
+    if (!ready || parts.length != 2 || parts.any((part) => part == null)) {
+      throw StateError('The Telegram post is unavailable.');
+    }
+    final ids = {'chat_id': parts[0], 'message_id': parts[1]};
+    final client = transport;
+    final properties = await client.request({
+      '@type': 'getMessageProperties',
+      ...ids,
+    });
+    if (properties['can_edit_media'] != true) {
+      throw StateError(
+        'Your account needs permission to edit this Telegram post.',
+      );
+    }
+    final message = await client.request({'@type': 'getMessage', ...ids});
+    if (!ready || !identical(client, transport)) {
+      throw StateError('The Telegram account changed.');
+    }
+    final content = message['content'] as Json?;
+    final type = content?['@type'];
+    final audio = type == 'messageAudio' ? 'audio' : 'document';
+    final filename = content?[audio]?['file_name'];
+    if ((type != 'messageAudio' && type != 'messageDocument') ||
+        Track.fromMessage(message, track.source)?.fileId != track.fileId) {
+      throw StateError(
+        'The Telegram post changed. Refresh the Library and try again.',
+      );
+    }
+    return (
+      message: message,
+      fileName: filename is String
+          ? p.basenameWithoutExtension(filename)
+          : null,
+    );
+  }
+
+  Future<Track> replaceSongMedia(Track track, File audio) async {
+    final original = (await editableSong(track)).message;
+    final content = original['content'] as Json;
+    final local = {'@type': 'inputFileLocal', 'path': audio.path};
+    final input = content['@type'] == 'messageAudio'
+        ? {
+            '@type': 'inputMessageAudio',
+            'audio': local,
+            'duration': track.duration.inSeconds,
+            'title': content['audio']?['title'] ?? '',
+            'performer': content['audio']?['performer'] ?? '',
+          }
+        : {
+            '@type': 'inputMessageDocument',
+            'document': local,
+            'disable_content_type_detection': true,
+          };
+    final changed = await transport.request({
+      '@type': 'editMessageMedia',
+      'chat_id': original['chat_id'],
+      'message_id': original['id'],
+      'input_message_content': {...input, 'caption': content['caption']},
+    }, timeout: const Duration(minutes: 10));
+    final result = Track.fromMessage(changed, track.source);
+    if (result == null) {
+      throw StateError(
+        'Telegram accepted the change. Refresh the Library to see the updated post.',
+      );
+    }
+    return result;
+  }
+
   Future<String?> image(int fileId) {
     if (!ready) return Future.value(null);
     if (_images[fileId] case final cached?) return cached;
@@ -859,7 +1007,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.215',
+          'application_version': '0.1.216',
         }));
       } on TdException catch (e) {
         throw FormatException(
