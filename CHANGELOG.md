@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.211
+
+- Fix Windows visualizer compilation by avoiding a PCM variable name reserved by Windows SDK RPC headers.
+
 ## 0.1.210
 
 - Keep Lyrics import and paste actions ahead of the longer help text so taller fallback fonts do not push them below the visible content panel.
