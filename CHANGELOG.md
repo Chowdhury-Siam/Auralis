@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.212
+
+- Make Spectrum fill its panel at every pixel density, size the animated visualizer canvas to the panel's aspect ratio, and refresh both renderers when resizing or switching modes.
+- Center the Lyrics/Spectrum/Visualizer selector, visualizer controls and wrapped preset titles while keeping Lyrics, artwork and playback controls intact.
+
 ## 0.1.211
 
 - Fix Windows visualizer compilation by avoiding a PCM variable name reserved by Windows SDK RPC headers.
