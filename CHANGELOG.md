@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.217
+
+- In Song-driven motion, cycle presets on detected musical accents. Show the Change every setting only for timed cycling.
+
 ## 0.1.216
 
 - Reduce Android Spectrum drawing and adaptive Visualizer rendering costs. Add 10 Spectrum styles, 10 palettes, six frame limits and compact settings dialogs.
