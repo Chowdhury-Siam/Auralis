@@ -915,15 +915,9 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: const Text(
-                  'Missing embedded lyrics are looked up automatically using LRCLIB and lyrics.ovh. Only song title, artist and duration are sent. You can retry, import a file or paste lyrics.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
               const SizedBox(height: 16),
+              // Keep recovery actions ahead of the longer explanation so
+              // taller fallback fonts do not push Import beneath transport.
               FilledButton.icon(
                 onPressed: _load,
                 icon: const Icon(Icons.search),
@@ -937,6 +931,14 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
               TextButton(
                 onPressed: _paste,
                 child: const Text('Paste lyrics instead'),
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: const Text(
+                  'Missing embedded lyrics are looked up automatically using LRCLIB and lyrics.ovh. Only song title, artist and duration are sent. You can retry, import a file or paste lyrics.',
+                  textAlign: TextAlign.center,
+                ),
               ),
             ],
           ),
