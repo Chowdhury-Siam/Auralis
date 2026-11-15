@@ -91,6 +91,7 @@ void main() {
         ..fps = 20
         ..preset = 'Preset A'
         ..cycleSeconds = 60
+        ..songMotion = false
         ..cycle = false;
       expect(settings.toJson().containsKey('_musicVisualizer'), isFalse);
       await settings.save();
@@ -113,6 +114,68 @@ void main() {
       expect(invalid.cycleSeconds, 30);
       expect(invalid.spectrum, 'line');
       expect(invalid.preset, isEmpty);
+      expect(invalid.songMotion, isTrue);
+      expect(MusicVisualizerSettings.fromJson({}).songMotion, isTrue);
+      expect(
+        MusicVisualizerSettings.fromJson({'songMotion': false}).songMotion,
+        isFalse,
+      );
+    },
+  );
+
+  testWidgets(
+    'song-driven motion is automatic, reversible and preserves preset choices',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final player = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy((_) async => {}),
+        MemorySettings(),
+      );
+      addTearDown(player.shutdown);
+      final scripts = <String>[];
+      messenger.setMockMethodCallHandler(channel, (_) async => null);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MusicVisualizerPane(
+              player: player,
+              mode: MusicPanel.visualizer,
+              fullscreen: false,
+              onFullscreen: () {},
+              webController: MusicVisualizerWebController(
+                runScript: (script) async => scripts.add(script),
+              ),
+              rendererBuilder: (message, _) => ReadyVisualizer(message),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(scripts.last, contains('"songMotion":true'));
+      await tester.tap(find.byTooltip('Visualizer settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Cycle presets'), findsOneWidget);
+      expect(find.text('Choose preset'), findsOneWidget);
+      await tester.tap(find.text('Song-driven motion'));
+      await tester.pumpAndSettle();
+      expect(player.settings.musicVisualizer.songMotion, isFalse);
+      expect(scripts.last, contains('"songMotion":false'));
+      await tester.tap(find.text('Song-driven motion'));
+      await tester.pumpAndSettle();
+      expect(player.settings.musicVisualizer.songMotion, isTrue);
+      expect(scripts.last, contains('"songMotion":true'));
+      await tester.ensureVisible(find.text('Done'));
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Previous preset'), findsOneWidget);
+      expect(find.byTooltip('Random preset'), findsOneWidget);
+      expect(find.byTooltip('Next preset'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
     },
   );
 
