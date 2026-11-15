@@ -85,6 +85,14 @@ Follow line-synced lyrics with the highlighted line sharp and all other lines so
 
 On Android and Windows, the screen stays awake while Music Lyrics is visible and the app is focused, even when paused or reading Static lyrics. Normal screen timeout resumes when you leave Lyrics, cover the page, minimize the app or switch away; video playback keeps its independent screen-awake ownership.
 
+### Spectrum and animated visualizers
+
+On Android and Windows, open Lyrics and select **Lyrics / Spectrum / Visualizer**. Lyrics remains the default, and switching panels preserves its reading state, artwork, search and translation features. Spectrum offers line, bars and radial styles, three palettes and 20/30/60 FPS limits. The Butterchurn/MilkDrop-style visualizer includes 99 offline presets, searchable selection, previous/next/random controls and automatic cycling. Expand hides the header/artwork while keeping playback controls; it is an in-app panel, not OS fullscreen.
+
+Choose **Enable visualizer** to opt in for the open panel. Output analysis stays on the device: it never opens a microphone, records/uploads audio, or gives media URLs or account credentials to the renderer. Because analysis observes the output mix, other apps sharing that output can appear too. Android requires the permission labeled “microphone” for its output Visualizer effect; declining it leaves Lyrics and playback usable. Windows observes the default render endpoint through WASAPI loopback; non-default output routing may not be reflected.
+
+Analysis and rendering stop for pause, buffering, covered/hidden routes, focus loss, backgrounding and reduced motion. Animated presets may flash: use Lyrics if sensitive. Rendering requires an up-to-date Android System WebView or Microsoft Edge WebView2 and a compatible GPU. Restricted Android devices may not support output visualization. Preferences are device-local and excluded from Music backup and Worker Sync. Bundled renderer licenses and exact upstream sources are documented in `third_party/visualizer/README.md`.
+
 Hold or right-click **Find lyrics online** to open **Search lyrics by**.
 Edit the prefilled **Song name** or **Artist**, then use that field's search
 button or the keyboard Search action. These edits only change the search, not
