@@ -11,7 +11,9 @@ let time = 0, nextFrame = 0, destroyed = false, renders = 0, lastWave;
 let resizeCallback, windowResizeCallback, visibilityCallback, rendererSize, createdSize;
 let presetReads=0, renderCost=0, trigCalls=0;
 const {audio,levels}=butterchurnAudio();
-let lastLevels;
+let lastLevels, lastPreset, lastEquation, lastElapsed;
+const testPresets={A:{id:'A',baseVals:{zoom:1,wave_scale:1,warp:.1},frame_eqs_str:''},
+  B:{id:'B',baseVals:{zoom:1,wave_scale:1,warp:.1},frame_eqs_str:''}};
 const math=Object.create(Math);
 math.cos=value=>{trigCalls++;return Math.cos(value);};
 math.sin=value=>{trigCalls++;return Math.sin(value);};
@@ -35,7 +37,7 @@ class Analyzer {
 }
 const engine = {
   audio, renderer:{audioLevels:levels},
-  loadPreset(preset, blend) { loaded.push(preset.id);blends.push(blend); },
+  loadPreset(preset, blend) { loaded.push(preset.id);blends.push(blend);lastPreset=preset; },
   setRendererSize(width, height) {
     assert(width <= 4096); assert(height <= 4096);
     assert(width*height <= 8388608+4096);
@@ -47,6 +49,12 @@ const engine = {
     audio.updateAudio(input.timeByteArray,input.timeByteArrayL,input.timeByteArrayR);
     levels.updateAudioLevels(30,renders);
     lastLevels={instant:[...levels.val],smooth:[...levels.att]};
+    lastElapsed=options.elapsedTime;
+    assert(Number.isFinite(lastElapsed) && lastElapsed>=.001 && lastElapsed<=.1,
+      'Every renderer frame needs a positive bounded elapsedTime');
+    const vars={...lastPreset.baseVals,bass:levels.bass,bass_att:levels.bass_att,
+      mid:levels.mid,mid_att:levels.mid_att,treb:levels.treb,treb_att:levels.treb_att};
+    lastEquation=new Function('a',lastPreset.frame_eqs_str+'\nreturn a;')(vars);
   },
 };
 const sandbox = {
@@ -70,7 +78,7 @@ const sandbox = {
     assert.deepEqual([canvas.width,canvas.height],createdSize);
     return engine;
   }}},
-  butterchurnPresets: {getPresets: () => {presetReads++;return {A:{id:'A'}, B:{id:'B'}};}},
+  butterchurnPresets: {getPresets: () => {presetReads++;return testPresets;}},
   AudioMotionAnalyzer: Analyzer,
 };
 sandbox.window = {
@@ -262,6 +270,42 @@ advance(130);
 assert(lastLevels.instant[2]<loudTreble,'Missing samples should release energy before the stale cutoff');
 advance(150);
 assert(lastLevels.instant.every(value=>value===0),'Stale input must not leave preset energy frozen');
+const milkStyle=elements.get('milk').style;
+function scale() { return Number(milkStyle.transform.match(/scale\(([^)]+)\)/)?.[1]||1); }
+api.configure({mode:'visualizer',active:true,songMotion:true,cycle:false});
+for (let i=0;i<90;i++) { api.feed(tone(90,18),44100);advance(34); }
+const quietOpacity=Number(milkStyle.opacity);
+assert(scale()<1.001,'Steady bass must not generate periodic fake kicks');
+api.feed(tone(90,90),44100);advance(34);
+assert(scale()>1.005,'A real bass onset must visibly move even a non-reactive preset');
+assert(lastEquation.zoom>1,'Bass attacks must reach preset feedback geometry as well as the compositor');
+assert(lastEquation.warp>.1,'Preset warp must receive the bounded real-audio kick');
+assert.equal(testPresets.A.frame_eqs_str,'','Original preset equations must not be mutated');
+assert(scale()<=1.035,'Master movement must stay restrained and avoid exposed edges');
+assert(Number(milkStyle.opacity)>quietOpacity,'Louder passages must be visibly distinct');
+for (let i=0;i<90;i++) { api.feed(tone(90,90),44100);advance(34); }
+assert(scale()<1.001,'Held notes must release to a steady view, not keep pumping');
+const heldOpacity=Number(milkStyle.opacity);
+for (let i=0;i<30;i++) { api.feed(Buffer.alloc(1024,128).toString('base64'),44100);advance(34); }
+assert(Number(milkStyle.opacity)<.01,'Silence must fade preset-authored autonomous motion');
+assert(Number(milkStyle.opacity)<heldOpacity*.05);
+api.configure({songMotion:false,active:true});
+assert.equal(milkStyle.opacity,'1');
+assert.equal(milkStyle.transform,'none','Original preset appearance remains available');
+api.feed(tone(90,90),44100);advance(34);
+assert.equal(milkStyle.opacity,'1');
+assert.equal(milkStyle.transform,'none');
+assert.equal(lastPreset.frame_eqs_str,'','Disabling song motion restores untouched preset equations');
+assert.equal(lastEquation.zoom,1);
+api.configure({songMotion:true,active:true});
+// Equal-power band changes exercise spectral novelty when RMS barely changes.
+for (let i=0;i<60;i++) { api.feed(tone(86,70),44100);advance(34); }
+const beforeBandShift=lastLevels.instant[0];
+api.feed(tone(258,70),44100);advance(34);
+assert(scale()>1.003,'A constant-loudness bass spectral attack must drive visible response');
+assert(lastLevels.instant[0]>beforeBandShift,'Spectral attacks must also accent preset equations');
+for (let i=0;i<30;i++) advance(34);
+assert(Number(milkStyle.opacity)<.01,'Missing sample release also reaches the master compositor');
 api.destroy();
 assert(destroyed);
 assert.equal(callbacks.size,0);
