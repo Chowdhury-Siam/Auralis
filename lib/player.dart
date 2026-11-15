@@ -177,6 +177,7 @@ class PlayerController extends ChangeNotifier {
     Duration Function()? elapsed,
   }) : _now = now ?? DateTime.now,
        _elapsedOverride = elapsed {
+    _lastViewState = _audioViewState;
     audio.addListener(_audioChanged);
     audio.onCompleted = () => unawaited(_completed());
     _proxyErrors = proxy.errors.listen((value) {
@@ -196,10 +197,46 @@ class PlayerController extends ChangeNotifier {
   int _sessionListened = 0, _statsRevision = 0, _savedStatsRevision = 0;
   bool restoringData = false;
   Future<void> Function()? releaseVideo;
+  final _viewChanges = ChangeNotifier();
+  late Object _lastViewState;
+
+  /// Structural UI updates, without high-frequency position/buffer ticks.
+  /// Existing listeners still receive every event for lyrics, seeking, stats,
+  /// sync and integrations; the playback backend and event timing are unchanged.
+  Listenable get viewChanges => _viewChanges;
+  Object get _audioViewState => (
+    audio.playing,
+    audio.buffering,
+    audio.starting,
+    audio.completed,
+    audio.duration,
+    audio.error,
+    loading,
+    restoringData,
+    _qualifiedPlay,
+  );
+
+  @override
+  void notifyListeners() {
+    _lastViewState = _audioViewState;
+    super.notifyListeners();
+    _viewChanges.notifyListeners();
+  }
 
   void _audioChanged() {
     _recordListening();
-    if (!_closed) notifyListeners();
+    if (_closed) return;
+    final state = _audioViewState;
+    final changed = state != _lastViewState;
+    _lastViewState = state;
+    super.notifyListeners();
+    if (changed) _viewChanges.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _viewChanges.dispose();
+    super.dispose();
   }
 
   void _recordListening() {
@@ -674,8 +711,7 @@ class PlayerController extends ChangeNotifier {
       await _persist();
     } catch (_) {
       if (generation == _generation) {
-        error =
-            'Could not open this track. Check the Telegram connection and native libraries.';
+        error = 'Could not open this track. Check the Telegram connection and native libraries.';
       }
     } finally {
       if (generation == _generation) {
