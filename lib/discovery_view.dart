@@ -156,50 +156,59 @@ extension _DiscoveryPages on _PlayerShellState {
             ),
           ),
         const SizedBox(height: 18),
-        DiscoveryCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionHeading(
-                'Listening stats',
-                action: IconButton.filledTonal(
-                  tooltip: 'Open listening stats',
-                  onPressed: _stats,
-                  icon: const Icon(Icons.arrow_forward_rounded, size: 20),
-                ),
+        ListenableBuilder(
+          key: const ValueKey('home-live-listening-stats'),
+          listenable: player,
+          builder: (context, _) => RepaintBoundary(
+            child: DiscoveryCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionHeading(
+                    'Listening stats',
+                    action: IconButton.filledTonal(
+                      tooltip: 'Open listening stats',
+                      onPressed: _stats,
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+                    ),
+                  ),
+                  Text(
+                    'All time',
+                    style: TextStyle(color: _colors.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    listeningTime(stats.milliseconds),
+                    style: Theme.of(context).textTheme.headlineLarge
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  Text('${stats.plays} plays · ${stats.tracks.length} tracks'),
+                  if (stats.tracks.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Top track',
+                      style: TextStyle(color: _colors.onSurfaceVariant),
+                    ),
+                    Text(
+                      stats.topTracks.first.value.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Last 7 days',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  ListeningBars(
+                    points: listeningDays(stats, now, 7),
+                    height: 48,
+                  ),
+                ],
               ),
-              Text(
-                'All time',
-                style: TextStyle(color: _colors.onSurfaceVariant),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                listeningTime(stats.milliseconds),
-                style: Theme.of(context).textTheme.headlineLarge
-                    ?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              Text('${stats.plays} plays · ${stats.tracks.length} tracks'),
-              if (stats.tracks.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(
-                  'Top track',
-                  style: TextStyle(color: _colors.onSurfaceVariant),
-                ),
-                Text(
-                  stats.topTracks.first.value.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ],
-              const SizedBox(height: 14),
-              const Text(
-                'Last 7 days',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              ListeningBars(points: listeningDays(stats, now, 7), height: 48),
-            ],
+            ),
           ),
         ),
       ],
@@ -327,7 +336,10 @@ extension _DiscoveryPages on _PlayerShellState {
                   ],
                 ),
               ),
-              _trackActions(track, onPlay: () => player.play(track, from: queue)),
+              _trackActions(
+                track,
+                onPlay: () => player.play(track, from: queue),
+              ),
             ],
           ),
         ),
@@ -364,7 +376,8 @@ extension _DiscoveryPages on _PlayerShellState {
                       IconButton(
                         key: const ValueKey('library-refresh'),
                         tooltip: 'Refresh library',
-                        onPressed: telegram.busy ||
+                        onPressed:
+                            telegram.busy ||
                                 library.saving ||
                                 library.loading ||
                                 _cachingLibrary
@@ -446,7 +459,8 @@ extension _DiscoveryPages on _PlayerShellState {
 
   List<MusicChat> _matchingMusicChannels(String query) {
     final channels = {
-      for (final channel in player.settings.selectedChannels) channel.id: channel,
+      for (final channel in player.settings.selectedChannels)
+        channel.id: channel,
       for (final channel in telegram.channels) channel.id: channel,
     };
     return channels.values
