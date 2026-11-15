@@ -3,7 +3,7 @@ enum MusicPanel { lyrics, spectrum, visualizer }
 /// Device-local rendering preferences. Never included in Music backup/sync.
 class MusicVisualizerSettings {
   String spectrum = 'line', palette = 'prism', preset = '';
-  bool cycle = true;
+  bool cycle = true, songMotion = true;
   int fps = 30, cycleSeconds = 30;
 
   Map<String, Object> toJson() => {
@@ -11,6 +11,7 @@ class MusicVisualizerSettings {
     'palette': palette,
     'preset': preset,
     'cycle': cycle,
+    'songMotion': songMotion,
     'fps': fps,
     'cycleSeconds': cycleSeconds,
   };
@@ -28,6 +29,7 @@ class MusicVisualizerSettings {
       result.preset = name;
     }
     result.cycle = value['cycle'] != false;
+    result.songMotion = value['songMotion'] != false;
     if ([20, 30, 60].contains(value['fps'])) result.fps = value['fps'] as int;
     if ([15, 30, 60].contains(value['cycleSeconds'])) {
       result.cycleSeconds = value['cycleSeconds'] as int;
