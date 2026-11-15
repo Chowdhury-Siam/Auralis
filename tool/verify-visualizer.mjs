@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import {butterchurnAudio} from './visualizer-audio-fixture.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const source = fs.readFileSync(`${root}assets/visualizer/bridge.js`, 'utf8');
 let time = 0, nextFrame = 0, destroyed = false, renders = 0, lastWave;
 let resizeCallback, windowResizeCallback, visibilityCallback, rendererSize, createdSize;
 let presetReads=0, renderCost=0, trigCalls=0;
+const {audio,levels}=butterchurnAudio();
+let lastLevels;
 const math=Object.create(Math);
 math.cos=value=>{trigCalls++;return Math.cos(value);};
 math.sin=value=>{trigCalls++;return Math.sin(value);};
@@ -31,6 +34,7 @@ class Analyzer {
   destroy() { destroyed = true; }
 }
 const engine = {
+  audio, renderer:{audioLevels:levels},
   loadPreset(preset, blend) { loaded.push(preset.id);blends.push(blend); },
   setRendererSize(width, height) {
     assert(width <= 4096); assert(height <= 4096);
@@ -39,6 +43,10 @@ const engine = {
   },
   render(options) {
     renders++; lastWave = [...options.audioLevels.timeByteArray];time+=renderCost;
+    const input=options.audioLevels;
+    audio.updateAudio(input.timeByteArray,input.timeByteArrayL,input.timeByteArrayR);
+    levels.updateAudioLevels(30,renders);
+    lastLevels={instant:[...levels.val],smooth:[...levels.att]};
   },
 };
 const sandbox = {
@@ -142,11 +150,11 @@ sandbox.window.devicePixelRatio=1;
 resizeCallback();
 api.feed(tone(440),44100);
 Analyzer.current._analyzer[0].getFloatFrequencyData(bins);
-assert(bins.every(value=>value===-100),'Animated visuals must not compute an unused spectrum FFT');
+assert(bins.every(value=>value===-100),'Animated energy analysis must skip unused Spectrum decibel/smoothing work');
 advance(40);
 assert(renders > 0);
 assert(lastWave.some(sample => sample !== 128), 'Render consumes actual input samples');
-assert(Math.max(...lastWave)>228,'Real onsets should have headroom-limited transient emphasis');
+assert.equal(Math.max(...lastWave),228,'Captured samples must reach Butterchurn without artificial gain');
 advance(300);
 assert(lastWave.every(sample => sample === 128), 'Stale audio must become silence');
 advance(19000);
@@ -190,7 +198,8 @@ for (let i=0;i<25;i++) {
 }
 assert.equal(Math.max(...lastWave),148,'Steady input must not create a repeating artificial beat');
 api.feed(tone(90,100),44100);advance(34);
-assert(Math.max(...lastWave)>228,'A real bass/energy onset should increase visual sensitivity');
+assert(lastLevels.instant[0]>.5,'A real bass/energy onset should reach the preset equations');
+assert.equal(Math.max(...lastWave),228,'Energy response must not clip or inflate the waveform');
 api.feed(tone(90,127),44100);advance(34);
 assert(Math.max(...lastWave)<=255 && Math.min(...lastWave)>=1,
   'Transient emphasis must respect available sample headroom');
@@ -221,6 +230,38 @@ assert.equal(callbacks.size,0,'Android background visibility must still stop ren
 sandbox.document.hidden=false;
 api.configure({mode:'spectrum',active:true});
 assert.deepEqual(Analyzer.current.size,[1200,675], 'Switching back restores spectrum dimensions');
+// These exercise the real pinned engine's audio path, not a sample-only mock.
+api.configure({mode:'visualizer',active:true,cycle:false,mobile:false});
+levels.longAvg.fill(0);levels.avg.fill(0); // The native long-silence steady state.
+for (let i=0;i<120;i++) {
+  api.feed(Buffer.alloc(1024,128).toString('base64'),44100);advance(34);
+}
+assert(lastLevels.instant.every(value=>value===0),
+  'Actual Butterchurn preset energy must be zero in silence, not its native neutral value of one');
+assert(lastLevels.smooth.every(value=>value<.001),'Silence must also release attenuated energy');
+function settleEnergy(amplitude) {
+  for (let i=0;i<240;i++) { api.feed(tone(90,amplitude),44100);advance(34); }
+  return lastLevels.instant[0];
+}
+const quietBass=settleEnergy(12), loudBass=settleEnergy(90);
+assert(loudBass>quietBass*2,
+  'Sustained loud and quiet music must not normalize to the same preset energy');
+assert(lastLevels.instant.every(Number.isFinite));
+assert(lastLevels.instant.every(value=>value>=0 && value<=4));
+console.log(`Real Butterchurn bass energy: quiet=${quietBass.toFixed(3)}, loud=${loudBass.toFixed(3)} (${(loudBass/quietBass).toFixed(1)}x).`);
+assert(lastLevels.instant[0]>lastLevels.instant[1]*10 &&
+  lastLevels.instant[0]>lastLevels.instant[2]*10,
+  'A bass tone must not falsely drive the mid and treble bands');
+const onsetLevels=[...lastLevels.instant];
+for (let i=0;i<100;i++) { api.feed(tone(6000,90),44100);advance(34); }
+assert(lastLevels.instant[2]>lastLevels.instant[0]*10,
+  'Treble changes must reach the treble equations independently of bass');
+assert(lastLevels.instant[2]>onsetLevels[2]*10);
+const loudTreble=lastLevels.instant[2];
+advance(130);
+assert(lastLevels.instant[2]<loudTreble,'Missing samples should release energy before the stale cutoff');
+advance(150);
+assert(lastLevels.instant.every(value=>value===0),'Stale input must not leave preset energy frozen');
 api.destroy();
 assert(destroyed);
 assert.equal(callbacks.size,0);
@@ -229,4 +270,4 @@ assert.equal(messages.filter(message => message.type === 'error').length,0);
 const html=fs.readFileSync(`${root}assets/visualizer/index.html`,'utf8');
 assert.match(html, /#spectrum canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/,
   'Spectrum canvases must fill the CSS panel at every pixel density');
-console.log('Visualizer bridge checks passed: lazy presets, cached FFT tables, audio attack/release and transients, phone adaptation/recovery, frame pacing, native-DPI sizing, silence, presets and cleanup.');
+console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, phone adaptation/recovery, pacing, DPI, cycling and cleanup.');
