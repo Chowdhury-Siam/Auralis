@@ -26,6 +26,26 @@ const song = Track(
   source: 'Music',
 );
 
+void expectCenteredRows(WidgetTester tester, Finder group, Finder children) {
+  final center = tester.getRect(group).center.dx;
+  final rows = <int, List<Rect>>{};
+  for (final element in children.evaluate()) {
+    final rect = tester.getRect(
+      find.byElementPredicate((candidate) => identical(candidate, element)),
+    );
+    rows.putIfAbsent(rect.top.round(), () => []).add(rect);
+  }
+  expect(rows, isNotEmpty);
+  for (final row in rows.values) {
+    final bounds = row.reduce((a, b) => a.expandToInclude(b));
+    expect(
+      bounds.center.dx,
+      closeTo(center, .5),
+      reason: 'Every wrapped row must remain centered in the panel.',
+    );
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
@@ -210,6 +230,12 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('Original words'), findsOneWidget);
+        final selector = find.byKey(const ValueKey('music-panel-selector'));
+        expectCenteredRows(
+          tester,
+          selector,
+          find.descendant(of: selector, matching: find.byType(ChoiceChip)),
+        );
         expect(find.byType(MusicVisualizerWebView), findsNothing);
         for (final mode in ['spectrum', 'visualizer']) {
           await tester.tap(find.byKey(ValueKey('music-panel-$mode')));
@@ -418,6 +444,24 @@ void main() {
       await tester.pump();
       final starts = calls.where((call) => call == 'start').length;
       expect(starts, 1);
+      void checkPanelLayout() {
+        final controls = find.byKey(
+          const ValueKey('music-visualizer-controls'),
+        );
+        expectCenteredRows(
+          tester,
+          controls,
+          find.descendant(of: controls, matching: find.byType(IconButton)),
+        );
+        expect(
+          tester
+              .getSize(find.byKey(const ValueKey('music-visualizer-surface')))
+              .width,
+          closeTo(tester.getSize(find.byType(MusicVisualizerPane)).width, .5),
+        );
+      }
+
+      checkPanelLayout();
       await tester.tap(find.byTooltip('Expand visualizer'));
       await tester.pump();
       expect(expanded, isTrue);
@@ -426,6 +470,7 @@ void main() {
       await tester.pump();
       expect(find.text('Enable visualizer'), findsNothing);
       expect(scripts.last, contains('"mode":"visualizer"'));
+      checkPanelLayout();
       expect(calls.where((call) => call == 'start').length, starts);
       await tester.tap(find.byTooltip('Next preset'));
       await tester.pump();
@@ -473,6 +518,12 @@ void main() {
     final html = File('assets/visualizer/index.html').readAsStringSync();
     final bridge = File('assets/visualizer/bridge.js').readAsStringSync();
     expect(html, contains("connect-src 'none'"));
+    expect(
+      html,
+      matches(
+        RegExp(r'#spectrum canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%'),
+      ),
+    );
     expect(bridge, contains('timeByteArray:waveform'));
     expect(bridge, contains('analyzer._analyzer'));
     for (final forbidden in [
