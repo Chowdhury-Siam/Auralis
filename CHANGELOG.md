@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.215
+
+- Make song response visible across all animated presets with bass-onset movement and smooth energy-driven visibility, rather than relying only on each preset's equations. Keep original preset appearance available through the Song-driven motion setting.
+- Detect positive spectral attacks even when overall loudness stays nearly constant, and map normal music levels into the useful preset-energy range without amplifying playback or waveform samples.
+- Preserve all presets, Spectrum, Lyrics, artwork effects, playback controls, Windows focus behavior and the UI lag fixes.
+
 ## 0.1.214
 
 - Preserve Android output loudness instead of normalizing quiet and loud passages to similar waveform levels.
