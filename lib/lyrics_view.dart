@@ -1432,7 +1432,12 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
   );
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.player,
+    builder: (context, _) => _buildPlayer(context),
+  );
+
+  Widget _buildPlayer(BuildContext context) {
     final reduced =
         widget.player.settings.reducedMotion ||
         MediaQuery.disableAnimationsOf(context);
