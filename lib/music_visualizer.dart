@@ -406,8 +406,10 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
       );
     }
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
+          key: const ValueKey('music-visualizer-surface'),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child:
@@ -421,16 +423,21 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
           ),
         ),
         if (_ready && !widget.player.audio.playing)
-          const Padding(padding: EdgeInsets.all(8), child: Text('Paused')),
+          const Padding(
+            padding: EdgeInsets.all(8),
+            child: Text('Paused', textAlign: TextAlign.center),
+          ),
         if (_ready && _reduced)
           const Padding(
             padding: EdgeInsets.all(8),
             child: Text(
               'Visualizers are stopped by your reduced-motion preference.',
+              textAlign: TextAlign.center,
             ),
           ),
         Wrap(
-          alignment: WrapAlignment.end,
+          key: const ValueKey('music-visualizer-controls'),
+          alignment: WrapAlignment.center,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             if (widget.mode == MusicPanel.visualizer) ...[
@@ -485,6 +492,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               _settings.preset,
+              textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall,
