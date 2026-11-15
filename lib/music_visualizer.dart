@@ -295,6 +295,17 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
                 ] else ...[
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
+                    title: const Text('Song-driven motion'),
+                    subtitle: const Text(
+                      'Bass-hit movement and energy-driven visibility across all presets. '
+                      'Turn off for the original preset appearance.',
+                    ),
+                    value: _settings.songMotion,
+                    onChanged: (value) =>
+                        change(() => _settings.songMotion = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
                     title: const Text('Cycle presets'),
                     value: _settings.cycle,
                     onChanged: (value) => change(() => _settings.cycle = value),
