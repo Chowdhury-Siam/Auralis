@@ -92,6 +92,7 @@ class _MusicVisualizerWebViewState extends State<MusicVisualizerWebView>
           onPermissionRequest: (request) => unawaited(request.deny()),
         );
         await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+        await controller.enableZoom(false);
         await controller.setBackgroundColor(Colors.transparent);
         await controller.addJavaScriptChannel(
           'AuralisVisuals',
