@@ -31,6 +31,7 @@ class LyricsView extends StatefulWidget {
     required this.onBack,
     this.backgroundColor,
     this.loadEmbedded,
+    this.saveSongWithLyrics,
     this.files = const DataFiles(),
     this.openLink = openExternalLink,
     this.visualizerRendererBuilder,
@@ -45,6 +46,8 @@ class LyricsView extends StatefulWidget {
   // The player shell supplies the artwork backdrop behind immersive lyrics.
   final Color? backgroundColor;
   final Future<Lyrics?> Function(Track)? loadEmbedded;
+  final Future<void> Function(Track, Lyrics, {required bool publish})?
+  saveSongWithLyrics;
   @override
   State<LyricsView> createState() => _LyricsViewState();
 }
@@ -95,7 +98,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
   bool _translating = false, _showTranslation = false;
   bool _openingDeepL = false;
   String? _error;
-  bool _importing = false;
+  bool _importing = false, _savingSong = false;
   bool _loading = false, _synced = true, _looked = false;
   int _generation = 0;
   MusicPanel _panel = MusicPanel.lyrics;
@@ -770,6 +773,17 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
     ),
   );
 
+  Future<void> _saveTaggedSong({required bool publish}) async {
+    final track = _track, lyrics = _lyrics;
+    if (track == null || lyrics == null || _savingSong) return;
+    setState(() => _savingSong = true);
+    try {
+      await widget.saveSongWithLyrics?.call(track, lyrics, publish: publish);
+    } finally {
+      if (mounted) setState(() => _savingSong = false);
+    }
+  }
+
   PopupMenuItem<String> _menuAction({
     required String value,
     required bool enabled,
@@ -855,6 +869,8 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
         unawaited(_openDeepL());
       } else if (value == 'embedded') {
         unawaited(_load(embedded: true, online: false));
+      } else if (value == 'save-tagged' || value == 'publish-tagged') {
+        unawaited(_saveTaggedSong(publish: value == 'publish-tagged'));
       } else if (value == 'find-by') {
         unawaited(_searchOnline());
       } else {
@@ -888,6 +904,25 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
             ? 'Hold for search options.'
             : 'Current: ${_lyrics!.provider}\nHold for search options.',
       ),
+      if (widget.saveSongWithLyrics != null &&
+          _track?.fileId != null &&
+          _lyrics != null &&
+          !_lyrics!.instrumental) ...[
+        _menuAction(
+          value: 'save-tagged',
+          enabled: !_savingSong && !_loading,
+          icon: Icons.download_rounded,
+          title: 'Save song with lyrics',
+          subtitle: 'Download an audio file with lyrics embedded.',
+        ),
+        _menuAction(
+          value: 'publish-tagged',
+          enabled: !_savingSong && !_loading,
+          icon: Icons.cloud_upload_outlined,
+          title: 'Update Telegram song',
+          subtitle: 'Embed lyrics for future downloads of this post.',
+        ),
+      ],
       _menuAction(
         value: 'paste',
         enabled: _track != null,
@@ -1346,8 +1381,15 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
     final modes = showModes
         ? Row(children: [_mode(true), _mode(false)])
         : const SizedBox.shrink();
-    return Material(
+    final dock = Material(
       key: const ValueKey('lyrics-transport'),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+        side: BorderSide(color: _colors.outlineVariant.withValues(alpha: .4)),
+      ),
+      elevation: 6,
+      shadowColor: _colors.shadow.withValues(alpha: .4),
+      clipBehavior: Clip.antiAlias,
       color: Color.alphaBlend(
         Colors.black.withValues(alpha: .40),
         _colors.surfaceContainerLowest,
@@ -1357,7 +1399,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
         child: wide
             ? Row(
                 children: [
-                  const Spacer(),
+                  if (showModes) const Spacer(),
                   Expanded(
                     flex: 3,
                     child: Center(
@@ -1370,15 +1412,16 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
-                  Expanded(
-                    child: Align(
-                      alignment: AlignmentDirectional.centerEnd,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 190),
-                        child: modes,
+                  if (showModes)
+                    Expanded(
+                      child: Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 190),
+                          child: modes,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               )
             : Column(
@@ -1397,6 +1440,15 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
                   _seekBar(reduced),
                 ],
               ),
+      ),
+    );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(wide ? 24 : 10, 6, wide ? 24 : 10, 8),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: dock,
+        ),
       ),
     );
   }
