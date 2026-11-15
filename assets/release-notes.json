@@ -1,6 +1,16 @@
 {
-  "current": "0.1.213",
+  "current": "0.1.214",
   "releases": [
+    {
+      "version": "0.1.214",
+      "changes": [
+        "Preserve Android output loudness instead of normalizing quiet and loud passages to similar waveform levels.",
+        "Drive animated preset bass, mid and treble values from measured song energy and band transients, with silence/stale-input release. Remove artificial waveform gain and retain all presets, phone optimizations and Windows focus behavior.",
+        "Test the pinned Butterchurn audio pipeline and preset energy values for sustained quiet/loud contrast, independent frequency bands and silence, rather than only checking that samples reach the renderer.",
+        "Keep playback progress, lyric following and live listening stats local instead of rebuilding the library, artwork and app shell on every audio tick.",
+        "Avoid synchronous page-image capture during Windows mini-player expansion/collapse while retaining the origin blur, spring transition, artwork effects, reading/scroll state and every control."
+      ]
+    },
     {
       "version": "0.1.213",
       "changes": [
