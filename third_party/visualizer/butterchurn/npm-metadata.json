@@ -1,0 +1,83 @@
+{
+  "bugs": {
+    "url": "https://github.com/jberg/butterchurn/issues"
+  },
+  "dist": {
+    "shasum": "1ff0c1365731a4fb7ada7bb16ae1c6f09a110c12",
+    "tarball": "https://registry.npmjs.org/butterchurn/-/butterchurn-2.6.7.tgz",
+    "fileCount": 7,
+    "integrity": "sha512-BJiRA8L0L2+84uoG2SSfkp0kclBuN+vQKf217pK7pMlwEO2ZEg3MtO2/o+l8Qpr8Nbejg8tmL1ZHD1jmhiaaqg==",
+    "signatures": [
+      {
+        "sig": "MEUCIFe/koyd0jQKqHWTOVwUJutyuOutBZi34dKf/oWP8743AiEAqti7g669A/gzOTM9aZ+LhCOpb+iANk5sO2KjKmKbqXk=",
+        "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+      }
+    ],
+    "unpackedSize": 728442,
+    "npm-signature": "-----BEGIN PGP SIGNATURE-----\r\nVersion: OpenPGP.js v3.0.4\r\nComment: https://openpgpjs.org\r\n\r\nwsFcBAEBCAAQBQJchvwRCRA9TVsSAnZWagAA+JIP/0yxgFvIQKgLBcV7QwV3\npG6OgK0yLGlmuR9ob48zNnJvK0+oGPQ5/R9LE8cNGlhFQwqr8gxpSOg6X3R4\nLFUW59aZvb5Fcwk/H5g2hzMCHeriDEPhgLyu5uWuOzkhTFJF9noisaOs3Tiw\nvd+gQlNWN2GnlNDMLMYAkrzeGBy1wyvrMo0qB5BsdJHDt/ZnTKtkTwfZ7ThU\n5E3692c8j3YV11Op1zllf7YNcOEfvN4pIm/Z/Gr4xq4FBvRMnQitBcF+0QAa\nfMCLVvlSMTGzyZhINXq7Zw3CAP4XfP0J1SUVjlOHg4cHQZzza17Yh+0n4zDo\n/LCfjd2RnFcOyKnf6munXf3c/6k9bf9EmqJReYU8wJqefarrSdzYNGpD+EqB\nJznU2kpUraAf7V9ixBIuhCMjBle6MBsGYvMSjRUyKMvcP8iRzFRHMsI0xKf/\nmZ8ZbxeI2UMvxL+w9ZM18avyykBYNvtlIbZFfYaajgeXEZos9Y3GKcELZYz+\nOqsMy9WEp05WvLaXYeGlQNIs1wmXkI/K/vkC/f6Q4zgC1Vekh5dVCdkOCocf\n9HT4tmnAzCjVoiFgMGC9SLCVrEBTsvdqSxnfplBHorH6GMCYIqPpLECpO8Js\nIGF7I81jghzcuERHKho9OJKLcXiRGO8oLw2iJRh3sCekf2JIliBYzxhOISnp\nvtlI\r\n=M2Kk\r\n-----END PGP SIGNATURE-----\r\n"
+  },
+  "main": "lib/butterchurn.js",
+  "name": "butterchurn",
+  "unpkg": "lib/butterchurn.js",
+  "author": {
+    "name": "Jordan Berg",
+    "email": "jordannealberg@gmail.com"
+  },
+  "gitHead": "d90f271be02969d8f16a3ed6b6960c971da6eff9",
+  "license": "MIT",
+  "scripts": {
+    "dev": "webpack --config config/webpack.config.js --progress --colors --watch --env dev",
+    "build": "webpack --config config/webpack.config.js --env prod"
+  },
+  "_npmUser": {
+    "name": "jberg",
+    "email": "jordannealberg@gmail.com"
+  },
+  "homepage": "https://butterchurnviz.com",
+  "keywords": [
+    "music visualization",
+    "visualizer",
+    "webgl",
+    "webaudio"
+  ],
+  "repository": {
+    "url": "git+https://github.com/jberg/butterchurn.git",
+    "type": "git"
+  },
+  "_npmVersion": "6.4.1",
+  "description": "Butterchurn is a WebGL implementation of the Milkdrop Visualizer",
+  "directories": {},
+  "maintainers": [
+    {
+      "name": "jberg",
+      "email": "jordannealberg@gmail.com"
+    }
+  ],
+  "_nodeVersion": "10.14.2",
+  "dependencies": {
+    "@babel/runtime": "^7.0.0",
+    "ecma-proposal-math-extensions": "0.0.2"
+  },
+  "_hasShrinkwrap": false,
+  "devDependencies": {
+    "yargs": "^11.0.0",
+    "eslint": "^5.15.1",
+    "webpack": "^4.29.6",
+    "@babel/core": "^7.0.0",
+    "webpack-cli": "^3.2.3",
+    "babel-eslint": "^9.0.0",
+    "babel-loader": "^8.0.0",
+    "eslint-loader": "^2.1.2",
+    "@babel/preset-env": "^7.0.0",
+    "eslint-plugin-react": "^7.6.1",
+    "eslint-config-airbnb": "^16.1.0",
+    "eslint-plugin-import": "^2.8.0",
+    "eslint-plugin-jsx-a11y": "^6.0.3"
+  },
+  "_npmOperationalInternal": {
+    "tmp": "tmp/butterchurn_2.6.7_1552350225095_0.776574299671366",
+    "host": "s3://npm-registry-packages"
+  },
+  "_id": "butterchurn@2.6.7",
+  "version": "2.6.7"
+}
