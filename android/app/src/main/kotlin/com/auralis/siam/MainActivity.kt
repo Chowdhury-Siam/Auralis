@@ -17,11 +17,14 @@ class MainActivity : AudioServiceActivity() {
     private val setup by lazy { DeviceSetup(this) }
     private var pending: MethodChannel.Result? = null
     private var videoWindow: VideoWindow? = null
+    private var musicVisualizer: MusicVisualizer? = null
     private var selectedRead: Uri? = null
     private var selectedWrite: Uri? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        musicVisualizer?.close()
+        musicVisualizer = MusicVisualizer(this, flutterEngine.dartExecutor.binaryMessenger)
         videoWindow?.close()
         videoWindow = VideoWindow(this, flutterEngine.dartExecutor.binaryMessenger, io)
         intent?.let { videoWindow?.onIntent(it) }
@@ -157,6 +160,8 @@ class MainActivity : AudioServiceActivity() {
     }
 
     override fun onDestroy() {
+        musicVisualizer?.close()
+        musicVisualizer = null
         videoWindow?.close()
         videoWindow = null
         pending?.success(null)
@@ -169,6 +174,17 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (musicVisualizer?.onPermissionsResult(requestCode) == true) return
         setup.onPermissionsResult(requestCode)
+    }
+
+    override fun onPause() {
+        musicVisualizer?.pause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        musicVisualizer?.resume()
+        super.onResume()
     }
 }
