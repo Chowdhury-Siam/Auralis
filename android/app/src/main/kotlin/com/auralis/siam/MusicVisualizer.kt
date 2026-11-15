@@ -59,7 +59,9 @@ class MusicVisualizer(private val activity: Activity, messenger: BinaryMessenger
             val effect = Visualizer(0)
             visualizer = effect
             check(effect.setCaptureSize(minOf(1024, Visualizer.getCaptureSizeRange()[1])) == Visualizer.SUCCESS)
-            check(effect.setScalingMode(Visualizer.SCALING_MODE_NORMALIZED) == Visualizer.SUCCESS)
+            // Preserve quiet/loud passages. NORMALIZED gain hides the song's
+            // real dynamics and makes a quiet verse look like a loud chorus.
+            check(effect.setScalingMode(Visualizer.SCALING_MODE_AS_PLAYED) == Visualizer.SUCCESS)
             check(effect.setEnabled(true) == Visualizer.SUCCESS)
             result.success(null)
         } catch (_: Exception) {
