@@ -105,6 +105,8 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: Wrap(
+          key: const ValueKey('music-panel-selector'),
+          alignment: WrapAlignment.center,
           spacing: 6,
           runSpacing: 4,
           children: [
