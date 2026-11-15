@@ -15,10 +15,15 @@
   let qualityScale=1, qualityAt=0, qualityFrames=0, slowFrames=0, lastDraw=0;
   let lastBeat=-Infinity, energyAverage=0, bassAverage=0, highAverage=0;
   let energyRms=0, lastEnergyRender=0;
+  let outputEnergy=0, outputPulse=0;
   const bandRms=new Float32Array(3), bandAverage=new Float32Array(3);
   const bandRelease=new Float32Array(3);
+  const previousMagnitude=new Float32Array(512), flux=new Float32Array(3);
+  const bandMagnitude=new Float32Array(3), impulses=new Float32Array(3);
+  const impulseAt=new Float64Array(3).fill(-Infinity);
   let options = {mode:'spectrum', spectrum:'line', palette:'prism',
-    fps:30, cycle:true, cycleSeconds:30, preset:'', active:false, mobile:false};
+    fps:30, cycle:true, cycleSeconds:30, preset:'', active:false, mobile:false,
+    songMotion:true};
   const waveform = new Uint8Array(1024).fill(128);
   const real = new Float64Array(1024), imag = new Float64Array(1024);
   const decibels = new Float32Array(512).fill(-100);
@@ -80,13 +85,18 @@
       }
     }
     bandRms.fill(0);
+    flux.fill(0);bandMagnitude.fill(0);
     for (let i=0;i<512;i++) {
       const power=real[i]*real[i]+imag[i]*imag[i], hz=i*44100/1024;
+      const magnitude=Math.sqrt(power)/256;
       if (hz>=20 && hz<11025) {
         const band=hz<320?0:hz<2800?1:2;
         // One-sided Hann-window energy, corrected for its squared window sum.
         bandRms[band]+=power/196416;
+        flux[band]+=Math.max(0,magnitude-previousMagnitude[i]);
+        bandMagnitude[band]+=magnitude;
       }
+      previousMagnitude[i]=magnitude;
       if (options.mode==='spectrum') {
         decibels[i]=Math.max(-100,10*Math.log10(Math.max(1e-16,power/65536)));
         // Fast attack follows drum hits; slower release keeps the graph readable.
@@ -94,7 +104,10 @@
         smooth[i]+=weight*(decibels[i]-smooth[i]);
       }
     }
-    for (let i=0;i<3;i++) bandRms[i]=Math.sqrt(bandRms[i]);
+    for (let i=0;i<3;i++) {
+      bandRms[i]=Math.sqrt(bandRms[i]);
+      flux[i]/=bandMagnitude[i]+.02;
+    }
   }
   function react(time) {
     let mean=0,energy=0;
@@ -107,6 +120,19 @@
     energyRms=energy=Math.sqrt(energy/1024);
     const bass=bandRms[0], high=Math.hypot(bandRms[1],bandRms[2]);
     const elapsed=Number.isFinite(lastAudio)?Math.max(0,time-lastAudio):33;
+    for (let i=0;i<3;i++) {
+      impulses[i]*=Math.exp(-Math.min(elapsed,250)/110);
+      // Positive spectral change catches drum attacks even under compressed
+      // music with nearly constant overall RMS. No oscillator/BPM clock.
+      const rise=bandRms[i]/(bandAverage[i]+.006)-1;
+      const novelty=Math.max((flux[i]-.18)*1.6,(rise-.18)*.65);
+      if (energy>.008 && bandRms[i]>.004 && novelty>0 &&
+          time-impulseAt[i]>100) {
+        impulses[i]=Math.max(impulses[i],Math.min(1,novelty));
+        impulseAt[i]=time;
+        if (novelty>.2) lastBeat=time;
+      }
+    }
     const attack=Math.max(energy/(energyAverage+.008),bass/(bassAverage+.004),
       high/(highAverage+.008));
     if (energy>.012 && attack>1.35 && time-lastBeat>120) {
@@ -138,20 +164,45 @@
       const elapsed=lastEnergyRender?Math.min(100,Math.max(0,now-lastEnergyRender)):1000/options.fps;
       lastEnergyRender=now;
       const fresh=age<=100?1:age<250?Math.exp(-(age-100)/70):0;
-      const loudness=energyRms>=.006?Math.min(1.8,energyRms*4)*fresh:0;
+      // MilkDrop equations expect normal programme levels near one. The old
+      // linear 4*RMS mapping left the supplied music around 0.2, making many
+      // beat equations effectively idle. A bounded perceptual curve preserves
+      // dynamics without auto-normalizing quiet passages to loud ones.
+      const loudness=energyRms>=.006?Math.min(1.8,3*Math.sqrt(energyRms))*fresh:0;
       for (let i=0;i<3;i++) {
         // Reject quantization noise and absent bands, rather than making a
         // bass-only tone look like simultaneous bass, mid and treble energy.
         const presence=bandRms[i]>.003
           ?Math.min(1,bandRms[i]/Math.max(.008,energyRms*.15)):0;
         const contrast=Math.min(2,bandRms[i]/(bandAverage[i]+.008));
-        const value=Math.min(4,loudness*presence*contrast);
+        const pulse=impulses[i]*Math.exp(-Math.max(0,age)/110);
+        const value=Math.min(4,loudness*presence*(contrast+pulse*1.25));
         const weight=1-Math.exp(-elapsed/(value>bandRelease[i]?45:140));
         bandRelease[i]+=weight*(value-bandRelease[i]);
         levels.val[i]=value;
         levels.att[i]=bandRelease[i];
       }
+      updateSongMotion(elapsed,fresh,age);
     };
+  }
+  function updateSongMotion(elapsed,fresh,age) {
+    if (!options.songMotion) {
+      milk.style.opacity='1';milk.style.transform='none';
+      return;
+    }
+    // One compositor transform/opacity, no extra canvas, shader pass or FFT.
+    // Preset feedback can keep moving on its own; this response remains tied
+    // to the actual audio regardless of which preset is selected.
+    const target=energyRms>=.006?Math.min(1,3*Math.sqrt(energyRms))*fresh:0;
+    const weight=1-Math.exp(-elapsed/(target>outputEnergy?30:160));
+    outputEnergy+=weight*(target-outputEnergy);
+    const kick=impulses[0]*Math.exp(-Math.max(0,age)/110)*fresh;
+    const pulseWeight=1-Math.exp(-elapsed/(kick>outputPulse?18:110));
+    outputPulse+=pulseWeight*(kick-outputPulse);
+    const opacity=Math.min(1,outputEnergy*(.84+.16*outputPulse));
+    // At most 3.5% outward movement, never shrink/reveal unpainted edges.
+    milk.style.opacity=opacity.toFixed(4);
+    milk.style.transform=`scale(${(1+.035*outputPulse).toFixed(5)})`;
   }
   function ensureSpectrum() {
     if (analyzer) return;
@@ -204,7 +255,28 @@
     if (!names.length) throw Error('No visualizer presets are installed.');
     const found=names.indexOf(name);
     presetIndex=found<0?0:found;
-    if (visualizer) visualizer.loadPreset(presets[names[presetIndex]],blend);
+    if (visualizer) {
+      const source=presets[names[presetIndex]];
+      // Keep every original equation/shader/layer. A copied per-frame equation
+      // adds a bounded feedback kick and waveform response even in presets
+      // whose authored motion mostly ignores audio. Never edit vendor assets.
+      const preset={
+        ...source,baseVals:{...source.baseVals},
+        shapes:(source.shapes||[]).map(item=>({...item,baseVals:{...item.baseVals}})),
+        waves:(source.waves||[]).map(item=>({...item,baseVals:{...item.baseVals}})),
+      };
+      if (options.songMotion && typeof source.frame_eqs_str==='string') {
+        preset.frame_eqs_str=`
+          const __auralisKick=Math.min(1,Math.max(0,a.bass-a.bass_att));
+          const __auralisEnergy=Math.min(1.5,Math.max(0,(a.bass_att+a.mid_att+a.treb_att)/3));
+          ${source.frame_eqs_str}
+          if(Number.isFinite(a.zoom)) a.zoom*=1+.018*__auralisKick;
+          if(Number.isFinite(a.wave_scale)) a.wave_scale*=.9+.2*__auralisEnergy+.35*__auralisKick;
+          if(Number.isFinite(a.warp)) a.warp+=.04*__auralisKick;
+        `;
+      }
+      visualizer.loadPreset(preset,blend);
+    }
     lastCycle=performance.now();
     send({type:'preset',name:names[presetIndex]});
   }
@@ -228,6 +300,13 @@
     if (analyzer) analyzer.stop();
     waveform.fill(128);decibels.fill(-100);smooth.fill(-100);
     energyRms=0;lastEnergyRender=0;bandRms.fill(0);bandAverage.fill(0);bandRelease.fill(0);
+    previousMagnitude.fill(0);flux.fill(0);impulses.fill(0);impulseAt.fill(-Infinity);
+    outputEnergy=0;outputPulse=0;
+    // Keep the last displayed frame when paused; histories reset so it cannot
+    // produce a stale beat on resume.
+    if (!options.songMotion) {
+      milk.style.opacity='1';milk.style.transform='none';
+    }
     lastBeat=-Infinity;energyAverage=0;bassAverage=0;highAverage=0;
     qualityAt=performance.now();qualityFrames=0;slowFrames=0;lastDraw=0;
   }
@@ -265,7 +344,11 @@
           loadPreset(names[(presetIndex+1)%names.length],time-lastBeat<120?.35:1.2);
         }
         const started=performance.now();
-        visualizer.render({audioLevels:{
+        const elapsedTime=Math.min(.1,Math.max(.001,
+          (lastDraw?time-lastDraw:interval)/1000));
+        // Explicit positive frame time also avoids Butterchurn's zero-delta
+        // FPS singularity when a first frame shares its creation timestamp.
+        visualizer.render({elapsedTime,audioLevels:{
           timeByteArray:waveform,timeByteArrayL:waveform,timeByteArrayR:waveform,
         }});
         adapt(time,performance.now()-started,lastDraw?time-lastDraw:0);
@@ -286,7 +369,9 @@
         spectrum.style.display=options.mode==='spectrum'?'block':'none';
         if (options.mode==='visualizer') {
           ensureMilk();
-          if (options.preset && options.preset!==previous.preset) loadPreset(options.preset);
+          if ((options.preset && options.preset!==previous.preset) ||
+              options.songMotion!==previous.songMotion)
+            loadPreset(options.preset || names[presetIndex]);
         } else {
           ensureSpectrum();
           analyzer.setOptions({
