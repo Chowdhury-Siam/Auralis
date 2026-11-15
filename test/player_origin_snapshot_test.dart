@@ -28,7 +28,7 @@ class _PaintCounter extends CustomPainter {
 void main() {
   for (final pixelRatio in [1.0, 2.0]) {
     testWidgets(
-      'origin is painted once per snapshot, not each blur frame: DPR $pixelRatio',
+      'live origin blur reuses its page/display list without image capture: DPR $pixelRatio',
       (tester) async {
         tester.view.devicePixelRatio = pixelRatio;
         tester.view.physicalSize = Size(400 * pixelRatio, 300 * pixelRatio);
@@ -90,7 +90,7 @@ void main() {
         expect(await redAt(77), 0);
         update(() => enabled = true);
         await tester.pump();
-        final snapshot = tester.widget<SnapshotWidget>(
+        final filter = tester.widget<ImageFiltered>(
           find.byKey(const ValueKey('player-cached-blur')),
         );
         final frozenPaints = paints, frozenBuilds = builds;
@@ -100,7 +100,7 @@ void main() {
           expect(
             paints,
             frozenPaints,
-            reason: 'Blur frames must use the cached raster',
+            reason: 'Blur frames must reuse the retained display list',
           );
           expect(
             builds,
@@ -111,22 +111,21 @@ void main() {
         expect(
           await redAt(77),
           inExclusiveRange(0, 255),
-          reason: 'The sharp black/white edge is blurred in the cached image',
+          reason: 'The sharp black/white edge retains the visible blur effect',
         );
         expect(
           identical(
             tester
-                .widget<SnapshotWidget>(
+                .widget<ImageFiltered>(
                   find.byKey(const ValueKey('player-cached-blur')),
                 )
-                .painter,
-            snapshot.painter,
+                .child,
+            filter.child,
           ),
           isTrue,
         );
 
-        // Geometry changes regenerate the raster once instead of stretching a
-        // stale-sized page, including at high device pixel ratios.
+        // Geometry changes relayout the actual page, never a stale bitmap.
         update(() => width = 200);
         await tester.pump();
         expect(paints, frozenPaints + 1);
@@ -139,17 +138,16 @@ void main() {
         await tester.pump();
         expect(
           tester
-              .widget<SnapshotWidget>(
+              .widget<ImageFiltered>(
                 find.byKey(const ValueKey('player-cached-blur')),
               )
-              .controller
-              .allowSnapshotting,
+              .enabled,
           isFalse,
           reason:
-              'Do not retain origin textures while the full player is settled',
+              'Do not run the origin filter while the full player is settled',
         );
 
-        // Returning to the origin discards both snapshots and paints fresh state.
+        // Returning to the origin paints fresh state without retaining pixels.
         update(() {
           enabled = false;
           color = const Color(0xFFFF0000);
@@ -158,11 +156,10 @@ void main() {
         expect(await redAt(10), 255);
         expect(
           tester
-              .widget<SnapshotWidget>(
+              .widget<ImageFiltered>(
                 find.byKey(const ValueKey('player-cached-blur')),
               )
-              .controller
-              .allowSnapshotting,
+              .enabled,
           isFalse,
         );
         update(() => enabled = true);
