@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:auralis/lyrics.dart';
@@ -57,6 +58,43 @@ void main() {
       },
     );
   }
+  test(
+    'MP3 export adds or replaces Unicode timed lyrics and copies audio',
+    () async {
+      final temp = await Directory.systemTemp.createTemp('auralis-embedded-');
+      addTearDown(() => temp.delete(recursive: true));
+      const replacement = '[00:00.320]新しい歌詞\n[00:01.125]次の行';
+      final audio = [0xff, 0xfb, ...List.filled(1022, 42)];
+      for (final version in [0, 2, 3, 4]) {
+        final source = File('${temp.path}/input-$version.mp3');
+        final metadata = version == 0
+            ? const <int>[]
+            : tag(version == 2 ? 'TXX' : 'TXXX', [
+                0,
+                ...ascii.encode('USLT'),
+                0,
+                ...ascii.encode('old lyric'),
+              ], version: version);
+        await source.writeAsBytes([
+          if (version != 0) ...metadata.take(metadata.length - 1024),
+          ...audio,
+        ]);
+        final exported = File(
+          await writeEmbeddedLyrics(
+            source,
+            temp,
+            replacement,
+            name: 'exported-$version',
+          ),
+        );
+        final bytes = await exported.readAsBytes();
+        expect(await extract(bytes), replacement);
+        expect(bytes.sublist(bytes.length - audio.length), audio);
+        expect(latin1.decode(bytes), isNot(contains('old lyric')));
+      }
+    },
+  );
+
   test(
     'ID3 Latin1, both UTF16 byte orders, descriptions and custom LYRICS',
     () async {
