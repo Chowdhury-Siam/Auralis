@@ -334,11 +334,14 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Cycle presets'),
+                          subtitle: _settings.songMotion
+                              ? const Text('Change presets on musical accents')
+                              : null,
                           value: _settings.cycle,
                           onChanged: (value) =>
                               change(() => _settings.cycle = value),
                         ),
-                        if (_settings.cycle)
+                        if (_settings.cycle && !_settings.songMotion)
                           PreferenceChoice<int>(
                             title: 'Change every',
                             value: _settings.cycleSeconds,
