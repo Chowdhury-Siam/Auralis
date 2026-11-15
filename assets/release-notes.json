@@ -1,6 +1,12 @@
 {
-  "current": "0.1.216",
+  "current": "0.1.217",
   "releases": [
+    {
+      "version": "0.1.217",
+      "changes": [
+        "In Song-driven motion, cycle presets on detected musical accents. Show the Change every setting only for timed cycling."
+      ]
+    },
     {
       "version": "0.1.216",
       "changes": [
