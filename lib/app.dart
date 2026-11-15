@@ -91,7 +91,7 @@ class _AuralisAppState extends State<AuralisApp> {
   void initState() {
     super.initState();
     _settingUp = widget.showSetup;
-    widget.player.addListener(_artworkChanged);
+    widget.player.viewChanges.addListener(_artworkChanged);
     widget.telegram.addListener(_artworkChanged);
     _artworkChanged();
   }
@@ -101,9 +101,9 @@ class _AuralisAppState extends State<AuralisApp> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.player != widget.player ||
         oldWidget.telegram != widget.telegram) {
-      oldWidget.player.removeListener(_artworkChanged);
+      oldWidget.player.viewChanges.removeListener(_artworkChanged);
       oldWidget.telegram.removeListener(_artworkChanged);
-      widget.player.addListener(_artworkChanged);
+      widget.player.viewChanges.addListener(_artworkChanged);
       widget.telegram.addListener(_artworkChanged);
       _artworkIdentity = null;
       _artworkChanged();
@@ -177,7 +177,7 @@ class _AuralisAppState extends State<AuralisApp> {
   @override
   void dispose() {
     ++_generation;
-    widget.player.removeListener(_artworkChanged);
+    widget.player.viewChanges.removeListener(_artworkChanged);
     widget.telegram.removeListener(_artworkChanged);
     super.dispose();
   }
@@ -200,7 +200,7 @@ class _AuralisAppState extends State<AuralisApp> {
     theme: auralisTheme(_scheme),
     scrollBehavior: const AuralisScrollBehavior(),
     builder: (context, child) => ListenableBuilder(
-      listenable: widget.player,
+      listenable: widget.player.viewChanges,
       builder: (_, _) => AuralisMotion(
         disabled: widget.player.settings.reducedMotion,
         child: child!,
@@ -307,9 +307,8 @@ class _PlayerShellState extends State<PlayerShell>
   late final ChannelLibrary library;
   late final Listenable _shellUpdates;
   late final AnimationController _dismissPlayer;
-  late final _playerHeaderOpacity = ReverseAnimation(_dismissPlayer).drive(
-    CurveTween(curve: const Interval(.32, .83)),
-  );
+  late final _playerHeaderOpacity = ReverseAnimation(_dismissPlayer)
+      .drive(CurveTween(curve: const Interval(.32, .83)));
   final _dockKey = GlobalKey();
   final _surfaceKey = GlobalKey();
   static const _miniPlayerRadius = 24.0;
@@ -349,8 +348,8 @@ class _PlayerShellState extends State<PlayerShell>
       preferences: player.settings,
     );
     library = ChannelLibrary(telegram, player.settings);
-    _shellUpdates = Listenable.merge([player, telegram, library]);
-    player.addListener(_prepareMedia);
+    _shellUpdates = Listenable.merge([player.viewChanges, telegram, library]);
+    player.viewChanges.addListener(_prepareMedia);
     telegram.addListener(_prepareMedia);
     library.addListener(_prepareMedia);
     HardwareKeyboard.instance.addHandler(_volumeKey);
@@ -652,7 +651,7 @@ class _PlayerShellState extends State<PlayerShell>
     ++_lyricGeneration;
     _volumeTimer?.cancel();
     HardwareKeyboard.instance.removeHandler(_volumeKey);
-    player.removeListener(_prepareMedia);
+    player.viewChanges.removeListener(_prepareMedia);
     telegram.removeListener(_prepareMedia);
     library.removeListener(_prepareMedia);
     _dismissPlayer.dispose();
@@ -788,8 +787,7 @@ class _PlayerShellState extends State<PlayerShell>
               Expanded(
                 child: _pageContent(page, narrow: narrow, short: short),
               ),
-              if (compact && !floatingNavigation)
-                _bottomNavigation(page: page),
+              if (compact && !floatingNavigation) _bottomNavigation(page: page),
             ],
           ),
           if (floatingNavigation)
@@ -850,9 +848,10 @@ class _PlayerShellState extends State<PlayerShell>
     animation: _dismissPlayer,
     child: body,
     builder: (context, child) {
-      final opacity = const Interval(.28, .90).transform(
-        1 - _dismissPlayer.value,
-      );
+      final opacity = const Interval(
+        .28,
+        .90,
+      ).transform(1 - _dismissPlayer.value);
       return IgnorePointer(
         ignoring: opacity == 0,
         child: Opacity(key: key, opacity: opacity, child: child),
@@ -994,8 +993,8 @@ class _PlayerShellState extends State<PlayerShell>
         child: RepaintBoundary(
           key: const ValueKey('player-origin-page'),
           child: PlayerOriginSnapshot(
-            // Keep the origin live on Android to avoid capturing the page and
-            // rasterizing a second, blurred image on the native render thread.
+            // Preserve the desktop origin blur without synchronous page-image
+            // capture. Android retains its lighter existing transition.
             enabled:
                 defaultTargetPlatform != TargetPlatform.android &&
                 expanded &&
@@ -1870,36 +1869,81 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
-  Widget _trackActions(Track track, {VoidCallback? onPlay}) => IconButton.filledTonal(
+  Widget _trackActions(
+    Track track, {
+    VoidCallback? onPlay,
+  }) => IconButton.filledTonal(
     tooltip: 'Track actions for ${track.title}',
     icon: const Icon(Icons.more_vert_rounded, size: 22),
-    style: IconButton.styleFrom(backgroundColor: _colors.surfaceContainerHigh,
-        foregroundColor: _colors.onSurface),
+    style: IconButton.styleFrom(
+      backgroundColor: _colors.surfaceContainerHigh,
+      foregroundColor: _colors.onSurface,
+    ),
     onPressed: () async {
-      final playlist = destination == _Page.library && collection == 'Playlists' ? selectedPlaylist : null;
+      final playlist = destination == _Page.library && collection == 'Playlists'
+          ? selectedPlaylist
+          : null;
       final favorite = player.settings.favoriteIds.contains(track.id);
       final value = await showMediaItemSheet(
         context: context,
         title: track.title,
-        subtitle: [track.artist, track.source].where((text) => text.isNotEmpty).join(' · '),
-        artwork: Artwork(seed: track.title, telegram: telegram, track: track, small: true),
+        subtitle: [
+          track.artist,
+          track.source,
+        ].where((text) => text.isNotEmpty).join(' · '),
+        artwork: Artwork(
+          seed: track.title,
+          telegram: telegram,
+          track: track,
+          small: true,
+        ),
         details: mediaItemDetails(track, video: false),
         actions: [
-          const MediaItemAction('play', 'Play', Icons.play_arrow_rounded, primary: true),
-          MediaItemAction('favorite', favorite ? 'Remove from favorites' : 'Add to favorites',
-              favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, selected: favorite),
-          const MediaItemAction('queue', 'Add to queue', Icons.queue_music_rounded),
-          const MediaItemAction('next', 'Play next', Icons.playlist_play_rounded),
-          const MediaItemAction('playlist', 'Add to playlist', Icons.playlist_add_rounded),
+          const MediaItemAction(
+            'play',
+            'Play',
+            Icons.play_arrow_rounded,
+            primary: true,
+          ),
+          MediaItemAction(
+            'favorite',
+            favorite ? 'Remove from favorites' : 'Add to favorites',
+            favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            selected: favorite,
+          ),
+          const MediaItemAction(
+            'queue',
+            'Add to queue',
+            Icons.queue_music_rounded,
+          ),
+          const MediaItemAction(
+            'next',
+            'Play next',
+            Icons.playlist_play_rounded,
+          ),
+          const MediaItemAction(
+            'playlist',
+            'Add to playlist',
+            Icons.playlist_add_rounded,
+          ),
           if (playlist != null)
-            const MediaItemAction('remove', 'Remove from playlist', Icons.remove_circle_outline_rounded, destructive: true),
+            const MediaItemAction(
+              'remove',
+              'Remove from playlist',
+              Icons.remove_circle_outline_rounded,
+              destructive: true,
+            ),
         ],
       );
       if (!mounted || value == null) return;
       try {
         switch (value) {
           case 'play':
-            if (onPlay != null) { onPlay(); } else { await player.play(track); }
+            if (onPlay != null) {
+              onPlay();
+            } else {
+              await player.play(track);
+            }
           case 'favorite':
             await player.toggleFavorite(track);
           case 'queue':
@@ -1911,7 +1955,9 @@ class _PlayerShellState extends State<PlayerShell>
           case 'playlist':
             await _choosePlaylist(track);
           case 'remove':
-            if (playlist != null) await player.removeFromPlaylist(playlist, track);
+            if (playlist != null) {
+              await player.removeFromPlaylist(playlist, track);
+            }
         }
       } on StateError catch (e) {
         _notice(e.message);
@@ -1922,8 +1968,10 @@ class _PlayerShellState extends State<PlayerShell>
   List<Track> _collectionTracks([String? scope]) {
     final selectedCollection = scope ?? collection;
     final tracks = library.tracks;
-    final artist = selectedCollection == 'Artists' && selectedCollection == collection
-        ? _selectedArtist?.toLowerCase() : null;
+    final artist =
+        selectedCollection == 'Artists' && selectedCollection == collection
+        ? _selectedArtist?.toLowerCase()
+        : null;
     if (artist != null) {
       return tracks
           .where((track) => _artistName(track).toLowerCase() == artist)
@@ -1937,7 +1985,10 @@ class _PlayerShellState extends State<PlayerShell>
     final ids = selectedCollection == 'Recently played'
         ? player.settings.recentIds
         : selectedCollection == 'Playlists'
-        ? player.settings.playlists[selectedCollection == collection ? selectedPlaylist : null] ?? <String>[]
+        ? player.settings.playlists[selectedCollection == collection
+                  ? selectedPlaylist
+                  : null] ??
+              <String>[]
         : null;
     return ids == null ? tracks : _tracksForIds(ids);
   }
@@ -1965,7 +2016,10 @@ class _PlayerShellState extends State<PlayerShell>
             name: entry.key,
             songCount: entry.value.length,
             photo: player.settings.playlistPhotos.photo(
-                'music', player.settings.musicPhotoScope, entry.key),
+              'music',
+              player.settings.musicPhotoScope,
+              entry.key,
+            ),
             tracks: [
               for (final id in entry.value)
                 if (byId[id] case final Track track) track,
@@ -1975,9 +2029,12 @@ class _PlayerShellState extends State<PlayerShell>
       searching: search.text.isNotEmpty,
       bottomPadding: _dockPadding,
       actionsBuilder: (playlist) => PlaylistCardMenu(
-        name: playlist.name, hasPhoto: playlist.photo != null,
-        onChangePhoto: () => _changeMusicPlaylistPhoto(playlist.name, reset: false),
-        onResetPhoto: () => _changeMusicPlaylistPhoto(playlist.name, reset: true),
+        name: playlist.name,
+        hasPhoto: playlist.photo != null,
+        onChangePhoto: () =>
+            _changeMusicPlaylistPhoto(playlist.name, reset: false),
+        onResetPhoto: () =>
+            _changeMusicPlaylistPhoto(playlist.name, reset: true),
         onRename: () async {
           final name = await _editPlaylist(previous: playlist.name);
           if (mounted && name != null) {
@@ -2010,17 +2067,29 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Future<void> _changeMusicPlaylistPhoto(String name, {required bool reset}) async {
+  Future<void> _changeMusicPlaylistPhoto(
+    String name, {
+    required bool reset,
+  }) async {
     final settings = player.settings;
     final scope = settings.musicPhotoScope;
     final list = settings.playlists[name];
     if (list == null) return;
-    await editPlaylistPhoto(context: context, photos: settings.playlistPhotos,
-      mode: 'music', scope: scope, name: name, reset: reset,
-      valid: () => settings.musicPhotoScope == scope &&
+    await editPlaylistPhoto(
+      context: context,
+      photos: settings.playlistPhotos,
+      mode: 'music',
+      scope: scope,
+      name: name,
+      reset: reset,
+      valid: () =>
+          settings.musicPhotoScope == scope &&
           identical(settings.playlists[name], list),
       save: settings.save,
-      refresh: () { if (mounted) setState(() {}); });
+      refresh: () {
+        if (mounted) setState(() {});
+      },
+    );
   }
 
   Widget _libraryCacheStatus() {
@@ -2146,45 +2215,45 @@ class _PlayerShellState extends State<PlayerShell>
   }
 
   Widget _librarySortButton() => AuralisPopupMenu<LibrarySort>(
-      tooltip: 'Sort Library',
-      itemBuilder: (_) => [
-        for (final sort in LibrarySort.values)
-          PopupMenuItem<LibrarySort>(
-            value: sort,
-            padding: EdgeInsets.zero,
-            child: AuralisMenuRow(
-              title: sort.label,
-              selected: player.settings.librarySort == sort,
-            ),
-          ),
-      ],
-      onSelected: (sort) async {
-        setState(() => player.settings.librarySort = sort);
-        try {
-          await player.settings.save();
-        } catch (_) {
-          _notice(
-            'Sort changed for this session. Could not save your preference.',
-          );
-        }
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Ink(
-          width: 48,
-          height: 40,
-          decoration: BoxDecoration(
-            color: _colors.secondaryContainer,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(
-            Icons.sort_rounded,
-            color: _colors.onSecondaryContainer,
-            size: 20,
+    tooltip: 'Sort Library',
+    itemBuilder: (_) => [
+      for (final sort in LibrarySort.values)
+        PopupMenuItem<LibrarySort>(
+          value: sort,
+          padding: EdgeInsets.zero,
+          child: AuralisMenuRow(
+            title: sort.label,
+            selected: player.settings.librarySort == sort,
           ),
         ),
+    ],
+    onSelected: (sort) async {
+      setState(() => player.settings.librarySort = sort);
+      try {
+        await player.settings.save();
+      } catch (_) {
+        _notice(
+          'Sort changed for this session. Could not save your preference.',
+        );
+      }
+    },
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Ink(
+        width: 48,
+        height: 40,
+        decoration: BoxDecoration(
+          color: _colors.secondaryContainer,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(
+          Icons.sort_rounded,
+          color: _colors.onSecondaryContainer,
+          size: 20,
+        ),
       ),
-    );
+    ),
+  );
 
   Widget _library() {
     final playlistOverview =
@@ -2221,23 +2290,24 @@ class _PlayerShellState extends State<PlayerShell>
                   ),
                   onPressed: () => _navigate(_Page.settings),
                   icon: const Icon(Icons.settings_outlined, size: 20),
-              ),
+                ),
             ],
           ),
           LibraryPageIndicator(
             key: const ValueKey('music-library-indicator'),
             labels: _libraryCollections.map((entry) => entry.$1).toList(),
-            index: _libraryCollections.indexWhere((entry) => entry.$1 == collection),
-            onSelected: (index) => _selectLibraryCollection(_libraryCollections[index].$1),
+            index: _libraryCollections.indexWhere(
+              (entry) => entry.$1 == collection,
+            ),
+            onSelected: (index) =>
+                _selectLibraryCollection(_libraryCollections[index].$1),
             reducedMotion: player.settings.reducedMotion,
           ),
         ],
         Expanded(
           child: Material(
             color: _colors.surfaceContainerLowest,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(26),
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
               child: Column(
@@ -2323,11 +2393,16 @@ class _PlayerShellState extends State<PlayerShell>
                   Expanded(
                     child: LibraryCollectionPager(
                       key: const ValueKey('music-library-pager'),
-                      index: _libraryCollections.indexWhere((entry) => entry.$1 == collection),
+                      index: _libraryCollections.indexWhere(
+                        (entry) => entry.$1 == collection,
+                      ),
                       count: _libraryCollections.length,
                       reducedMotion: player.settings.reducedMotion,
-                      onChanged: (index) => _selectLibraryCollection(_libraryCollections[index].$1),
-                      itemBuilder: (_, index) => _libraryCollectionBody(_libraryCollections[index].$1),
+                      onChanged: (index) => _selectLibraryCollection(
+                        _libraryCollections[index].$1,
+                      ),
+                      itemBuilder: (_, index) =>
+                          _libraryCollectionBody(_libraryCollections[index].$1),
                     ),
                   ),
                 ],
@@ -2342,35 +2417,61 @@ class _PlayerShellState extends State<PlayerShell>
   Widget _libraryCollectionBody(String scope) {
     final tracks = _collectionTracks(scope);
     final active = scope == collection;
-    if (scope == 'Playlists' && (!active || selectedPlaylist == null)) return _playlists();
+    if (scope == 'Playlists' && (!active || selectedPlaylist == null)) {
+      return _playlists();
+    }
     if (!telegram.ready) {
-      return _empty(Icons.send_rounded, 'Connect Telegram for your music',
+      return _empty(
+        Icons.send_rounded,
+        'Connect Telegram for your music',
         bottomPadding: _dockPadding,
         'Sign in and choose channels to fill your Library.',
-        action: FilledButton.tonalIcon(onPressed: _openTelegram,
-          icon: const Icon(Icons.send_rounded), label: const Text('Connect Telegram')));
+        action: FilledButton.tonalIcon(
+          onPressed: _openTelegram,
+          icon: const Icon(Icons.send_rounded),
+          label: const Text('Connect Telegram'),
+        ),
+      );
     }
     if (player.settings.selectedChannels.isEmpty) {
-      return _empty(Icons.campaign_rounded, 'Choose your music channels',
+      return _empty(
+        Icons.campaign_rounded,
+        'Choose your music channels',
         bottomPadding: _dockPadding,
         'Select channels in Browse. Their music appears here together.',
-        action: FilledButton.tonalIcon(onPressed: _openMusicChannels,
-          icon: const Icon(Icons.playlist_add_rounded), label: const Text('Choose channels')));
+        action: FilledButton.tonalIcon(
+          onPressed: _openMusicChannels,
+          icon: const Icon(Icons.playlist_add_rounded),
+          label: const Text('Choose channels'),
+        ),
+      );
     }
     if (library.tracks.isEmpty) {
-      return _empty(Icons.library_music_rounded,
+      return _empty(
+        Icons.library_music_rounded,
         library.loading ? 'Finding your music' : 'No music loaded',
-        library.loading ? 'Tracks appear here as your channels load.'
-            : 'Refresh in Browse or choose different channels.');
+        library.loading
+            ? 'Tracks appear here as your channels load.'
+            : 'Refresh in Browse or choose different channels.',
+      );
     }
-    if (scope == 'Artists' && (!active || _selectedArtist == null)) return _musicArtists(tracks);
+    if (scope == 'Artists' && (!active || _selectedArtist == null)) {
+      return _musicArtists(tracks);
+    }
     if (tracks.isEmpty && scope != 'All songs' && scope != 'Artists') {
-      return _empty(Icons.music_note_rounded, 'No loaded tracks in this collection',
-        'Add music using track actions. Saved entries appear when their Telegram channels are selected and loaded.');
+      return _empty(
+        Icons.music_note_rounded,
+        'No loaded tracks in this collection',
+        'Add music using track actions. Saved entries appear when their Telegram channels are selected and loaded.',
+      );
     }
-    return _trackList(_visibleTracks(tracks,
-        preserveOrder: scope == 'Recently played' || scope == 'Playlists'),
-        key: PageStorageKey(('music-collection', scope)));
+    return _trackList(
+      _visibleTracks(
+        tracks,
+        preserveOrder: scope == 'Recently played' || scope == 'Playlists',
+      ),
+      key: PageStorageKey(('music-collection', scope)),
+    );
   }
 
   List<Track> _visibleTracks(List<Track> tracks, {bool preserveOrder = false}) {
@@ -2405,10 +2506,7 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Widget _trackTile(
-    Track track, {
-    required VoidCallback onPlay,
-  }) {
+  Widget _trackTile(Track track, {required VoidCallback onPlay}) {
     final active = player.current?.id == track.id;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -2593,10 +2691,6 @@ class _PlayerShellState extends State<PlayerShell>
   Widget _nowPlaying() {
     final track = player.current;
     final audio = player.audio;
-    final duration = audio.duration.inMilliseconds;
-    final progress = duration <= 0
-        ? 0.0
-        : (audio.position.inMilliseconds / duration).clamp(0.0, 1.0);
     final nextIndex = player.index + 1;
     final hasNext = player.index >= 0 && nextIndex < player.queue.length;
     final favorite = player.settings.favoriteIds.contains(track?.id);
@@ -2710,9 +2804,7 @@ class _PlayerShellState extends State<PlayerShell>
                                 player.queue[index % player.queue.length],
                                 key: ValueKey((
                                   'artwork-page',
-                                  player
-                                      .queue[index % player.queue.length]
-                                      .id,
+                                  player.queue[index % player.queue.length].id,
                                   index,
                                 )),
                               ),
@@ -2785,41 +2877,54 @@ class _PlayerShellState extends State<PlayerShell>
             ],
           );
 
-          final seek = Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              WaveSeekBar(
-                value: progress,
-                playing: audio.playing && !audio.buffering && track != null,
-                reducedMotion: player.settings.reducedMotion,
-                format: (v) =>
-                    clockText(Duration(milliseconds: (v * duration).round())),
-                onChanged: duration <= 0
-                    ? null
-                    : (v) => player.seek(
+          final seek = ListenableBuilder(
+            listenable: player,
+            builder: (context, _) {
+              final duration = audio.duration.inMilliseconds;
+              final progress = duration <= 0
+                  ? 0.0
+                  : (audio.position.inMilliseconds / duration).clamp(0.0, 1.0);
+              return RepaintBoundary(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    WaveSeekBar(
+                      value: progress,
+                      playing:
+                          audio.playing && !audio.buffering && track != null,
+                      reducedMotion: player.settings.reducedMotion,
+                      format: (v) => clockText(
                         Duration(milliseconds: (v * duration).round()),
                       ),
-              ),
-              Row(
-                children: [
-                  Text(
-                    clockText(audio.position),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _colors.onSurfaceVariant,
+                      onChanged: duration <= 0
+                          ? null
+                          : (v) => player.seek(
+                              Duration(milliseconds: (v * duration).round()),
+                            ),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    clockText(audio.duration),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _colors.onSurfaceVariant,
+                    Row(
+                      children: [
+                        Text(
+                          clockText(audio.position),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _colors.onSurfaceVariant,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          clockText(audio.duration),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              );
+            },
           );
 
           final transport = SizedBox(
@@ -3218,10 +3323,6 @@ class _PlayerShellState extends State<PlayerShell>
   Widget _dockContent({bool transitionCopy = false}) {
     final audio = player.audio;
     final track = player.current!;
-    final duration = audio.duration.inMilliseconds;
-    final progress = duration <= 0
-        ? 0.0
-        : (audio.position.inMilliseconds / duration).clamp(0.0, 1.0);
     final colors = _colors;
     final titleColor = colors.onPrimaryContainer;
     final detailColor = titleColor.withValues(alpha: .80);
@@ -3294,45 +3395,58 @@ class _PlayerShellState extends State<PlayerShell>
       ],
     );
 
-    Widget timeline({required bool showTimes}) => Row(
-      children: [
-        if (showTimes)
-          Text(
-            clockText(audio.position),
-            style: TextStyle(fontSize: 11, color: detailColor),
-          ),
-        Expanded(
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: titleColor,
-              inactiveTrackColor: titleColor.withValues(alpha: .24),
-              thumbColor: titleColor,
-              overlayColor: titleColor.withValues(alpha: .12),
-            ),
-            child: SizedBox(
-              height: showTimes ? 44 : 22,
-              child: WaveSeekBar(
-                value: progress,
-                playing: audio.playing && !audio.buffering,
-                reducedMotion: player.settings.reducedMotion,
-                format: (value) => clockText(
-                  Duration(milliseconds: (value * duration).round()),
+    Widget timeline({required bool showTimes}) => ListenableBuilder(
+      listenable: player,
+      builder: (context, _) {
+        final duration = audio.duration.inMilliseconds;
+        final progress = duration <= 0
+            ? 0.0
+            : (audio.position.inMilliseconds / duration).clamp(0.0, 1.0);
+        return RepaintBoundary(
+          child: Row(
+            children: [
+              if (showTimes)
+                Text(
+                  clockText(audio.position),
+                  style: TextStyle(fontSize: 11, color: detailColor),
                 ),
-                onChanged: duration <= 0
-                    ? null
-                    : (value) => player.seek(
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: titleColor,
+                    inactiveTrackColor: titleColor.withValues(alpha: .24),
+                    thumbColor: titleColor,
+                    overlayColor: titleColor.withValues(alpha: .12),
+                  ),
+                  child: SizedBox(
+                    height: showTimes ? 44 : 22,
+                    child: WaveSeekBar(
+                      value: progress,
+                      playing: audio.playing && !audio.buffering,
+                      reducedMotion: player.settings.reducedMotion,
+                      format: (value) => clockText(
                         Duration(milliseconds: (value * duration).round()),
                       ),
+                      onChanged: duration <= 0
+                          ? null
+                          : (value) => player.seek(
+                              Duration(
+                                milliseconds: (value * duration).round(),
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+              if (showTimes)
+                Text(
+                  clockText(audio.duration),
+                  style: TextStyle(fontSize: 11, color: detailColor),
+                ),
+            ],
           ),
-        ),
-        if (showTimes)
-          Text(
-            clockText(audio.duration),
-            style: TextStyle(fontSize: 11, color: detailColor),
-          ),
-      ],
+        );
+      },
     );
 
     final preview = Material(
@@ -3556,7 +3670,9 @@ class _PlayerShellState extends State<PlayerShell>
             _savePreferences(() => player.settings.repeatMode = mode),
       ),
       PreferenceChoice<LibrarySort>(
-        key: ValueKey(_videoMode ? 'video-sort-preference' : 'music-sort-preference'),
+        key: ValueKey(
+          _videoMode ? 'video-sort-preference' : 'music-sort-preference',
+        ),
         title: 'Library sort order',
         value: _videoMode
             ? player.settings.videoPlayback.librarySort
@@ -3586,9 +3702,7 @@ class _PlayerShellState extends State<PlayerShell>
       ),
     ],
     SettingsSection.media => [_lyricPreferences()],
-    SettingsSection.video => [
-      VideoSettingsOptions(settings: player.settings),
-    ],
+    SettingsSection.video => [VideoSettingsOptions(settings: player.settings)],
     SettingsSection.data => [
       ListTile(
         leading: const PreferenceIcon(Icons.bar_chart_rounded),
@@ -3744,7 +3858,8 @@ class _PlayerShellState extends State<PlayerShell>
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: _settingsSection == SettingsSection.video
-                            ? child : PreferenceCard(child: child),
+                            ? child
+                            : PreferenceCard(child: child),
                       ),
                   ],
                 ),
