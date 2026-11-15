@@ -1,6 +1,12 @@
 {
-  "current": "0.1.207",
+  "current": "0.1.208",
   "releases": [
+    {
+      "version": "0.1.208",
+      "changes": [
+        "Give Lyrics a split artwork and lyric layout on desktop, a compact phone header, centered lyric lines, and a full-width playback bar."
+      ]
+    },
     {
       "version": "0.1.207",
       "changes": [
