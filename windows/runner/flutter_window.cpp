@@ -54,8 +54,11 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
-  // Release capture even if a plugin consumes the activation message.
-  if (message == WM_ACTIVATEAPP && !wparam && music_visualizer_) {
+  // Losing focus to another app is not minimization. Keep visible visualizers
+  // alive, but release capture when this window is actually minimized/hidden,
+  // even if a plugin consumes the message.
+  if (((message == WM_SIZE && wparam == SIZE_MINIMIZED) ||
+       (message == WM_SHOWWINDOW && !wparam)) && music_visualizer_) {
     music_visualizer_->Stop();
   }
   // Give Flutter, including plugins, an opportunity to handle window messages.
