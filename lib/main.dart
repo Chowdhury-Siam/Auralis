@@ -25,9 +25,11 @@ import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
 import 'updater.dart';
 import 'sync/controller.dart';
+import 'visualizer_licenses.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerVisualizerLicenses();
   RandomAccessFile? lock;
   try {
     final root = await getApplicationSupportDirectory();
