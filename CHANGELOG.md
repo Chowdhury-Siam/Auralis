@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.209
+
+- Add offline Spectrum and Butterchurn visualizer panels on Android and Windows alongside the redesigned Lyrics page, which remains the default.
+- Add spectrum styles, colors and frame limits, 99 bundled visualizer presets with search and cycling, and an expanded panel that retains playback controls.
+- Make local output-audio analysis opt-in and stop it when paused, buffering, covered, unfocused, backgrounded or using reduced motion. Android requests its required audio permission; no microphone is opened and no audio is recorded or uploaded.
+
 ## 0.1.208
 
 - Give Lyrics a split artwork and lyric layout on desktop, a compact phone header, centered lyric lines, and a full-width playback bar.
