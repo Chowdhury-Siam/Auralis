@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:isolate';
+import 'dart:io';
 import 'dart:typed_data';
+
+part 'embedded_lyrics_writer.dart';
 
 typedef CoverRange = Future<Uint8List?> Function(int offset, int count);
 const maxCoverBytes = 4 * 1024 * 1024;
