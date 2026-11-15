@@ -1,6 +1,6 @@
 # Music visualizers: implementation and verification
 
-Version: **0.1.209+210**, based on the supplied **0.1.208+209** source.
+Version: **0.1.210+211**, retaining the **0.1.209+210** visualizers and the supplied **0.1.208+209** Lyrics redesign.
 
 ## Scope
 
@@ -39,7 +39,24 @@ distribution hashes and build materials are retained under
 
 ## Automated checks
 
-Delivery results: analyzer **no issues**; **533 Flutter tests passed**;
+The 0.1.209 Windows delivery passed 533 Flutter tests, but Linux CI exposed
+an offscreen empty-Lyrics Import button with taller DejaVu Sans metrics.
+Version 0.1.210 puts recovery actions before the longer help text and uses the
+bundled DejaVu font in Lyrics tests on every host. Import tests explicitly
+require a hittable button; a short-phone/large-text regression also verifies
+scrolling to Import. No missed-tap warnings are suppressed.
+The exact original CI missed-tap failure was reproduced on Windows after
+switching the fixture to the bundled CI font. After the layout fix, all 36
+Lyrics tests passed with that font.
+
+Final 0.1.210 local verification: **534 Flutter tests passed**, analyzer **no
+issues**, all **46 Node sync/workflow-policy tests passed**, and release-note,
+Android source, visualizer bridge and distribution/source-integrity checks
+passed. The full Flutter run completed separately after an earlier combined
+validation command exceeded its shell timeout. A new Linux CI run is still
+required; the CI-font reproduction was performed on the Windows host.
+
+Previous delivery results: analyzer **no issues**; **533 Flutter tests passed**;
 release-note validation, Android source checks, offline distribution/source
 integrity checks, Node visualizer bridge checks and all nine Node release-policy
 tests passed. The separate Python tooling suite ran 39 tests: 37 passed and two
