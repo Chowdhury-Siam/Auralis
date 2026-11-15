@@ -143,7 +143,7 @@ assert(Analyzer.current.running);
 api.configure({mode:'spectrum',spectrum:'radial',palette:'classic',active:true});
 assert(Analyzer.current.options.radial);
 assert.equal(Analyzer.current.options.gradient,'classic');
-api.configure({mode:'visualizer',active:true,cycle:true,cycleSeconds:15,fps:30});
+api.configure({mode:'visualizer',active:true,cycle:true,songMotion:false,cycleSeconds:15,fps:30});
 assert.equal(presetReads,1);
 
 assert.deepEqual(createdSize,[1200,675], 'Initial render targets must also use the full drawing size');
@@ -224,20 +224,42 @@ assert(Math.max(...lastWave)<=255 && Math.min(...lastWave)>=1,
   'Transient emphasis must respect available sample headroom');
 api.feed(Buffer.alloc(1024,128).toString('base64'),44100);advance(34);
 assert(lastWave.every(sample=>sample===128),'Live silence must stay silent, not generate pulses');
-api.configure({mode:'visualizer',active:false});
-api.configure({mode:'visualizer',active:true,cycle:true,cycleSeconds:15});
-const beforeBeatCycle=loaded.length;
-advance(15020);
-assert.equal(loaded.length,beforeBeatCycle,'Due cycles should briefly wait for an actual onset');
-api.feed(tone(90),44100);advance(34);
-assert.equal(loaded.length,beforeBeatCycle+1,'An actual onset should release the pending cycle');
-assert.equal(blends.at(-1),.35);
-api.configure({mode:'visualizer',active:true,cycle:true,cycleSeconds:15});
-const beforeFallback=loaded.length;
+const quiet=tone(90,10), accent=tone(90,100);
+const silence=Buffer.alloc(1024,128).toString('base64');
+function capture(samples) {
+  api.feed(samples,44100);
+  advance(34);
+}
+function playAccent() {
+  for (let i=0;i<5;i++) capture(quiet);
+  capture(accent);
+}
+for (const cycleSeconds of [15,60]) {
+  api.configure({mode:'visualizer',active:true,cycle:true,songMotion:true,
+    cycleSeconds,song:`cycle test ${cycleSeconds}`});
+  const before=loaded.length;
+  const started=time;
+  for (let i=0;i<11;i++) playAccent();
+  assert.equal(loaded.length,before,'Distinct accents accumulate before a change');
+  playAccent();
+  assert.equal(loaded.length,before+1,'An audible accent can change presets before the timer');
+  assert.equal(blends.at(-1),.35);
+  assert(time-started<15000);
+  for (let i=0;i<300;i++) capture(accent);
+  for (let i=0;i<20;i++) capture(silence);
+  advance(61000);
+  assert.equal(loaded.length,before+1,'Steady audio, silence and missing samples cannot force a change');
+}
+api.configure({cycle:false});
+const beforeDisabled=loaded.length;
+for (let i=0;i<13;i++) playAccent();
+assert.equal(loaded.length,beforeDisabled,'Turning off preset cycling also disables audio-driven changes');
+api.configure({cycle:true,songMotion:false,cycleSeconds:15});
+const beforeTimer=loaded.length;
 advance(16000);
-assert.equal(loaded.length,beforeFallback);
+assert.equal(loaded.length,beforeTimer);
 advance(600);
-assert.equal(loaded.length,beforeFallback+1,'Cycling must still work in silence after the bounded wait');
+assert.equal(loaded.length,beforeTimer+1,'The selected timer still works with song-driven motion off');
 assert.equal(blends.at(-1),1.2);
 sandbox.document.hidden=true;
 visibilityCallback();
