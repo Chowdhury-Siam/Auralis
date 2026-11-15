@@ -33,9 +33,11 @@ class LyricsView extends StatefulWidget {
     this.loadEmbedded,
     this.files = const DataFiles(),
     this.openLink = openExternalLink,
+    this.visualizerRendererBuilder,
   });
   final DataFiles files;
   final Future<void> Function(String) openLink;
+  final MusicVisualizerRendererBuilder? visualizerRendererBuilder;
   final PlayerController player;
   final LyricsRepository repository;
   final Widget artwork;
@@ -98,6 +100,16 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
   int _generation = 0;
   MusicPanel _panel = MusicPanel.lyrics;
   bool _expandedVisualizer = false;
+  Widget? _retainedLyricsBody;
+
+  Widget _lyricsBody({required bool wide}) {
+    // Keep the actual reading state, not a bitmap snapshot. While hidden,
+    // reuse the subtree so position notifications cannot rebuild/scroll it.
+    if (_panel == MusicPanel.lyrics || _retainedLyricsBody == null) {
+      _retainedLyricsBody = _body(wide: wide);
+    }
+    return _retainedLyricsBody!;
+  }
 
   Widget _contentPane({required bool wide}) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -142,7 +154,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
               offstage: _panel != MusicPanel.lyrics,
               child: TickerMode(
                 enabled: _panel == MusicPanel.lyrics,
-                child: _body(wide: wide),
+                child: _lyricsBody(wide: wide),
               ),
             ),
             if (_panel != MusicPanel.lyrics)
@@ -150,6 +162,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
                 key: const ValueKey('music-visualizer-pane'),
                 player: widget.player,
                 mode: _panel,
+                rendererBuilder: widget.visualizerRendererBuilder,
                 fullscreen: _expandedVisualizer,
                 onFullscreen: () =>
                     setState(() => _expandedVisualizer = !_expandedVisualizer),
