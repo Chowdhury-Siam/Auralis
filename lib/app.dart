@@ -10,6 +10,8 @@ import 'app_popups.dart';
 
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'models.dart';
 import 'media_item_sheet.dart';
@@ -311,7 +313,7 @@ class _PlayerShellState extends State<PlayerShell>
       .drive(CurveTween(curve: const Interval(.32, .83)));
   final _dockKey = GlobalKey();
   final _surfaceKey = GlobalKey();
-  static const _miniPlayerRadius = 24.0;
+  static const _miniPlayerRadius = 28.0;
   Rect? _dockBounds;
   Size? _dockViewport;
   double _playerTravel = 1;
@@ -713,6 +715,7 @@ class _PlayerShellState extends State<PlayerShell>
                     repository: lyrics,
                     files: widget.dataFiles,
                     loadEmbedded: telegram.embeddedLyrics,
+                    saveSongWithLyrics: _saveSongWithLyrics,
                     artwork: Artwork(
                       seed: player.current?.title ?? 'Auralis',
                       telegram: telegram,
@@ -801,7 +804,7 @@ class _PlayerShellState extends State<PlayerShell>
             Positioned(
               left: 0,
               right: 0,
-              bottom: compact ? 80 + MediaQuery.paddingOf(context).bottom : 0,
+              bottom: compact ? 80 + MediaQuery.paddingOf(context).bottom : 8,
               child: Opacity(
                 opacity: destination == _Page.nowPlaying ? 0 : 1,
                 child: _transport(),
@@ -1244,6 +1247,89 @@ class _PlayerShellState extends State<PlayerShell>
   void _focusDiscovery() {
     _navigate(_Page.browse);
     _discoveryFocus.requestFocus();
+  }
+
+  bool _savingTaggedSong = false;
+
+  Future<void> _saveSongWithLyrics(
+    Track track,
+    Lyrics value, {
+    required bool publish,
+  }) async {
+    if (_savingTaggedSong) return;
+    _savingTaggedSong = true;
+    Directory? temporary;
+    final scope = telegram.mediaCache.directory?.path;
+    bool active() =>
+        mounted &&
+        telegram.ready &&
+        telegram.mediaCache.directory?.path == scope;
+    try {
+      String? fileName;
+      if (publish) {
+        final original = await telegram.editableSong(track);
+        if (!mounted || !active()) return;
+        fileName = original.fileName;
+        final confirmed = await confirmAuralisAction(
+          context,
+          title: 'Update Telegram song?',
+          message:
+              'Replace the audio in “${track.source}” with a copy of “${track.title}” containing these lyrics. Future downloads from this post will include them.',
+          confirmLabel: 'Update song',
+        );
+        if (confirmed != true || !active()) return;
+      }
+      _notice('Preparing song with embedded lyrics…');
+      temporary = await (await getTemporaryDirectory()).createTemp(
+        'auralis-song-',
+      );
+      final folder = temporary;
+      Future<File> prepare() =>
+          telegram.songWithLyrics(track, value, folder, name: fileName);
+      final file = await telegram.hasCompleteSong(track)
+          ? await prepare()
+          : await player.withAudioReleased(track, prepare);
+      if (!active()) return;
+      if (publish) {
+        final updated = await telegram.replaceSongMedia(track, file);
+        if (!active()) return;
+        await lyrics.save(updated, value);
+        unawaited(library.refresh());
+        _notice('Telegram song updated with embedded lyrics.');
+      } else {
+        final mime = switch (p.extension(file.path)) {
+          '.flac' => 'audio/flac',
+          '.m4a' => 'audio/mp4',
+          _ => 'audio/mpeg',
+        };
+        final path = await widget.dataFiles.saveAudioPath(
+          p.basename(file.path),
+          mime,
+        );
+        if (path == null || !active()) return;
+        await widget.dataFiles.saveAudio(file, path);
+        _notice('Saved song with embedded lyrics.');
+      }
+    } on FormatException catch (error) {
+      _notice(error.message);
+    } on StateError catch (error) {
+      _notice(error.message);
+    } catch (_) {
+      _notice(
+        publish
+            ? 'Could not update the Telegram song. Check the post and your connection.'
+            : 'Could not save the song. Check your connection and available storage.',
+      );
+    } finally {
+      _savingTaggedSong = false;
+      if (temporary != null) {
+        try {
+          await temporary.delete(recursive: true);
+        } on FileSystemException {
+          // The OS can clear expired files from the temporary directory.
+        }
+      }
+    }
   }
 
   void _notice(String value) {
@@ -3295,28 +3381,39 @@ class _PlayerShellState extends State<PlayerShell>
   );
 
   Widget _transport() => Padding(
-    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-    child: PlayerDockMotion(
-      key: _dockKey,
-      reducedMotion: _reducedPlayerMotion,
-      enabled: !player.restoringData,
-      onExpandStart: (_) => _navigate(_Page.nowPlaying, draggingDock: true),
-      onExpandUpdate: _dragPlayer,
-      onExpandEnd: _settleDock,
-      onExpandCancel: () {
-        if (!_reducedPlayerMotion && destination == _Page.nowPlaying) {
-          unawaited(_closeNowPlaying());
-        }
-      },
-      child: Material(
-        key: const ValueKey('player-bar'),
-        color: _colors.primaryContainer,
-        elevation: 4,
-        shadowColor: _colors.shadow.withValues(alpha: .38),
-        borderRadius: BorderRadius.circular(_miniPlayerRadius),
-        clipBehavior: Clip.antiAlias,
-        child: _dockContent(),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    child: Align(
+      alignment: Alignment.bottomCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 820),
+        child: _floatingDock(),
       ),
+    ),
+  );
+
+  Widget _floatingDock() => PlayerDockMotion(
+    key: _dockKey,
+    reducedMotion: _reducedPlayerMotion,
+    enabled: !player.restoringData,
+    onExpandStart: (_) => _navigate(_Page.nowPlaying, draggingDock: true),
+    onExpandUpdate: _dragPlayer,
+    onExpandEnd: _settleDock,
+    onExpandCancel: () {
+      if (!_reducedPlayerMotion && destination == _Page.nowPlaying) {
+        unawaited(_closeNowPlaying());
+      }
+    },
+    child: Material(
+      key: const ValueKey('player-bar'),
+      color: _colors.primaryContainer,
+      elevation: 8,
+      shadowColor: _colors.shadow.withValues(alpha: .46),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_miniPlayerRadius),
+        side: BorderSide(color: _colors.outlineVariant.withValues(alpha: .45)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: _dockContent(),
     ),
   );
 
@@ -3502,7 +3599,7 @@ class _PlayerShellState extends State<PlayerShell>
       builder: (context, box) {
         final inline = box.maxWidth >= 576;
         return Padding(
-          padding: EdgeInsets.fromLTRB(10, 6, 10, inline ? 6 : 2),
+          padding: EdgeInsets.fromLTRB(12, 7, 12, inline ? 7 : 3),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
