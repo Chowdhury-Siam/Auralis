@@ -1,6 +1,6 @@
 # Music visualizers: implementation and verification
 
-Version: **0.1.213+214**, retaining the **0.1.212+213** positioning fix, **0.1.211+212** Windows SDK fix, **0.1.210+211** Lyrics fix, **0.1.209+210** visualizers and supplied **0.1.208+209** Lyrics redesign.
+Version: **0.1.214+215**, retaining the **0.1.213+214** focus/performance changes, **0.1.212+213** positioning fix, **0.1.211+212** Windows SDK fix, **0.1.210+211** Lyrics fix, **0.1.209+210** visualizers and supplied **0.1.208+209** Lyrics redesign.
 
 ## Scope
 
@@ -25,6 +25,8 @@ distribution hashes and build materials are retained under
   Its required `RECORD_AUDIO` permission is labeled microphone by Android;
   the bridge never instantiates `AudioRecord` or opens an input device.
   Device/OEM restrictions can make this effect unavailable.
+  Version 0.1.214 selects `SCALING_MODE_AS_PLAYED`, not `NORMALIZED`, to retain
+  quiet/loud dynamics. Low output volume can therefore reduce visible response.
 - Windows uses shared-mode WASAPI loopback on the default console render
   endpoint. Other output routing or device changes can require Retry.
 - Both approaches can include other apps sharing the observed output.
@@ -42,6 +44,18 @@ distribution hashes and build materials are retained under
   Sync. The selected panel is not persisted; Lyrics remains the default.
 
 ## Automated checks
+
+Final 0.1.214 local validation with Flutter **3.47.1** / Dart **3.13.1**:
+**551 Flutter tests passed** (`--concurrency=2`); analyzer **no issues**
+(`--no-pub --fatal-infos`); **46 Node sync/workflow-policy tests passed**.
+The real Butterchurn audio/equation-energy bridge regressions, source/license
+integrity, release notes and Android source checks passed. The compiled-engine
+Chromium energy check is recorded below. Android/Windows native builds and
+real-device song response remain unverified; the previous two Python signing
+tests still require the missing JDK `keytool`. This includes the UI lag
+regressions described in `docs/PERFORMANCE.md`. An initial host run ended
+without a failure/completion summary; confirmed orphan test processes were
+released and a complete rerun passed.
 
 Final 0.1.213 local validation with Flutter **3.47.1** / Dart **3.13.1**:
 **546 Flutter tests passed** (`--concurrency=2`); analyzer **no issues** with
@@ -69,8 +83,10 @@ Phone performance changes retain every mode, preset, palette and FPS choice:
 - Bundled engine scripts are inert until selected. Spectrum evaluates only
   audioMotion; Butterchurn and all 99 presets initialize on animated-mode entry.
   Evaluated script elements release their source text. No network loading.
-- FFT Hann/twiddle/bit-reversal tables are precomputed; animated mode skips the
-  unused Spectrum FFT. Spectrum's disconnected Web Audio context is suspended.
+- FFT Hann/twiddle/bit-reversal tables are precomputed. One shared FFT per
+  captured frame provides Spectrum bins or animated energy bands; animated mode
+  skips Spectrum-only logarithms/smoothing. Spectrum's disconnected Web Audio
+  context is suspended.
 - Position-only notifications do not rebuild the visualizer pane. Its renderer
   widget is reused behind a repaint boundary, including parent playback ticks.
   Hidden Lyrics retains its real widget subtree and manual reading position,
@@ -86,16 +102,43 @@ Phone performance changes retain every mode, preset, palette and FPS choice:
   inter-frame interval above 170%. These are heuristics, not GPU timing.
   Spectrum stays at full DPI; no presets or FPS choices are disabled.
 
-Beat response uses real captured waveform data, not an animation clock:
-Spectrum uses fast spectral attack (85%) and slower release (30%).
-Animated mode tracks RMS energy, a 180 Hz low-pass bass band and the remaining
-high band against moving averages. Onsets require an energy floor, a ratio
-above 1.35 and more than 120 ms since the preceding onset. A 120 ms decaying
-envelope gives at most 30% visual-input emphasis, limited by available sample
-headroom. Spectrum source samples and actual audio playback are unchanged.
-Silence stays silent. Timed preset changes wait for a real onset for at most
-1.5 seconds beyond their interval, then use the normal transition. This is
-transient-sensitive visualization, not an exact beat grid or BPM detector.
+Beat response uses captured waveform data, not an animation clock. Spectrum
+retains fast spectral attack (85%) and slower release (30%). The 0.1.213
+headroom-limited waveform boost did not preserve sustained song dynamics:
+Android normalized capture amplitude, while Butterchurn normalized each band
+against a long average and eventually returned a neutral value of 1 in silence.
+The new real-audio-pipeline test reproduced the sustained loud/quiet failure
+before the 0.1.214 fix.
+
+Version 0.1.214 passes the original waveform to Butterchurn without gain or
+clipping. A pinned adapter runs its native audio analysis, then supplies actual
+preset-equation `bass`/`mid`/`treb` and attenuated values. Bands use Hann-window
+power corrected by its squared-window sum: 20–320, 320–2800 and 2800–11025 Hz.
+DC-removed waveform RMS supplies absolute loudness (4x RMS, capped at 1.8),
+so quiet and loud passages cannot simply converge to identical levels.
+Each band is weighted by its presence and contrast against a two-second
+time-based band average (contrast capped at 2, final values at 4). RMS below
+.006 and band RMS below .003 reject silence/8-bit quantization noise. The
+attenuated values use 45 ms attack/140 ms release. Missing samples start
+releasing after 100 ms and reach zero at 250 ms; stop/reset clears all history.
+No extra messages or per-animation-frame shared FFTs are added.
+
+Onsets used for preset cycling track full/bass/high-band energy against
+300 ms averages, require an energy floor and ratio above 1.35, and are spaced
+more than 120 ms apart. Timed changes wait for an onset for at most 1.5 seconds,
+then use the normal transition. This is not an exact beat grid or BPM detector.
+All 99 presets remain; preset-authored time-driven motion is not removed and
+some presets naturally emphasize audio more than others.
+
+The compiled bundled Butterchurn engine was also exercised in Chromium at a
+240x160 test surface with controlled synthetic samples and clock increments.
+A quiet 90 Hz passage produced preset bass energy **0.233**; a louder passage
+produced **1.898** (8.1x), with absent mid/treble values at zero. Silence produced
+zero instantaneous bands and released the attenuated bass to approximately
+6.1e-10. The actual preset equation globals also received zero bass/mid/treble
+in silence. All 99 presets were available and no engine/console errors occurred.
+This validates the compiled adapter path, not real-song synchronization on a
+phone or native Windows output capture.
 
 The updated lazy-loading document was executed in Chromium: no engines at
 boot; only audioMotion after Spectrum selection; Butterchurn and all 99 presets
@@ -218,9 +261,12 @@ Document tests cover shared loads, cache flags/clear, failure retry and an
 in-flight clear/failure race. Widget/channel regressions cover Android's read
 cap at 60 FPS, renderer reuse across parent ticks, backpressure and frozen
 hidden Lyrics with retained manual scroll position.
-The Node bridge test uses synthetic test tones to check FFT frequency,
-cached FFT tables, fast attack/slower release, actual-input transient emphasis,
-headroom/silence, onset-aware cycling/fallback, lazy presets, phone pixel-budget
+The Node bridge test executes the exact retained Butterchurn FFT/audio processor
+and level classes via `tool/visualizer-audio-fixture.mjs`, not just a sample
+receiver stub. It checks actual preset energy for sustained quiet/loud contrast,
+independent bass/treble, silence, stale release and unmodified waveforms. It
+also checks FFT frequency/tables, fast Spectrum attack/slower release,
+onset-aware cycling/fallback, lazy presets, phone pixel-budget
 adaptation/recovery, FPS pacing, pause and cleanup.
 Synthetic samples are test-only, not app playback.
 
