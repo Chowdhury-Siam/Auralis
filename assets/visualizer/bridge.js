@@ -13,6 +13,8 @@
   let visualizer, analyzer, audioContext, request = 0, lastFrame = 0;
   let lastAudio = -Infinity, lastCycle = 0, presetIndex = 0, destroyed = false;
   let qualityScale=1, qualityAt=0, qualityFrames=0, slowFrames=0, lastDraw=0;
+  let song='', take=0, order=[], cursor=0, songInitialized=false;
+  let lastTransform='', lastOpacity='', audioRevision=0, silent=true;
   let lastBeat=-Infinity, energyAverage=0, bassAverage=0, highAverage=0;
   let energyRms=0, lastEnergyRender=0;
   let outputEnergy=0, outputPulse=0;
@@ -23,10 +25,32 @@
   const impulseAt=new Float64Array(3).fill(-Infinity);
   let options = {mode:'spectrum', spectrum:'line', palette:'prism',
     fps:30, cycle:true, cycleSeconds:30, preset:'', active:false, mobile:false,
-    songMotion:true};
+    songMotion:true,song:''};
+  const frameLimits=[20,23,29,30,60,90,100,120,144];
+  const spectrumStyles={
+    line:{mode:10,reflexRatio:.15}, bars:{mode:2}, radial:{mode:2,radial:true},
+    fine:{mode:1}, wide:{mode:5,barSpace:.22},
+    led:{mode:4,ledBars:true}, outline:{mode:3,outlineBars:true,lineWidth:2},
+    glow:{mode:4,alphaBars:true}, mirror:{mode:3,mirror:1},
+    wave:{mode:10,fillAlpha:0,showPeaks:false,lineWidth:2.5},
+    ridge:{mode:10,peakLine:true,fillAlpha:.08},
+    halo:{mode:10,radial:true,fillAlpha:.25,lineWidth:2},
+    inward:{mode:3,radial:true,radialInvert:true},
+  };
+  const palettes={
+    aurora:['#7c54f6','#53f9ac','#09c5cb'],
+    sunset:['#554bd2','#f15d91','#ffbd64'],
+    ember:['#a3343e','#ff6c37','#ffe283'],
+    glacier:['#386ce4','#54d8ee','#ebfcff'],
+    orchid:['#6132bf','#b971f7','#f7b3ee'],
+    mint:['#147a66','#47dcb1','#d0ffe7'],
+    neon:['#d0ff00','#00ffb7','#4b79ff'],
+    sakura:['#d84a85','#ffa3c9','#fff0f6'],
+    marine:['#374ac6','#008b96','#44ffd6'],
+    sand:['#b46b43','#eda961','#fff1b1'],
+  };
   const waveform = new Uint8Array(1024).fill(128);
   const real = new Float64Array(1024), imag = new Float64Array(1024);
-  const decibels = new Float32Array(512).fill(-100);
   const smooth = new Float32Array(512).fill(-100);
   const hann=new Float64Array(1024), cosine=new Float64Array(512), sine=new Float64Array(512);
   const reversed=new Uint16Array(1024);
@@ -84,6 +108,14 @@
         real[l]=real[k]-r;imag[l]=imag[k]-v;real[k]+=r;imag[k]+=v;
       }
     }
+    if (options.mode==='spectrum') {
+      for (let i=0;i<512;i++) {
+        const power=real[i]*real[i]+imag[i]*imag[i];
+        const db=Math.max(-100,10*Math.log10(Math.max(1e-16,power/65536)));
+        smooth[i]+=(db>smooth[i]?.85:.3)*(db-smooth[i]);
+      }
+      return;
+    }
     bandRms.fill(0);
     flux.fill(0);bandMagnitude.fill(0);
     for (let i=0;i<512;i++) {
@@ -97,12 +129,6 @@
         bandMagnitude[band]+=magnitude;
       }
       previousMagnitude[i]=magnitude;
-      if (options.mode==='spectrum') {
-        decibels[i]=Math.max(-100,10*Math.log10(Math.max(1e-16,power/65536)));
-        // Fast attack follows drum hits; slower release keeps the graph readable.
-        const weight=decibels[i]>smooth[i]?.85:.3;
-        smooth[i]+=weight*(decibels[i]-smooth[i]);
-      }
     }
     for (let i=0;i<3;i++) {
       bandRms[i]=Math.sqrt(bandRms[i]);
@@ -157,6 +183,18 @@
     if (!levels || typeof levels.updateAudioLevels!=='function' ||
         levels.val?.length!==3 || levels.att?.length!==3)
       throw Error('Unsupported offline energy adapter');
+    // The 2.6.7 renderer otherwise recomputes three FFTs on every draw,
+    // including high-refresh frames reusing the same native capture.
+    const audio=visualizer.audio;
+    if (typeof audio?.updateAudio==='function') {
+      const updateAudio=audio.updateAudio.bind(audio);
+      let lastRevision=-1;
+      audio.updateAudio=(...samples)=>{
+        if (lastRevision===audioRevision) return;
+        lastRevision=audioRevision;
+        updateAudio(...samples);
+      };
+    }
     const nativeUpdate=levels.updateAudioLevels.bind(levels);
     levels.updateAudioLevels=(fps,frame)=>{
       nativeUpdate(fps,frame);
@@ -201,8 +239,10 @@
     outputPulse+=pulseWeight*(kick-outputPulse);
     const opacity=Math.min(1,outputEnergy*(.84+.16*outputPulse));
     // At most 3.5% outward movement, never shrink/reveal unpainted edges.
-    milk.style.opacity=opacity.toFixed(4);
-    milk.style.transform=`scale(${(1+.035*outputPulse).toFixed(5)})`;
+    const nextOpacity=opacity.toFixed(3);
+    const nextTransform=`scale(${(1+.035*outputPulse).toFixed(4)})`;
+    if (nextOpacity!==lastOpacity) milk.style.opacity=lastOpacity=nextOpacity;
+    if (nextTransform!==lastTransform) milk.style.transform=lastTransform=nextTransform;
   }
   function ensureSpectrum() {
     if (analyzer) return;
@@ -212,18 +252,56 @@
       audioCtx:audioContext, connectSpeakers:false, start:false, fftSize:1024,
       overlay:true, showBgColor:false, bgAlpha:0, maxFPS:options.fps,
       minFreq:30, maxFreq:16000, minDecibels:-85, maxDecibels:-10,
-      showScaleX:true, showPeaks:true, smoothing:.5, loRes:false,
+      showScaleX:true, showPeaks:true, smoothing:.5, loRes:options.mobile,
     });
     // Samples come from native output capture, not a Web Audio graph.
     audioContext.suspend().catch(()=>{});
     // Pinned library adapter. The graph remains disconnected from speakers.
+    for (const [name, colors] of Object.entries(palettes)) {
+      analyzer.registerGradient(name, {dir:'h',colorStops:[...colors]});
+    }
     for (const node of analyzer._analyzer) {
       node.getFloatFrequencyData = target => {
-        for (let i=0;i<target.length;i++) {
-          const source = i * audioContext.sampleRate / 44100;
-          target[i] = smooth[Math.min(511,Math.round(source))];
-        }
+        const age=performance.now()-lastAudio;
+        const fade=age<=180?1:Math.max(0,1-(age-180)/180);
+        for (let i=0;i<target.length;i++) target[i]=-100+(smooth[i]+100)*fade;
       };
+    }
+  }
+  function hash(text) {
+    let value=2166136261;
+    for (let i=0;i<text.length;i++) value=Math.imul(value^text.charCodeAt(i),16777619);
+    return value>>>0;
+  }
+  function shuffle() {
+    order=names.slice();
+    let seed=hash(`${song}:${options.variation}:${take}`);
+    for (let i=order.length-1;i>0;i--) {
+      seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+      const j=seed%(i+1);
+      [order[i],order[j]]=[order[j],order[i]];
+    }
+    cursor=0;
+    if (order.length>1 && order[0]===names[presetIndex])
+      [order[0],order[1]]=[order[1],order[0]];
+  }
+  function nextPreset(blend) {
+    if (cursor>=order.length) shuffle();
+    const current=names[presetIndex];
+    while (cursor<order.length-1 && order[cursor]===current) cursor++;
+    loadPreset(order[cursor++],blend);
+  }
+  function startSong() {
+    song=options.song;
+    songInitialized=true;
+    order=[];
+    cursor=0;
+    if (names.includes(options.preset)) {
+      loadPreset(options.preset,0);
+    } else if (song) {
+      nextPreset(0);
+    } else {
+      loadPreset(names[0],0);
     }
   }
   function milkSize() {
@@ -233,7 +311,7 @@
     const height=Math.max(1,milk.clientHeight)*ratio;
     // Keep normal phone panels sharp, but do not allocate desktop-sized warp
     // textures on phones. Adapt only animated pixels, never spectrum labels.
-    const edge=options.mobile?2048:4096, pixels=options.mobile?2097152:8388608;
+    const edge=options.mobile?1120:4096, pixels=options.mobile?640000:8388608;
     const scale=Math.min(1,edge/Math.max(width,height),Math.sqrt(pixels/(width*height)))*
       (options.mobile?qualityScale:1);
     return [Math.max(1,Math.round(width*scale)),Math.max(1,Math.round(height*scale))];
@@ -246,15 +324,20 @@
     milk.width=width;milk.height=height;
     visualizer = butterchurn.default.createVisualizer(null, milk, {
       width,height,
-      pixelRatio:1, textureRatio:1,
+      pixelRatio:1, textureRatio:options.mobile?.8:1,
     });
     installEnergyResponse();
-    loadPreset(options.preset || names[0], 0);
+    startSong();
   }
   function loadPreset(name, blend=1.2) {
     if (!names.length) throw Error('No visualizer presets are installed.');
     const found=names.indexOf(name);
     presetIndex=found<0?0:found;
+    const variation=hash(`${song}:${options.variation}:${take++}:${names[presetIndex]}`)/0x100000000;
+    if (order.includes(names[presetIndex])) {
+      const used=order.indexOf(names[presetIndex]);
+      if (used>=cursor) order.splice(used,1);
+    }
     if (visualizer) {
       const source=presets[names[presetIndex]];
       // Keep every original equation/shader/layer. A copied per-frame equation
@@ -270,9 +353,10 @@
           const __auralisKick=Math.min(1,Math.max(0,a.bass-a.bass_att));
           const __auralisEnergy=Math.min(1.5,Math.max(0,(a.bass_att+a.mid_att+a.treb_att)/3));
           ${source.frame_eqs_str}
-          if(Number.isFinite(a.zoom)) a.zoom*=1+.018*__auralisKick;
-          if(Number.isFinite(a.wave_scale)) a.wave_scale*=.9+.2*__auralisEnergy+.35*__auralisKick;
-          if(Number.isFinite(a.warp)) a.warp+=.04*__auralisKick;
+          if(Number.isFinite(a.zoom)) a.zoom*=1+${.009+variation*.021}*__auralisKick;
+          if(Number.isFinite(a.wave_scale)) a.wave_scale*=.9+${.14+variation*.16}*__auralisEnergy+.35*__auralisKick;
+          if(Number.isFinite(a.warp)) a.warp+=${.02+variation*.07}*__auralisKick;
+          if(Number.isFinite(a.rot)) a.rot+=${(variation-.5)*.045}*__auralisEnergy;
         `;
       }
       visualizer.loadPreset(preset,blend);
@@ -290,22 +374,29 @@
       const [renderWidth,renderHeight]=milkSize();
       // Butterchurn sizes its render targets, not the supplied canvas element.
       // Keep the visible drawing buffer in the same aspect as the CSS panel.
-      if (milk.width!==renderWidth) milk.width=renderWidth;
-      if (milk.height!==renderHeight) milk.height=renderHeight;
+      if (milk.width===renderWidth && milk.height===renderHeight) return;
+      milk.width=renderWidth;
+      milk.height=renderHeight;
       visualizer.setRendererSize(renderWidth,renderHeight);
     }
+  }
+  function clearWaveform() {
+    if (silent) return;
+    waveform.fill(128);
+    silent=true;
+    audioRevision++;
   }
   function stop() {
     cancelAnimationFrame(request);request=0;
     if (analyzer) analyzer.stop();
-    waveform.fill(128);decibels.fill(-100);smooth.fill(-100);
+    clearWaveform();smooth.fill(-100);lastAudio=-Infinity;
     energyRms=0;lastEnergyRender=0;bandRms.fill(0);bandAverage.fill(0);bandRelease.fill(0);
     previousMagnitude.fill(0);flux.fill(0);impulses.fill(0);impulseAt.fill(-Infinity);
     outputEnergy=0;outputPulse=0;
     // Keep the last displayed frame when paused; histories reset so it cannot
     // produce a stale beat on resume.
     if (!options.songMotion) {
-      milk.style.opacity='1';milk.style.transform='none';
+      milk.style.opacity=lastOpacity='1';milk.style.transform=lastTransform='none';
     }
     lastBeat=-Infinity;energyAverage=0;bassAverage=0;highAverage=0;
     qualityAt=performance.now();qualityFrames=0;slowFrames=0;lastDraw=0;
@@ -317,7 +408,7 @@
     if (cost>budget*.75 || (elapsed>0 && elapsed>budget*1.7)) slowFrames++;
     if (time-qualityAt<2500 || qualityFrames<20) return;
     let next=qualityScale;
-    if (slowFrames/qualityFrames>.25) next=Math.max(.75,qualityScale*.9);
+    if (slowFrames/qualityFrames>.25) next=Math.max(.5,qualityScale*.85);
     else if (slowFrames/qualityFrames<.05) next=Math.min(1,qualityScale+.05);
     qualityAt=time;qualityFrames=0;slowFrames=0;
     if (Math.abs(next-qualityScale)>.001) { qualityScale=next;resize(); }
@@ -331,29 +422,22 @@
     // frame arrives a fraction of a millisecond before its nominal deadline.
     lastFrame+=Math.max(1,Math.floor((elapsed+.5)/interval))*interval;
     try {
-      if (time-lastAudio>250) {
-        waveform.fill(128);
-        if (options.mode==='spectrum') {
-          for (let i=0;i<512;i++) smooth[i]+=.3*(-100-smooth[i]);
-        }
+      if (time-lastAudio>250) clearWaveform();
+      const due=options.cycleSeconds*1000;
+      if (options.cycle && time-lastCycle>due &&
+          (time-lastBeat<120 || time-lastCycle>due+1500)) {
+        nextPreset(time-lastBeat<120?(options.mobile?.2:.35):options.mobile?.42:1.2);
       }
-      if (options.mode==='visualizer') {
-        const due=options.cycleSeconds*1000;
-        if (options.cycle && time-lastCycle>due &&
-            (time-lastBeat<120 || time-lastCycle>due+1500)) {
-          loadPreset(names[(presetIndex+1)%names.length],time-lastBeat<120?.35:1.2);
-        }
-        const started=performance.now();
-        const elapsedTime=Math.min(.1,Math.max(.001,
-          (lastDraw?time-lastDraw:interval)/1000));
-        // Explicit positive frame time also avoids Butterchurn's zero-delta
-        // FPS singularity when a first frame shares its creation timestamp.
-        visualizer.render({elapsedTime,audioLevels:{
-          timeByteArray:waveform,timeByteArrayL:waveform,timeByteArrayR:waveform,
-        }});
-        adapt(time,performance.now()-started,lastDraw?time-lastDraw:0);
-        lastDraw=time;
-      }
+      const started=performance.now();
+      const elapsedTime=Math.min(.1,Math.max(.001,
+        (lastDraw?time-lastDraw:interval)/1000));
+      // Explicit positive frame time also avoids Butterchurn's zero-delta
+      // FPS singularity when a first frame shares its creation timestamp.
+      visualizer.render({elapsedTime,audioLevels:{
+        timeByteArray:waveform,timeByteArrayL:waveform,timeByteArrayR:waveform,
+      }});
+      adapt(time,performance.now()-started,lastDraw?time-lastDraw:0);
+      lastDraw=time;
     } catch (error) { fail(error); }
   }
   window.auralisVisuals = {
@@ -362,32 +446,45 @@
         const previous=options;
         options={...options,...next};
         if (!['spectrum','visualizer'].includes(options.mode)) throw Error('Invalid mode');
-        options.fps=[20,30,60].includes(options.fps)?options.fps:30;
+        options.fps=frameLimits.includes(options.fps)?options.fps:30;
         options.cycleSeconds=[15,30,60].includes(options.cycleSeconds)?options.cycleSeconds:30;
-        stop();
+        const modeChanged=options.mode!==previous.mode;
+        const activityChanged=options.active!==previous.active;
+        const songChanged=options.song!==previous.song;
+        if (songChanged && !Object.prototype.hasOwnProperty.call(next,'preset')) options.preset='';
+        if (modeChanged || activityChanged || songChanged) stop();
+        if (!options.songMotion && previous.songMotion)
+          updateSongMotion(0,0,0);
         milk.style.display=options.mode==='visualizer'?'block':'none';
         spectrum.style.display=options.mode==='spectrum'?'block':'none';
         if (options.mode==='visualizer') {
           ensureMilk();
-          if ((options.preset && options.preset!==previous.preset) ||
-              options.songMotion!==previous.songMotion)
-            loadPreset(options.preset || names[presetIndex]);
+          if (!songInitialized || song!==options.song) {
+            startSong();
+          } else if ((next.preset && next.preset!==names[presetIndex]) ||
+              options.songMotion!==previous.songMotion) {
+            loadPreset(next.preset || names[presetIndex],0);
+          }
         } else {
           ensureSpectrum();
           analyzer.setOptions({
-            mode:options.spectrum==='line'?10:2,
-            radial:options.spectrum==='radial',
-            gradient:options.palette, maxFPS:options.fps,
-            reflexRatio:options.spectrum==='line'?.15:0,
-            fillAlpha:.2,lineWidth:1.5,roundBars:true,
+            mode:2,radial:false,radialInvert:false,mirror:0,ledBars:false,barSpace:.1,
+            outlineBars:false,alphaBars:false,peakLine:false,showPeaks:true,
+            reflexRatio:0,fillAlpha:.2,lineWidth:1.5,roundBars:true,
+            ...spectrumStyles[options.spectrum],gradient:options.palette,maxFPS:options.fps,
+            loRes:options.mobile,
           });
         }
         resize();
         status.style.display='none';
         if (options.active) {
-          lastCycle=performance.now();lastFrame=0;
+          if (options.fps!==previous.fps) lastFrame=performance.now()-1000/options.fps;
+          if (modeChanged || activityChanged || songChanged) {
+            lastCycle=performance.now();
+            lastFrame=lastCycle-1000/options.fps;
+          }
           if (options.mode==='spectrum') analyzer.start();
-          request=requestAnimationFrame(loop);
+          else if (!request) request=requestAnimationFrame(loop);
         }
       } catch (error) { fail(error); }
     },
@@ -401,16 +498,20 @@
         waveform[i]=source<0?128:bytes.charCodeAt(Math.min(bytes.length-1,Math.round(source)));
       }
       const time=performance.now();
+      audioRevision++;
+      silent=false;
       fft();
-      react(time);
+      if (options.mode==='visualizer') react(time);
       lastAudio=time;
     },
     step(direction) {
       try {
         ensureMilk();
-        const next=direction===0?Math.floor(Math.random()*names.length):
-          (presetIndex+direction+names.length)%names.length;
-        loadPreset(names[next]);
+        if (direction===0) nextPreset(options.mobile?.42:1.2);
+        else {
+          const next=(presetIndex+direction+names.length)%names.length;
+          loadPreset(names[next],options.mobile?.42:1.2);
+        }
       } catch (error) { fail(error); }
     },
     destroy() {
