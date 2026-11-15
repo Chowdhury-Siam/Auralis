@@ -1,0 +1,35 @@
+[
+  {
+    "name": "audiomotion-analyzer",
+    "version": "4.5.4",
+    "license": "AGPL-3.0-or-later",
+    "revision": "bd226d1331316319583b9a56207b86c6f3c8fea5",
+    "sourceUrl": "https://codeload.github.com/hvianna/audioMotion-analyzer/tar.gz/bd226d1331316319583b9a56207b86c6f3c8fea5",
+    "sourceSha256": "ba581562e15b95345e54d7af2313796f3e1d0c43cdbf9a951c2361c0f75babc4",
+    "packageUrl": "https://registry.npmjs.org/audiomotion-analyzer/-/audiomotion-analyzer-4.5.4.tgz",
+    "packageSha256": "2ec1505a9445c2d76e03247fb148bea7f8356656dc456e254d347649fbd48465",
+    "npmIntegrity": "sha512-bBTIFr0VgM764MJN3ATIyKrv2BzGTfQgJugulIHNEIFT0+zbz7lb+2CvFTPvk6n3J06wwWiJBPZFEIt9OSxzfQ=="
+  },
+  {
+    "name": "butterchurn",
+    "version": "2.6.7",
+    "license": "MIT",
+    "revision": "d90f271be02969d8f16a3ed6b6960c971da6eff9",
+    "sourceUrl": "https://codeload.github.com/jberg/butterchurn/tar.gz/d90f271be02969d8f16a3ed6b6960c971da6eff9",
+    "sourceSha256": "a2022739d5949ff7133cd57c5b5709b2b878804aef5a6f4c1898d56dc4d993d9",
+    "packageUrl": "https://registry.npmjs.org/butterchurn/-/butterchurn-2.6.7.tgz",
+    "packageSha256": "0212618a871df3980c03cf6e03b34d0026fd7230e0320b4de5cdb472454c0eb0",
+    "npmIntegrity": "sha512-BJiRA8L0L2+84uoG2SSfkp0kclBuN+vQKf217pK7pMlwEO2ZEg3MtO2/o+l8Qpr8Nbejg8tmL1ZHD1jmhiaaqg=="
+  },
+  {
+    "name": "butterchurn-presets",
+    "version": "2.4.7",
+    "license": "MIT",
+    "revision": "d19bf03f8930e391a98cc502342ab7658a33af3c",
+    "sourceUrl": "https://codeload.github.com/jberg/butterchurn-presets/tar.gz/d19bf03f8930e391a98cc502342ab7658a33af3c",
+    "sourceSha256": "cae23762f74d342aaa78df09a7b1582e525fc9262d8a137da2f47ac8b691980b",
+    "packageUrl": "https://registry.npmjs.org/butterchurn-presets/-/butterchurn-presets-2.4.7.tgz",
+    "packageSha256": "d9c067b354e4ed87b3a1dace1dc59c9d64e6a99300a82d5fa086f696e35204a7",
+    "npmIntegrity": "sha512-4MdM8ripz/VfH1BCldrIKdAc/1ryJFBDvqlyow6Ivo1frwj0H3duzvSMFC7/wIjAjxb1QpwVHVqGqS9uAFKhpg=="
+  }
+]
