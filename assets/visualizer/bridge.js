@@ -95,11 +95,21 @@
     send({type:'preset',name:names[presetIndex]});
   }
   function resize() {
-    if (visualizer) {
+    if (analyzer && options.mode==='spectrum') {
+      // CSS size is independent of the low-resolution drawing buffer. Refresh
+      // immediately when switching modes or expanding, not only on debounce.
+      analyzer.setCanvasSize(Math.max(1,spectrum.clientWidth),Math.max(1,spectrum.clientHeight));
+    }
+    if (visualizer && options.mode==='visualizer') {
       // Bound GPU work on high-DPI phones and large desktop windows.
       const width=Math.max(1,milk.clientWidth), height=Math.max(1,milk.clientHeight);
       const scale=Math.min(1,960/Math.max(width,height));
-      visualizer.setRendererSize(Math.round(width*scale),Math.round(height*scale));
+      const renderWidth=Math.round(width*scale), renderHeight=Math.round(height*scale);
+      // Butterchurn sizes its render targets, not the supplied canvas element.
+      // Keep the visible drawing buffer in the same aspect as the CSS panel.
+      if (milk.width!==renderWidth) milk.width=renderWidth;
+      if (milk.height!==renderHeight) milk.height=renderHeight;
+      visualizer.setRendererSize(renderWidth,renderHeight);
     }
   }
   function stop() {
