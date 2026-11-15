@@ -1,6 +1,6 @@
 # Music visualizers: implementation and verification
 
-Version: **0.1.214+215**, retaining the **0.1.213+214** focus/performance changes, **0.1.212+213** positioning fix, **0.1.211+212** Windows SDK fix, **0.1.210+211** Lyrics fix, **0.1.209+210** visualizers and supplied **0.1.208+209** Lyrics redesign.
+Version: **0.1.215+216**, retaining the **0.1.214+215** UI lag/energy changes, **0.1.213+214** focus/performance changes, **0.1.212+213** positioning fix, **0.1.211+212** Windows SDK fix, **0.1.210+211** Lyrics fix, **0.1.209+210** visualizers and supplied **0.1.208+209** Lyrics redesign.
 
 ## Scope
 
@@ -44,6 +44,84 @@ distribution hashes and build materials are retained under
   Sync. The selected panel is not persisted; Lyrics remains the default.
 
 ## Automated checks
+
+Final 0.1.215 local verification: **552 Flutter tests passed** with Flutter
+**3.47.1** / Dart **3.13.1** (`--concurrency=2`); analyzer **no issues**
+(`--no-pub --fatal-infos`); all **46 Node sync/workflow-policy tests passed**.
+Node renderer regressions, source/license hashes, release-note consistency and
+Android source checks passed. Recorded-audio and 99-preset browser results and
+their native-device/perception limitations are detailed below.
+
+## Visible song response in 0.1.215
+
+The 0.1.214 internal-energy tests did not establish convincing visible
+real-song synchronization. Review of the supplied 33.7-second recording showed
+that authored preset motion still dominated. This version adds a default-on,
+device-local **Song-driven motion** switch. Original preset equations and
+appearance remain available by turning it off. Spectrum, Lyrics and all presets
+and controls remain; playback/native capture and the UI lag fixes are unchanged.
+
+- The existing per-sample FFT also measures positive per-bin spectral change
+  in bass/mid/treble. This catches attacks in compressed music without requiring
+  a large jump in whole-song RMS. Band energy/noise floors, a 100 ms per-band
+  refractory interval and a 110 ms impulse decay suppress noise/repeated held
+  notes. There is no generated BPM clock.
+- Normal captured song RMS around .05 mapped to approximately .2 under the
+  previous linear gain. The new perceptual mapping `3 * sqrt(RMS)` (capped at
+  1.8) places it in a more useful range for MilkDrop equations, while maintaining
+  quiet/loud contrast, absent-band gating and the existing stale/silence rules.
+  Bounded spectral impulses also accent the appropriate preset energy band.
+- A copy of each preset's frame equation retains the original equations,
+  shaders, shapes and waves and adds bass-driven feedback zoom (at most 1.8%
+  per-frame multiplier), up to .04 extra warp and restrained waveform scaling.
+  Original vendor assets/preset objects are not edited. Switching the setting
+  off reloads the untouched equations; it does not remove the preset.
+- Independently of preset behavior, one canvas compositor transform and opacity
+  make actual attacks/energy visible. Bass movement is bounded to **3.5%**
+  outward scale, smoothed with 18 ms attack/110 ms release. Visibility follows
+  absolute energy with 30 ms attack/160 ms release; the small onset contribution
+  never exceeds full opacity. It is not a white flash, extra rendering canvas
+  or synthetic waveform. Silence fades autonomous motion; pause retains the
+  last displayed frame. Histories reset so resume cannot replay a stale beat.
+- Rendering supplies positive, bounded real elapsed time explicitly. This
+  avoids the pinned engine's zero-delta first-frame FPS singularity. FPS choices
+  and phase-preserving pacing remain independent of audio sensitivity.
+
+### Recorded-audio replay
+
+The audio from the user's recording was decoded **locally**, resampled to
+44.1 kHz and converted to 1024-sample mono unsigned-byte windows at 30 Hz, then
+fed through both the delivered 0.1.214 bridge and revised bridge with controlled
+positive frame times. Both compiled engines rendered **1,011 frames per preset**
+at 400x300 for the two presets visible in the recording:
+
+| Preset | Previous pixel-brightness/RMS correlation | Revised |
+| --- | ---: | ---: |
+| Aderrasi + Geiss - Airhandler (Kali Mix) - Canvas Mix | .14 | .54 |
+| Aderrasi - Potion of Spirits | .08 | .42 |
+
+The check sampled 64x48 output pixels including canvas opacity/transform,
+excluding the first second. New master visibility/RMS correlation was .88;
+scale stayed between 1.000 and 1.03314. The quieter 7.5–11.5 s passage averaged
+.325 visibility versus .635 at 1–6 s. These figures support improved energy
+coupling, **not** perfect beat perception, exact phase alignment or a performance
+benchmark. Pixel brightness depends on the preset; the master correlation is
+partly inherent to its mapping. Native capture/embedding latency was not tested.
+
+All **99 selectable presets** were additionally compiled/rendered with the
+modified equations; checked bass/mid/treble/zoom/wave-scale/warp outputs remained
+finite. No renderer errors occurred. User media, extracted audio and private
+replay screenshots/scripts are not shipped in the source ZIP.
+
+Node regressions exercise the real pinned audio classes plus visible transform/
+opacity, equation feedback, quiet/loud contrast, spectral attacks at equal
+amplitude, held-note stability, silence/stale release, positive elapsed time,
+immutable preset source and reversible original appearance. Flutter tests cover
+default-on/migration, device-local persistence and reversible settings while
+keeping all preset controls. Real Windows/Android song response, performance,
+battery and capture latency still require device testing.
+
+## Earlier verification history
 
 Final 0.1.214 local validation with Flutter **3.47.1** / Dart **3.13.1**:
 **551 Flutter tests passed** (`--concurrency=2`); analyzer **no issues**
