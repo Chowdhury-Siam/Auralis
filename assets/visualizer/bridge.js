@@ -1,5 +1,7 @@
 /* Auralis output-waveform bridge. No microphone, media URL, socket or network.
  * Butterchurn's documented audioLevels input consumes the native waveform.
+ * A pinned equation-level adapter preserves absolute loudness and band dynamics
+ * instead of relying only on Butterchurn's long-average normalization.
  * audioMotion 4.5.4 consumes our Hann-windowed FFT through its pinned analyser
  * readers, not a second audio player or an oscillator masquerading as music.
  */
@@ -11,11 +13,13 @@
   let visualizer, analyzer, audioContext, request = 0, lastFrame = 0;
   let lastAudio = -Infinity, lastCycle = 0, presetIndex = 0, destroyed = false;
   let qualityScale=1, qualityAt=0, qualityFrames=0, slowFrames=0, lastDraw=0;
-  let beatEnvelope=0, lastBeat=-Infinity, energyAverage=0, bassAverage=0, highAverage=0;
+  let lastBeat=-Infinity, energyAverage=0, bassAverage=0, highAverage=0;
+  let energyRms=0, lastEnergyRender=0;
+  const bandRms=new Float32Array(3), bandAverage=new Float32Array(3);
+  const bandRelease=new Float32Array(3);
   let options = {mode:'spectrum', spectrum:'line', palette:'prism',
     fps:30, cycle:true, cycleSeconds:30, preset:'', active:false, mobile:false};
   const waveform = new Uint8Array(1024).fill(128);
-  const milkWaveform = new Uint8Array(1024).fill(128);
   const real = new Float64Array(1024), imag = new Float64Array(1024);
   const decibels = new Float32Array(512).fill(-100);
   const smooth = new Float32Array(512).fill(-100);
@@ -31,7 +35,6 @@
     cosine[i]=Math.cos(-2*Math.PI*i/1024);
     sine[i]=Math.sin(-2*Math.PI*i/1024);
   }
-  const bassPole=Math.exp(-2*Math.PI*180/44100);
   let presets, names=[];
   function library(name) {
     const script=document.getElementById('library-'+name);
@@ -76,40 +79,79 @@
         real[l]=real[k]-r;imag[l]=imag[k]-v;real[k]+=r;imag[k]+=v;
       }
     }
+    bandRms.fill(0);
     for (let i=0;i<512;i++) {
-      decibels[i]=Math.max(-100,20*Math.log10(Math.max(1e-8,Math.hypot(real[i],imag[i])/256)));
-      // Fast attack follows drum hits; slower release keeps the graph readable.
-      const weight=decibels[i]>smooth[i]?.85:.3;
-      smooth[i]+=weight*(decibels[i]-smooth[i]);
+      const power=real[i]*real[i]+imag[i]*imag[i], hz=i*44100/1024;
+      if (hz>=20 && hz<11025) {
+        const band=hz<320?0:hz<2800?1:2;
+        // One-sided Hann-window energy, corrected for its squared window sum.
+        bandRms[band]+=power/196416;
+      }
+      if (options.mode==='spectrum') {
+        decibels[i]=Math.max(-100,10*Math.log10(Math.max(1e-16,power/65536)));
+        // Fast attack follows drum hits; slower release keeps the graph readable.
+        const weight=decibels[i]>smooth[i]?.85:.3;
+        smooth[i]+=weight*(decibels[i]-smooth[i]);
+      }
     }
+    for (let i=0;i<3;i++) bandRms[i]=Math.sqrt(bandRms[i]);
   }
   function react(time) {
-    let energy=0,bass=0,high=0,low=0,peak=0;
+    let mean=0,energy=0;
+    for (let i=0;i<1024;i++) mean+=(waveform[i]-128)/128;
+    mean/=1024;
     for (let i=0;i<1024;i++) {
-      const sample=(waveform[i]-128)/128;
-      low=bassPole*low+(1-bassPole)*sample;
-      energy+=sample*sample;bass+=low*low;high+=(sample-low)*(sample-low);
-      peak=Math.max(peak,Math.abs(sample));
+      const sample=(waveform[i]-128)/128-mean;
+      energy+=sample*sample;
     }
-    energy=Math.sqrt(energy/1024);bass=Math.sqrt(bass/1024);high=Math.sqrt(high/1024);
+    energyRms=energy=Math.sqrt(energy/1024);
+    const bass=bandRms[0], high=Math.hypot(bandRms[1],bandRms[2]);
     const elapsed=Number.isFinite(lastAudio)?Math.max(0,time-lastAudio):33;
-    beatEnvelope*=Math.exp(-elapsed/120);
     const attack=Math.max(energy/(energyAverage+.008),bass/(bassAverage+.004),
       high/(highAverage+.008));
     if (energy>.012 && attack>1.35 && time-lastBeat>120) {
-      beatEnvelope=1;lastBeat=time;
+      lastBeat=time;
     }
+    const weight=1-Math.exp(-Math.min(elapsed,100)/300);
     const established=energyAverage>0;
-    energyAverage=established?energyAverage*.9+energy*.1:energy;
-    bassAverage=established?bassAverage*.9+bass*.1:bass;
-    highAverage=established?highAverage*.9+high*.1:high;
-    if (options.mode==='visualizer') {
-      // Emphasize real transients only when the samples have headroom. This
-      // changes visualization sensitivity, never playback or song timing.
-      const gain=Math.min(1+beatEnvelope*.3,peak>0?.992/peak:1);
-      for (let i=0;i<1024;i++)
-        milkWaveform[i]=Math.max(0,Math.min(255,Math.round(128+(waveform[i]-128)*gain)));
+    energyAverage=established?energyAverage+weight*(energy-energyAverage):energy;
+    bassAverage=established?bassAverage+weight*(bass-bassAverage):bass;
+    highAverage=established?highAverage+weight*(high-highAverage):high;
+    const slow=1-Math.exp(-Math.min(elapsed,100)/2000);
+    for (let i=0;i<3;i++) {
+      bandAverage[i]=bandAverage[i]>0
+        ?bandAverage[i]+slow*(bandRms[i]-bandAverage[i]):bandRms[i];
     }
+  }
+  function installEnergyResponse() {
+    // Pinned 2.6.7 adapter: its stock long-average ratios flatten sustained
+    // loud/quiet sections and eventually return 1 in silence. Keep its complete
+    // waveform/spectrum pipeline, but give preset equations measured dynamics.
+    const levels=visualizer.renderer?.audioLevels;
+    if (!levels || typeof levels.updateAudioLevels!=='function' ||
+        levels.val?.length!==3 || levels.att?.length!==3)
+      throw Error('Unsupported offline energy adapter');
+    const nativeUpdate=levels.updateAudioLevels.bind(levels);
+    levels.updateAudioLevels=(fps,frame)=>{
+      nativeUpdate(fps,frame);
+      const now=performance.now(), age=now-lastAudio;
+      const elapsed=lastEnergyRender?Math.min(100,Math.max(0,now-lastEnergyRender)):1000/options.fps;
+      lastEnergyRender=now;
+      const fresh=age<=100?1:age<250?Math.exp(-(age-100)/70):0;
+      const loudness=energyRms>=.006?Math.min(1.8,energyRms*4)*fresh:0;
+      for (let i=0;i<3;i++) {
+        // Reject quantization noise and absent bands, rather than making a
+        // bass-only tone look like simultaneous bass, mid and treble energy.
+        const presence=bandRms[i]>.003
+          ?Math.min(1,bandRms[i]/Math.max(.008,energyRms*.15)):0;
+        const contrast=Math.min(2,bandRms[i]/(bandAverage[i]+.008));
+        const value=Math.min(4,loudness*presence*contrast);
+        const weight=1-Math.exp(-elapsed/(value>bandRelease[i]?45:140));
+        bandRelease[i]+=weight*(value-bandRelease[i]);
+        levels.val[i]=value;
+        levels.att[i]=bandRelease[i];
+      }
+    };
   }
   function ensureSpectrum() {
     if (analyzer) return;
@@ -155,6 +197,7 @@
       width,height,
       pixelRatio:1, textureRatio:1,
     });
+    installEnergyResponse();
     loadPreset(options.preset || names[0], 0);
   }
   function loadPreset(name, blend=1.2) {
@@ -183,8 +226,9 @@
   function stop() {
     cancelAnimationFrame(request);request=0;
     if (analyzer) analyzer.stop();
-    waveform.fill(128);milkWaveform.fill(128);decibels.fill(-100);smooth.fill(-100);
-    beatEnvelope=0;lastBeat=-Infinity;energyAverage=0;bassAverage=0;highAverage=0;
+    waveform.fill(128);decibels.fill(-100);smooth.fill(-100);
+    energyRms=0;lastEnergyRender=0;bandRms.fill(0);bandAverage.fill(0);bandRelease.fill(0);
+    lastBeat=-Infinity;energyAverage=0;bassAverage=0;highAverage=0;
     qualityAt=performance.now();qualityFrames=0;slowFrames=0;lastDraw=0;
   }
   function adapt(time,cost,elapsed) {
@@ -209,7 +253,7 @@
     lastFrame+=Math.max(1,Math.floor((elapsed+.5)/interval))*interval;
     try {
       if (time-lastAudio>250) {
-        waveform.fill(128);milkWaveform.fill(128);beatEnvelope=0;
+        waveform.fill(128);
         if (options.mode==='spectrum') {
           for (let i=0;i<512;i++) smooth[i]+=.3*(-100-smooth[i]);
         }
@@ -222,7 +266,7 @@
         }
         const started=performance.now();
         visualizer.render({audioLevels:{
-          timeByteArray:milkWaveform,timeByteArrayL:milkWaveform,timeByteArrayR:milkWaveform,
+          timeByteArray:waveform,timeByteArrayL:waveform,timeByteArrayR:waveform,
         }});
         adapt(time,performance.now()-started,lastDraw?time-lastDraw:0);
         lastDraw=time;
@@ -272,9 +316,9 @@
         waveform[i]=source<0?128:bytes.charCodeAt(Math.min(bytes.length-1,Math.round(source)));
       }
       const time=performance.now();
+      fft();
       react(time);
       lastAudio=time;
-      if (options.mode==='spectrum') fft();
     },
     step(direction) {
       try {
