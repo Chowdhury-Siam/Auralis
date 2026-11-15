@@ -25,6 +25,7 @@ class LyricsTranslator {
   final _clients = <HttpClient>{};
   bool _closed = false;
   static final _japanese = RegExp(r'[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]');
+  static final _kana = RegExp(r'[\u3040-\u30ff\uff66-\uff9f]');
   static final _english = RegExp(r'[A-Za-z]');
   static final _letters = RegExp(r'\p{L}', unicode: true);
   static bool _needsTranslation(String text, TranslationDirection direction) =>
@@ -129,66 +130,66 @@ class LyricsTranslator {
       batch.add(part);
     }
     if (batch.isNotEmpty) batches.add(batch);
+    final providers = [
+      first,
+      if (fallback != null && fallback != first) fallback,
+    ];
     final unavailable = <TranslationSource>{};
     for (final batch in batches) {
       check();
-      final text = batch.join('\n');
       List<String>? output;
-      for (final provider in [
-        first,
-        if (fallback != null && fallback != first) fallback,
-      ]) {
+      for (final provider in providers) {
         if (unavailable.contains(provider)) continue;
         try {
-          final data = await _request(
-            provider == TranslationSource.google
-                ? Uri.https('translate.googleapis.com', '/translate_a/single', {
-                    'client': 'gtx',
-                    'sl': direction.source,
-                    'tl': direction.target,
-                    'dt': 't',
-                    'q': text,
-                  })
-                : Uri.https('api.mymemory.translated.net', '/get', {
-                    'q': text,
-                    'langpair':
-                        '${direction.source == 'auto' ? 'autodetect' : direction.source}|${direction.target}',
-                    'mt': '1',
-                  }),
-          );
+          final result = await _translateBatch(batch, provider, direction);
           check();
-          if (provider == TranslationSource.google) {
-            if (data is List && data.isNotEmpty && data[0] is List) {
-              final segments = data[0] as List;
-              if (segments.every(
-                (v) => v is List && v.isNotEmpty && v[0] is String,
-              )) {
-                output = _aligned(
-                  segments.map((v) => v[0] as String).join(),
-                  batch.length,
-                );
-              }
-            }
-          } else if (data is Map &&
-              data['quotaFinished'] != true &&
-              '${data['responseStatus']}' == '200') {
-            final result = data['responseData'];
-            if (result is Map && result['translatedText'] is String) {
-              output = _aligned(
-                _decodeEntities(result['translatedText'] as String),
-                batch.length,
+          if (result == null) {
+            unavailable.add(provider);
+            continue;
+          }
+          output = _aligned(result, batch.length);
+          if (output == null && batch.length > 1) {
+            // Providers can merge lines even when every phrase translated.
+            // Reissue by line so repeated choruses and timestamps stay aligned.
+            final lines = <String>[];
+            for (var i = 0; i < batch.length; i += 3) {
+              final group = await Future.wait(
+                batch
+                    .skip(i)
+                    .take(3)
+                    .map(
+                      (line) => _translateBatch(
+                        [line],
+                        provider,
+                        direction,
+                        japaneseContext: batch.any(_kana.hasMatch),
+                      ),
+                    ),
               );
+              check();
+              if (group.any((line) => line == null || line.trim().isEmpty)) {
+                break;
+              }
+              lines.addAll(
+                group.cast<String>().map(
+                  (line) => line.trim().replaceAll(RegExp(r'[\r\n]+'), ' '),
+                ),
+              );
+            }
+            if (lines.length == batch.length &&
+                lines.every((line) => line.length <= 16000)) {
+              output = lines;
             }
           }
         } catch (_) {
           check();
+          unavailable.add(provider);
         }
         if (output != null) break;
-        unavailable.add(provider);
       }
       if (output == null) {
         throw const TranslationFailure(
-          'The selected translators are unavailable, limited, or changed lyric line breaks. Original lyrics were kept; try again later.',
+          'Translation services could not finish this song. Try again later or switch translators in Settings.',
         );
       }
       for (var i = 0; i < batch.length; i++) {
@@ -210,6 +211,53 @@ class LyricsTranslator {
     await disk?.write(track, kind, encoded);
     check();
     return _bilingual(source, rows, result);
+  }
+
+  Future<String?> _translateBatch(
+    List<String> lines,
+    TranslationSource provider,
+    TranslationDirection direction, {
+    bool japaneseContext = false,
+  }) async {
+    final text = lines.join('\n');
+    if (provider == TranslationSource.google) {
+      final data = await _request(
+        Uri.https('translate.googleapis.com', '/translate_a/single', {
+          'client': 'gtx',
+          'sl': direction.source,
+          'tl': direction.target,
+          'dt': 't',
+          'q': text,
+        }),
+      );
+      if (data is! List || data.isEmpty || data[0] is! List) return null;
+      final segments = data[0] as List;
+      if (!segments.every((v) => v is List && v.isNotEmpty && v[0] is String)) {
+        return null;
+      }
+      return segments.map((v) => v[0] as String).join();
+    }
+    final source = direction.source != 'auto'
+        ? direction.source
+        : _kana.hasMatch(text) || (japaneseContext && _japanese.hasMatch(text))
+        ? 'ja'
+        : 'autodetect';
+    final data = await _request(
+      Uri.https('api.mymemory.translated.net', '/get', {
+        'q': text,
+        'langpair': '$source|${direction.target}',
+        'mt': '1',
+      }),
+    );
+    if (data is! Map ||
+        data['quotaFinished'] == true ||
+        '${data['responseStatus']}' != '200') {
+      return null;
+    }
+    final result = data['responseData'];
+    return result is Map && result['translatedText'] is String
+        ? _decodeEntities(result['translatedText'] as String)
+        : null;
   }
 
   static List<String>? _aligned(String text, int count) {
