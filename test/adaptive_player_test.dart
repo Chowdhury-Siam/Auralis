@@ -202,7 +202,14 @@ void main() {
           await tester.pump(const Duration(milliseconds: 300));
           final dock = find.byKey(const ValueKey('player-bar'));
           final card = tester.widget<Material>(dock);
-          expect(card.borderRadius, BorderRadius.circular(24));
+          expect(
+            (card.shape! as RoundedRectangleBorder).borderRadius,
+            BorderRadius.circular(28),
+          );
+          final bounds = tester.getRect(dock);
+          expect(bounds.left, greaterThan(0));
+          expect(bounds.right, lessThan(size.width));
+          expect(bounds.width, lessThanOrEqualTo(820));
           expect(card.clipBehavior, Clip.antiAlias);
           for (final key in [
             'sleep-timer-control',
