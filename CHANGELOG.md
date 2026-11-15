@@ -1,5 +1,12 @@
 # Auralis changes
 
+## 0.1.216
+
+- Reduce Android Spectrum drawing and adaptive Visualizer rendering costs. Add 10 Spectrum styles, 10 palettes, six frame limits and compact settings dialogs.
+- Vary automatic Visualizer presets by song and avoid reusing presets within a cycle. Hide visual expansion controls on phones and add rounded floating music controls on Android and Windows.
+- Save MP3, FLAC and M4A songs with the selected lyrics embedded and optionally update an editable Telegram post.
+- Use an explicit Japanese language code in MyMemory and recover translations that lose lyric line breaks.
+
 ## 0.1.215
 
 - Make song response visible across all animated presets with bass-onset movement and smooth energy-driven visibility, rather than relying only on each preset's equations. Keep original preset appearance available through the Song-driven motion setting.
