@@ -19,6 +19,8 @@ import 'models.dart';
 import 'player.dart';
 import 'wave_seek_bar.dart';
 import 'now_playing_effects.dart';
+import 'music_visualizer.dart';
+import 'music_visualizer_data.dart';
 
 class LyricsView extends StatefulWidget {
   const LyricsView({
@@ -94,6 +96,67 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
   bool _importing = false;
   bool _loading = false, _synced = true, _looked = false;
   int _generation = 0;
+  MusicPanel _panel = MusicPanel.lyrics;
+  bool _expandedVisualizer = false;
+
+  Widget _contentPane({required bool wide}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final panel in MusicPanel.values)
+              ChoiceChip(
+                key: ValueKey('music-panel-${panel.name}'),
+                avatar: Icon(switch (panel) {
+                  MusicPanel.lyrics => Icons.lyrics_outlined,
+                  MusicPanel.spectrum => Icons.graphic_eq_rounded,
+                  MusicPanel.visualizer => Icons.auto_awesome_rounded,
+                }, size: 18),
+                label: Text(switch (panel) {
+                  MusicPanel.lyrics => 'Lyrics',
+                  MusicPanel.spectrum => 'Spectrum',
+                  MusicPanel.visualizer => 'Visualizer',
+                }),
+                selected: _panel == panel,
+                onSelected: (_) => setState(() {
+                  _panel = panel;
+                  if (panel == MusicPanel.lyrics) _expandedVisualizer = false;
+                }),
+              ),
+          ],
+        ),
+      ),
+      Expanded(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Retain the redesigned Lyrics subtree and reading state while a
+            // visualizer occupies the same panel. Hidden lyrics stop ticking.
+            Offstage(
+              offstage: _panel != MusicPanel.lyrics,
+              child: TickerMode(
+                enabled: _panel == MusicPanel.lyrics,
+                child: _body(wide: wide),
+              ),
+            ),
+            if (_panel != MusicPanel.lyrics)
+              MusicVisualizerPane(
+                key: const ValueKey('music-visualizer-pane'),
+                player: widget.player,
+                mode: _panel,
+                fullscreen: _expandedVisualizer,
+                onFullscreen: () =>
+                    setState(() => _expandedVisualizer = !_expandedVisualizer),
+              ),
+          ],
+        ),
+      ),
+    ],
+  );
 
   @override
   void initState() {
@@ -1324,25 +1387,28 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
   Widget _layout({required bool reduced, required bool wide}) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _header(wide: wide),
+      if (!_expandedVisualizer) _header(wide: wide),
       Expanded(
-        child: wide
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _artworkPane()),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 0, 28, 12),
-                      child: _body(wide: true),
-                    ),
-                  ),
-                ],
-              )
-            : Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: _body(wide: false),
+        key: const ValueKey('lyrics-panel-area'),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (wide && !_expandedVisualizer)
+              Expanded(
+                key: const ValueKey('lyrics-artwork-pane'),
+                child: _artworkPane(),
               ),
+            Expanded(
+              key: const ValueKey('lyrics-content-pane'),
+              child: Padding(
+                padding: wide
+                    ? const EdgeInsets.fromLTRB(14, 0, 28, 12)
+                    : const EdgeInsets.symmetric(horizontal: 4),
+                child: _contentPane(wide: wide),
+              ),
+            ),
+          ],
+        ),
       ),
       _transportDock(reduced: reduced, wide: wide),
     ],
