@@ -1,0 +1,83 @@
+{
+  "bugs": {
+    "url": "https://github.com/hvianna/audioMotion-analyzer/issues"
+  },
+  "dist": {
+    "shasum": "aa22fb09357e87678f0513a3672f10e27363926b",
+    "tarball": "https://registry.npmjs.org/audiomotion-analyzer/-/audiomotion-analyzer-4.5.4.tgz",
+    "fileCount": 7,
+    "integrity": "sha512-bBTIFr0VgM764MJN3ATIyKrv2BzGTfQgJugulIHNEIFT0+zbz7lb+2CvFTPvk6n3J06wwWiJBPZFEIt9OSxzfQ==",
+    "signatures": [
+      {
+        "sig": "MEUCIQDphxIOmmVpZWuCzyplByBNvnkvuVfRzlNyXRBPEynPLgIgIer+mVy3QDpzgYXgwU/21K/bnh4dvF5d4KM5ya32Kno=",
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+      }
+    ],
+    "unpackedSize": 300827
+  },
+  "main": "./dist/index.js",
+  "name": "audiomotion-analyzer",
+  "types": "./src/index.d.ts",
+  "author": {
+    "url": "https://henriquevianna.com",
+    "name": "Henrique Vianna",
+    "email": "hvianna@gmail.com"
+  },
+  "module": "./src/audioMotion-analyzer.js",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/audioMotion-analyzer.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "funding": {
+    "url": "https://ko-fi.com/hvianna",
+    "type": "Ko-fi"
+  },
+  "gitHead": "bd226d1331316319583b9a56207b86c6f3c8fea5",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "build": "rm -rf dist/* && babel src/audioMotion-analyzer.js --out-file dist/index.js && sed -i -e 's/= mod.exports;/= mod.exports.default;/' dist/index.js",
+    "start": "npx http-server",
+    "prepare": "npm run build"
+  },
+  "_npmUser": {
+    "name": "hvianna",
+    "email": "hvianna@gmail.com"
+  },
+  "homepage": "https://audiomotion.dev",
+  "keywords": [
+    "spectrum analyzer",
+    "graphic analyzer",
+    "audio",
+    "music",
+    "visualization"
+  ],
+  "repository": {
+    "url": "git+https://github.com/hvianna/audioMotion-analyzer.git",
+    "type": "git"
+  },
+  "_npmVersion": "10.8.2",
+  "description": "High-resolution real-time graphic audio spectrum analyzer JavaScript module with no dependencies.",
+  "directories": {},
+  "maintainers": [
+    {
+      "name": "hvianna",
+      "email": "hvianna@gmail.com"
+    }
+  ],
+  "_nodeVersion": "24.12.0",
+  "_hasShrinkwrap": false,
+  "devDependencies": {
+    "@babel/cli": "^7.28.3",
+    "@babel/core": "^7.28.5",
+    "@babel/plugin-transform-modules-umd": "^7.27.1"
+  },
+  "_npmOperationalInternal": {
+    "tmp": "tmp/audiomotion-analyzer_4.5.4_1767981090119_0.15186011316083925",
+    "host": "s3://npm-registry-packages-npm-production"
+  },
+  "_id": "audiomotion-analyzer@4.5.4",
+  "version": "4.5.4"
+}
