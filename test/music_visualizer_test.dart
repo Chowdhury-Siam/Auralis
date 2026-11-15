@@ -981,7 +981,7 @@ void main() {
         RegExp(r'#spectrum canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%'),
       ),
     );
-    expect(bridge, contains('timeByteArray:milkWaveform'));
+    expect(bridge, contains('timeByteArray:waveform'));
     expect(bridge, contains('analyzer._analyzer'));
     expect(bridge, contains('loRes:false'));
     for (final forbidden in [
@@ -1003,6 +1003,14 @@ void main() {
       'android/app/src/main/kotlin/com/auralis/siam/MusicVisualizer.kt',
     ).readAsStringSync();
     expect(android, contains('Visualizer(0)'));
+    expect(
+      android,
+      contains('setScalingMode(Visualizer.SCALING_MODE_AS_PLAYED)'),
+    );
+    expect(
+      android,
+      isNot(contains('setScalingMode(Visualizer.SCALING_MODE_NORMALIZED)')),
+    );
     expect(android, isNot(contains('AudioRecord(')));
     final windows = File('windows/runner/music_visualizer.cpp')
         .readAsStringSync();
