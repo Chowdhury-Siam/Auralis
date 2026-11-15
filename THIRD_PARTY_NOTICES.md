@@ -13,9 +13,19 @@ Auralis's original source is AGPL-3.0-or-later. Third-party components retain th
 | file_selector 1.1.0 and platform implementations; cross_file 0.3.5+5 | BSD-3-Clause; [Flutter packages](https://github.com/flutter/packages/tree/main/packages/file_selector), [cross_file](https://github.com/flutter/packages/tree/main/packages/cross_file). Native file dialogs and file objects; package notices are included by Flutter. |
 | media_kit_libs_android_video 1.3.8 | MIT wrapper; [media-kit](https://github.com/media-kit/media-kit). Downloads native video build v1.1.7 for Android; native mpv/FFmpeg licenses are separate. See Android provenance below. |
 | audio_service 0.18.19 and audio_session 0.2.4 | MIT; [audio_service](https://github.com/ryanheise/audio_service), [audio_session](https://github.com/ryanheise/audio_session). Flutter includes package/transitive notices in its license asset. |
+| webview_flutter 4.14.1 and platform packages | BSD-3-Clause; [Flutter packages](https://github.com/flutter/packages/tree/main/packages/webview_flutter). Flutter includes package notices. |
+| webview_windows 0.4.0 | BSD-3-Clause; [jnschulze/flutter-webview-windows](https://github.com/jnschulze/flutter-webview-windows). Flutter includes its package notice. Microsoft Edge WebView2 runtime has separate Microsoft terms and is not bundled in this source project. |
+| Butterchurn 2.6.7 and butterchurn-presets 2.4.7 | MIT; [Butterchurn](https://github.com/jberg/butterchurn), [presets](https://github.com/jberg/butterchurn-presets). Copyright Jordan Berg. Retained notices: `assets/visualizer/LICENSE-butterchurn.txt` and `LICENSE-presets.txt`. |
+| audioMotion-analyzer 4.5.4 | AGPL-3.0-or-later; [audioMotion](https://github.com/hvianna/audioMotion-analyzer). Copyright Henrique Avila Vianna. Full license: `assets/visualizer/LICENSE-audiomotion.txt`. Exact readable upstream source and build configuration are supplied in `third_party/visualizer/audiomotion-analyzer/upstream-source.tar.gz`. |
 | TDLib 1.8.68 | Boost Software License 1.0; full text in `docs/TDLIB-LICENSE.txt`. Build revision: `a94b83d67ab4c8397c6245e541b31a4131ea2f79`. |
 | OpenSSL and zlib | Dependency-specific licenses copied by `tool/build-tdlib.ps1` into `native/licenses/`; versions/build inputs follow vcpkg revision `664933b8d385dfc01f4e0cdff4c7c74e71f6a740`. |
 | libmpv and FFmpeg native playback | Build-dependent GPL/LGPL and dependency terms. Do not infer native binary licensing from the MIT wrapper. See below. |
+
+## Offline visualizer source and notices
+
+The three JavaScript distributions are unmodified and bundled for offline rendering. Auralis's independent waveform/FFT adapter is `assets/visualizer/bridge.js`; its native capture bridges do not replace the playback backend. `third_party/visualizer/` retains exact upstream source snapshots, npm package archives, build configuration and integrity metadata, with extraction/build instructions in its README. Bundled licenses are also registered in the application's Licenses page. Retain this corresponding source and these notices with any binary distribution; third-party MIT/AGPL terms remain in effect.
+
+Feishin was a design/integration reference only. No Feishin application code or artwork is bundled. Presets retain their upstream authorship and names.
 
 ## Playback binary selected by the pinned plugin
 
