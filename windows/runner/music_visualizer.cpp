@@ -125,9 +125,9 @@ void MusicVisualizer::Capture() {
               } else {
                 int32_t value = 0;
                 if (step == 2) {
-                  int16_t small;
-                  std::memcpy(&small, sample, 2);
-                  value = small;
+                  int16_t pcm_sample;
+                  std::memcpy(&pcm_sample, sample, sizeof(pcm_sample));
+                  value = pcm_sample;
                   mono += value / 32768.0;
                 } else if (step == 3) {
                   value = sample[0] | (sample[1] << 8) | (sample[2] << 16);
