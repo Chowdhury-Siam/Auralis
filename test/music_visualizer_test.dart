@@ -161,14 +161,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Cycle presets'), findsOneWidget);
       expect(find.text('Choose preset'), findsOneWidget);
+      expect(find.text('Change every'), findsNothing);
       await tester.tap(find.text('Song-driven motion'));
       await tester.pumpAndSettle();
       expect(player.settings.musicVisualizer.songMotion, isFalse);
       expect(scripts.last, contains('"songMotion":false'));
+      expect(find.text('Change every'), findsOneWidget);
       await tester.tap(find.text('Song-driven motion'));
       await tester.pumpAndSettle();
       expect(player.settings.musicVisualizer.songMotion, isTrue);
       expect(scripts.last, contains('"songMotion":true'));
+      expect(find.text('Change every'), findsNothing);
       await tester.ensureVisible(find.text('Done'));
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
