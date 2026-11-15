@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_windows/webview_windows.dart' as win;
+
+import 'music_visualizer_document.dart';
 
 /// A local-only renderer. Audio arrives as bounded waveform messages; this
 /// WebView never receives a Telegram URL, account details or microphone access.
@@ -30,7 +31,8 @@ class MusicVisualizerWebView extends StatefulWidget {
   State<MusicVisualizerWebView> createState() => _MusicVisualizerWebViewState();
 }
 
-class _MusicVisualizerWebViewState extends State<MusicVisualizerWebView> {
+class _MusicVisualizerWebViewState extends State<MusicVisualizerWebView>
+    with WidgetsBindingObserver {
   WebViewController? _android;
   win.WebviewController? _windows;
   StreamSubscription<dynamic>? _messages;
@@ -40,9 +42,13 @@ class _MusicVisualizerWebViewState extends State<MusicVisualizerWebView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initialization = _init();
     unawaited(_initialization);
   }
+
+  @override
+  void didHaveMemoryPressure() => MusicVisualizerDocument.bundled.clear();
 
   void _message(dynamic raw) {
     if (_closed) return;
@@ -58,21 +64,7 @@ class _MusicVisualizerWebViewState extends State<MusicVisualizerWebView> {
 
   Future<void> _init() async {
     try {
-      var html = await rootBundle.loadString('assets/visualizer/index.html');
-      for (final entry in const {
-        'BUTTERCHURN': 'butterchurn.js',
-        'PRESETS': 'presets.js',
-        'AUDIOMOTION': 'audiomotion.js',
-        'BRIDGE': 'bridge.js',
-      }.entries) {
-        final script = await rootBundle.loadString(
-          'assets/visualizer/${entry.value}',
-        );
-        html = html.replaceFirst(
-          '/*__${entry.key}__*/',
-          script.replaceAll('</script', r'<\/script'),
-        );
-      }
+      final html = await MusicVisualizerDocument.bundled.load();
       if (_closed) return;
       if (Platform.isWindows) {
         final controller = _windows = win.WebviewController();
@@ -143,6 +135,7 @@ class _MusicVisualizerWebViewState extends State<MusicVisualizerWebView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _closed = true;
     widget.controller.runScript = null;
     unawaited(_release());
@@ -180,9 +173,16 @@ class _MusicVisualizerWebViewState extends State<MusicVisualizerWebView> {
   Widget build(BuildContext context) {
     if (!_initialized) return const Center(child: CircularProgressIndicator());
     if (_windows case final controller?) {
-      return win.Webview(
-        controller,
-        permissionRequested: (_, _, _) => win.WebviewPermissionDecision.deny,
+      final ratio = MediaQuery.devicePixelRatioOf(context);
+      // Refresh the plugin's surface scale even when changing display DPI
+      // leaves the logical widget dimensions unchanged.
+      return KeyedSubtree(
+        key: ValueKey(ratio),
+        child: win.Webview(
+          controller,
+          scaleFactor: ratio,
+          permissionRequested: (_, _, _) => win.WebviewPermissionDecision.deny,
+        ),
       );
     }
     return WebViewWidget(controller: _android!);
