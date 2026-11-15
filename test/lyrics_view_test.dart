@@ -1267,7 +1267,7 @@ void main() {
       );
       expect(
         active.style.color,
-        Theme.of(tester.element(find.byType(LyricsView))).colorScheme.primary,
+        Theme.of(tester.element(find.byType(LyricsView))).colorScheme.onSurface,
       );
       await tester.tap(find.byKey(const ValueKey('lyric-21')));
       await tester.pumpAndSettle();
@@ -1711,6 +1711,7 @@ void main() {
       await tester.pumpAndSettle();
       for (final size in [
         const Size(1280, 800),
+        const Size(1920, 1080),
         const Size(360, 480),
         const Size(390, 844),
       ]) {
@@ -1718,6 +1719,31 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: '$size');
         expect(find.text('Synced'), findsOneWidget);
+        final cover = tester.getRect(
+          find.byKey(const ValueKey('lyrics-artwork')),
+        );
+        final lyrics = tester.getRect(
+          find.byKey(const ValueKey('synced-lyrics')),
+        );
+        final transport = tester.getRect(
+          find.byKey(const ValueKey('lyrics-transport')),
+        );
+        final activeLine = tester.getRect(
+          find.byKey(const ValueKey('lyric-2')),
+        );
+        expect(cover.width, cover.height);
+        if (size.width >= 760) {
+          expect(cover.width, greaterThan(size.width * .3));
+          expect(cover.right, lessThan(lyrics.left));
+          expect(
+            tester.getCenter(find.byTooltip('Shuffle')).dy,
+            greaterThan(transport.top),
+          );
+        } else {
+          expect(cover.bottom, lessThan(lyrics.top));
+        }
+        expect(lyrics.bottom, lessThanOrEqualTo(transport.top));
+        expect(activeLine.center.dy, closeTo(lyrics.center.dy, 1));
         expect(
           tester.getRect(backdrop),
           tester.getRect(find.byKey(const ValueKey('lyrics-immersive'))),
@@ -1747,13 +1773,16 @@ void main() {
           find.byKey(const ValueKey('lyric-2')).hitTestable(),
           findsOneWidget,
         );
+        final previewDirectory = Platform.environment['AURALIS_LYRICS_PREVIEWS'];
+        if (previewDirectory == null && size.width == 1920) continue;
         await tester.runAsync(() async {
           final render =
               boundary.currentContext!.findRenderObject()!
                   as RenderRepaintBoundary;
           final image = await render.toImage();
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          await File('docs/screenshots/lyrics-${size.width.toInt()}.png')
+          final directory = previewDirectory ?? 'docs/screenshots';
+          await File('$directory/lyrics-${size.width.toInt()}.png')
               .writeAsBytes(bytes!.buffer.asUint8List());
           image.dispose();
         });
