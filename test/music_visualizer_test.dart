@@ -454,6 +454,21 @@ void main() {
     },
   );
 
+  test('Windows PCM locals do not collide with SDK RPC macros', () {
+    final windows = File('windows/runner/music_visualizer.cpp')
+        .readAsStringSync();
+    // Windows RPC headers define small as char, including through WASAPI.
+    // Source validation also runs on hosts without MSVC or the Windows SDK.
+    final collisions = RegExp(
+      r'\b(?:int16_t|int32_t|float|double)\s+(?:small|near|far|interface)\b',
+    ).allMatches(windows).map((match) => match.group(0)).toList();
+    expect(
+      collisions,
+      isEmpty,
+      reason: 'Local PCM identifiers must not expand into Windows SDK macros.',
+    );
+  });
+
   test('bundled renderers are offline, licensed and do not open microphone or media sources', () {
     final html = File('assets/visualizer/index.html').readAsStringSync();
     final bridge = File('assets/visualizer/bridge.js').readAsStringSync();
