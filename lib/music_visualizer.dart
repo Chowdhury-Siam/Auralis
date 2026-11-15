@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -60,6 +61,9 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   );
   bool _ready = false, _visible = true;
   bool _focused = true, _sending = false, _lastActive = false, _reduced = false;
+  final _variation = Random.secure().nextInt(1 << 32);
+  String _activePreset = '';
+  String? _configuredSong;
   bool _systemReduced = false, _mobile = false, _windows = false;
   Object? _lastPlaybackState;
   Widget? _renderer;
@@ -99,7 +103,10 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
         TickerMode.valuesOf(context).enabled &&
         (ModalRoute.isCurrentOf(context) ?? true);
     _systemReduced = MediaQuery.disableAnimationsOf(context);
-    _mobile = Theme.of(context).platform == TargetPlatform.android;
+    _mobile = switch (Theme.of(context).platform) {
+      TargetPlatform.android || TargetPlatform.iOS => true,
+      _ => false,
+    };
     _windows = Theme.of(context).platform == TargetPlatform.windows;
     _reduced = _systemReduced || widget.player.settings.reducedMotion;
     _lastPlaybackState = _playbackState;
@@ -135,7 +142,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     final state = _playbackState;
     if (state == _lastPlaybackState) return;
     _lastPlaybackState = state;
-    _sync();
+    _sync(force: true);
     if (mounted) setState(() {});
   }
 
@@ -144,6 +151,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     widget.player.audio.buffering,
     widget.player.settings.reducedMotion,
     _settings.fps,
+    widget.player.current?.id,
   );
 
   void _failed(String message) {
@@ -158,20 +166,29 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     );
   }
 
-  void _sync({bool force = false}) {
+  void _sync({bool force = false, String? preset}) {
     final active = _active;
     // Animation FPS stays user-selectable. Native waveform reads do not need
     // to cross Android's platform/WebView bridges more than 30 times a second.
-    final captureFps = _mobile && _settings.fps > 30 ? 30 : _settings.fps;
+    final captureFps = _settings.fps.clamp(20, _mobile ? 30 : 60);
     _capture.setActive(active, fps: captureFps);
     if (!_ready || (!force && active == _lastActive)) return;
     _lastActive = active;
+    final track = widget.player.current;
+    final song = track == null
+        ? ''
+        : '${track.id}:${track.title}:${track.artist}';
     final value = {
-      ..._settings.toJson(),
+      ...(_settings.toJson()..remove('preset')),
       'mode': widget.mode == MusicPanel.spectrum ? 'spectrum' : 'visualizer',
       'active': active,
+      'song': song,
+      'variation': _variation,
+      if (preset != null || (!_settings.cycle && song != _configuredSong))
+        'preset': preset ?? _settings.preset,
       'mobile': _mobile,
     };
+    _configuredSong = song;
     unawaited(
       _web
           .execute('window.auralisVisuals?.configure(${jsonEncode(value)})')
@@ -205,7 +222,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     } else if (message['type'] == 'preset' && message['name'] is String) {
       final name = message['name'] as String;
       if (_presets.contains(name)) {
-        setState(() => _settings.preset = name);
+        setState(() => _activePreset = name);
       }
     } else if (message['type'] == 'error') {
       _failed(
@@ -219,6 +236,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
       _error = null;
       _ready = false;
       _renderer = null;
+      _configuredSong = null;
     });
     _watchReady();
   }
@@ -234,8 +252,8 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     });
   }
 
-  Future<void> _save() async {
-    _sync(force: true);
+  Future<void> _save({String? preset}) async {
+    _sync(force: true, preset: preset);
     try {
       await widget.player.settings.save();
     } catch (_) {
@@ -262,97 +280,107 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
             unawaited(_save());
           }
 
+          final spectrum = widget.mode == MusicPanel.spectrum;
           return AuralisDialog(
-            title: const Text('Visualizer settings'),
+            width: 380,
+            maxWidth: 460,
+            title: AuralisDialogTitle(
+              spectrum ? 'Spectrum settings' : 'Visualizer settings',
+              leading: PreferenceIcon(
+                spectrum
+                    ? Icons.graphic_eq_rounded
+                    : Icons.auto_awesome_rounded,
+              ),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (widget.mode == MusicPanel.spectrum) ...[
-                  PreferenceChoice<String>(
-                    title: 'Spectrum style',
-                    value: _settings.spectrum,
-                    values: const ['line', 'bars', 'radial'],
-                    label: (value) => switch (value) {
-                      'line' => 'Spectrum',
-                      'bars' => 'Bars',
-                      _ => 'Radial',
-                    },
-                    onSelected: (value) =>
-                        change(() => _settings.spectrum = value),
+                PreferenceCard(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (spectrum) ...[
+                        PreferenceChoice<String>(
+                          title: 'Style',
+                          value: _settings.spectrum,
+                          values: MusicVisualizerSettings.spectrumStyles.keys
+                              .toList(),
+                          label: (value) =>
+                              MusicVisualizerSettings.spectrumStyles[value]!,
+                          onSelected: (value) =>
+                              change(() => _settings.spectrum = value),
+                        ),
+                        PreferenceChoice<String>(
+                          title: 'Colors',
+                          value: _settings.palette,
+                          values: MusicVisualizerSettings.spectrumPalettes.keys
+                              .toList(),
+                          label: (value) =>
+                              MusicVisualizerSettings.spectrumPalettes[value]!,
+                          onSelected: (value) =>
+                              change(() => _settings.palette = value),
+                        ),
+                      ] else ...[
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Song-driven motion'),
+                          subtitle: const Text(
+                            'React to beats and changes in energy',
+                          ),
+                          value: _settings.songMotion,
+                          onChanged: (value) =>
+                              change(() => _settings.songMotion = value),
+                        ),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Cycle presets'),
+                          value: _settings.cycle,
+                          onChanged: (value) =>
+                              change(() => _settings.cycle = value),
+                        ),
+                        if (_settings.cycle)
+                          PreferenceChoice<int>(
+                            title: 'Change every',
+                            value: _settings.cycleSeconds,
+                            values: const [15, 30, 60],
+                            label: (value) => '$value sec',
+                            onSelected: (value) =>
+                                change(() => _settings.cycleSeconds = value),
+                          ),
+                        AuralisChoiceTile(
+                          leading: const Icon(
+                            Icons.auto_awesome_motion_rounded,
+                          ),
+                          title: const Text('Choose preset'),
+                          subtitle: Text(
+                            _activePreset,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () async {
+                            Navigator.pop(dialog);
+                            await _choosePreset();
+                          },
+                        ),
+                      ],
+                    ],
                   ),
-                  PreferenceChoice<String>(
-                    title: 'Colors',
-                    value: _settings.palette,
-                    values: const ['prism', 'classic', 'steelblue'],
-                    label: (value) => switch (value) {
-                      'prism' => 'Rainbow',
-                      'classic' => 'Classic',
-                      _ => 'Blue',
-                    },
-                    onSelected: (value) =>
-                        change(() => _settings.palette = value),
-                  ),
-                ] else ...[
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Song-driven motion'),
-                    subtitle: const Text(
-                      'Bass-hit movement and energy-driven visibility across all presets. '
-                      'Turn off for the original preset appearance.',
-                    ),
-                    value: _settings.songMotion,
-                    onChanged: (value) =>
-                        change(() => _settings.songMotion = value),
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Cycle presets'),
-                    value: _settings.cycle,
-                    onChanged: (value) => change(() => _settings.cycle = value),
-                  ),
-                  PreferenceChoice<int>(
-                    title: 'Change every',
-                    value: _settings.cycleSeconds,
-                    values: const [15, 30, 60],
-                    label: (value) => '$value seconds',
-                    onSelected: (value) =>
-                        change(() => _settings.cycleSeconds = value),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Choose preset'),
-                    subtitle: Text(
-                      _settings.preset,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () async {
-                      Navigator.pop(dialog);
-                      await _choosePreset();
-                    },
-                  ),
-                ],
-                PreferenceChoice<int>(
-                  title: 'Frame limit',
-                  value: _settings.fps,
-                  values: const [20, 30, 60],
-                  label: (value) => '$value FPS',
-                  onSelected: (value) => change(() => _settings.fps = value),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Selecting Spectrum or Visualizer starts device-output analysis automatically. '
-                  'Other apps sharing the output may appear. Android requires the permission '
-                  'labeled “microphone”, but no microphone is opened and nothing is recorded or uploaded. '
-                  'Visualizers stop when paused, minimized, or covered by an in-app page/dialog. '
-                  'Windows keeps running behind other apps; Android stops in the background. '
-                  'Animated visuals may flash; use Lyrics if sensitive.',
+                const SizedBox(height: 10),
+                PreferenceCard(
+                  child: PreferenceChoice<int>(
+                    title: 'Frame limit',
+                    value: _settings.fps,
+                    values: MusicVisualizerSettings.frameLimits,
+                    label: (value) => '$value FPS',
+                    onSelected: (value) => change(() => _settings.fps = value),
+                  ),
                 ),
               ],
             ),
             actions: [
-              TextButton(
+              FilledButton(
                 onPressed: () => Navigator.pop(dialog),
                 child: const Text('Done'),
               ),
@@ -369,12 +397,18 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
       context: context,
       builder: (dialog) => StatefulBuilder(
         builder: (context, update) => AuralisDialog(
-          title: const Text('Choose visualizer preset'),
+          title: const AuralisDialogTitle(
+            'Choose preset',
+            leading: PreferenceIcon(Icons.auto_awesome_motion_rounded),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
-                decoration: const InputDecoration(labelText: 'Search presets'),
+                decoration: const InputDecoration(
+                  labelText: 'Search presets',
+                  prefixIcon: Icon(Icons.search_rounded),
+                ),
                 onChanged: (value) =>
                     update(() => query = value.trim().toLowerCase()),
               ),
@@ -388,7 +422,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
                     ))
                       AuralisChoiceTile(
                         title: Text(name),
-                        selected: name == _settings.preset,
+                        selected: name == _activePreset,
                         onTap: () => Navigator.pop(dialog, name),
                       ),
                   ],
@@ -407,7 +441,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     );
     if (!mounted || selected == null) return;
     setState(() => _settings.preset = selected);
-    await _save();
+    await _save(preset: selected);
   }
 
   @override
@@ -521,28 +555,31 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
               ),
             ],
             IconButton(
-              tooltip: 'Visualizer settings',
+              tooltip: widget.mode == MusicPanel.spectrum
+                  ? 'Spectrum settings'
+                  : 'Visualizer settings',
               icon: const Icon(Icons.tune_rounded),
               onPressed: !_ready ? null : _options,
             ),
-            IconButton(
-              tooltip: widget.fullscreen
-                  ? 'Exit expanded visualizer'
-                  : 'Expand visualizer',
-              icon: Icon(
-                widget.fullscreen
-                    ? Icons.fullscreen_exit_rounded
-                    : Icons.fullscreen_rounded,
+            if (!_mobile)
+              IconButton(
+                tooltip: widget.fullscreen
+                    ? 'Exit expanded visualizer'
+                    : 'Expand visualizer',
+                icon: Icon(
+                  widget.fullscreen
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
+                ),
+                onPressed: widget.onFullscreen,
               ),
-              onPressed: widget.onFullscreen,
-            ),
           ],
         ),
-        if (widget.mode == MusicPanel.visualizer && _settings.preset.isNotEmpty)
+        if (widget.mode == MusicPanel.visualizer && _activePreset.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              _settings.preset,
+              _activePreset,
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
