@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const source = fs.readFileSync(`${root}assets/visualizer/bridge.js`, 'utf8');
 let time = 0, nextFrame = 0, destroyed = false, renders = 0, lastWave;
+let resizeCallback, rendererSize;
 const callbacks = new Map(), messages = [], loaded = [];
 const elements = new Map(['status','milk','spectrum','surface'].map(id => [id, {
   style: {}, clientWidth: 800, clientHeight: 500,
@@ -20,13 +21,17 @@ class Analyzer {
     Analyzer.current = this;
   }
   setOptions(options) { Object.assign(this.options, options); }
+  setCanvasSize(width, height) { this.size = [width, height]; }
   start() { this.running = true; }
   stop() { this.running = false; }
   destroy() { destroyed = true; }
 }
 const engine = {
   loadPreset(preset) { loaded.push(preset.id); },
-  setRendererSize(width, height) { assert(width <= 960); assert(height <= 960); },
+  setRendererSize(width, height) {
+    assert(width <= 960); assert(height <= 960);
+    rendererSize = [width, height];
+  },
   render(options) { renders++; lastWave = [...options.audioLevels.timeByteArray]; },
 };
 const sandbox = {
@@ -39,7 +44,10 @@ const sandbox = {
     getElementById: id => elements.get(id),
     addEventListener() {}, hidden: false,
   },
-  ResizeObserver: class { observe() {} disconnect() {} },
+  ResizeObserver: class {
+    constructor(callback) { resizeCallback = callback; }
+    observe() {} disconnect() {}
+  },
   butterchurn: {default: {createVisualizer: () => engine}},
   butterchurnPresets: {getPresets: () => ({A:{id:'A'}, B:{id:'B'}})},
   AudioMotionAnalyzer: Analyzer,
@@ -63,6 +71,12 @@ function tone(frequency) {
 }
 assert.equal(messages[0].type, 'ready');
 api.configure({mode:'spectrum',active:true});
+assert.deepEqual(Analyzer.current.size, [800,500]);
+for (const element of elements.values()) {
+  element.clientWidth=1200;element.clientHeight=675;
+}
+resizeCallback();
+assert.deepEqual(Analyzer.current.size,[1200,675], 'Spectrum follows expanded panel dimensions');
 api.feed(tone(1000), 44100);
 const bins = new Float32Array(512);
 Analyzer.current._analyzer[0].getFloatFrequencyData(bins);
@@ -73,6 +87,9 @@ api.configure({mode:'spectrum',spectrum:'radial',palette:'classic',active:true})
 assert(Analyzer.current.options.radial);
 assert.equal(Analyzer.current.options.gradient,'classic');
 api.configure({mode:'visualizer',active:true,cycle:true,cycleSeconds:15,fps:30});
+assert.deepEqual(rendererSize,[960,540], 'Expanded visuals preserve aspect and bounded GPU size');
+assert.deepEqual([elements.get('milk').width,elements.get('milk').height],[960,540],
+  'The visible animated canvas must not retain its default 300 by 150 buffer');
 api.feed(tone(440),44100);
 advance(40);
 assert(renders > 0);
@@ -89,9 +106,13 @@ const count = renders;
 advance(1000);
 assert.equal(renders,count);
 api.configure({mode:'spectrum',active:true});
+assert.deepEqual(Analyzer.current.size,[1200,675], 'Switching back restores spectrum dimensions');
 api.destroy();
 assert(destroyed);
 assert.equal(callbacks.size,0);
 api.feed(tone(440),44100);
 assert.equal(messages.filter(message => message.type === 'error').length,0);
-console.log('Visualizer bridge checks passed: tone FFT, rendering input, silence, presets, pause and cleanup.');
+const html=fs.readFileSync(`${root}assets/visualizer/index.html`,'utf8');
+assert.match(html, /#spectrum canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/,
+  'Low-resolution spectrum canvases must fill the CSS panel at every pixel density');
+console.log('Visualizer bridge checks passed: panel sizing, expansion/mode resize, tone FFT, rendering input, silence, presets, pause and cleanup.');
