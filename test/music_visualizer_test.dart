@@ -155,6 +155,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.byTooltip('Expand visualizer'), findsNothing);
       expect(scripts.last, contains('"songMotion":true'));
       await tester.tap(find.byTooltip('Visualizer settings'));
       await tester.pumpAndSettle();
@@ -897,7 +898,7 @@ void main() {
   );
 
   testWidgets(
-    'mode changes and expansion stay automatic; renderer failures stop capture and allow retry',
+    'desktop expansion works; renderer failures stop capture and allow retry',
     (tester) async {
       final audio = FakeAudio()..playing = true;
       final player = PlayerController(
@@ -920,6 +921,7 @@ void main() {
       late ValueChanged<String> failRenderer;
       await tester.pumpWidget(
         MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.windows),
           home: StatefulBuilder(
             builder: (context, setState) {
               update = setState;
@@ -1046,7 +1048,7 @@ void main() {
     );
     expect(bridge, contains('timeByteArray:waveform'));
     expect(bridge, contains('analyzer._analyzer'));
-    expect(bridge, contains('loRes:false'));
+    expect(bridge, contains('loRes:options.mobile'));
     for (final forbidden in [
       'getUserMedia',
       'getDisplayMedia',
