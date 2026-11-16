@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'app_popups.dart';
 
 import 'package:flutter/physics.dart';
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -987,7 +988,17 @@ class _PlayerShellState extends State<PlayerShell>
           ? TickerMode(
               enabled: false,
               child: ExcludeSemantics(
-                child: IgnorePointer(child: _dockContent(transitionCopy: true)),
+                child: IgnorePointer(
+                  child: OverflowBox(
+                    alignment: Alignment.topCenter,
+                    minWidth: mini.width,
+                    maxWidth: mini.width,
+                    fit: OverflowBoxFit.deferToChild,
+                    child: RepaintBoundary(
+                      child: _dockContent(transitionCopy: true),
+                    ),
+                  ),
+                ),
               ),
             )
           : null;
@@ -996,8 +1007,8 @@ class _PlayerShellState extends State<PlayerShell>
         child: RepaintBoundary(
           key: const ValueKey('player-origin-page'),
           child: PlayerOriginSnapshot(
-            // Preserve the desktop origin blur without synchronous page-image
-            // capture. Android retains its lighter existing transition.
+            // Cache the desktop blur while the origin is behind a moving card.
+            // Android retains its lighter existing transition.
             enabled:
                 defaultTargetPlatform != TargetPlatform.android &&
                 expanded &&
