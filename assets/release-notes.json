@@ -1,6 +1,13 @@
 {
-  "current": "0.1.221",
+  "current": "0.1.222",
   "releases": [
+    {
+      "version": "0.1.222",
+      "changes": [
+        "Remove Visualizer presets with no authored beat response and ProjectM presets with consistently broken warp geometry.",
+        "Use the curated catalogue in both the preset picker and the persistent shuffle."
+      ]
+    },
     {
       "version": "0.1.221",
       "changes": [
