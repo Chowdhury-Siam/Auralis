@@ -28,7 +28,7 @@ class _PaintCounter extends CustomPainter {
 void main() {
   for (final pixelRatio in [1.0, 2.0]) {
     testWidgets(
-      'live origin blur reuses its page/display list without image capture: DPR $pixelRatio',
+      'origin blur reuses its live page and a small transition image: DPR $pixelRatio',
       (tester) async {
         tester.view.devicePixelRatio = pixelRatio;
         tester.view.physicalSize = Size(400 * pixelRatio, 300 * pixelRatio);
@@ -90,8 +90,9 @@ void main() {
         expect(await redAt(77), 0);
         update(() => enabled = true);
         await tester.pump();
-        final filter = tester.widget<ImageFiltered>(
-          find.byKey(const ValueKey('player-cached-blur')),
+        final filter = find.byKey(const ValueKey('player-cached-blur'));
+        final retained = tester.element(
+          find.byWidget(tester.widget<ImageFiltered>(filter).child!),
         );
         final frozenPaints = paints, frozenBuilds = builds;
         for (var frame = 1; frame < 20; frame++) {
@@ -108,26 +109,54 @@ void main() {
             reason: 'No rebuilds during the blur animation',
           );
         }
+        final cached = find.byKey(
+          const ValueKey('player-origin-blurred-image'),
+        );
+        // Rasterization finishes asynchronously, outside the fake frame clock.
+        for (
+          var attempt = 0;
+          attempt < 50 && cached.evaluate().isEmpty;
+          attempt++
+        ) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump();
+        }
+        final image = tester.widget<RawImage>(cached).image!;
+        expect(image.width, 80);
+        expect(image.height, 50);
+        expect(
+          tester
+              .widget<ImageFiltered>(
+                find.byKey(const ValueKey('player-cached-blur')),
+              )
+              .enabled,
+          isFalse,
+        );
+        dismissal.value = .2;
+        await tester.pump();
+        expect(identical(tester.widget<RawImage>(cached).image, image), isTrue);
         expect(
           await redAt(77),
           inExclusiveRange(0, 255),
           reason: 'The sharp black/white edge retains the visible blur effect',
         );
         expect(
-          identical(
-            tester
-                .widget<ImageFiltered>(
-                  find.byKey(const ValueKey('player-cached-blur')),
-                )
-                .child,
-            filter.child,
+          tester.element(
+            find.byWidget(tester.widget<ImageFiltered>(filter).child!),
           ),
-          isTrue,
+          same(retained),
         );
 
         // Geometry changes relayout the actual page, never a stale bitmap.
         update(() => width = 200);
         await tester.pump();
+        expect(
+          cached,
+          findsNothing,
+          reason: 'A resize invalidates the old image',
+        );
         expect(paints, frozenPaints + 1);
         final resizedPaints = paints;
         dismissal.value = .5;
