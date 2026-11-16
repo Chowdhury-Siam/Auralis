@@ -1,6 +1,13 @@
 {
-  "current": "0.1.217",
+  "current": "0.1.218",
   "releases": [
+    {
+      "version": "0.1.218",
+      "changes": [
+        "Use sustained changes in loudness, tone, or rhythm to switch Visualizer presets in Song-driven mode. Individual beats continue to animate the current preset.",
+        "Use gentler crossfades when Song-driven motion changes scenes."
+      ]
+    },
     {
       "version": "0.1.217",
       "changes": [
