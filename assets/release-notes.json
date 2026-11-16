@@ -1,6 +1,12 @@
 {
-  "current": "0.1.222",
+  "current": "0.1.223",
   "releases": [
+    {
+      "version": "0.1.223",
+      "changes": [
+        "Keep playback controls available during recoverable decoder errors and show Retry when the video actually aborts."
+      ]
+    },
     {
       "version": "0.1.222",
       "changes": [
