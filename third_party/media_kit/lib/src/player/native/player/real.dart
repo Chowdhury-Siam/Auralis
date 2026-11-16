@@ -85,6 +85,11 @@ class NativePlayer extends PlatformPlayer {
       });
   }
 
+  final _playbackErrors = StreamController<int>.broadcast();
+
+  /// libmpv error codes for files whose playback aborted.
+  Stream<int> get playbackErrors => _playbackErrors.stream;
+
   /// Disposes the [Player] instance & releases the resources.
   @override
   Future<void> dispose({bool synchronized = true}) {
@@ -114,6 +119,7 @@ class NativePlayer extends PlatformPlayer {
         ]);
         await Initializer(mpv).disposeAndDestroy(ctx);
       }
+      await _playbackErrors.close();
       await super.dispose();
 
       if (joinAndroidVideo) {
@@ -1558,24 +1564,15 @@ class NativePlayer extends PlatformPlayer {
         bufferingController.add(true);
       }
     }
-    // NOTE: Now, --keep-open=yes is used. Thus, eof-reached property is used instead of this.
-    // if (event.ref.event_id == generated.mpv_event_id.MPV_EVENT_END_FILE) {
-    //   // Check for mpv_end_file_reason.MPV_END_FILE_REASON_EOF before modifying state.completed.
-    //   if (event.ref.data.cast<generated.mpv_event_end_file>().ref.reason == generated.mpv_end_file_reason.MPV_END_FILE_REASON_EOF) {
-    //     if (isPlayingStateChangeAllowed) {
-    //       state = state.copyWith(
-    //         playing: false,
-    //         completed: true,
-    //       );
-    //       if (!playingController.isClosed) {
-    //         playingController.add(false);
-    //       }
-    //       if (!completedController.isClosed) {
-    //         completedController.add(true);
-    //       }
-    //     }
-    //   }
-    // }
+    if (event.ref.event_id == generated.mpv_event_id.MPV_EVENT_END_FILE &&
+        !_playbackErrors.isClosed) {
+      final ended = event.ref.data.cast<generated.mpv_event_end_file>().ref;
+      if (ended.reason ==
+          generated.mpv_end_file_reason.MPV_END_FILE_REASON_ERROR) {
+        _playbackErrors.add(ended.error);
+      }
+      // With keep-open, normal completion is reported by eof-reached.
+    }
     if (event.ref.event_id ==
         generated.mpv_event_id.MPV_EVENT_PROPERTY_CHANGE) {
       final prop = event.ref.data.cast<generated.mpv_event_property>();
