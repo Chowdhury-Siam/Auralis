@@ -1,0 +1,5955 @@
+{
+  "sourceHash": "49e4b65334de758858c99cc21a9a791d7cb3c49ab62e5ec93030028ab1e1def7",
+  "total": 9208,
+  "imported": 7738,
+  "counts": {
+    "Identical converted preset": 420,
+    "Invalid equation syntax": 604,
+    "Identical source": 103,
+    "Parse error at line 1, column 72:": 2,
+    "Parse error at line 1, column 207:": 1,
+    "No matching clause: NEGATIVE": 10,
+    "Parse error at line 1, column 197:": 1,
+    "Parse error at line 1, column 393:": 2,
+    "Parse error at line 1, column 129:": 2,
+    "Already bundled": 15,
+    "Parse error at line 1, column 21:": 2,
+    "Parse error at line 1, column 146:": 2,
+    "Parse error at line 1, column 71:": 4,
+    "Parse error at line 1, column 33:": 3,
+    "Parse error at line 1, column 35:": 1,
+    "Parse error at line 1, column 40:": 1,
+    "Parse error at line 1, column 363:": 1,
+    "Unavailable texture": 23,
+    "Parse error at line 1, column 192:": 10,
+    "Parse error at line 1, column 100:": 2,
+    "Conversion timed out": 22,
+    "Parse error at line 1, column 67:": 2,
+    "Parse error at line 1, column 23:": 2,
+    "Parse error at line 1, column 34:": 4,
+    "Parse error at line 1, column 154:": 1,
+    "Parse error at line 1, column 953:": 3,
+    "Parse error at line 1, column 8:": 1,
+    "Parse error at line 1, column 133:": 1,
+    "Parse error at line 1, column 306:": 1,
+    "Parse error at line 1, column 302:": 3,
+    "Parse error at line 1, column 24:": 2,
+    "Parse error at line 1, column 17:": 1,
+    "Parse error at line 1, column 633:": 1,
+    "Parse error at line 1, column 112:": 1,
+    "Parse error at line 1, column 368:": 4,
+    "Parse error at line 1, column 126:": 2,
+    "Parse error at line 1, column 981:": 1,
+    "Parse error at line 1, column 108:": 1,
+    "Parse error at line 1, column 1153:": 3,
+    "Parse error at line 1, column 175:": 1,
+    "Parse error at line 1, column 111:": 1,
+    "No function matching: oos": 1,
+    "Parse error at line 1, column 143:": 1,
+    "Parse error at line 1, column 238:": 2,
+    "Parse error at line 1, column 15:": 6,
+    "Parse error at line 1, column 99:": 1,
+    "Parse error at line 1, column 7:": 5,
+    "Parse error at line 1, column 1080:": 1,
+    "Parse error at line 1, column 899:": 1,
+    "Parse error at line 1, column 998:": 1,
+    "Parse error at line 1, column 449:": 2,
+    "Parse error at line 1, column 892:": 1,
+    "Parse error at line 1, column 1106:": 1,
+    "Parse error at line 1, column 355:": 1,
+    "Parse error at line 1, column 494:": 3,
+    "Parse error at line 1, column 1235:": 2,
+    "Parse error at line 1, column 1115:": 1,
+    "Parse error at line 1, column 196:": 2,
+    "Parse error at line 1, column 711:": 1,
+    "Parse error at line 1, column 27:": 2,
+    "Parse error at line 1, column 519:": 3,
+    "Parse error at line 1, column 1375:": 1,
+    "Parse error at line 1, column 55:": 2,
+    "Missing preset header": 1,
+    "Butterchurn equation runtime failed": 1,
+    "Renderer shader did not compile or link": 160
+  },
+  "skipped": [
+    [
+      "!mu$  and  Rovastar - The Shroomery (syllaciban cerbremium)",
+      "Identical converted preset"
+    ],
+    [
+      "!mu$  and T-miles - halflife3 (Pbag UPdatE)",
+      "Identical converted preset"
+    ],
+    [
+      "!mu$ - Zylot - DISCO INFERNO (powerball)",
+      "Invalid equation syntax"
+    ],
+    [
+      "!mu$ , PieturP and Zylot - PacMad (blue Ghosties reMix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "!mu$ + PieturP - PacMad (introducing non-educated small monster)",
+      "Invalid equation syntax"
+    ],
+    [
+      "[Ishan] - Devil's Disco Night(Inverted Electron Flow rmx)",
+      "Identical converted preset"
+    ],
+    [
+      "[Ishan] - Life in the drains",
+      "Identical converted preset"
+    ],
+    [
+      "[Ishan] - MidJune",
+      "Invalid equation syntax"
+    ],
+    [
+      "AAA-Ginkner-Spiral Dreams",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Accelerator (Blast Hat)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Accelerator (Evidence Bluster)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Accelerator (Hot Chocolate Transfusion)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Accelerator (Hot Lead Transfusion)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Accelerator (Liquid Gelatin Headache)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Accelerator (Orbital Migraine)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Accelerator (Plastique Garden - The Way Things Always Were)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Accelerator (Plastique Garden)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Accelerator (Plastique Palace)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Aimless (Spirogravity Mix)",
+      "Identical source"
+    ],
+    [
+      "Aderrasi - Anomalous Material Science (Pure Splinter Mix)",
+      "Identical source"
+    ],
+    [
+      "Aderrasi - Bass Fibre",
+      "Parse error at line 1, column 72:"
+    ],
+    [
+      "Aderrasi - Causeway of Dreams (Deep Sleep)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Causeway Of Dreams (REMix)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Chromatic Abyss (Contained Mix)",
+      "Parse error at line 1, column 207:"
+    ],
+    [
+      "Aderrasi - Chromatic Voyage (Rough Ground)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Chromatic Voyage",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Circlefacade",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Concrete Blocks (Cubic Meter)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Crossroads (Twitch Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Crystal Storm",
+      "No matching clause: NEGATIVE"
+    ],
+    [
+      "Aderrasi - Engine of Sound (bassbase)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Engine of Sound (receding)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Gemstone Factory (ethereal)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Ghast (Full Circle Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Ghast (Wall Mix)",
+      "Parse error at line 1, column 197:"
+    ],
+    [
+      "Aderrasi - Graft (Dream Wheel)",
+      "No matching clause: NEGATIVE"
+    ],
+    [
+      "Aderrasi - Gravity Lensing (Psycho Extasy)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Gravity Lensing (Psycho Joy)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Gravity Lensing (Psycho Regret)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Gravity Lensing (Psycho Remorse)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Gravity Lensing",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Negative Sun (Hollow Blood Star)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Negative Sun III",
+      "Identical source"
+    ],
+    [
+      "Aderrasi - Negative Sun IV",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Negative Sun",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Nightscape (The Talker Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Nothing for Something",
+      "Parse error at line 1, column 393:"
+    ],
+    [
+      "Aderrasi - Oceanic Bassograph",
+      "Parse error at line 1, column 129:"
+    ],
+    [
+      "Aderrasi - Potion of Spirits",
+      "Already bundled"
+    ],
+    [
+      "Aderrasi - Quantum Container",
+      "Parse error at line 1, column 21:"
+    ],
+    [
+      "Aderrasi - Songflower (Moss Posy)",
+      "Already bundled"
+    ],
+    [
+      "Aderrasi - Sound Spectrograph",
+      "Parse error at line 1, column 146:"
+    ],
+    [
+      "Aderrasi - Static Explosion (Blasting Mix)",
+      "Parse error at line 1, column 71:"
+    ],
+    [
+      "Aderrasi - Static Explosion (Blasting)",
+      "Parse error at line 1, column 71:"
+    ],
+    [
+      "Aderrasi - Static Explosion",
+      "Parse error at line 1, column 71:"
+    ],
+    [
+      "Aderrasi - The Dishes (Shaken)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - The Lurker",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - The Red and The Blue",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - The Waving Shaker (Attenuated)",
+      "Parse error at line 1, column 33:"
+    ],
+    [
+      "Aderrasi - The Waving Shaker",
+      "Parse error at line 1, column 33:"
+    ],
+    [
+      "Aderrasi - Transfrontation (Triangle Standoff)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi - Trips And Visits",
+      "No matching clause: NEGATIVE"
+    ],
+    [
+      "Aderrasi - Zephyr",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi - Zone & Shine",
+      "Parse error at line 1, column 35:"
+    ],
+    [
+      "Aderrasi + Geiss - Airhandler (Kali Mix) - Canvas Mix",
+      "Already bundled"
+    ],
+    [
+      "Aderrasi + Redi Jedi - Curse of the Ochre Owl(hangover mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Aderrasi-agitator",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-Antidote",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-AntiqueAbyss",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-BassFibre",
+      "Parse error at line 1, column 72:"
+    ],
+    [
+      "Aderrasi-Beta",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-BitterCrew",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-Blender",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-BoundSound",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-BowToGravity",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-Brush",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-CandyAvian",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-CauseandEffort",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-CausewayOfDreams",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-ChromaticAbyss(TheOtherSide)",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-Circlefaca00",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-contortion(flairmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-CoreOfPureCorruption",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-CoreWithoutCorruption",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-Crossroads",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-CrystalStorm",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-DifferentWaves",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-DiseasedBadBassPulsar",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-DiseasedBassPulsar",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-Elastoid",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-EngineOfSound",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-ExpressionistCircles",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-FameFrame",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-FirstAid",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-FlowingForm",
+      "Identical source"
+    ],
+    [
+      "Aderrasi-FogCollector",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-IntoTheGlue",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-kevlarabyss",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-KingOfVegas",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-LostIn2Dimensions",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-MagneticSanity",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-MightyGuard",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-Mobile5",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-MotherOfPearl",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-NeonShiver",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-NothingforSomething",
+      "Parse error at line 1, column 393:"
+    ],
+    [
+      "Aderrasi-OceanicBassograph",
+      "Parse error at line 1, column 129:"
+    ],
+    [
+      "Aderrasi-PrimarilyAnActionStory",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-pyrokinesis",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-QuantumContainer",
+      "Parse error at line 1, column 21:"
+    ],
+    [
+      "Aderrasi-Ribbons",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-See",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-ShineslugFormula",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-SnowstormDimension",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-SoulConductor",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-SoundSpectrograph",
+      "Parse error at line 1, column 146:"
+    ],
+    [
+      "Aderrasi-SpiderwebsInTheWind",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-Spine",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-StaticExplosion",
+      "Parse error at line 1, column 71:"
+    ],
+    [
+      "Aderrasi-TerrorFromTheDeep",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-TheDishes",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-TheGreatSuspender",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-TheWavingShaker",
+      "Parse error at line 1, column 33:"
+    ],
+    [
+      "Aderrasi-TripsAndVisits",
+      "No matching clause: NEGATIVE"
+    ],
+    [
+      "Aderrasi-UnderTheMicroscope",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-WandererInRage",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-WandererManifesto",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-WandererWithoutSelf",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-WandererWithShell",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-WayToGo",
+      "Identical converted preset"
+    ],
+    [
+      "Aderrasi-What(a)World",
+      "Identical converted preset"
+    ],
+    [
+      "Andy - D2K",
+      "Invalid equation syntax"
+    ],
+    [
+      "baked - Chinese Fingerbang (cao ni ma =])",
+      "Parse error at line 1, column 40:"
+    ],
+    [
+      "baked - wAsted",
+      "Invalid equation syntax"
+    ],
+    [
+      "baked & Rovastar - sh00mery remix",
+      "Parse error at line 1, column 363:"
+    ],
+    [
+      "baked & Rovastar - sh00miez g0ne w!Ld",
+      "Invalid equation syntax"
+    ],
+    [
+      "Benjam & Zylot - Dust on the Lens (Light of the Ancient Ones mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Benjam & Zylot - Dust on the Lens (Warped Light of the Ancient Ones mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Benjam & Zylot - Dust on the Lens",
+      "Invalid equation syntax"
+    ],
+    [
+      "Benjam & Zylot - Fractal Timepiece",
+      "Invalid equation syntax"
+    ],
+    [
+      "Benjam & Zylot - Light of the Ancient Ones",
+      "Invalid equation syntax"
+    ],
+    [
+      "Benski - Atom Smasher",
+      "Unavailable texture"
+    ],
+    [
+      "Bmelgren - Penultimate Neural Slipstream 2",
+      "Identical source"
+    ],
+    [
+      "Bmelgren & Krash - Rainbow Orb Peacock (Centred Journey Mix",
+      "Identical converted preset"
+    ],
+    [
+      "Bmelgren & Krash - Rainbow Orb Peacock (Lonely Signal Gone Mad Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Bmelgren + Krash - Rainbow Orb Peacock (Centred Journey Mix 2)",
+      "Identical source"
+    ],
+    [
+      "Bmelgren&krash-ra(centredjourneymix2)",
+      "Identical source"
+    ],
+    [
+      "Bmelgren&krash-rainboworbpeacock(lon",
+      "Identical source"
+    ],
+    [
+      "Bmelgren-acidiris",
+      "Identical source"
+    ],
+    [
+      "Bmelgren-godhead",
+      "Identical source"
+    ],
+    [
+      "Bmelgren-takethishighway",
+      "Identical source"
+    ],
+    [
+      "bw pieterp Redi Jedi - tr",
+      "Invalid equation syntax"
+    ],
+    [
+      "bw pieterp Redi Jedi - tr5",
+      "Invalid equation syntax"
+    ],
+    [
+      "cardboard does not bend like that",
+      "Invalid equation syntax"
+    ],
+    [
+      "cheater",
+      "Invalid equation syntax"
+    ],
+    [
+      "Che-barcodeinfidelity",
+      "Identical converted preset"
+    ],
+    [
+      "Che-burninghus(oilmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Che-burninghus",
+      "Identical converted preset"
+    ],
+    [
+      "Che-escape",
+      "Identical source"
+    ],
+    [
+      "Che-geology",
+      "Identical converted preset"
+    ],
+    [
+      "Chemlock - Acid Flamewave of Spooky Doom (Zylot & Aderrasi equations)",
+      "Parse error at line 1, column 192:"
+    ],
+    [
+      "Chemlock - How Am I Alive (Zylot & Aderrasi equations)",
+      "Parse error at line 1, column 192:"
+    ],
+    [
+      "Chemlock - How Am I Alive [hard mix - faster] (Zylot & Aderrasi equations)",
+      "Parse error at line 1, column 192:"
+    ],
+    [
+      "Chemlock - How Am I Driving (Zylot & Aderrasi equations)",
+      "Parse error at line 1, column 192:"
+    ],
+    [
+      "Chemlock - Jesus Firestorm Slipstream [in dev] (Zylot & Aderrasi equations)",
+      "Parse error at line 1, column 192:"
+    ],
+    [
+      "Chemlock - Jesus Flamewave (Zylot & Aderrasi equations)",
+      "Parse error at line 1, column 192:"
+    ],
+    [
+      "Chemlock - Spot (Zylot & Aderrasi equations)",
+      "Parse error at line 1, column 192:"
+    ],
+    [
+      "Chemlock - Spot mod(Zylot & Aderrasi equations)",
+      "Parse error at line 1, column 192:"
+    ],
+    [
+      "Che-terracarbonstream",
+      "Identical source"
+    ],
+    [
+      "Che-watch&fly",
+      "Identical converted preset"
+    ],
+    [
+      "DaNOnE - Highway To Heaven 2",
+      "Identical converted preset"
+    ],
+    [
+      "Dbleja - Dawid",
+      "Parse error at line 1, column 100:"
+    ],
+    [
+      "DefTech - Techno Slam",
+      "Parse error at line 1, column 100:"
+    ],
+    [
+      "eMale - shattered diamond",
+      "Identical converted preset"
+    ],
+    [
+      "eMale - wheel of fortune (crazy version)",
+      "Identical converted preset"
+    ],
+    [
+      "eMale - wheel of fortune",
+      "Identical converted preset"
+    ],
+    [
+      "Eo.s and PieturP - AlienSpaceshipIinvasion",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.s and PieturP - AlienSpaceshipIinvasion_phats_particle edit",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.s and PieturP - AlienSpaceshipIinvasion_phats_vidio_edit",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.s and PieturP - AlienSpaceshipInvasion 2",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.s and PieturP - Starfield",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S and PieturP - Starfield-with-huge-stars",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. - 7th galaxy c ethereum",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - Apocalypse D",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - Apocalypse D_ImFuckedUP",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - Apocalypse D_ImFuckedUP_2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - Apocalypse D_ImFuckedUP_3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - Apocalypse E",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - Apocalypse F",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - Apocalypse F2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix01",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix02",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix02b",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix02c offset center",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix02c",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix03 madhatter",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix03 madhatter_v2",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix07 recursive demons slow illum",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix07 recursive demons slow",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix07 recursive demons",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - glowsticks v2 05 and proton lights (+Krash's beat code) _Phat_remix07",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - glowsticks v2 06 trigger (+Krash's beat code) ",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - glowsticks v2 07 trigger arrow (+Krash's beat code) ",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core B",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_on route",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_class + sparks_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_class_mix altcolors 1",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_class_mix minimalism",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_class_mix pulse",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_class_mix pulse2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_class_mix wave2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_class_mix wormhole",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_class_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_on route_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_on route_mix+beam",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core C_Phat's_simple_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - heater core",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - linefield more demon",
+      "No matching clause: NEGATIVE"
+    ],
+    [
+      "Eo.S. - linefield more",
+      "No matching clause: NEGATIVE"
+    ],
+    [
+      "Eo.S. - linefield",
+      "No matching clause: NEGATIVE"
+    ],
+    [
+      "Eo.S. - magnetosphere 10 - quantumsphere-warp",
+      "Identical converted preset"
+    ],
+    [
+      "Eo.S. - magnetosphere 11 - polarsphere-warp_phat_chill_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 03 arcs",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 04 arcs demon",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 04 arcs demon_phat edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 04 arcs demon_phat edit_v3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 06 changing arcform",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 09 the gases beyond 85",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 09 the gases beyond 85b 3d",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 09 the gases beyond 85b 3d_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 09 the gases beyond 85b",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 09 the gases beyond 85c",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - pointfield 12 deep oceans-170",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - quasar",
+      "No matching clause: NEGATIVE"
+    ],
+    [
+      "Eo.S. - repeater 07 - rave on a lot of acid b",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - repeater 08 - rave on a lot of acid and some K",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - repeater 09 - rave on a lot of acid and some Karma",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - repeater 10 - psychic (needs louder music)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - repeater 11 - stars",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - repeater 13 - definitive fast",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - repeater 15 - kaleidoscope b",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - skylight a [bass response]",
+      "Parse error at line 1, column 67:"
+    ],
+    [
+      "Eo.S. - spark C_Phats_nebulous_mix3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - tumbler arcs daemon vortex",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - tumbler arcs daemon",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - tumbler arcs",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - tumbler solid mix - daemon",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. - tumbler solid mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - CAT Scan (Nirvana flux)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - CAT Scan (Nirvana)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - CAT Scan",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - chasers 11 sentinel C_poltergeist_mix response",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. + Phat - chasers 11 sentinel C_poltergeist_mix",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. + Phat - chasers 12 sentinel Daemon",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. + Phat - chasers 13 sentinel 189",
+      "Conversion timed out"
+    ],
+    [
+      "Eo.S. + Phat - cubetrace - v2",
+      "Already bundled"
+    ],
+    [
+      "Eo.S. + Phat - PET Scan",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - recursion frustum 02_Ananda_Flash_Remix zion 6 orange hold B",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - recursion frustum 02_Ananda_Flash_Remix zion 6 orange hold",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - recursion frustum 02_Ananda_Flash_Remix zion 7 intelligent",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - recursion frustum 02_Ananda_Flash_Remix zion B",
+      "Parse error at line 1, column 23:"
+    ],
+    [
+      "Eo.S. + Phat - recursion frustum 02_Ananda_Flash_Remix zion G seizure 5 fractal b",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - recursion frustum 02_Ananda_Flash_Remix zion G seizure 5 fractal c",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - recursion frustum 02_Ananda_Flash_Remix zion",
+      "Parse error at line 1, column 23:"
+    ],
+    [
+      "Eo.S. + Phat - recursion frustum 02_Ananda_Flash_Remix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - temple sentinel 0737",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Phat - temple sentinel 0746",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + phat - trinary 02 - afterlife",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. + Zylot - skylight (Stained Glass Majesty mix)",
+      "Already bundled"
+    ],
+    [
+      "Eo.S. and Zylot - tumbler arcs daemon (Xelototh)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. and Zylot and Phat - dam",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. and Zylot and Phat - dam_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. and Zylot and Phat - dam_v2_zoe_colours",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. and Zylot and Phat - dam_v3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. and Zylot and Phat - Pointfield 9 (Hypnotic Orbit remex)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. and Zylot and Phat - Pointfield 9 (Hypnotic Orbit_bass_responce_mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S. and Zylot and Phat - Pointfield 9 (Hypnotic Orbit_bass_responce_mix)_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S._Phat - Ocean_waves",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S._Phat technicolor D",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S._Phat technicolor E breather B",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S._Phat technicolor E breather",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S._Phat technicolor F breather D",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S._Phat_PeterP_Sentinel_Aware_4",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S._Phat_PeterP_Sentinel_Aware_6 Eo.S. edit ",
+      "Parse error at line 1, column 34:"
+    ],
+    [
+      "Eo.S._Phat_PeterP_Sentinel_Aware_6 Eo.S. edit B",
+      "Parse error at line 1, column 34:"
+    ],
+    [
+      "Eo.S._Phat_PeterP_Sentinel_Aware_6 Eo.S. edit C",
+      "Parse error at line 1, column 34:"
+    ],
+    [
+      "Eo.S._Phat_PeterP_Sentinel_Aware_6 Eo.S. edit C_b",
+      "Parse error at line 1, column 34:"
+    ],
+    [
+      "Eo.S.+Phat - spectrum bubble Green Pointer",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S.+Phat - spectrum bubble new colors WF2 in water dark",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S.+Phat - spectrum bubble new colors WF2 in water_3d",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S.+Phat - spectrum bubble Red Pointer",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eo.S.+Phat - the lights at night_spikes",
+      "Identical converted preset"
+    ],
+    [
+      "Eo.S.+Phat Cool Bug_is_the_hue_shading_done_in_8bit_7",
+      "Parse error at line 1, column 154:"
+    ],
+    [
+      "Eo.S.+Phat Emergent factors",
+      "Identical converted preset"
+    ],
+    [
+      "Eo.S.+Phat last of it's kind_sinking",
+      "Identical converted preset"
+    ],
+    [
+      "Eosandzylotandphat-pointfield9(hypnot",
+      "Invalid equation syntax"
+    ],
+    [
+      "Eosphat-chasers20wisps(redijedishambu",
+      "Parse error at line 1, column 953:"
+    ],
+    [
+      "Eosphat-chasers20wisps(redijedislongn",
+      "Parse error at line 1, column 953:"
+    ],
+    [
+      "Eosphat-chasers20wisps(redijedissavem",
+      "Parse error at line 1, column 953:"
+    ],
+    [
+      "Esotic & Rozzer - Hippie Hypnotizer",
+      "Invalid equation syntax"
+    ],
+    [
+      "Esotic & Rozzer - Museum",
+      "Invalid equation syntax"
+    ],
+    [
+      "Esotic & Rozzer - Now And Later",
+      "Invalid equation syntax"
+    ],
+    [
+      "Esotic & Rozzer - Revolverlution",
+      "Invalid equation syntax"
+    ],
+    [
+      "Esotic & Rozzer - The Dark Side Of My Moon",
+      "Invalid equation syntax"
+    ],
+    [
+      "EvilJim - Fairy Fountain",
+      "No matching clause: NEGATIVE"
+    ],
+    [
+      "EvilJim - Irregular Zoom",
+      "Parse error at line 1, column 8:"
+    ],
+    [
+      "EvilJim - U-Turn",
+      "No matching clause: NEGATIVE"
+    ],
+    [
+      "fiShbRaiN - crazy diamond",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - cthulhus asshole",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - evolution (3d)_phat_edit_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - gandalf does it best (pipeweed remix v2)_Phat_God_Head_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - gandalf does it best (pipeweed remix v2)_Phat_God_HeAD_V2",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - gandalf does it best (pipeweed remix v2)_Phat_God_HeAD_V2b",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - gandalf does it best (pipeweed remix v2)_phat_mandala_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - gandalf does it best (pipeweed remix v2)_phat_mandala_mix_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - gandalf does it best (pipeweed remix v2)_phat_mandala_more_responce_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - gandalf does it best (pipeweed remix v2)_phat_reactor_core_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - gandalf does it best (pipeweed remix v2)_phat_rose_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - gandalf does it best (pipeweed remix v2)_Phat_slooow_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - planet x_Phat_Zylot_Eo.S_Planet_System_Remix",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - planet x_Phat_Zylot_Eo.S_Planet_System_Remix_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - planet x_Phat+Eo.S._inFlux_gravity well mix (xbmc speed tweak)",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - planet x_Phat+Eo.S._inFlux_gravity well mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - white scream firefly",
+      "Identical source"
+    ],
+    [
+      "fiShbRaiN - witchcraft (DMT remix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN - witchcraft (metropolis remix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN + Geiss - the adventures of prismo jenkins - water mix",
+      "Unavailable texture"
+    ],
+    [
+      "fiShbRaiN and Zylot - The Machine Mind",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN and Zylot - The Machine Mind_phat_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN_Phat_snowflake",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN_Phat_snowflake_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "fiShbRaiN_Phat_snowflake_v3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fishbrain-betelguese",
+      "Identical converted preset"
+    ],
+    [
+      "Fishbrain-blueprint",
+      "Identical converted preset"
+    ],
+    [
+      "Fishbrain-whitescreamfirefly",
+      "Identical converted preset"
+    ],
+    [
+      "Fishbrain-witchcraft",
+      "Identical converted preset"
+    ],
+    [
+      "Flexi - evolved from empirical modelling",
+      "Invalid equation syntax"
+    ],
+    [
+      "Flexi - julian affairs",
+      "Invalid equation syntax"
+    ],
+    [
+      "Flexi - mindblob [where it's at now]",
+      "Invalid equation syntax"
+    ],
+    [
+      "flexi - Mindblob",
+      "Invalid equation syntax"
+    ],
+    [
+      "Flexi - smashing fractals 2.0",
+      "Invalid equation syntax"
+    ],
+    [
+      "Flexi + Geiss - Tokamak mindblob 2.0",
+      "Invalid equation syntax"
+    ],
+    [
+      "Flexi, Redi Jedi + Geiss - dual random textured tokamak",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fluff___Day_Shroom__Ver_2_",
+      "Parse error at line 1, column 133:"
+    ],
+    [
+      "fuck with this",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fvese - Gritty",
+      "Parse error at line 1, column 306:"
+    ],
+    [
+      "Fvese - Round and Round (geiss gamma mix)",
+      "Parse error at line 1, column 302:"
+    ],
+    [
+      "Fvese - Round and Round",
+      "Parse error at line 1, column 302:"
+    ],
+    [
+      "Fvese - Stop and Go",
+      "Parse error at line 1, column 302:"
+    ],
+    [
+      "Fvese - Zoom Effects With A Twist",
+      "Identical converted preset"
+    ],
+    [
+      "Fvese-0to60",
+      "Identical source"
+    ],
+    [
+      "Fvese-lifesavoranyone",
+      "Identical converted preset"
+    ],
+    [
+      "Fvese-multicircle",
+      "Identical converted preset"
+    ],
+    [
+      "Fvese-quicksand",
+      "Identical converted preset"
+    ],
+    [
+      "Fvese-snowflakelike2",
+      "Identical converted preset"
+    ],
+    [
+      "Fvese-thetunnel(finalstagemix)",
+      "Identical converted preset"
+    ],
+    [
+      "Fvese-zoomeffects(remix2)",
+      "Identical converted preset"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Bug_Eyes_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Remix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Spin_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Spin_mix_2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Spin_No_rotation_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Spin_No_rotation_mix_2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Spin_No_rotation_mix_3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Spin_No_rotation_mix_4",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Spin_No_rotation_mix_4b",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Spin_No_rotation_Smooth_Color_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Spin_No_rotation_Textured_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Fyornulis- the color of time 5_Phat_Eo.S_Glowsticks_(Krash_Beat_Detection)_Spin_No_rotation_Textured_mix_2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Geiss - Blasto",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss - Brain Zoom 3 (random texture mix)",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Brain Zoom 3",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Brain Zoom 4",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Chromatexture Paint-In 2",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Chrome",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Cosmic Dust 2 - cloud journey",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Diffuser (Gold Mix)",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Diffuser (Red Mix)",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Drop Shadow 1",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Electric Storm Half-Digital 2",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Explosion 2",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Explosion 3 (Relief Mix)",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Explosion 3",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Liquid Beats",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss - Many Colors in the Homo Rainbow",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss - Music Box",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss - Planar Travel",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss - Reaction Diffusion 2",
+      "Already bundled"
+    ],
+    [
+      "Geiss - Spiral Artifact",
+      "Already bundled"
+    ],
+    [
+      "Geiss + Rovastar - Julia Fractal (Vectrip Mix)",
+      "Unavailable texture"
+    ],
+    [
+      "Geiss + Rovastar - The Chaos Of Colours (sprouting dimentia mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss and Rovastar - The Chaos Of Colours (sprouting dimentia mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss&rovastar-notionsoftonality2",
+      "Identical source"
+    ],
+    [
+      "Geiss-aieeeeee!!",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-anomaly2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-approach",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-basskaleidosphere",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-basszoom",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-bipolar1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-bipolar2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-bipolar3",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-bipolar4",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-bonfire",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-brightfibermatrix1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-brightfibermatrix2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-calligraphy",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-cartographie",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-casino",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-cepiasound",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-churn",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-colortones1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-colortones2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-constantvelocity",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-coral",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-corpuscallosum",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-cosmicdust1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-cosmicdust2",
+      "Identical source"
+    ],
+    [
+      "Geiss-cruzin",
+      "Identical source"
+    ],
+    [
+      "Geiss-cycloid1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-cycloid2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-davodthepod",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-demonicdistortion",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-descent",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-destruction",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-diffraction",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-digitalsmoke",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-downwardspiral",
+      "Identical source"
+    ],
+    [
+      "Geiss-dynamicswirls2",
+      "Identical source"
+    ],
+    [
+      "Geiss-eddies1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-eggs",
+      "Identical source"
+    ],
+    [
+      "Geiss-elcubismo",
+      "Identical source"
+    ],
+    [
+      "Geiss-festive",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-fiberglass",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-flotsam",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-fogtunnel",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-galaxy2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-greenland",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-happydrops",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-heavenly1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-heavenly2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-heavenly3",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-hovering",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-hurricane",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-hyperion",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-juliafractal1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-juliafractal2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-luz",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-manycolors2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-megaswirl1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-microcosm",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-monotoneripples",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-nautilus",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-octopus",
+      "Identical source"
+    ],
+    [
+      "Geiss-octopusblue",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-octopuseverchanging",
+      "Identical source"
+    ],
+    [
+      "Geiss-octopusfatandeverchanging",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-octopusgold",
+      "Identical source"
+    ],
+    [
+      "Geiss-octopusgoldwithdots",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-oldskoolmellowstyle",
+      "Identical source"
+    ],
+    [
+      "Geiss-pelotadefuego",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-pinch",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-pistons",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-planet2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-quasilinearsubmanifolds",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-rocket",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-runoff",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-scary",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-script",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-serpent",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-shake",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-shift",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-sinews1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-sinews2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-smoke",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-solarflare(blue)",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-solarflare(reptile)",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-solarflare",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-soundandthefury",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-spacedust",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-spacevoyage(high-warp)",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-spacevoyage",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-spacevoyagebright",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-starfish1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-supernova1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-surface",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-swirl1",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-swirlie1",
+      "Identical source"
+    ],
+    [
+      "Geiss-swirlie2",
+      "Identical source"
+    ],
+    [
+      "Geiss-swirlie3",
+      "Identical source"
+    ],
+    [
+      "Geiss-swirlie4",
+      "Identical source"
+    ],
+    [
+      "Geiss-swirlie5",
+      "Identical source"
+    ],
+    [
+      "Geiss-thefattylumpkinsunkletweaker",
+      "Identical source"
+    ],
+    [
+      "Geiss-threeandahalfkindsofamphetamine",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-threekindsofamphetamines",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-tokamak",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-toy",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-ultrafast",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-volumezoom",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-vortex2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-warpofdali2",
+      "Identical converted preset"
+    ],
+    [
+      "Geiss-warpofdalibright",
+      "Identical converted preset"
+    ],
+    [
+      "he went that away",
+      "Invalid equation syntax"
+    ],
+    [
+      "Idiot - Dwarf Of Annon (Before The Star)",
+      "Identical converted preset"
+    ],
+    [
+      "idiot - Random Init Colours",
+      "Invalid equation syntax"
+    ],
+    [
+      "idiot - Random Water Colours (remix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "idiot - Random Water Colours",
+      "Invalid equation syntax"
+    ],
+    [
+      "Idiot - Shifting Squares Of Idiot",
+      "Identical converted preset"
+    ],
+    [
+      "idiot - Sinful Code (unchained style)",
+      "Identical converted preset"
+    ],
+    [
+      "Idiot - Star Of Annon",
+      "Already bundled"
+    ],
+    [
+      "Idiot - Tentacle Dreams (Remix)",
+      "Parse error at line 1, column 24:"
+    ],
+    [
+      "Idiot - Tentacle Dreams",
+      "Parse error at line 1, column 17:"
+    ],
+    [
+      "Idiot - The Worst Of The Pack",
+      "Identical converted preset"
+    ],
+    [
+      "Idiot - Unhealthy Love (Remix)",
+      "Parse error at line 1, column 633:"
+    ],
+    [
+      "Idiot - Waterfalls (Remix2)",
+      "Identical converted preset"
+    ],
+    [
+      "Idiot&che-variousabstracteffects",
+      "Identical converted preset"
+    ],
+    [
+      "Idiot&rovastar-rainpainting(ca(remix)",
+      "Identical converted preset"
+    ],
+    [
+      "Idiot24-7 - Ascending to heaven 2",
+      "Identical converted preset"
+    ],
+    [
+      "Idiot24-7 - Morphing Grid 2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Idiot24-7 - Version 2",
+      "Parse error at line 1, column 112:"
+    ],
+    [
+      "Idiot24-7 & Illusion - Shadow Tremor 1",
+      "Parse error at line 1, column 368:"
+    ],
+    [
+      "Idiot24-7 & Illusion - Shadow Tremor 2",
+      "Parse error at line 1, column 368:"
+    ],
+    [
+      "Idiot24-7 & Illusion - Space Collapsing",
+      "Parse error at line 1, column 368:"
+    ],
+    [
+      "Idiot24-7 & Unchained - A Little Too Unchainedish",
+      "Invalid equation syntax"
+    ],
+    [
+      "Idiot24-7 & Unchained - Mind Bending Beat Demo",
+      "Invalid equation syntax"
+    ],
+    [
+      "Idiot24-7-justplaincool3",
+      "Identical converted preset"
+    ],
+    [
+      "Idiot-cortex(spiritualvisionsmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Idiot-nucleus",
+      "Identical converted preset"
+    ],
+    [
+      "Idiot-spectrum",
+      "Identical converted preset"
+    ],
+    [
+      "Idiot-tentacledreams(remix)",
+      "Parse error at line 1, column 24:"
+    ],
+    [
+      "Idiot-whatis",
+      "Identical source"
+    ],
+    [
+      "Idiot-whatshallcome",
+      "Identical converted preset"
+    ],
+    [
+      "Illusion & Unchained - Invade My Mind",
+      "Invalid equation syntax"
+    ],
+    [
+      "Illusion&rovastar-cloudedbottle",
+      "Identical source"
+    ],
+    [
+      "Illusion&unchained-frozeneye1",
+      "Identical source"
+    ],
+    [
+      "Illusion-heavenlyeye",
+      "Identical converted preset"
+    ],
+    [
+      "Ishan - Anuera",
+      "Identical converted preset"
+    ],
+    [
+      "Jess-tryingtotrapatwister",
+      "Identical converted preset"
+    ],
+    [
+      "John Scoville - Color Gears",
+      "Identical converted preset"
+    ],
+    [
+      "John Scoville - Inside Outside",
+      "Identical converted preset"
+    ],
+    [
+      "Krash - 3D Shapes Demo 2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Krash - interwoven (nightmare weft)",
+      "Identical converted preset"
+    ],
+    [
+      "Krash - interwoven (nightmare weft)_Phats_Maybe_Ill_Go_To_A_Party",
+      "Identical converted preset"
+    ],
+    [
+      "Krash - war machine (shifting complexity)",
+      "Identical converted preset"
+    ],
+    [
+      "Krash & Telek - Real Noughts and Crosses (Random Ending)",
+      "Identical converted preset"
+    ],
+    [
+      "Krash + Rovastar - Cerebral Demons - Phat + Eo.S. Stars Remix",
+      "Identical converted preset"
+    ],
+    [
+      "Krash + Rovastar - Rainbow Orb",
+      "Identical converted preset"
+    ],
+    [
+      "Krash and Rovastar - Rainbow Orb 2 Peacock (Bmelgren's Compelling Vision)",
+      "Identical source"
+    ],
+    [
+      "Krash and Rovastar - Rainbow Orb",
+      "Identical converted preset"
+    ],
+    [
+      "Krash and Telek - Real Noughts and Crosses (Random Ending)",
+      "Identical converted preset"
+    ],
+    [
+      "Krash&Rovastar-AltarsofMadness",
+      "Identical source"
+    ],
+    [
+      "Krash&Rovastar-CerebralDemons(D",
+      "Identical converted preset"
+    ],
+    [
+      "Krash&rovastar-switchingpolygons",
+      "Identical converted preset"
+    ],
+    [
+      "Krash&Rovastar-TheDevilIsInTh",
+      "Identical source"
+    ],
+    [
+      "Krash&zylot-insidethep(indecisionmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Krash-chronoshift",
+      "Identical converted preset"
+    ],
+    [
+      "Krash-digitalflame",
+      "Identical source"
+    ],
+    [
+      "Krash-dynamicborders1",
+      "Identical source"
+    ],
+    [
+      "Krash-heatwaves",
+      "Identical converted preset"
+    ],
+    [
+      "Krash-Interwoven",
+      "Identical converted preset"
+    ],
+    [
+      "Krash-pulse",
+      "Identical converted preset"
+    ],
+    [
+      "Krash-snowflakehalo",
+      "Identical converted preset"
+    ],
+    [
+      "Krash-twistingindecision",
+      "Identical converted preset"
+    ],
+    [
+      "Krash-vinyldisk",
+      "Identical converted preset"
+    ],
+    [
+      "Krash-windowframetomegaswirl2",
+      "Identical source"
+    ],
+    [
+      "landscape",
+      "Invalid equation syntax"
+    ],
+    [
+      "MisterJingo - Nova",
+      "Identical converted preset"
+    ],
+    [
+      "mstress - Scattered gravity (Meteo alpha mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "mstress - Scattered gravity (Meteo mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Mstress & Juppy - Dancer",
+      "Invalid equation syntax"
+    ],
+    [
+      "Mstress & Juppy - Lonely Dancer Fantasies",
+      "Invalid equation syntax"
+    ],
+    [
+      "Mstress + Zylot - Acid UFO",
+      "Identical converted preset"
+    ],
+    [
+      "Mstress and Giuppy - Don't drink to the disco! 2 (Krash and Zylot lazer formula)",
+      "Invalid equation syntax"
+    ],
+    [
+      "mstress and rovastar - carnival of madness (dancing worms) Studio Music Mod",
+      "Parse error at line 1, column 126:"
+    ],
+    [
+      "mstress and rovastar - carnival of madness (dancing worms)",
+      "Parse error at line 1, column 126:"
+    ],
+    [
+      "Mstress&darius-pursuingthesunset",
+      "Identical converted preset"
+    ],
+    [
+      "Mstress&zylot-acidufo",
+      "Identical converted preset"
+    ],
+    [
+      "Mstress-aciduniverses(bigbanginterfer",
+      "Identical converted preset"
+    ],
+    [
+      "Mstress-aciduniverses",
+      "Identical converted preset"
+    ],
+    [
+      "Mstress-acousticnerveimpulses(primary",
+      "Identical converted preset"
+    ],
+    [
+      "Mstress-snowingfibercity",
+      "Identical converted preset"
+    ],
+    [
+      "Mstress-supernovaselfcontrol",
+      "Identical converted preset"
+    ],
+    [
+      "Mxyzptlk - FiberAudic cable (colors! Mix 2) test kbd",
+      "Parse error at line 1, column 981:"
+    ],
+    [
+      "Neuro - Starover",
+      "Parse error at line 1, column 108:"
+    ],
+    [
+      "Nighthawk - Dancing Mushroom Holy Fuck!!_pHAT_Edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "NiGHtHawK - My Third Eye_phat_edit_v2(Redi Jedi crap i put acid in my eye mix unisex)",
+      "Parse error at line 1, column 67:"
+    ],
+    [
+      "Nil & EMPR - Curling Flower Space 2 (Electric Boogaloo Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "nil + EMPR - Electron Flow (Copper Wire Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Nil&empr-electronflow(copperwiremix)",
+      "Identical converted preset"
+    ],
+    [
+      "Nil-cidandlucy",
+      "Identical source"
+    ],
+    [
+      "Nil-didyouspeakwiththeorb",
+      "Identical converted preset"
+    ],
+    [
+      "Nil-discocomet",
+      "Identical converted preset"
+    ],
+    [
+      "Nil-singularityinmyoscilloscope",
+      "Identical converted preset"
+    ],
+    [
+      "Nil-timlearysamazingwaterslide",
+      "Identical converted preset"
+    ],
+    [
+      "Nil-vortexofvortices",
+      "Identical converted preset"
+    ],
+    [
+      "Ondras - VisualPlayer 2.0 for DOS",
+      "Invalid equation syntax"
+    ],
+    [
+      "ORB - Comic Book Curves 2",
+      "Parse error at line 1, column 1153:"
+    ],
+    [
+      "ORB - Comic Book Curves 2_Phat_Graphix_Edit",
+      "Parse error at line 1, column 1153:"
+    ],
+    [
+      "ORB - Eat me",
+      "Invalid equation syntax"
+    ],
+    [
+      "ORB - Liquid Fire",
+      "Invalid equation syntax"
+    ],
+    [
+      "ORB - Paper Cutouts",
+      "Invalid equation syntax"
+    ],
+    [
+      "ORB - Sliding down light",
+      "Parse error at line 1, column 1153:"
+    ],
+    [
+      "ORB - Space Time",
+      "Parse error at line 1, column 175:"
+    ],
+    [
+      "ORB - Starflower blazing sun",
+      "Invalid equation syntax"
+    ],
+    [
+      "ORB - World at war2",
+      "Parse error at line 1, column 111:"
+    ],
+    [
+      "phat + Eo.S. - 2ct2V8",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat + Eo.S. - blah",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat + Eo.S. - blah_Red_Dot_Mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat + Eo.S. - blah_Smooth_Colors_Shadow_Dancer",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat + Eo.S. - blah_Smooth_Colors_Shadow_Dancer_V2",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat + Eo.S. - TesellatingFractal_Mix3",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat + Eo.S. - TesellatingFractal_Mix4",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat + Eo.S. - whale in plankton",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool - birth_death_cycle",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool - so are tangent artifacts",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool - so are tangent artifacts_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool - zoom in",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool demon",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool smoke move",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool smoke move2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool smoke move3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool smoke",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool_slow_colour_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool_slow_colour_melting_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat and Eo.S. _ shapes are cool_slow_colour_melting_sin",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat_2C-Igoodbug4",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat_2C-IPHATNESS2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_Aderrasi - Mind (Reader) Time dancer5",
+      "No function matching: oos"
+    ],
+    [
+      "Phat_BlueLight_Condition (Yin and Eo.S waveforms) More Flash Mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_BlueLight_Condition(Yin and Eo.S waveforms)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_BlueLight_Condition",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_BlueLight_Condition_I_Love_You_Zoe",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_BlueLight_Condition_I_Love_You_Zoe_2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_BlueLight_Condition_I_Love_You_Zoe_3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_BlueLight_Condition_I_Love_You_Zoe_4",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat_breathe",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_Eo.S. - Just more trash",
+      "Identical converted preset"
+    ],
+    [
+      "Phat_Eo.S. rainbow bubble_mid3-fuck me dood",
+      "Identical converted preset"
+    ],
+    [
+      "Phat_Eo.S._Algorithm_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_Eo.S._Data_swimmer",
+      "Identical converted preset"
+    ],
+    [
+      "Phat_Eo.S._Swim_waveform_mix",
+      "Identical converted preset"
+    ],
+    [
+      "Phat_remix_Zylot - waveform - String (Reactive mix)V2",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat_RippleNebula99e",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat_RippleNebula99f",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat_RippleNebula99g",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat_RippleNebula99h",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat_RippleNebula99h-eo.s. mod",
+      "Invalid equation syntax"
+    ],
+    [
+      "phat_RippleNebula99i",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_Zylot - Will'o Wisp (Adult)remix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_Zylot_Eo.S. Puzzle_box",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat_Zylot_Eo.S. work with lines",
+      "Identical converted preset"
+    ],
+    [
+      "Phat+Eo.S_Mandala_Chasers_remix_Circles_mix(NEOhm's Caged Delerium Mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Eo.S_Mandala_Chasers_remix_Circles_mix(NEOhm's OOooo Mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Eo.S_Mandala_Chasers_remix_Circles_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Eo.S_Mandala_Chasers_remix_Targeting_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Eo.S_Mandala_Chasers_remix_Weird_Colours_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Eo.s_Zion",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Eo.s_Zion_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Eo.s_Zion_v3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Eo.s_Zion_v4",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+fiShbRaiN_Looker",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+fiShbRaiN_Looker_fuck_boxs_remix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+fiShbRaiN_Looker_fuck_remix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+fiShbRaiN_Looker_Left_right_shift",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+fiShbRaiN_Mandala_additive_responce_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+fiShbRaiN_Mandala_additive_responce_v3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+fiShbRaiN_Mandala_Minimlist_mix",
+      "Parse error at line 1, column 143:"
+    ],
+    [
+      "Phat+fiShbRaiN_Mandala_Spirit_Box_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+fiShbRaiN+Eo.S_Mandala_Chasers_remix",
+      "Already bundled"
+    ],
+    [
+      "Phat+fiShbRaiN+Eo.S_Mandala_Chasers_remix_spectrum lock dark",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+fiShbRaiN+Eo.S_Mandala_Chasers_remix_spectrum lock lighting",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+fiShbRaiN+Eo.S_Mandala_Chasers_remix_spectrum lock",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Yin+Eo.S_Mandala_Chasers_Soul_Feed_Geostigma_v3b",
+      "Identical converted preset"
+    ],
+    [
+      "Phat+Yin+Eo.S_Mandala_Chasers_SOULar_Name",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Yin+Eo.S_Mandala_Chasers_SOULar_Named",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Yin+Eo.S_Mandala_Chasers_SOULar_Named_Red_Pulse",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phat+Yin+Eo.S_Mandala_Chasers_SOULar_Named_Red_Pulse_b",
+      "Invalid equation syntax"
+    ],
+    [
+      "Phateoszionv3",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - Bitmap - some flags build armies - uzi power",
+      "Conversion timed out"
+    ],
+    [
+      "PieturP - dots_in_a_practical_way_Plus_Shapes",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - dots_in_a_practical_way_sined_wave",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - dots_in_a_practical_way3_ultraplusversion",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - dots_in_a_practical_way3_zoomed",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - EGOTRIP 2",
+      "Conversion timed out"
+    ],
+    [
+      "PieturP - EGOTRIP 2_phat_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - EGOTRIP 3",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - EGOTRIP 3_phat_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - EGOTRIP",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - FEAR USA",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - fun with colors - tiles",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-demo-wave1",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-demo-wave2",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-demo-wave3",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-here-we-go-0.5",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-here-we-go-1",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-here-we-go-2",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-here-we-go-3",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-here-we-go-4",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-here-we-go-circle",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-here-we-go-circles",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-here-we-go-circles-weird",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSLtoRGB-swirl",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-tunnelvisions",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-tunnelvisions_morphing",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-tunnelvisions_morphing2",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - HSL-tunnelvisions_morphing3",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - influenca1",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - influenca2",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - influenca2a",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - influenca2b",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - IT_MIGHT_BE_EVIL",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - IT_MIGHT_BE_EVIL_phat_remix",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - PacMad",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - sides_betterSeries1",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - sides_betterSeries2.5",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - sides_betterSeries2",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - sides_betterSeries2_absurd",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - sides_betterSeries2_def_tweak",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - sides_betterSeries3",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - sides_betterSeries3_solarised",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - triptrap_(crazed-perspective-mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - triptrap_(living-in-a-box-mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP - triptrap_(ultimate-trip-mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "PieturP and Zylot - PacMad (Ghosties reMix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Pithlit - Guilty (major Warp)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Pithlit - Guilty",
+      "Invalid equation syntax"
+    ],
+    [
+      "Pithlit - Hair",
+      "Invalid equation syntax"
+    ],
+    [
+      "Pithlit - Rainbow Wheel (extreme power mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Pithlit - Rainbow Wheel",
+      "Invalid equation syntax"
+    ],
+    [
+      "quantum_foam",
+      "Identical converted preset"
+    ],
+    [
+      "quit spraypainting my monitor",
+      "Parse error at line 1, column 238:"
+    ],
+    [
+      "raron - music radar 2",
+      "Invalid equation syntax"
+    ],
+    [
+      "raron - music radar 3",
+      "Invalid equation syntax"
+    ],
+    [
+      "raron - music radar 4",
+      "Invalid equation syntax"
+    ],
+    [
+      "raron - music radar",
+      "Invalid equation syntax"
+    ],
+    [
+      "raron - simple frequency spectrum, almost ordinary equalizer 2",
+      "Invalid equation syntax"
+    ],
+    [
+      "raron - simple frequency spectrum, almost ordinary equalizer",
+      "Invalid equation syntax"
+    ],
+    [
+      "raron - simple frequency spectrum, landscape flyover",
+      "Identical converted preset"
+    ],
+    [
+      "raron - simple frequency spectrum, landscape vertical scroll",
+      "Identical converted preset"
+    ],
+    [
+      "raron - simple frequency spectrum, white vertical double bars",
+      "Identical converted preset"
+    ],
+    [
+      "raron - sproing-O-lizer 2",
+      "Invalid equation syntax"
+    ],
+    [
+      "raron - sproing-O-lizer",
+      "Invalid equation syntax"
+    ],
+    [
+      "raron - time-variable-band almost-ordinary equalizer",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi - are you in the box",
+      "Parse error at line 1, column 238:"
+    ],
+    [
+      "Redi Jedi - brainfart remiz",
+      "Identical converted preset"
+    ],
+    [
+      "Redi Jedi - Cardboard does not bend like that",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi - how am i suspost to paint during this earthquake_Phat_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi - how am i suspost to paint during this earthquake_Phat_edit_V2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi - multiple points of origin, one destination",
+      "Identical converted preset"
+    ],
+    [
+      "Redi Jedi - Noted",
+      "Invalid equation syntax"
+    ],
+    [
+      "redi jedi - off the fadar(no sweeps or bleeps, but alotta creeps)",
+      "Identical converted preset"
+    ],
+    [
+      "Redi Jedi - pladman is no more",
+      "Unavailable texture"
+    ],
+    [
+      "Redi Jedi - quit smoking my watter,you dick",
+      "Identical converted preset"
+    ],
+    [
+      "Redi Jedi - self painting portrait of the universe ver2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi - Shaking your reality (remix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi - Shaking your reality",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi - Smoke and lasers",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi - viewing the world through a chain link fence(and we're the 'free' ones mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi - viewing the world through a chain link fence(welcome to the usa mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi - viewing the world through a chain link fence",
+      "Invalid equation syntax"
+    ],
+    [
+      "Redi Jedi + Studio Music - Shimmering Love",
+      "Parse error at line 1, column 15:"
+    ],
+    [
+      "Redijedi-subspaceofreality",
+      "Identical converted preset"
+    ],
+    [
+      "Reenen Geiss - Triple Feedback_phat+eos_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "Reenen-phoenix",
+      "Identical source"
+    ],
+    [
+      "retina_beat",
+      "Identical converted preset"
+    ],
+    [
+      "Rocke - Cold Love 2",
+      "Identical converted preset"
+    ],
+    [
+      "Roosta  - Bursting - Dissolving cavern mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta  - Bursting - Third Eye Mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta  - Bursting Egg",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta  - Bursting Flood",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta  - Bursting Jelly",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta  - Bursting",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - A Fractured Reflection",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - A Gateway is Expressed - Show Me the Way",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - A Gateway is Expressed",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - A Moment of Focus",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - Demented Swirl 2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - Demented Swirl",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - Her Glowing Iris",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - His Blazing Scepter",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - Swirl Monster",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - Swirl Tiles",
+      "Invalid equation syntax"
+    ],
+    [
+      "Roosta - The Transit of a Thought",
+      "Invalid equation syntax"
+    ],
+    [
+      "Rovastar - Altars Of Harlequin's Madness (Dark Disorder Mix",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar - Altars Of Harlequin's Madness",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar - Altars Of Madness (A Million Miles From Earth Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar - Harlequin's Dynamic Fractal (Dual Spiral Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar - Harlequin's Dynamic Fractal",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar - Harlequin's Fluid Wallpaper",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar - Oozing Resistance",
+      "Already bundled"
+    ],
+    [
+      "Rovastar - Starquake (Sunquake MD2 Mix)",
+      "Unavailable texture"
+    ],
+    [
+      "Rovastar - Trippy Sperm",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar & Geiss - Dynamic Swirls 3 (Mysticial Awakening Mix)",
+      "Identical source"
+    ],
+    [
+      "Rovastar & Geiss - Julia Fractal (Vectrip Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar & Idiot24-7 - Hyper Ball Wrap",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar & Illusion - Dotty Mad Space",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Fvese - Paranormal Static",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Geiss - Bipolar 2 (Vectrip Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Krash - Rainbow Deflection",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Loadus - FractalDrop (Active Sparks Mix) Steady",
+      "Unavailable texture"
+    ],
+    [
+      "Rovastar + Loadus + Geiss - FractalDrop (Triple Mix)",
+      "Already bundled"
+    ],
+    [
+      "Rovastar + Rocke - Sugar Spun Sister",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Telek - Altars of Madness (Rolling Oceans Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Unchained - Ambrosia Mystic (Dark Heart Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Unchained - Life After Pie (Remix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Unchained - Oddball World",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Unchained - Xen Traffic",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Zylot - Azirphaeli's Plan (Multiplan Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Zylot - Narell's Fever",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar + Zylot - Urza's Revenge",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar and Krash - Hallucinogenic Pyramids (Extra Beat Ti",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar and Krash - Hallucinogenic Pyramids (Extra Beat Time Mix)",
+      "Identical source"
+    ],
+    [
+      "Rovastar and Krash - Rainbow Deflection",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&che-adelatheflower(altarso2)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&che-asylumanimations",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&che-definitlynotfortheepilep",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&fvese-darksubconscious",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&fvese-mosaicwaves",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&fvese-paranormalstatic",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&geiss-approach(vectripmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&geiss-bipolar2(vectripmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&geiss-dyn3(brokendestinymix)",
+      "Identical source"
+    ],
+    [
+      "Rovastar&Geiss-Dynamic",
+      "Identical source"
+    ],
+    [
+      "Rovastar&Geiss-DynamicSwir",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&Geiss-DynamicSwirl",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&geiss-hurricanenightmare",
+      "Identical source"
+    ],
+    [
+      "Rovastar&geiss-iceplanet",
+      "Identical source"
+    ],
+    [
+      "Rovastar&geiss-octoplasm",
+      "Identical source"
+    ],
+    [
+      "Rovastar&geiss-surface(vectripmix)",
+      "Identical source"
+    ],
+    [
+      "Rovastar&idiot24-(harlequinsshamemix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&idiot24-7-balkacid",
+      "Identical source"
+    ],
+    [
+      "Rovastar&illusion-shiftingsphere",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&krash-flowingsynergy",
+      "Identical source"
+    ],
+    [
+      "Rovastar&rocke-sugarspunsister",
+      "Identical source"
+    ],
+    [
+      "Rovastar&telek-alta(rollingoceansmix)",
+      "Identical source"
+    ],
+    [
+      "Rovastar&unchained-de(vampiresoulmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&unchained-lifeafterpi(remix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&unchained-voodo(everglowmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&unchained-xentraffic",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&zylot-azirphae(multiplanmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&zylot-insidethetransdimensio",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar&zylot-narellsfever",
+      "Identical source"
+    ],
+    [
+      "Rovastar-altarsofharlequinsmaddess",
+      "Identical source"
+    ],
+    [
+      "Rovastar-AltarsOfHarlequin'sMadn",
+      "Identical source"
+    ],
+    [
+      "Rovastar-altarsofmadness4(spiritoftwi",
+      "Identical source"
+    ],
+    [
+      "Rovastar-amillionmilesfromearth",
+      "Identical source"
+    ],
+    [
+      "Rovastar-attackingfreedom",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-braindance1",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-chemicalspirituality",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-darkritual(starofdestinydeni",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-darkritual(starofdestinymix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-dreamcatcher",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-explosiveminds",
+      "Identical source"
+    ],
+    [
+      "Rovastar-forgottenmoon",
+      "Identical source"
+    ],
+    [
+      "Rovastar-hallucinogenicp(beattimemix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-harlequinsdelight(endlesstun",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-Harlequin'sDynamicFra",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-harlequinsdynamicfractal1",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-harlequinsdynamicfractal3",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-harlequinsliquiddragon",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-harlequinsspirit(twistedmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-harlequinsspirit",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-hyperspace(frozenrapturemix)",
+      "Identical source"
+    ],
+    [
+      "Rovastar-hyperspace(hyperspeedmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-hyperspace",
+      "Identical source"
+    ],
+    [
+      "Rovastar-labfunk",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-lostsoulsof(darkestsoulsmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-mosaicsofages",
+      "Identical source"
+    ],
+    [
+      "Rovastar-pandorasvolcano",
+      "Identical source"
+    ],
+    [
+      "Rovastar-paradigmsphere",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-powertrip",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-ritualoflife",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-sealife",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-shadowsportal",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-snapshotofspace",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-solarizedspace(spacednamix)",
+      "Identical source"
+    ],
+    [
+      "Rovastar-solarizedspace",
+      "Identical source"
+    ],
+    [
+      "Rovastar-starquake(sunquakemix)",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-thechaosofcolours",
+      "Identical source"
+    ],
+    [
+      "Rovastar-visionsofthefuture",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-voovsbrainwaves",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-voovsmovement(afterdarkmix)",
+      "Identical source"
+    ],
+    [
+      "Rovastar-voovsmovement",
+      "Identical converted preset"
+    ],
+    [
+      "Rovastar-voovsorganiclight",
+      "Identical source"
+    ],
+    [
+      "Rozzer & Krash - Molten Indecision (Hot Fast Tweak)",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor & Def Tech - Non-Luddite",
+      "Parse error at line 1, column 99:"
+    ],
+    [
+      "Rozzor & Esotic - Blue Brain Scan",
+      "Invalid equation syntax"
+    ],
+    [
+      "Rozzor & Esotic - Color Plotz",
+      "Invalid equation syntax"
+    ],
+    [
+      "Rozzor & Esotic - River Portal (With Reenen Shapes & Waves)",
+      "Parse error at line 1, column 7:"
+    ],
+    [
+      "Rozzor & Esotic - River Portal",
+      "Invalid equation syntax"
+    ],
+    [
+      "Rozzor & Esotic - Sea Portal",
+      "Invalid equation syntax"
+    ],
+    [
+      "Rozzor & Neuro - Starover (Semicolon Mix)",
+      "Identical source"
+    ],
+    [
+      "Rozzor & Rovastar - Altars Of Madness 3 (ooze tweak with custom wave)",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor & Rovastar - Dynamic Swirls 3 (Twisted Truth Mix Modded)",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor + Idiot - Any Other Deep Rising",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor and che - Inside the House of nil",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor and Idiot - Any Other Deep Rising",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor and Rovastar - Altars Of Madness 3 (ooze tweak)",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor and Zylot - Associative Order",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor vs Unchained - Tripmaker (Color Plotz)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Rozzor&Rovastar-AltarsOfMadnes",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor&studiomusic-ver(geissshapemod)",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor-colorbreaksitsboycot(shapemod)",
+      "Identical converted preset"
+    ],
+    [
+      "Rozzor-learningcurve(inverttweak)",
+      "Identical converted preset"
+    ],
+    [
+      "shifter - a thousand monkeys_phat_edit+Redi Jedi(how are my monkeys suspost to do my homework in this earthquake) persistence beat",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - a thousand monkeys_phat_edit+Redi Jedi(how are my monkeys suspost to do my homework in this earthquake) persistence beat_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - a thousand monkeys_phat_edit+Redi Jedi(how are my monkeys suspost to do my homework in this earthquake) persistence",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - a thousand monkeys_phat_edit+Redi Jedi(how are my monkeys suspost to do my homework in this earthquake)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - a thousand monkeys_phat_edit+Redi Jedi(ok, who put alphabet soup in my washer)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - a thousand monkeys_phat_edit+Redi Jedi(spray painting empty space)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - a thousand monkeys_phat_edit+Redi Jedi(theres milk droping on my homework mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - a thousand monkeys_phat_phrame_rate_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - beat tube (3d)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - brain coral cartoon",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - brain coral primaries",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - catseye",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_phat",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_I_Only_Want_Youre_Virgins_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_I_Only_Want_Youre_Virgins_mix_2",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_Spinny_Mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_Spinny_Slide_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_Spinny_Slide_mix_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_Spinny_Slide_mix_v2_Time_Mod",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_Spinny_Slide_mix_v2_Time_Mod_tan angwarp B",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_Spinny_Slide_mix_v2_Time_Mod_tan angwarp",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_Spinny_Slide_mix_v2_Time_Mod_tan",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_Spinny_Swimmer_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_Spinny_Swimmer_mix_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_YAK_Infusion (shifter leukocyte mix b)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_YAK_Infusion (shifter leukocyte mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_YAK_Infusion",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cellular_Phat_YAK_Infusion_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - comets",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - crosshatch neopsy",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - cyanred",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - digi (xbmc speed tweak)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - digi",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat - Before_It_Eats_Your_Brain_Mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat - Before_It_Eats_Your_Brain_Mix_texture_pop",
+      "Parse error at line 1, column 1080:"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat - Before_It_Eats_Your_Brain_Mix_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat - whale smile",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat 5362",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat 5363",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat 5365",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat Before_It_Eats_Your_Brain_Mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat Before_It_Eats_Your_Brain_Mix_for_NVIDA",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat Brain_Scrambler_Mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat More responsive edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat responsive edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat Tangeren_singularitys_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat Water_Colors",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm - Eo.S. + Phat Well_Placed_Frame_Rate_Drop_Mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - escape the worm",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - feathers (angel wings)_phat_remix relief 2",
+      "Unavailable texture"
+    ],
+    [
+      "shifter - fractal grinder (opalescent)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - fractal grinder (starcity)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - fuzzball (psychadelic mirrorball)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - glassworms flare (xbmc speed tweak)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - glassworms flare",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - glassworms flip",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - glassworms original",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - glassworms skip",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - glassworms skip_phat_edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - glassworms trio",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - glassworms trip",
+      "Conversion timed out"
+    ],
+    [
+      "shifter - insanity pepper",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field topography v3",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field topography",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field twin v3",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit Eo.S. beat edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit_v3",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit_v4 Eo.S. edit B",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit_v4 Eo.S. edit B_Rework",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit_v4 Eo.S. edit C",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit_v4 Eo.S. edit D",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit_v4 Eo.S. edit E",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit_v4 Eo.S. edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Darken_Pop_Edit_v4",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Lines_Edit",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Old_School",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Old_School_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - interference field v3_Phat_Old_School_v3",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - kiwi fruit",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - lattice (eclipse) Phat + Eo.S. more color mix_v6",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - lattice",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - lenticle",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - liquid circuitry",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - mandala (xbmc speed tweak)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - mandala(NEOhm's_Barcode_Remix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - mandala(NEOhm's_BarcodeScanner_Remix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - mandala",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - morphid",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - ralter b",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - ralter c",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - ralter nova warp",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - ralter oilslick b",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - ralter",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - robotopia (xbmc speed tweak)",
+      "Conversion timed out"
+    ],
+    [
+      "shifter - smokering",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - swarm (donuts)",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - swarm",
+      "Invalid equation syntax"
+    ],
+    [
+      "shifter - woodgrain striped",
+      "Invalid equation syntax"
+    ],
+    [
+      "Studio Music - Intuitive Awareness (Always want more mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Studio Music - Personification",
+      "Invalid equation syntax"
+    ],
+    [
+      "Studio Music & Unchained -  We gotta get in (inside Milkdrip mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Studio Music & Unchained -  We gotta get in",
+      "Invalid equation syntax"
+    ],
+    [
+      "Studio Music & Unchained - Melody in Bed",
+      "Invalid equation syntax"
+    ],
+    [
+      "Studio Music & Unchained + Phat and E.o.S - How it feel's to be Alive",
+      "Invalid equation syntax"
+    ],
+    [
+      "Studio Music + Eo.S._Phat - Intuitive Awareness (stimulus effect mix) ",
+      "Identical converted preset"
+    ],
+    [
+      "Studio Music + Eo.S._Phat - Intuitive Awareness (Traces of Love mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Studio Music and Redi Jedi - Passionate Behavior (She Loves it mix)",
+      "Parse error at line 1, column 15:"
+    ],
+    [
+      "Studio Music and Redi Jedi - Passionate Behavior (xbmc speed tweak)",
+      "Parse error at line 1, column 15:"
+    ],
+    [
+      "Studio Music and Redi Jedi - Passionate Behavior",
+      "Parse error at line 1, column 15:"
+    ],
+    [
+      "Studio Music and Redi Jedi - Shimmering Love (remix)",
+      "Parse error at line 1, column 15:"
+    ],
+    [
+      "StudioMusic - Cherished Desires",
+      "Identical converted preset"
+    ],
+    [
+      "StudioMusic - Intuitive Awareness (gyrate mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "StudioMusic - Intuitive Awareness (Revised Edition)",
+      "Invalid equation syntax"
+    ],
+    [
+      "StudioMusic - Intuitive Awareness",
+      "Invalid equation syntax"
+    ],
+    [
+      "StudioMusic - Quick Fix (dramatic mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "StudioMusic - Quick Fix (Mercy Mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "StudioMusic - Quick Fix",
+      "Invalid equation syntax"
+    ],
+    [
+      "StudioMusic - Take Your Pick",
+      "Identical converted preset"
+    ],
+    [
+      "StudioMusic - Twisted Galaxy",
+      "Identical converted preset"
+    ],
+    [
+      "StudioMusic & Unchained - Rapid Alteration",
+      "Identical source"
+    ],
+    [
+      "StudioMusic & Unchained - So Much Love (Aspiration Mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "StudioMusic & Unchained - So Much Love (But she's a Heartbreaker Mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "StudioMusic & Unchained - So Much Love (Caught In The Middle Mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "StudioMusic & Unchained - So Much Love (When you let me mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Studiomusicandredijedi-shimmer(remix)",
+      "Parse error at line 1, column 15:"
+    ],
+    [
+      "Studiomusic-harmonicbliss(elatedmix)",
+      "Identical converted preset"
+    ],
+    [
+      "Studiomusic-intuitive(revisededition)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Studiomusic-twistedgalaxy",
+      "Identical converted preset"
+    ],
+    [
+      "supernova 2",
+      "Identical converted preset"
+    ],
+    [
+      "supernova",
+      "Identical converted preset"
+    ],
+    [
+      "Syst3mFailur - phat - Eo.S. planetfunk-tracers(devilglobe-4)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Syst3mFailur - phat - Eo.S. planetfunk-tracers(devilglobe-6)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Syst3mFailur - phat - Eo.S. planetfunk-tracers(devilglobe-7)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Syst3mFailur - phat - Eo.S. planetfunk-tracers(devilglobe-8)",
+      "Invalid equation syntax"
+    ],
+    [
+      "TEcHNO & SandStorm - Psychodelic Highway",
+      "Identical converted preset"
+    ],
+    [
+      "TEcHNO + SandStorm - Psychodelic Highway",
+      "Identical converted preset"
+    ],
+    [
+      "Telek - Directive Swagger (Spectral Inferno) (fix...) maybe.. YES",
+      "Identical converted preset"
+    ],
+    [
+      "Telek - Lost Star (Flash)",
+      "Identical converted preset"
+    ],
+    [
+      "Telek - Recirculate (Cool)",
+      "Identical converted preset"
+    ],
+    [
+      "Telek - Scanner (@ztec) 2",
+      "Identical converted preset"
+    ],
+    [
+      "Telek - Slow Shift Matrix (bb4.5)",
+      "Identical converted preset"
+    ],
+    [
+      "Telek - Slow Shift Matrix (Ethereal Drift)",
+      "Identical converted preset"
+    ],
+    [
+      "Telek - Spiral Tabletop (New and Improved!)",
+      "Identical converted preset"
+    ],
+    [
+      "Telek - Spokes (More Dynamic)",
+      "Identical converted preset"
+    ],
+    [
+      "Telek & EMPR - Aztec Pool (Flicker @xis Mix)",
+      "Parse error at line 1, column 899:"
+    ],
+    [
+      "Telek & EMPR - Changing Polyevolution",
+      "Identical converted preset"
+    ],
+    [
+      "Telek & EMPR - Hell Cave (Fiddle A Bit (Flicker @xis) Mix)",
+      "Parse error at line 1, column 998:"
+    ],
+    [
+      "Telek & EMPR - Hole",
+      "Parse error at line 1, column 449:"
+    ],
+    [
+      "Telek & EMPR - Ocean Sunset",
+      "Parse error at line 1, column 449:"
+    ],
+    [
+      "Telek & EMPR - Rolling Dunes (Filcker @xis Mix)",
+      "Parse error at line 1, column 892:"
+    ],
+    [
+      "Telek & EMPR - Trust Me, I've Got A Melways",
+      "Identical converted preset"
+    ],
+    [
+      "Telek EMPR - Scanner - Trust me, I've got a Melways",
+      "Identical converted preset"
+    ],
+    [
+      "Telek-flicker(@xis)",
+      "Identical converted preset"
+    ],
+    [
+      "Telek-Flicker",
+      "Identical source"
+    ],
+    [
+      "Telek-sinewave",
+      "Identical converted preset"
+    ],
+    [
+      "Telek-slowshiftmatrix",
+      "Identical converted preset"
+    ],
+    [
+      "Tobiaswolfboi-cataract",
+      "Identical converted preset"
+    ],
+    [
+      "Tobiaswolfboi-thepit",
+      "Identical converted preset"
+    ],
+    [
+      "torsion",
+      "Identical converted preset"
+    ],
+    [
+      "triptacular to the max(maxtacular remix)",
+      "Parse error at line 1, column 1106:"
+    ],
+    [
+      "triptacular to the max(maxtacular to the trip remix)",
+      "Identical converted preset"
+    ],
+    [
+      "Tschoey-musicflower",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained - Beat Demo (Demonology Mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Unchained - Beat Demo (The Blank Slate)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Unchained - Beat Demo 2.0",
+      "Invalid equation syntax"
+    ],
+    [
+      "Unchained - Beat Demo 2.1",
+      "Invalid equation syntax"
+    ],
+    [
+      "Unchained - Beat Demo 2.2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Unchained - Beat Demo 2.3",
+      "Invalid equation syntax"
+    ],
+    [
+      "Unchained - Beat Demo 2.4",
+      "Invalid equation syntax"
+    ],
+    [
+      "Unchained - Beat Demo 2.5",
+      "Invalid equation syntax"
+    ],
+    [
+      "Unchained - Custom Gramatix",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained - Furious Spirals (Remix) Steady",
+      "Unavailable texture"
+    ],
+    [
+      "Unchained - Greedy Gambit",
+      "Invalid equation syntax"
+    ],
+    [
+      "Unchained - Making a Science of It 6",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained - Painful Plasma (Multi-Wave Mirrored Rage) -- Rozzor triangle tweak",
+      "Identical source"
+    ],
+    [
+      "Unchained - Rewop",
+      "Already bundled"
+    ],
+    [
+      "Unchained - Unclaimed Wreckage 2 (Shamanic)",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained - Unified Drag 2",
+      "Already bundled"
+    ],
+    [
+      "Unchained - Your Cortex is Mine",
+      "Invalid equation syntax"
+    ],
+    [
+      "Unchained & Che - Oddnezz 4 (Done it again)",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained & Illusion - Logic Morph",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained & Rovastar - Wormhole Pillars (Hall of Shadows mix)",
+      "Identical source"
+    ],
+    [
+      "Unchained&che-oddnezz3",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained&che-oddnezz4(doneitagain)",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained&illusion-dualwave3",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained&illusion-logicmorph",
+      "Identical source"
+    ],
+    [
+      "Unchained&illusion-spiritmorph",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained&rovastar-luckless",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained&rovastar-rainbowobscura",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-allyoucaneat",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-amatteroftaste(remix)",
+      "Identical source"
+    ],
+    [
+      "Unchained-beatdemo(demonologymix)",
+      "Identical source"
+    ],
+    [
+      "Unchained-beatdemo10",
+      "Identical source"
+    ],
+    [
+      "Unchained-cartoonfactory",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-crankedonfailure",
+      "Identical source"
+    ],
+    [
+      "Unchained-customgramatix(remix)",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-deeperlogic",
+      "Identical source"
+    ],
+    [
+      "Unchained-frenchclothing",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-ghostlightwhisper",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-godofthegame(remix)",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-goofybeatdetection",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-gookungfu",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-housedinachildishmind",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-jadedemotion",
+      "Identical source"
+    ],
+    [
+      "Unchained-jaundice",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-makingascienceofit4",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-moratsfinalvoyage",
+      "Identical source"
+    ],
+    [
+      "Unchained-non-professionalmusicanalyz",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-perverteddialect",
+      "Identical source"
+    ],
+    [
+      "Unchained-pictureofpoison",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-resistance",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-ribaldballad",
+      "Identical source"
+    ],
+    [
+      "Unchained-unclaimedwreckag2(shamanic)",
+      "Identical converted preset"
+    ],
+    [
+      "Unchained-unclaimedwreckage",
+      "Identical converted preset"
+    ],
+    [
+      "va ultramix - 165",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix - 39",
+      "Parse error at line 1, column 355:"
+    ],
+    [
+      "va ultramix - 40",
+      "Parse error at line 1, column 368:"
+    ],
+    [
+      "va ultramix2 - 158",
+      "Parse error at line 1, column 494:"
+    ],
+    [
+      "va ultramix2 - 159",
+      "Parse error at line 1, column 494:"
+    ],
+    [
+      "va ultramix2 - 16",
+      "Parse error at line 1, column 1235:"
+    ],
+    [
+      "va ultramix2 - 160",
+      "Parse error at line 1, column 494:"
+    ],
+    [
+      "va ultramix2 - 191",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 299",
+      "Identical converted preset"
+    ],
+    [
+      "va ultramix2 - 302",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 303",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 304",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 305",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 306",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 307",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 308",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 309",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 310",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 311",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 312",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 313",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 314",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 315",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 316",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 317",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 318",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 319",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 320",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 321",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 322",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 323",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 324",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 325",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 326",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 327",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 328",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 329",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 330",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 331",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 332",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 333",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 334",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 337",
+      "Parse error at line 1, column 1115:"
+    ],
+    [
+      "va ultramix2 - 348",
+      "Parse error at line 1, column 196:"
+    ],
+    [
+      "va ultramix2 - 349",
+      "Parse error at line 1, column 196:"
+    ],
+    [
+      "va ultramix2 - 354",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 355",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 356",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 357",
+      "Parse error at line 1, column 711:"
+    ],
+    [
+      "va ultramix2 - 398",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 399",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 40",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 400",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 401",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 414",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 415",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 425",
+      "Parse error at line 1, column 27:"
+    ],
+    [
+      "va ultramix2 - 429",
+      "Identical source"
+    ],
+    [
+      "va ultramix2 - 431",
+      "Parse error at line 1, column 27:"
+    ],
+    [
+      "va ultramix2 - 459",
+      "Identical source"
+    ],
+    [
+      "va ultramix2 - 464",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 495",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 510",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 514",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 515",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 516",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 517",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 524",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 525",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 53",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 54",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 541",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 542",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 55",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 56",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 60",
+      "Parse error at line 1, column 519:"
+    ],
+    [
+      "va ultramix2 - 61",
+      "Parse error at line 1, column 519:"
+    ],
+    [
+      "va ultramix2 - 62",
+      "Parse error at line 1, column 519:"
+    ],
+    [
+      "va ultramix2 - 66",
+      "Invalid equation syntax"
+    ],
+    [
+      "va ultramix2 - 68",
+      "Parse error at line 1, column 1375:"
+    ],
+    [
+      "va ultramix2 - 78",
+      "Parse error at line 1, column 1235:"
+    ],
+    [
+      "welcome to the underworld(remix)",
+      "Identical converted preset"
+    ],
+    [
+      "yin - 101 - Through the ether (Phase Two)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 102 - Through the ether (The separation) - Bitcore Tweak",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 102 - Through the ether (The separation)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 191 - Temporal singularities",
+      "Already bundled"
+    ],
+    [
+      "yin - 250 - Artificial poles of the continuum_Phat's_Orbit_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 250 - Artificial poles of the continuum_Phat's_star_mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 251 - Artificial poles of the continuum (remix #1)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 252 - Artificial poles of the continuum (remix #2)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 294 - Sonic brainstorm (inner state - UHF mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 295 - Sonic brainstorm (inner state - chemical interferences mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 370 - Something happened here last night",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 371 - Something happened here last night (beat perspective)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 372 - Something happened here last night (aligned)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 373 - Something happened here last night (distorted view)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 380 - Magic ride(redi's magic highway)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin - 381 - Magic ride (2)",
+      "Parse error at line 1, column 7:"
+    ],
+    [
+      "yin - 382 - Magic ride (3)",
+      "Parse error at line 1, column 7:"
+    ],
+    [
+      "yin - 383 - Magic ride (4)",
+      "Parse error at line 1, column 7:"
+    ],
+    [
+      "yin - 384 - Magic ride (5)",
+      "Parse error at line 1, column 7:"
+    ],
+    [
+      "yin - 386 - Magic ride (Redi Jedi's teleporting teleporter)",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin + Geiss - 240 - Electric universe (Bkg Mix)",
+      "Unavailable texture"
+    ],
+    [
+      "yin + Phat + Eo.S. - Dreams of Blood",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin + Phat + Eo.S. - Dreams of Decay",
+      "Invalid equation syntax"
+    ],
+    [
+      "yin + Phat + Eo.S. - Dreams of Pain",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Age of Science (seeking truth mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Building Block of color - Bitcore Tweak",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Building Block Of color",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Cut Glass Majesty",
+      "Parse error at line 1, column 55:"
+    ],
+    [
+      "Zylot - Dark Wisps",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - DISCO INFERNO (Falling)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - DISCO INFERNO (Slow Decent)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - DISCO INFERNO (solid floor)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - DISCO INFERNO",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Gateway to the Unknown (Fractured Nightmares mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Gateway to the Unknown (Nightmares mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Gateway to the Unknown",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Milkdrop v0.001;",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Mirror Ball (Full Train Remix)",
+      "Conversion timed out"
+    ],
+    [
+      "Zylot - My World (burning mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - My World (crashing down mix)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Mystical Center Of All",
+      "Parse error at line 1, column 55:"
+    ],
+    [
+      "Zylot - Radiance",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Seraphic Radiance",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Sex Pulse Virus",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot - Spiral (Hypnotic Crisis v2)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Spiral (Hypnotic Crisis v3)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Spiral (Hypnotic Crisis)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Spiral (Hypnotic Machine)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Spiral (Hypnotic)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Spiral (Hypnotic)_Phat_Double_Spiral_Mix",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Spiral (Hypnotic)_Phat_Double_Spiral_Mix_v2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Spiral",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Square Chuckahs!!!",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Star Ornament",
+      "Already bundled"
+    ],
+    [
+      "Zylot - Static",
+      "Missing preset header"
+    ],
+    [
+      "Zylot - Still Very Old Visualization",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - The Color And The Shapes",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Very Old Visualization",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Will'o Wisp (Adult)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Will'o Wisp (Angered)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Will'o Wisp (Dark Displacer)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Will'o Wisp (Guardian)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Will'o Wisp (Home)",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot - Wisps",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot & Aderrasi - Oceanic Bassograph (New Jersey Shore Mix)",
+      "Parse error at line 1, column 192:"
+    ],
+    [
+      "Zylot & Idiot24-7- ATan2 Demo (Spiraling Mad Mix)",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifact Clouds",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts - lesbians",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts - X",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _After_image",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _After_image_V2",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _After_image_V2_eyes",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _After_image_V2_eyes_made for killing",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _pot",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _Psy",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _Psy_red",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _Psy_red_purple_shape",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _shell",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _slow",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts _slow_faster",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts_3d",
+      "Invalid equation syntax"
+    ],
+    [
+      "Zylot&aderrasi-oce(newjerseyshoremix)",
+      "Parse error at line 1, column 192:"
+    ],
+    [
+      "Zylot&boz-spiritenergy(angrysoulsremi",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot&krash-extremophile",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot&mstress-celebrate",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot&mstress-toxicstormonacidsea(the",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-blockofsound(abstractarchitectu",
+      "Identical source"
+    ],
+    [
+      "Zylot-blockofsound(fractalconstructio",
+      "Identical source"
+    ],
+    [
+      "Zylot-burningpassion",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-de(-a)range(d)(ment)complex",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-de(-a)range(d)(ment)strain",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-digiscapeadvancedprocessor",
+      "Identical source"
+    ],
+    [
+      "Zylot-hollowshell",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-magmacrawl",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-magmavein",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-mixingpot",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-newstar",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-presentforsaddam",
+      "Identical source"
+    ],
+    [
+      "Zylot-puddleofmusic",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-rainbowplanetunderattack",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-ridingthesoundwaves",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-rush",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-thedeeper",
+      "Identical converted preset"
+    ],
+    [
+      "Zylot-tunnelofillusion",
+      "Identical converted preset"
+    ],
+    [
+      "Eo.S. + Phat + fiShbRaiN + Redi Jedi - pictures of insanity(premium blend)",
+      "Butterchurn equation runtime failed"
+    ],
+    [
+      "Aderrasi + Geiss - Airhandler (Kali Mix) - Painterly Kaleidoscope 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Aderrasi + Geiss - Airhandler (Kali Mix) - Painterly Tendrils Colorfast",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Aderrasi + Geiss - Airhandler (Painterly Relief Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Aderrasi + Geiss - Airhandler (Square Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Bmelgren + Geiss - Godhead (Canvas Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Eo.S. + Geiss - glowsticks v2 02 (Relief Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Eo.S. + Geiss - glowsticks v2 03 music shifter edit b (water mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Eo.S. + Geiss - sarc c_Phats Zoom Mix Reflecto",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Flexi + Geiss - Bipolar vs. reaction diffusion",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Flexi - ferny ernie",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - 3 layers (Minefield Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - 3 layers (Planar Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - 3 layers (Rayleigh Scattering Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - 3 layers (Tunnel Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - All-Spark",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - All-Spark Polar",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - All-Spark Sinews",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Artifact 6",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Artifact 6b",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Artifact 6d",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Aurora Industrialis",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Bas Relief",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Beat Dots 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Bipolar 2 Enhanced",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Bipolar 5",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Blur Mix 3",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Brain Zoom",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Cauldron - Tendrils",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Cepia Dither",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Color Pox (Acid Impression Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Color Pox (Measles Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Color Pox (Van Gogh Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Confetti",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Confetti (Kaleidoscope Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Constant Velocity - angular blur",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Constant Velocity - glow",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Cosmic Dust 2 - Game of Life mix",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Cosmic Dust 2 - Laplacian Mix",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Cosmic Dust 2 - Tiny Reaction Diffusion Mix",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Cosmic Dust 2 - Trails 5b",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Cosmic Dust 2 - quasistatic noise (Grow Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Cosmic Dust 2 - quasistatic noise desat trails",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Cosmic Dust 2 - quasistatic noise desat trails 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Cosmic Dust 2 - static noise",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Dancing Spirits",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Desert Rose (Grow Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Desert Rose 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Desert Rose 4",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Digitunnel",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Downward Spiral - color invert mirror x",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Drempels (Let Op!)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Drop Shadow 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Dynamic Swirls 2 - max invert - crazytiles",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Electric Storm Half-Digital 2 (Fiesta Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Explosion",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Fog Zone",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Game of Life",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Game of Life 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Game of Life 3",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Hyperion (LSB mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Iris Storm",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Julia Fractal 3",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Julia Fractal 3 square mix",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Kaleidoscope 1",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Liquid Beats 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Mandelbrot 9a4",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Mandelbrot 9c2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Mash-Up 1",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Mash-Up 3",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Mash-Up 4",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - MicroCheckers 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - MicroCheckers 3",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - MicroCheckers 5",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Mosaic",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Mosaic Octopus",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Mosaic Octopus 7",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Motion Blur 2 (Relief Mix 2)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Motion Blur 2 (Relief Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Myriad Mosaics",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Myriad Spirals",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Myriad Spirals (Relief Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Neutron - radial blur 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Plasma",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Plasma 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Reaction Diffusion (Puddle Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Reaction Diffusion (Relief Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Reaction Diffusion (Royal Crown Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Reaction Diffusion (Shifting Sphere Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Reaction Diffusion (Squamous Flow Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Reaction Diffusion - Simple Squamous Mix",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Reaction Diffusion 3",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Reaction Diffusion 3 (Lichen Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Reaction Diffusion 4 - Petri Mix",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Rose 4",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Rose 4 (LSB mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Rose 4 Shifted Tiles",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Rose 5 Crossfire Beats",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Skin Dots 10",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Skin Dots 10b",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Skin Dots 11 Crossfire Composite",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Skin Dots 11b",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Skin Dots 3",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Skin Dots 6",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Skin Dots 9",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Skin Dots Multi-layer 1",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Skin Dots Multi-layer 3",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Smoke Rings",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Smoke Trail",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Soft",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Spiral Artifact (Filament Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Tadpole Hunter",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Tokamak Plus 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Tokamak Plus 4",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Virus 2",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - Virus Broth",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss - beetle bore - color invert mirror x",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Geiss and Zylot - Reaction Diffusion 3 (Overload Mix 2)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Hexcollie - Personal Mashup3 [Flexis portal mix]",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Illusion - Heavenly Eye - radial blur",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Krash + Illusion + Geiss - Spiral Movement (Reaction Diffusion mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Krash + Rovastar - Rainbow Orb 2 Peacock (Bmelgren's Compelling Vision)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Krash + TEcHNO - Rhythmic Mantas - Painterly",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "ORB - Acid Cycle",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "ORB - Acid Cycle Gas Giant",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "ORB - Supernova Meltdown",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Geiss - Hurricane Nightmare (Gold Chrome Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Geiss - Hurricane Nightmare (Relief Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Geiss - Hyperkaleidoscope Glow 2 motion blur",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Geiss - Hyperspace - kaleidoscope",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Geiss - Snapshot Of Space (LSB mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Geiss - Tripmaker (tiles)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Loadus + Geiss - FractalDrop (Atmospheric Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Loadus + Geiss - FractalDrop (Cauliflower Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Loadus + Geiss - FractalDrop (Insanity Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Loadus + Geiss - FractalDrop (Spinning Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Loadus + Geiss - Tone-mapped FractalDrop",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Loadus + Geiss - Tone-mapped FractalDrop 4",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Loadus + Geiss - Tone-mapped FractalDrop 7b",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Loadus + Geiss - Tone-mapped FractalDrop 7c",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Loadus + Geiss - Tone-mapped FractalDrop 7d",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Rovastar + Rocke - Sugar Spun Sister - Painterly",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Telek - Directive Swagger (Spectral Inferno) with radial blur",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Unchained + Geiss - Furious Spirals (Blur and Glow Remix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Unchained + Geiss - Furious Spirals (Canvas Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Unchained - Furious Spirals (Remix) Radial Blur",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Various - Fire and Brimstone",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Vovan - Bass With Flover - smooth kaleidoscope",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Zylot + Geiss - Enlightenment",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Zylot - Crossing Over (Geiss Tweak)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Zylot - In death there is life (Dancing Lights mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Zylot - In death there is life (Geiss Layered Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Zylot - In death there is life (surface reflection mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "fiShbRaiN + geiss - witchcraft (Grow Mix 2)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "fiShbRaiN + geiss - witchcraft (Grow Mix 3)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "fiShbRaiN + geiss - witchcraft (Grow Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "shifter + Geiss - molten glass (crystal glass mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "shifter + Geiss - molten glass wrap",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "shifter + geiss - neon pulse (glow mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "Eo.S. + Phat + Geiss - chasers 15 sentinels male and female (Dementia Mix)",
+      "Renderer shader did not compile or link"
+    ],
+    [
+      "shifter - tumbling cubes (endless) radial blur",
+      "Renderer shader did not compile or link"
+    ]
+  ]
+}
