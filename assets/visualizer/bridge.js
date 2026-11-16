@@ -13,6 +13,7 @@
   let visualizer, analyzer, audioContext, request = 0, lastFrame = 0;
   let lastAudio = -Infinity, lastCycle = 0, destroyed = false;
   let qualityScale=1, qualityAt=0, qualityFrames=0, slowFrames=0, lastDraw=0;
+  let lastRaf=0, refreshInterval=1000/60, cadenceTotal=0, cadenceSamples=0;
   let song='', take=0, songInitialized=false;
   let activePreset='', activeSource, pendingPreset, presetTicket=0;
   let rotationSeed=0, rotationPosition=0, orderRound=-1, order=[];
@@ -392,11 +393,10 @@
       ? window.devicePixelRatio : 1;
     const width=Math.max(1,milk.clientWidth)*ratio;
     const height=Math.max(1,milk.clientHeight)*ratio;
-    // Keep normal phone panels sharp, but do not allocate desktop-sized warp
-    // textures on phones. Adapt only animated pixels, never spectrum labels.
+    // Phones start with a smaller budget. Both platforms adapt animated pixels
+    // under frame pressure, independently of the Spectrum and its labels.
     const edge=options.mobile?1120:4096, pixels=options.mobile?640000:8388608;
-    const scale=Math.min(1,edge/Math.max(width,height),Math.sqrt(pixels/(width*height)))*
-      (options.mobile?qualityScale:1);
+    const scale=Math.min(1,edge/Math.max(width,height),Math.sqrt(pixels/(width*height)))*qualityScale;
     return [Math.max(1,Math.round(width*scale)),Math.max(1,Math.round(height*scale))];
   }
   function ensureMilk() {
@@ -468,6 +468,13 @@
       visualizer.setRendererSize(renderWidth,renderHeight);
     }
   }
+  function resizeDisplay() {
+    // Display changes can move this view to a different refresh rate. Quality
+    // changes call resize() directly so they retain the measured cadence.
+    refreshInterval=1000/60;
+    lastRaf=0;cadenceTotal=0;cadenceSamples=0;
+    resize();
+  }
   function clearWaveform() {
     if (silent) return;
     waveform.fill(128);
@@ -489,10 +496,11 @@
     }
     lastBeat=-Infinity;energyAverage=0;bassAverage=0;highAverage=0;
     qualityAt=performance.now();qualityFrames=0;slowFrames=0;lastDraw=0;
+    lastRaf=0;cadenceTotal=0;cadenceSamples=0;
   }
   function adapt(time,cost,elapsed) {
-    if (!options.mobile) return;
-    const budget=1000/options.fps;
+    // A high frame limit on a slower display cannot outrun its refresh rate.
+    const budget=Math.max(1000/options.fps,refreshInterval);
     qualityFrames++;
     if (cost>budget*.75 || (elapsed>0 && elapsed>budget*1.7)) slowFrames++;
     if (time-qualityAt<2500 || qualityFrames<20) return;
@@ -505,6 +513,15 @@
   function loop(time) {
     if (!options.active || destroyed) return;
     request=requestAnimationFrame(loop);
+    const cadence=time-lastRaf;
+    if (lastRaf && cadence>=4) {
+      cadenceTotal+=cadence;
+      if (++cadenceSamples===8) {
+        refreshInterval=Math.min(refreshInterval,cadenceTotal/cadenceSamples);
+        cadenceTotal=0;cadenceSamples=0;
+      }
+    }
+    lastRaf=time;
     const interval=1000/options.fps, elapsed=time-lastFrame;
     if (elapsed+.5<interval) return;
     // Preserve the pacing phase instead of dropping to ~20 FPS when a 30 FPS
@@ -671,12 +688,12 @@
       const gl=milk.getContext('webgl2') || milk.getContext('webgl');
       if (gl) gl.getExtension('WEBGL_lose_context')?.loseContext();
       visualizer=null;analyzer=null;resizeObserver.disconnect();
-      window.removeEventListener('resize',resize);
+      window.removeEventListener('resize',resizeDisplay);
     },
   };
-  const resizeObserver=new ResizeObserver(resize);
+  const resizeObserver=new ResizeObserver(resizeDisplay);
   resizeObserver.observe(document.getElementById('surface'));
-  window.addEventListener('resize',resize);
+  window.addEventListener('resize',resizeDisplay);
   document.addEventListener('visibilitychange',()=>{
     // Desktop occlusion/focus loss is not a user-requested stop. Flutter/native
     // window lifecycle still stops desktop capture/rendering on minimization.
