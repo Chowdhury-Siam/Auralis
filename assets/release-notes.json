@@ -1,6 +1,13 @@
 {
-  "current": "0.1.218",
+  "current": "0.1.219",
   "releases": [
+    {
+      "version": "0.1.219",
+      "changes": [
+        "Add the compatible MilkDrop presets from the supplied ProjectM Add on Presets 2.0 pack. Load preset pages on demand and make the full catalogue searchable.",
+        "Save the shuffled preset rotation across tracks and restarts. Keep song-driven transitions and vary the animation with the music."
+      ]
+    },
     {
       "version": "0.1.218",
       "changes": [
