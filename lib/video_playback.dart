@@ -388,9 +388,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
             widget.createController?.call() ?? _createController();
         final player = _player = video.player;
         _subscriptions.addAll([
-          player.stream.error.listen(
-            (_) => _setError('The video could not be played.'),
-          ),
+          // libmpv also logs recoverable decoder and network errors during
+          // playback. Show Retry only when the active file actually aborts.
+          _native.playbackErrors.listen((_) {
+            if (_acceptVideoParams) _setError('The video could not be played.');
+          }),
           widget.proxy.errors.listen((_) {
             if (_source.telegram != null) {
               _setError('Telegram could not load the video.');
