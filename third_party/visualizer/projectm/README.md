@@ -24,3 +24,10 @@ NODE_PATH=/tmp/auralis-projectm/node_modules node tool/convert-projectm-presets.
   /path/to/original.zip assets/visualizer/projectm \
   third_party/visualizer/projectm/import-report.json
 ```
+
+The quality pass drops animations with no authored audio response.
+Explicit volume modulation and PCM-driven custom waveforms count as audio
+response. The import report also records presets that repeatedly produced
+non-finite warp coordinates under quiet, bass, midrange and treble profiles
+at several points in the animation. The app omits failed built-in presets
+from both the picker and automatic rotation.
