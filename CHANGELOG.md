@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.218
+
+- Use sustained changes in loudness, tone, or rhythm to switch Visualizer presets in Song-driven mode. Individual beats continue to animate the current preset.
+- Use gentler crossfades when Song-driven motion changes scenes.
+
 ## 0.1.217
 
 - In Song-driven motion, cycle presets on detected musical accents. Show the Change every setting only for timed cycling.
