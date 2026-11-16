@@ -335,7 +335,9 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Cycle presets'),
                           subtitle: _settings.songMotion
-                              ? const Text('Change presets on musical accents')
+                              ? const Text(
+                                  'Change presets when the music shifts',
+                                )
                               : null,
                           value: _settings.cycle,
                           onChanged: (value) =>
