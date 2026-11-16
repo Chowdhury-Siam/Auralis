@@ -563,8 +563,13 @@ void main() {
             findsNothing,
           );
           await tester.pump(const Duration(milliseconds: 120));
+          final cached = find.descendant(
+            of: origin,
+            matching: find.byKey(const ValueKey('player-origin-blurred-image')),
+          );
           expect(
-            tester.widget<ImageFiltered>(snapshotFinder).enabled,
+            tester.widget<ImageFiltered>(snapshotFinder).enabled ||
+                cached.evaluate().isNotEmpty,
             capturesOrigin,
           );
           expect(home, findsOneWidget);
@@ -617,7 +622,17 @@ void main() {
         expect(tester.widget<Opacity>(body).opacity, 0);
         expect(start.height, lessThan(150));
         expect(start.top, greaterThan(size.height * .5));
-        await tester.pump(const Duration(milliseconds: 150));
+        final previewLayout = find.descendant(
+          of: preview,
+          matching: find.byType(OverflowBox),
+        );
+        final previewContent = find.byWidget(
+          tester.widget<OverflowBox>(previewLayout).child!,
+        );
+        await tester.pump(const Duration(milliseconds: 48));
+        expect(tester.getSize(previewContent).width, dockBounds.width);
+        expect(tester.getRect(surface).width, greaterThan(dockBounds.width));
+        await tester.pump(const Duration(milliseconds: 102));
         final middle = tester.getRect(surface);
         expect(tester.widget<Opacity>(body).opacity, inExclusiveRange(0, 1));
         expect(middle.height, greaterThan(start.height));
