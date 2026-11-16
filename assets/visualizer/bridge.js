@@ -11,9 +11,12 @@
   const milk = document.getElementById('milk');
   const spectrum = document.getElementById('spectrum');
   let visualizer, analyzer, audioContext, request = 0, lastFrame = 0;
-  let lastAudio = -Infinity, lastCycle = 0, presetIndex = 0, destroyed = false;
+  let lastAudio = -Infinity, lastCycle = 0, destroyed = false;
   let qualityScale=1, qualityAt=0, qualityFrames=0, slowFrames=0, lastDraw=0;
-  let song='', take=0, order=[], cursor=0, songInitialized=false;
+  let song='', take=0, songInitialized=false;
+  let activePreset='', activeSource, pendingPreset, presetTicket=0;
+  let rotationSeed=0, rotationPosition=0, orderRound=-1, order=[];
+  const unavailablePresets=new Set(), projectmIndexes=new Map();
   let lastTransform='', lastOpacity='', audioRevision=0, silent=true;
   let lastBeat=-Infinity, energyAverage=0, bassAverage=0, highAverage=0;
   let sectionAudioMs=0, sectionShiftMs=0;
@@ -69,7 +72,7 @@
     cosine[i]=Math.cos(-2*Math.PI*i/1024);
     sine[i]=Math.sin(-2*Math.PI*i/1024);
   }
-  let presets, names=[];
+  let presets, builtInNames=[], names=[];
   function library(name) {
     const script=document.getElementById('library-'+name);
     if (!script || !script.textContent) throw Error('Missing offline renderer: '+name);
@@ -81,8 +84,9 @@
     if (presets) return;
     if (typeof butterchurnPresets==='undefined') library('presets');
     presets=butterchurnPresets.getPresets();
-    names=Object.keys(presets).filter(name => name!=='Flexi + Martin - astral projection');
-    send({type:'presets',presets:names});
+    builtInNames=Object.keys(presets).filter(name => name!=='Flexi + Martin - astral projection');
+    names=[...builtInNames,...projectmIndexes.keys()];
+    send({type:'presets',presets:builtInNames});
   }
   function send(message) {
     const value = JSON.stringify(message);
@@ -322,35 +326,65 @@
     for (let i=0;i<text.length;i++) value=Math.imul(value^text.charCodeAt(i),16777619);
     return value>>>0;
   }
-  function shuffle() {
-    order=names.slice();
-    let seed=hash(`${song}:${options.variation}:${take}`);
-    for (let i=order.length-1;i>0;i--) {
+  function shuffle(round) {
+    const shuffled=names.slice();
+    let seed=hash(`${rotationSeed || options.variation || 1}:${round}`);
+    for (let i=shuffled.length-1;i>0;i--) {
       seed=(Math.imul(seed,1664525)+1013904223)>>>0;
       const j=seed%(i+1);
-      [order[i],order[j]]=[order[j],order[i]];
+      [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];
     }
-    cursor=0;
-    if (order.length>1 && order[0]===names[presetIndex])
-      [order[0],order[1]]=[order[1],order[0]];
+    return shuffled;
   }
-  function nextPreset(blend) {
-    if (cursor>=order.length) shuffle();
-    const current=names[presetIndex];
-    while (cursor<order.length-1 && order[cursor]===current) cursor++;
-    loadPreset(order[cursor++],blend);
+  function rotationOrder(round) {
+    order=shuffle(names.length===2?0:round);
+    // A deterministic swap across round boundaries survives a WebView restart.
+    // The last entry is unaffected by the swap in packs with at least 3 entries.
+    if (round>0 && order.length>2) {
+      const previous=shuffle(round-1);
+      if (order[0]===previous[previous.length-1])
+        [order[0],order[1]]=[order[1],order[0]];
+    }
+    orderRound=round;
+  }
+  function nextPreset(blend,retry=0) {
+    const count=names.length;
+    for (let i=0;i<count;i++) {
+      const round=Math.floor(rotationPosition/count);
+      if (orderRound!==round) rotationOrder(round);
+      const name=order[rotationPosition++%count];
+      if (unavailablePresets.has(name) || (count>1 && name===activePreset)) continue;
+      selectPreset(name,blend,true,retry);
+      return;
+    }
+  }
+  function cancelPresetRequest() {
+    if (pendingPreset) clearTimeout(pendingPreset.timeout);
+    pendingPreset=null;
+  }
+  function selectPreset(name,blend,automatic=false,retry=0) {
+    cancelPresetRequest();
+    if (name===activePreset && activeSource) {
+      loadPreset(name,activeSource,blend,automatic);
+    } else if (builtInNames.includes(name)) {
+      loadPreset(name,presets[name],blend,automatic);
+    } else if (projectmIndexes.has(name)) {
+      const ticket=++presetTicket;
+      const timeout=setTimeout(() => window.auralisVisuals.deliverPreset(ticket,null),5000);
+      pendingPreset={ticket,name,blend,automatic,retry,timeout};
+      send({type:'requestPreset',ticket,index:projectmIndexes.get(name)});
+    }
   }
   function startSong() {
     song=options.song;
     songInitialized=true;
-    order=[];
-    cursor=0;
+    cancelPresetRequest();
     if (names.includes(options.preset)) {
-      loadPreset(options.preset,0);
+      selectPreset(options.preset,0);
     } else if (song) {
       nextPreset(0);
     } else {
-      loadPreset(names[0],0);
+      selectPreset(builtInNames[0],0);
     }
   }
   function milkSize() {
@@ -378,17 +412,10 @@
     installEnergyResponse();
     startSong();
   }
-  function loadPreset(name, blend=1.2) {
-    if (!names.length) throw Error('No visualizer presets are installed.');
-    const found=names.indexOf(name);
-    presetIndex=found<0?0:found;
-    const variation=hash(`${song}:${options.variation}:${take++}:${names[presetIndex]}`)/0x100000000;
-    if (order.includes(names[presetIndex])) {
-      const used=order.indexOf(names[presetIndex]);
-      if (used>=cursor) order.splice(used,1);
-    }
+  function loadPreset(name,source,blend,automatic=false) {
+    if (!source) throw Error('No visualizer presets are installed.');
+    const variation=hash(`${song}:${options.variation}:${take++}:${name}`)/0x100000000;
     if (visualizer) {
-      const source=presets[names[presetIndex]];
       // Keep every original equation/shader/layer. A copied per-frame equation
       // adds a bounded feedback kick and waveform response even in presets
       // whose authored motion mostly ignores audio. Never edit vendor assets.
@@ -409,12 +436,21 @@
         `;
       }
       visualizer.loadPreset(preset,blend);
+      if (projectmIndexes.has(name) && (preset.warp || preset.comp)) {
+        const renderer=visualizer.renderer;
+        for (const shader of [renderer.warpShader,renderer.compShader]) {
+          if (!renderer.gl.getProgramParameter(shader.shaderProgram,renderer.gl.LINK_STATUS))
+            throw Error('The preset shader could not be linked');
+        }
+      }
     }
+    activePreset=name;
+    activeSource=source;
     lastCycle=performance.now();
     blendElapsed=0;
     blendDuration=blend*1000;
     sectionAudioMs=sectionShiftMs=0;
-    send({type:'preset',name:names[presetIndex]});
+    send(automatic?{type:'preset',name,rotationPosition}:{type:'preset',name});
   }
   function resize() {
     if (analyzer && options.mode==='spectrum') {
@@ -475,9 +511,10 @@
     // frame arrives a fraction of a millisecond before its nominal deadline.
     lastFrame+=Math.max(1,Math.floor((elapsed+.5)/interval))*interval;
     try {
+      if (!activePreset) return;
       if (time-lastAudio>250) clearWaveform();
       const onBeat=time-lastBeat<120;
-      if (options.cycle) {
+      if (options.cycle && !pendingPreset) {
         if (options.songMotion) {
           if (sectionAudioMs>=sectionMinAudioMs && sectionShiftMs>=sectionHoldMs &&
               time-lastAudio<=120 && energyRms>=.012) {
@@ -500,9 +537,51 @@
       }});
       adapt(time,performance.now()-started,lastDraw?time-lastDraw:0);
       lastDraw=time;
-    } catch (error) { fail(error); }
+    } catch (error) {
+      if (projectmIndexes.has(activePreset)) {
+        unavailablePresets.add(activePreset);
+        cancelPresetRequest();
+        try { selectPreset(builtInNames[0],0); }
+        catch (_) { fail(error); }
+      } else fail(error);
+    }
   }
   window.auralisVisuals = {
+    addPresetNames(chunk) {
+      for (const name of chunk) projectmIndexes.set(name,projectmIndexes.size);
+      names=[...builtInNames,...projectmIndexes.keys()];
+      orderRound=-1;
+    },
+    clearPresetNames() {
+      projectmIndexes.clear();
+      names=builtInNames.slice();
+      orderRound=-1;
+    },
+    usePresetRotation(seed,position) {
+      rotationSeed=seed;
+      rotationPosition=position;
+      orderRound=-1;
+    },
+    deliverPreset(ticket,source) {
+      if (destroyed || pendingPreset?.ticket!==ticket) return;
+      const {name,blend,automatic,retry}=pendingPreset;
+      cancelPresetRequest();
+      try {
+        if (!source || typeof source!=='object') throw Error('Preset data unavailable');
+        loadPreset(name,source,blend,automatic);
+      } catch (_) {
+        unavailablePresets.add(name);
+        // Recover the previous renderer state if a shader failed during load.
+        try {
+          if (activeSource) loadPreset(activePreset,activeSource,0);
+        } catch (error) {
+          fail(error);
+          return;
+        }
+        if (automatic && retry<3) nextPreset(blend,retry+1);
+        else if (!activeSource) selectPreset(builtInNames[0],0);
+      }
+    },
     configure(next) {
       try {
         const previous=options;
@@ -527,11 +606,14 @@
           ensureMilk();
           if (!songInitialized || song!==options.song) {
             startSong();
-          } else if ((next.preset && next.preset!==names[presetIndex]) ||
-              options.songMotion!==previous.songMotion) {
-            loadPreset(next.preset || names[presetIndex],0);
+          } else if (next.preset && next.preset!==activePreset) {
+            selectPreset(next.preset,0);
+          } else if (options.songMotion!==previous.songMotion && activeSource && !pendingPreset) {
+            selectPreset(activePreset,0);
           }
         } else {
+          cancelPresetRequest();
+          songInitialized=false;
           ensureSpectrum();
           analyzer.setOptions({
             mode:2,radial:false,radialInvert:false,mirror:0,ledBars:false,barSpace:.1,
@@ -575,13 +657,15 @@
         ensureMilk();
         if (direction===0) nextPreset(options.mobile?.42:1.2);
         else {
-          const next=(presetIndex+direction+names.length)%names.length;
-          loadPreset(names[next],options.mobile?.42:1.2);
+          const current=names.indexOf(pendingPreset?.name || activePreset);
+          const next=(current+direction+names.length)%names.length;
+          selectPreset(names[next],options.mobile?.42:1.2);
         }
       } catch (error) { fail(error); }
     },
     destroy() {
       destroyed=true;options.active=false;stop();
+      cancelPresetRequest();
       if (analyzer) analyzer.destroy();
       if (audioContext) audioContext.close().catch(()=>{});
       const gl=milk.getContext('webgl2') || milk.getContext('webgl');
