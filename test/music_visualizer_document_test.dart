@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:auralis/music_visualizer_document.dart';
+import 'package:auralis/music_visualizer_preset_pack.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -34,7 +35,29 @@ class VisualizerBundle extends CachingAssetBundle {
       '/*__BUTTERCHURN__*/ /*__PRESETS__*/ /*__AUDIOMOTION__*/ /*__BRIDGE__*/';
 }
 
+class PresetPackBundle extends VisualizerBundle {
+  @override
+  Future<String> loadString(String key, {bool cache = true}) async {
+    reads.add(key.split('/').last);
+    if (key.endsWith('catalog.json')) {
+      return '{"version":"test","pageSize":2,"names":["A","B","C"]}';
+    }
+    if (key.endsWith('page-1.json')) return '[{"baseVals":{"zoom":1.05}}]';
+    throw StateError('Unexpected asset $key');
+  }
+}
+
 void main() {
+  test('ProjectM catalogue loads only the selected page', () async {
+    final bundle = PresetPackBundle();
+    final pack = await MusicVisualizerPresetPack.load(bundle);
+    expect(pack.names, ['A', 'B', 'C']);
+    expect(bundle.reads, ['catalog.json']);
+    expect(await pack.jsonFor(2), '{"baseVals":{"zoom":1.05}}');
+    expect(bundle.reads, ['catalog.json', 'page-1.json']);
+    await expectLater(pack.jsonFor(3), throwsRangeError);
+  });
+
   test(
     'offline document shares loads and caches only the assembled HTML',
     () async {
