@@ -1,6 +1,20 @@
 {
-  "current": "0.1.219",
+  "current": "0.1.221",
   "releases": [
+    {
+      "version": "0.1.221",
+      "changes": [
+        "Adapt Windows Visualizer resolution under rendering pressure and recover the full drawing size when there is enough headroom.",
+        "Use fresh Windows loopback samples and let the renderer release its reaction between audio packets."
+      ]
+    },
+    {
+      "version": "0.1.220",
+      "changes": [
+        "Reduce desktop Now Playing transition stutter by reusing a small asynchronously blurred image of the origin page while the card moves.",
+        "Keep transition preview controls at a stable layout size while expanding and collapsing the mini-player."
+      ]
+    },
     {
       "version": "0.1.219",
       "changes": [
