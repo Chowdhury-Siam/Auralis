@@ -212,7 +212,17 @@ api.configure({mode:'visualizer',active:true,mobile:false,fps:30});
 const paced=renders;
 for (let i=0;i<60;i++) advance(16.5);
 assert(renders-paced>=28 && renders-paced<=31,'30 FPS pacing must not drift down to 20 FPS');
-api.configure({mode:'visualizer',active:true,cycle:false});
+const desktopSharp=rendererSize[0];
+api.configure({fps:144,cycle:false});
+for (let i=0;i<180;i++) advance(1000/60);
+assert.equal(rendererSize[0],desktopSharp,'A 60 Hz display keeps sharp visuals with a 144 FPS limit');
+renderCost=15;
+for (let i=0;i<100;i++) advance(1000/60);
+assert(rendererSize[0]<desktopSharp,'Costly Windows presets must reduce animated pixel work');
+renderCost=0;
+for (let i=0;i<1200;i++) advance(1000/60);
+assert.equal(rendererSize[0],desktopSharp,'Windows recovers the full drawing size when frames are fast again');
+api.configure({mode:'visualizer',active:true,cycle:false,fps:30});
 for (let i=0;i<25;i++) {
   api.feed(tone(90,20),44100);advance(50);
 }
@@ -450,4 +460,4 @@ secondSession.destroy();
 const html=fs.readFileSync(`${root}assets/visualizer/index.html`,'utf8');
 assert.match(html, /#spectrum canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/,
   'Spectrum canvases must fill the CSS panel at every pixel density');
-console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, phone adaptation/recovery, pacing, DPI, section-driven cycling, softened blends, lazy preset loading, persistent rotation and cleanup.');
+console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, Android and Windows adaptation/recovery, refresh-aware pacing, DPI, section-driven cycling, softened blends, lazy preset loading, persistent rotation and cleanup.');
