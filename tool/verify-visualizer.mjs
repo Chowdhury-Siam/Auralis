@@ -224,36 +224,75 @@ assert(Math.max(...lastWave)<=255 && Math.min(...lastWave)>=1,
   'Transient emphasis must respect available sample headroom');
 api.feed(Buffer.alloc(1024,128).toString('base64'),44100);advance(34);
 assert(lastWave.every(sample=>sample===128),'Live silence must stay silent, not generate pulses');
-const quiet=tone(90,10), accent=tone(90,100);
+const quiet=tone(90,16), accent=tone(90,110);
 const silence=Buffer.alloc(1024,128).toString('base64');
 function capture(samples) {
   api.feed(samples,44100);
   advance(34);
 }
-function playAccent() {
-  for (let i=0;i<5;i++) capture(quiet);
+function hold(samples,ms) {
+  for (let elapsed=0;elapsed<ms;elapsed+=34) capture(samples);
+}
+function cycleSong(song,cycleSeconds=15,mobile=false) {
+  api.configure({mode:'visualizer',active:true,cycle:true,songMotion:true,
+    cycleSeconds,song,mobile});
+  return loaded.length;
+}
+const beforeRepeatedBeats=cycleSong('steady rhythm');
+for (let i=0;i<180;i++) {
+  hold(quiet,170);
   capture(accent);
 }
-for (const cycleSeconds of [15,60]) {
-  api.configure({mode:'visualizer',active:true,cycle:true,songMotion:true,
-    cycleSeconds,song:`cycle test ${cycleSeconds}`});
-  const before=loaded.length;
+assert.equal(loaded.length,beforeRepeatedBeats,'Repeated beats animate one preset without cycling it');
+hold(silence,2000);
+advance(61000);
+assert.equal(loaded.length,beforeRepeatedBeats,'Silence or missing samples cannot force a switch');
+
+const milkStyle=elements.get('milk').style;
+for (const [cycleSeconds,mobile,blend] of [[15,false,1.35],[60,true,1]]) {
+  const before=cycleSong(`level shift ${cycleSeconds}`,cycleSeconds,mobile);
   const started=time;
-  for (let i=0;i<11;i++) playAccent();
-  assert.equal(loaded.length,before,'Distinct accents accumulate before a change');
-  playAccent();
-  assert.equal(loaded.length,before+1,'An audible accent can change presets before the timer');
-  assert.equal(blends.at(-1),.35);
-  assert(time-started<15000);
-  for (let i=0;i<300;i++) capture(accent);
-  for (let i=0;i<20;i++) capture(silence);
-  advance(61000);
-  assert.equal(loaded.length,before+1,'Steady audio, silence and missing samples cannot force a change');
+  hold(quiet,9200);
+  hold(accent,170);
+  hold(quiet,1500);
+  assert.equal(loaded.length,before,'A short accent is not a new section');
+  for (let i=0;i<120 && loaded.length===before;i++) capture(accent);
+  assert.equal(loaded.length,before+1,'A sustained level shift changes the scene');
+  assert.equal(blends.at(-1),blend);
+  assert(time-started<15000,'Song-driven switching is independent of the timer');
+  const initialOpacity=Number(milkStyle.opacity);
+  hold(accent,blend*500);
+  const blendOpacity=Number(milkStyle.opacity);
+  assert(blendOpacity<initialOpacity*.76,'Mid-blend opacity softens bright transitions');
+  hold(accent,blend*700);
+  assert(Number(milkStyle.opacity)>blendOpacity*1.25,'Opacity returns smoothly after the blend');
+  hold(accent,15000);
+  assert.equal(loaded.length,before+1,'The same new section cannot trigger another switch');
 }
+
+const beforeToneShift=cycleSong('tone shift at constant loudness');
+const bassTone=tone(90,76), trebleTone=tone(5000,76);
+hold(bassTone,10000);
+hold(trebleTone,3200);
+assert.equal(loaded.length,beforeToneShift+1,'Sustained tone shifts work at constant loudness');
+
+const beforeRhythmShift=cycleSong('rhythm shift at a consistent average level');
+for (let i=0;i<12;i++) {
+  hold(quiet,680);
+  hold(accent,136);
+}
+assert.equal(loaded.length,beforeRhythmShift);
+for (let i=0;i<26 && loaded.length===beforeRhythmShift;i++) {
+  hold(quiet,170);
+  capture(accent);
+}
+assert.equal(loaded.length,beforeRhythmShift+1,'A sustained attack-rate change can change the scene');
+
 api.configure({cycle:false});
 const beforeDisabled=loaded.length;
-for (let i=0;i<13;i++) playAccent();
-assert.equal(loaded.length,beforeDisabled,'Turning off preset cycling also disables audio-driven changes');
+hold(bassTone,10000);
+hold(trebleTone,5000);
+assert.equal(loaded.length,beforeDisabled,'Turning off preset cycling also disables section changes');
 api.configure({cycle:true,songMotion:false,cycleSeconds:15});
 const beforeTimer=loaded.length;
 advance(16000);
@@ -304,7 +343,6 @@ advance(130);
 assert(lastLevels.instant[2]<loudTreble,'Missing samples should release energy before the stale cutoff');
 advance(150);
 assert(lastLevels.instant.every(value=>value===0),'Stale input must not leave preset energy frozen');
-const milkStyle=elements.get('milk').style;
 function scale() { return Number(milkStyle.transform.match(/scale\(([^)]+)\)/)?.[1]||1); }
 api.configure({mode:'visualizer',active:true,songMotion:true,cycle:false});
 for (let i=0;i<90;i++) { api.feed(tone(90,18),44100);advance(34); }
@@ -358,4 +396,4 @@ assert.equal(messages.filter(message => message.type === 'error').length,0);
 const html=fs.readFileSync(`${root}assets/visualizer/index.html`,'utf8');
 assert.match(html, /#spectrum canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/,
   'Spectrum canvases must fill the CSS panel at every pixel density');
-console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, phone adaptation/recovery, pacing, DPI, cycling and cleanup.');
+console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, phone adaptation/recovery, pacing, DPI, section-driven cycling, softened blends and cleanup.');
