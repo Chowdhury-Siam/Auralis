@@ -61,6 +61,7 @@ const engine = {
 };
 const sandbox = {
   Uint8Array, Float32Array, Float64Array, Math:math, Number, String, JSON, Error,
+  setTimeout, clearTimeout,
   performance: {now: () => time},
   requestAnimationFrame(fn) { callbacks.set(++nextFrame, fn); return nextFrame; },
   cancelAnimationFrame(id) { callbacks.delete(id); },
@@ -393,7 +394,60 @@ assert(destroyed);
 assert.equal(callbacks.size,0);
 api.feed(tone(440),44100);
 assert.equal(messages.filter(message => message.type === 'error').length,0);
+// Imported presets load one at a time, and rotation resumes from a saved cursor.
+function openRotation(position) {
+  vm.runInNewContext(source,sandbox);
+  const bridge=sandbox.window.auralisVisuals;
+  bridge.addPresetNames(['Imported 0','Imported 1','Imported 2']);
+  bridge.usePresetRotation(413,position);
+  bridge.configure({mode:'visualizer',active:false,song:'new session'});
+  return bridge;
+}
+function receivePreset(bridge) {
+  const message=messages.at(-1);
+  if (message.type==='requestPreset') {
+    assert(message.index>=0 && message.index<3);
+    bridge.deliverPreset(message.ticket,{
+      id:`Imported ${message.index}`,baseVals:{},frame_eqs_str:'',
+    });
+  }
+  const selected=messages.at(-1);
+  assert.equal(selected.type,'preset');
+  return selected;
+}
+const firstSession=openRotation(0);
+const draws=[receivePreset(firstSession).name];
+firstSession.configure({song:'new session:second playback'});
+const saved=receivePreset(firstSession);
+draws.push(saved.name);
+assert.equal(saved.rotationPosition,2);
+firstSession.destroy();
+
+const secondSession=openRotation(saved.rotationPosition);
+draws.push(receivePreset(secondSession).name);
+for (let i=0;i<2;i++) {
+  secondSession.step(0);
+  draws.push(receivePreset(secondSession).name);
+}
+assert.equal(new Set(draws).size,5,'All distinct presets play before rotation wraps across sessions');
+secondSession.step(0);
+assert.notEqual(receivePreset(secondSession).name,draws.at(-1),'Rotation does not repeat at the boundary');
+
+secondSession.configure({preset:'Imported 0'});
+const staleRequest=messages.at(-1);
+secondSession.configure({preset:'Imported 1'});
+const currentRequest=messages.at(-1);
+assert.notEqual(staleRequest.ticket,currentRequest.ticket);
+secondSession.deliverPreset(staleRequest.ticket,{id:'stale',baseVals:{}});
+assert.equal(messages.at(-1),currentRequest,'A stale asset cannot overwrite a newer choice');
+assert.equal(receivePreset(secondSession).name,'Imported 1');
+
+secondSession.configure({preset:'Imported 2'});
+secondSession.deliverPreset(messages.at(-1).ticket,null);
+assert.equal(messages.at(-1).name,'Imported 1','Missing preset data preserves the current preset');
+secondSession.destroy();
+
 const html=fs.readFileSync(`${root}assets/visualizer/index.html`,'utf8');
 assert.match(html, /#spectrum canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/,
   'Spectrum canvases must fill the CSS panel at every pixel density');
-console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, phone adaptation/recovery, pacing, DPI, section-driven cycling, softened blends and cleanup.');
+console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, phone adaptation/recovery, pacing, DPI, section-driven cycling, softened blends, lazy preset loading, persistent rotation and cleanup.');
