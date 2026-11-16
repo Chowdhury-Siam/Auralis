@@ -4,10 +4,12 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app_popups.dart';
 import 'music_visualizer_capture.dart';
 import 'music_visualizer_data.dart';
+import 'music_visualizer_preset_pack.dart';
 import 'music_visualizer_webview.dart';
 import 'player.dart';
 import 'preference_widgets.dart';
@@ -71,6 +73,9 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   AppLifecycleState? _lifecycle;
   String? _error;
   List<String> _presets = [];
+  MusicVisualizerPresetPack? _presetPack;
+  bool _catalogueLoading = false, _catalogueReady = false;
+  int _rendererGeneration = 0;
   Timer? _readyTimeout;
   MusicVisualizerSettings get _settings =>
       widget.player.settings.musicVisualizer;
@@ -83,6 +88,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
       (_lifecycle == null ||
           _lifecycle == AppLifecycleState.resumed ||
           (_windows && _lifecycle == AppLifecycleState.inactive)) &&
+      !widget.player.loading &&
       widget.player.audio.playing &&
       !widget.player.audio.buffering;
 
@@ -149,6 +155,8 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   Object get _playbackState => (
     widget.player.audio.playing,
     widget.player.audio.buffering,
+    widget.player.loading,
+    widget.player.playbackRevision,
     widget.player.settings.reducedMotion,
     _settings.fps,
     widget.player.current?.id,
@@ -167,6 +175,15 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   }
 
   void _sync({bool force = false, String? preset}) {
+    if (_ready &&
+        _error == null &&
+        widget.mode == MusicPanel.visualizer &&
+        widget.rendererBuilder == null &&
+        !_catalogueReady) {
+      _capture.setActive(false);
+      if (!_catalogueLoading) unawaited(_installCatalogue(_rendererGeneration));
+      return;
+    }
     final active = _active;
     // Animation FPS stays user-selectable. Native waveform reads do not need
     // to cross Android's platform/WebView bridges more than 30 times a second.
@@ -175,11 +192,15 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     if (!_ready || (!force && active == _lastActive)) return;
     _lastActive = active;
     final track = widget.player.current;
-    final song = track == null
+    final song = widget.player.loading
+        ? _configuredSong ?? ''
+        : track == null
         ? ''
-        : '${track.id}:${track.title}:${track.artist}';
+        : '${track.id}:${track.title}:${track.artist}:${widget.player.playbackRevision}';
     final value = {
-      ...(_settings.toJson()..remove('preset')),
+      ...(_settings.toJson()
+        ..remove('preset')
+        ..remove('rotation')),
       'mode': widget.mode == MusicPanel.spectrum ? 'spectrum' : 'visualizer',
       'active': active,
       'song': song,
@@ -198,6 +219,68 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
             ),
           ),
     );
+  }
+
+  Future<void> _installCatalogue(int generation) async {
+    _catalogueLoading = true;
+    bool current() =>
+        mounted &&
+        _ready &&
+        _error == null &&
+        _rendererGeneration == generation;
+    try {
+      final pack = await MusicVisualizerPresetPack.load(rootBundle);
+      if (!current()) return;
+      _presetPack = pack;
+      final settings = _settings;
+      if (settings.presetCatalogue != pack.version ||
+          settings.presetSeed == 0) {
+        settings
+          ..presetCatalogue = pack.version
+          ..presetSeed = 1 + Random.secure().nextInt((1 << 32) - 1)
+          ..presetPosition = 0;
+      }
+      // Keep individual Android WebView messages well below the Binder limit.
+      const chunkSize = 500;
+      for (var i = 0; i < pack.names.length; i += chunkSize) {
+        final names = pack.names.sublist(
+          i,
+          min(i + chunkSize, pack.names.length),
+        );
+        await _web.execute(
+          'window.auralisVisuals?.addPresetNames(${jsonEncode(names)})',
+        );
+        if (!current()) return;
+      }
+      await _web.execute(
+        'window.auralisVisuals?.usePresetRotation(${settings.presetSeed},${settings.presetPosition})',
+      );
+    } catch (_) {
+      if (!current()) return;
+      _presetPack = null;
+      await _web
+          .execute('window.auralisVisuals?.clearPresetNames()')
+          .catchError((_) {});
+    }
+    if (!current()) return;
+    setState(() {
+      _catalogueLoading = false;
+      _catalogueReady = true;
+    });
+    _sync(force: true);
+  }
+
+  Future<void> _deliverPreset(int ticket, int index, int generation) async {
+    String value;
+    try {
+      value = await _presetPack!.jsonFor(index);
+    } catch (_) {
+      value = 'null';
+    }
+    if (!mounted || generation != _rendererGeneration) return;
+    await _web
+        .execute('window.auralisVisuals?.deliverPreset($ticket,$value)')
+        .catchError((_) {});
   }
 
   void _message(Map<String, dynamic> message) {
@@ -221,9 +304,26 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
       );
     } else if (message['type'] == 'preset' && message['name'] is String) {
       final name = message['name'] as String;
-      if (_presets.contains(name)) {
+      if (_presets.contains(name) ||
+          (_presetPack?.names.contains(name) ?? false)) {
         setState(() => _activePreset = name);
+        final position = message['rotationPosition'];
+        if (_presetPack != null &&
+            position is int &&
+            position > _settings.presetPosition &&
+            position < (1 << 48)) {
+          _settings.presetPosition = position;
+          unawaited(widget.player.settings.save().catchError((_) {}));
+        }
       }
+    } else if (message
+        case {
+          'type': 'requestPreset',
+          'ticket': final int ticket,
+          'index': final int index,
+        }
+        when _presetPack != null) {
+      unawaited(_deliverPreset(ticket, index, _rendererGeneration));
     } else if (message['type'] == 'error') {
       _failed(
         'The graphics engine could not render this preset. Retry or return to Lyrics.',
@@ -237,6 +337,9 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
       _ready = false;
       _renderer = null;
       _configuredSong = null;
+      _rendererGeneration++;
+      _catalogueLoading = _catalogueReady = false;
+      _presetPack = null;
     });
     _watchReady();
   }
@@ -397,7 +500,8 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   }
 
   Future<void> _choosePreset() async {
-    var query = '';
+    final names = [..._presets, ...?_presetPack?.names];
+    var results = names;
     final selected = await showAuralisDialog<String>(
       context: context,
       builder: (dialog) => StatefulBuilder(
@@ -414,23 +518,32 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
                   labelText: 'Search presets',
                   prefixIcon: Icon(Icons.search_rounded),
                 ),
-                onChanged: (value) =>
-                    update(() => query = value.trim().toLowerCase()),
+                onChanged: (value) {
+                  final query = value.trim().toLowerCase();
+                  update(
+                    () => results = query.isEmpty
+                        ? names
+                        : names
+                              .where(
+                                (name) => name.toLowerCase().contains(query),
+                              )
+                              .toList(),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               SizedBox(
                 height: 240,
-                child: ListView(
-                  children: [
-                    for (final name in _presets.where(
-                      (name) => name.toLowerCase().contains(query),
-                    ))
-                      AuralisChoiceTile(
-                        title: Text(name),
-                        selected: name == _activePreset,
-                        onTap: () => Navigator.pop(dialog, name),
-                      ),
-                  ],
+                child: ListView.builder(
+                  itemCount: results.length,
+                  itemBuilder: (context, index) {
+                    final name = results[index];
+                    return AuralisChoiceTile(
+                      title: Text(name),
+                      selected: name == _activePreset,
+                      onTap: () => Navigator.pop(dialog, name),
+                    );
+                  },
                 ),
               ),
             ],
