@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.222
+
+- Remove Visualizer presets with no authored beat response and ProjectM presets with consistently broken warp geometry.
+- Use the curated catalogue in both the preset picker and the persistent shuffle.
+
 ## 0.1.221
 
 - Adapt Windows Visualizer resolution under rendering pressure and recover the full drawing size when there is enough headroom.
