@@ -1,7 +1,7 @@
 {
   "sourceHash": "49e4b65334de758858c99cc21a9a791d7cb3c49ab62e5ec93030028ab1e1def7",
   "total": 9208,
-  "imported": 7738,
+  "imported": 6791,
   "counts": {
     "Identical converted preset": 420,
     "Invalid equation syntax": 604,
@@ -68,7 +68,9 @@
     "Parse error at line 1, column 55:": 2,
     "Missing preset header": 1,
     "Butterchurn equation runtime failed": 1,
-    "Renderer shader did not compile or link": 160
+    "Renderer shader did not compile or link": 160,
+    "No authored beat response": 923,
+    "Invalid geometry across audio profiles": 24
   },
   "skipped": [
     [
@@ -5950,6 +5952,3794 @@
     [
       "shifter - tumbling cubes (endless) radial blur",
       "Renderer shader did not compile or link"
+    ],
+    [
+      "!mu$ - Rovastar - Harlequin's Fluid Wallpaper 3",
+      "No authored beat response"
+    ],
+    [
+      "3dRaGoNs & Rovastar - StarGate rEmIx",
+      "No authored beat response"
+    ],
+    [
+      "3dRaGoNs & Zylot - Sound Blasted",
+      "No authored beat response"
+    ],
+    [
+      "3dRaGoNs - Dragonfly Dreams",
+      "No authored beat response"
+    ],
+    [
+      "3dRaGoNs - Dragonfly Epic",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Airhandler",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Airhandler (Kali Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Airhandler (Kali Mix) - Painterly",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Airhandler (Last Breath - Eden)",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Airhandler (Menagerie Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Airhandler (Radial Dreamers - Nightmare)",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Airhandler (The Goods Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Airs (Something against the Wind)",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Crossroads",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Crossroads (Psychic Traffic)",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Flowing Form",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Helix of Contrast 2003",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - Sounds White",
+      "No authored beat response"
+    ],
+    [
+      "Aderrasi - The Dishes",
+      "No authored beat response"
+    ],
+    [
+      "Bablonwarp - cataractal 2.1",
+      "No authored beat response"
+    ],
+    [
+      "Bmelgren & Rovastar - Celestial Sphere (Dippity Doo)",
+      "No authored beat response"
+    ],
+    [
+      "Bmelgren & Unchained - Shamed Into Silence 1",
+      "No authored beat response"
+    ],
+    [
+      "Bmelgren - Morpherous 1",
+      "No authored beat response"
+    ],
+    [
+      "Bmelgren - Smokin' Chrome",
+      "No authored beat response"
+    ],
+    [
+      "Boz - Bird Of Paradise",
+      "No authored beat response"
+    ],
+    [
+      "Boz - Flip'd Moshun",
+      "No authored beat response"
+    ],
+    [
+      "Boz - Going Blind",
+      "No authored beat response"
+    ],
+    [
+      "Boz - It'll Give You Cancer",
+      "No authored beat response"
+    ],
+    [
+      "Boz - Sunshowers",
+      "No authored beat response"
+    ],
+    [
+      "BrainStain-roto-pinwheel-mix2",
+      "No authored beat response"
+    ],
+    [
+      "Chemlock - Berry Maddog 20-20",
+      "No authored beat response"
+    ],
+    [
+      "Chemlock - Disco Lava",
+      "No authored beat response"
+    ],
+    [
+      "Chemlock - Flood in the Mainframe",
+      "No authored beat response"
+    ],
+    [
+      "Chemlock - Oil Spill",
+      "No authored beat response"
+    ],
+    [
+      "Chemlock - White Flag",
+      "No authored beat response"
+    ],
+    [
+      "Chemlock - Will Does Lines",
+      "No authored beat response"
+    ],
+    [
+      "DaNOnE - A Snowy Day In Paradise",
+      "No authored beat response"
+    ],
+    [
+      "DiSSo - Angelwind",
+      "No authored beat response"
+    ],
+    [
+      "DiSSo - Blue Hall",
+      "No authored beat response"
+    ],
+    [
+      "DiSSo - Cubic Tunnel Syndrome",
+      "No authored beat response"
+    ],
+    [
+      "DiSSo - Quiver Shocker3",
+      "No authored beat response"
+    ],
+    [
+      "Dr. Fragger - 7",
+      "No authored beat response"
+    ],
+    [
+      "Dr. Fragger - 8",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. + Phat - chasers 02 daemon",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - angles of decay",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - arrow base",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - buildings",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - buildings_phat_mix",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - chasers",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - cubetrace",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - cubetrace alt",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - cubetrace particlefly",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - cubetrace particlefly_Phat_Remix",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - cubetrace particlefly_Phat_Solarized_Mix",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - ddg",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - ddg_phat_mix",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - ddg_phat_mix_v2",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - ddg_phat_mix_v3",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - demon60-B",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - ether",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - ether posession",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - ether_phat_edit",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - fractal 1",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - glowstick base",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - glowsticks 01",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - glowsticks 02",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - glowsticks 02_Phat_edit",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - glowsticks 02_Phat_edit_v2",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - glowsticks 02_Phat_edit_v3",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - glowsticks v2 01",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - glowsticks v2 02",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - god 1",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - marble",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - more waveforms",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - more waveforms 2",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - more waveforms 3",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - more waveforms 4",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - more waveforms 5",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - nematodes",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - nematodes B",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - nematodes C",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - nematodes D",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - nematodes D_phat_edit_v2",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - nematodes E daemon",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - particle storm",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - pointfield 01 complex",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - pointfield 02 complex",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - ramus",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - ramus daemon",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - sectors 1_phat_weird_edit",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - skylight",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Eo.S. - starburst 01",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - subtraction fade",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - subtraction fade pain",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. - weird trails",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. planetfunk-09 - tracers D",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. planetfunk-10 - tracers E",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S. remix - Rovastar and Krash - Rainbow Deflection",
+      "No authored beat response"
+    ],
+    [
+      "Eo.S.+Phat - Conductor_Module_Inward_portal",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Eo.S.+Phat -I'm Going to stop playing with this_v2",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Eo.S.+Phat -I'm Going to stop playing with this_v3",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Eo.S.+Phat -I'm Going to stop playing with this_v4",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Eo.S.+Phat -I'm Going to stop playing with this_v4_slow",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Eo.S.+Phat Fractical_dancer - pulsate nubsy_pointer",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Eo.S.+Phat last of it's kind_Just_for_when_computers_are_faster_v2",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Eo.S.+Phat last of it's kind_Points_of_light_v2",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Esotic & Krash - The Tree Of Math",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Esotic - Centeriptical",
+      "No authored beat response"
+    ],
+    [
+      "Esotic - Desert Portal",
+      "No authored beat response"
+    ],
+    [
+      "Esotic - Going Up",
+      "No authored beat response"
+    ],
+    [
+      "Esotic - Open Limeness",
+      "No authored beat response"
+    ],
+    [
+      "Esotic - Time Lapse Rot",
+      "No authored beat response"
+    ],
+    [
+      "Evil02 - Liquid Lighting",
+      "No authored beat response"
+    ],
+    [
+      "Evil02 - Past the Canyon",
+      "No authored beat response"
+    ],
+    [
+      "Fvese - 50-50",
+      "No authored beat response"
+    ],
+    [
+      "Fvese - Bottom Of The Fall",
+      "No authored beat response"
+    ],
+    [
+      "Fvese - Life In A New Box (Begining Mix)",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Fvese - Life In A New Box (Regression Mix 2)",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Fvese - Life In A New Box (Regression Mix)",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Fvese - Static Control",
+      "No authored beat response"
+    ],
+    [
+      "Fvese - Strech",
+      "No authored beat response"
+    ],
+    [
+      "Fvese - Water Fall",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- blender4",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- circit board",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- circit board 2",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- circit board 3",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- circit board 4",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- circit board 5",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- circit board 6",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- circit board towers",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- circit boards",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- circit boards 2",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- circit boards 3",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- eXis",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- eXis 2",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- eXis 3",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- fabrics of reality",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- lilly pad pond",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- the big city",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- the camouflaged starfish",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- the circler maker",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- the circler maker 2",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- the hidden starfish",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- the seasons of the flower",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- wave patterns",
+      "No authored beat response"
+    ],
+    [
+      "Fyornulis- wave patterns 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss & Rovastar - Bytes (quasiresurrected mix)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss & Rovastar - Notions Of Tonality 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss & Rovastar - Tokamak (Naked Intrusion Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss & TobiasWolfBoi - Cataract Slipstream",
+      "No authored beat response"
+    ],
+    [
+      "Geiss + Rovastar - Notions Of Tonality 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss + Rovastar - Tokamak (Naked Intrusion Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Breathing",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Convex",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Cosmic Dust",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Crater",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Cupcake",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Luz",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Monotone Ripples",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Oozing Mass",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Quasilinear Submanifolds",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Serpentine",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Shockwaves",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Spirals",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Spirals 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Starfish 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Two-Pointed Pulsagon",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Vortex",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Warp of Dali Bright",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - 3D - Washboard",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Anomaly 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Anomaly 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Antimatter",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Approach",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Approach (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Asmyptote (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Asymptote",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Bipolar 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Bipolar 2 (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Bipolar 3",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Bipolar 3  (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Bipolar 4",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Bonfire",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Bonfire (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Bright Fiber Matrix 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Calligraphy",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Cartographie",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Casino",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Casino (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Churn",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Churn (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - City At Night",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Constant Velocity",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Constant Velocity (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Coral",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Coral (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Cosmic Dust 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Cruzin'",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Cycloid 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Cycloid 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Davod The Pod",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Demonic Distortion",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Demonic Distortion (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Descent",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Destruction",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Destruction (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Diffraction",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Digital Smoke",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Downward Spiral",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Downward Spiral (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Dynamic Swirls 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Dynamic Swirls 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Eddies 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Eddies 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Eggs",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - El Cubismo",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - El Cubismo 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Fiberglass",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Flames",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Flotsam",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Flower",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Flower Blossom",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Flower Blossom (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Fog Tunnel",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Fog Tunnel (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Four Kinds of Amphetamines",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Galaxy 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Galaxy 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Greenland",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Greenland (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Heavenly 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Heavenly 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Heavenly 3",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Hovering",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Hovering  (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Hurricane",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Hurricane (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Inkblot",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Inverted 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Journey",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Julia Fractal 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Julia Fractal 1 (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Julia Fractal 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Julia Fractal 2 (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Luz",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Many Colors 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Many Colors 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Mega Swirl 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Mega Swirl 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Mega Swirl 3",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Monotone Ripples",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Music Box 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Music Box 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Oozing Mass",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Pastel",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Pelota De Fuego",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Pinch",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Pistons",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Planet 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Planet 1 (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Planet 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Planet 2 (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Quasilinear Submanifolds",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Rocket",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Runoff",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Scary",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Scary (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Script (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Serpent",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Serpent (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Sinews 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Sinews 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Smoke",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Smoke Chaser",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Solar Flare",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Solar Flare (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Solar Flare (Blue)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Solar Flare (Blue) (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Solar Flare (Reptile)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Solar Flare (Reptile) (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Space Voyage",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Space Voyage (High-Warp)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Space Voyage Bright",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Spacedust",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Starfish 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Starfish 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Sunsets",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Supernova 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Supernova 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Surface",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Surface (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Swirl 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Swirlie 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Swirlie 1 (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Swirlie 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Swirlie 3",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Swirlie 4",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Swirlie 5",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Symmetry",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - The Fatty Lumpkin Sunkle Tweaker",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - The Fatty Lumpkin Sunkle Tweaker (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - The Fatty Lumpkin Sunkle Tweaker (Inverted)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Toy",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Toy (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Trampoline",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Trampoline (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Tube",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Two-Pointed Pulsagon",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Ultrafast",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Vapor Echo",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Vortex (Inverted)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Vortex 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Vortex 1 (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Vortex 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Vortex 2 Painterly",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Warp Of Dali 1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Warp Of Dali 2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Warp Of Dali Bright",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Watching",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Waterfall",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Waterfall (1.02 Version)",
+      "No authored beat response"
+    ],
+    [
+      "Geiss - Zygote",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-asymptote",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-flower",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-flowerblossom",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-fourkindsofamphetamines",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-inkblot",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-megaswirl2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-megaswirl3",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-planet1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-starfish2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-sunsets",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-supernova2",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-trampoline",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-two-pointedpulsagon",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-vortex1",
+      "No authored beat response"
+    ],
+    [
+      "Geiss-waterfall",
+      "No authored beat response"
+    ],
+    [
+      "GreenOlive - Electrical Surge",
+      "No authored beat response"
+    ],
+    [
+      "Hampton GER - FrameMove No. 1",
+      "No authored beat response"
+    ],
+    [
+      "Hampton GER - Randomnity",
+      "No authored beat response"
+    ],
+    [
+      "Idiot & Zylot - Hall Of Reflections (Melting Inside The Factal Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot - Away From The Norm",
+      "No authored beat response"
+    ],
+    [
+      "Idiot - Away From The Norm (Dafhi Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot - Hall Of Reflections",
+      "No authored beat response"
+    ],
+    [
+      "Idiot - Hall Of Reflections (Astral Visions Inside The Fracta Mixl)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot - Hall Of Reflections (Astral Visions Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot - Hall Of Reflections (Dual Reflection Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot - Hall Of Reflections (Inside The Fractal Mix 2)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot - Hall Of Reflections (Inside The Fractal Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot - Hall Of Reflections (Marphet's Tornado Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot - What Shall Come",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Idiot24-7 & Illusion - A New Eye",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Idiot24-7 & Illusion - Bad Writing",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 & Illusion - Chrome Swirl",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 & Illusion - Electric Touch Ball",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Idiot24-7 & Illusion - Rave (Living Ka Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 & Illusion - Think On It",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 & Krash  - Rainpainting vs Cyberia 1",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 & Zylot - Orb of Worlds",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 & sysRq - The Rotor Project (Color Tweak)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 & sysRq - The Rotor Project (Elvis AVS Original Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Abstract 1",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Abstract 2",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Abstract 3",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Abstract 4",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Abstract 5",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Ascending To Heaven 1",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Beam Me Up Scotty",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Bottomless Pit",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Collapsed Static 1",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Collapsed Static 2",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Do You Like Me",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Even More Abstract",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Eye Candy",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Fault The Police",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Fault The Police (Fading Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Flame Of Colors",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Follow The Bouncing Wave",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Follow The Bouncing Wave (Letter X Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Getting There",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Goht's Third eye",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Hydrogen",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Icy Hell",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Icy Hell (Tweak 1)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Icy Hell (Tweak 2)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Icy Hell (Vector Drift Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Idiot's Rainbow Tube 1",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Idiot's Rainbow Tube 2",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Marphet's Awakening",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Marphet's Eye",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Marphet's Weapon",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Maybe A Fractal",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Only 14",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Pain",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Peacock",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Phenoix Awakens",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Quad Shift",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Rainbow Blade",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Rainbow Blade (Idiots Accidental Coolness 1)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Rainbow Blade (Idiots Accidental Coolness 2)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Rainbow Blade (Idiots Accidental Coolness 3)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Rainbow Explosion",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Rotor Attempt (Elvis Original Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Scanner",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Strobe",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Strobe (Crazy Lines Mix 1)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Strobe (Crazy Lines Mix 2)",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Tectonic Plates",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - The Blob",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Tri Wave 1",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Tri Wave 2",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Tri Wave 3",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Try This On",
+      "No authored beat response"
+    ],
+    [
+      "Idiot24-7 - Ty3 Dy3",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Aderrasi - Tribute To Spiderman",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Fvese - Rainbow Wheel",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Idiot24-7 - Living Kaleidoscope",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Idiot24-7 - Magical Kaleidoscope",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Idiot24-7 - Puzzle Pieces",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Idiot24-7 - Puzzle Pieces (Uncontrolled Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Idiot24-7 - Rainbow Web",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Idiot24-7 - Spiral Blade",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Krash - Grand Odyssey 1",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Krash - Grand Odyssey 2",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Krash - Major Stars",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Krash - Rainbow Waves",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Rovastar - Dotty Mad",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Rovastar - Faded Spirals",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Rovastar - Good Moods",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Rovastar - Harlequin's Insanity",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Rovastar - Harlequin's Rainbow Spiral",
+      "No authored beat response"
+    ],
+    [
+      "Illusion & Unchained - Wave Of Dots",
+      "No authored beat response"
+    ],
+    [
+      "Illusion - Crazed Spiral",
+      "No authored beat response"
+    ],
+    [
+      "Illusion - Dual Spin",
+      "No authored beat response"
+    ],
+    [
+      "Illusion - Ellimist's Flower",
+      "No authored beat response"
+    ],
+    [
+      "Illusion - Figure Eight",
+      "No authored beat response"
+    ],
+    [
+      "Illusion - Heavenly Eye",
+      "No authored beat response"
+    ],
+    [
+      "Illusion - Perfect Rotation",
+      "No authored beat response"
+    ],
+    [
+      "Illusion - Smoky Clouds",
+      "No authored beat response"
+    ],
+    [
+      "Illusion - Twice Alive",
+      "No authored beat response"
+    ],
+    [
+      "Illusion-figureeight",
+      "No authored beat response"
+    ],
+    [
+      "Inventive Software - Colour Feast In The Tunnel",
+      "No authored beat response"
+    ],
+    [
+      "Inventive Software - Colour Feast In The Tunnel 3",
+      "No authored beat response"
+    ],
+    [
+      "Inventive Software - Lightning Always Strikes Twice",
+      "No authored beat response"
+    ],
+    [
+      "Inventive Software - Madness In A Waveform",
+      "No authored beat response"
+    ],
+    [
+      "Inventive Software - Mathemagical Madness",
+      "No authored beat response"
+    ],
+    [
+      "Inventive Software - Ripples In The Searchlight",
+      "No authored beat response"
+    ],
+    [
+      "Inventive Software - Ripples In The Searchlight (Colour Remix)",
+      "No authored beat response"
+    ],
+    [
+      "Inventive Software - Sun Storm",
+      "No authored beat response"
+    ],
+    [
+      "Inventive Software - The Eye Of The Storm",
+      "No authored beat response"
+    ],
+    [
+      "Inventive Software - The Waveblend Machine",
+      "No authored beat response"
+    ],
+    [
+      "Jeeway - Seashell",
+      "No authored beat response"
+    ],
+    [
+      "Jeff & the Milkdrop Crew - Surf",
+      "No authored beat response"
+    ],
+    [
+      "Jess - A Paradox",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Jess - Atomic Theory",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Bloodshot",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Bloody Pool",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Electric Ball",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Electric Ball (Inverted)",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Falling Away From Me",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Hemorhage",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Hot or Cold.....",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Inside A Cyclone",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Jess 3",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Jess 4",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Just Really Cool",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Opening & Closing Portal",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Rectangular Pupil",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Target",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Whirlpool",
+      "No authored beat response"
+    ],
+    [
+      "Jess - Window Of Oppurtunity",
+      "No authored beat response"
+    ],
+    [
+      "John Scoville - Retina",
+      "No authored beat response"
+    ],
+    [
+      "John Scoville - Torsion",
+      "No authored beat response"
+    ],
+    [
+      "John Scoville - Window Grid",
+      "No authored beat response"
+    ],
+    [
+      "Krash & Rovastar - Dreamtime Retold",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Anemea Critter",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Corkscrew",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Event Horizon",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Fountain",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Garden Sprinkler",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Krash Flames",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Ocean Sunset",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Ocean Sunset With Clouds",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Pulse",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Rainpainting 1",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Rainpainting 2",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Rainpainting 2 (Quick Dry Remix)",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Rainpainting 2 (Triple Sec Remix)",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Swelling Spiral 2",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Window To Quasilinear Submanifolds",
+      "No authored beat response"
+    ],
+    [
+      "Krash - Windowframe To Mega Swirl 2",
+      "No authored beat response"
+    ],
+    [
+      "Krash - rainpainting",
+      "No authored beat response"
+    ],
+    [
+      "Krash - rainpainting 2 (quick dry paint)",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 10",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 11",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 2",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 26",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 28",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 3",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 30",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 31",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 32",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 34",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 35",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 36",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 38",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 39",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 46",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 47",
+      "No authored beat response"
+    ],
+    [
+      "Loadus & Geiss - FractalDrop 7",
+      "No authored beat response"
+    ],
+    [
+      "MisterJingo - Lava",
+      "No authored beat response"
+    ],
+    [
+      "Mstress - Aurora Boreale",
+      "No authored beat response"
+    ],
+    [
+      "Mstress - Curtain",
+      "No authored beat response"
+    ],
+    [
+      "Mxyzptlk - Fluid Reaction",
+      "No authored beat response"
+    ],
+    [
+      "Mxyzptlk - Fluid Reaction (Hallucinagenic Mass mix)",
+      "No authored beat response"
+    ],
+    [
+      "Nil & EMPR - Fire Water",
+      "No authored beat response"
+    ],
+    [
+      "Nil - Singularity in My Oscilloscope",
+      "No authored beat response"
+    ],
+    [
+      "Ondras - Simple",
+      "No authored beat response"
+    ],
+    [
+      "Ondras - Slow bouncer",
+      "No authored beat response"
+    ],
+    [
+      "Ondras - Some more rotation, please",
+      "No authored beat response"
+    ],
+    [
+      "Ondras - Sun Above Sea",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - Atangent flux3",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - Atangent flux4",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - Atangent flux5",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - Atangent flux6",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - Atangent flux_6",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - Atangent flux_7",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - Atangent flux_8 Eo.S.",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - Atangent flux_8 Eo.S._remix",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - Atangent flux_striped",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - D@ 5W!M!n6 P0()!",
+      "No authored beat response"
+    ],
+    [
+      "Phat+Eo.S. - D@ 5W!M!n6 P0()!2",
+      "No authored beat response"
+    ],
+    [
+      "Phmall + Calculations Gone Wrong",
+      "No authored beat response"
+    ],
+    [
+      "Phmall + LCD",
+      "No authored beat response"
+    ],
+    [
+      "Phmall + Untitled 2",
+      "No authored beat response"
+    ],
+    [
+      "Pinbi7 & Idiot - Cathedral",
+      "No authored beat response"
+    ],
+    [
+      "Pinbi7 & Idiot - Get Sucked In",
+      "No authored beat response"
+    ],
+    [
+      "Pinbi7 & Idiot - Rock Around The Clock (The Hands Of Time Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Pinbi7 & Idiot - Sun Flare",
+      "No authored beat response"
+    ],
+    [
+      "Pinbi7 & Zylot - Hiding In The Shadow",
+      "No authored beat response"
+    ],
+    [
+      "Pinbi7 - Hope You Like It",
+      "No authored beat response"
+    ],
+    [
+      "Pinbi7 - Rock Around The Clock 1",
+      "No authored beat response"
+    ],
+    [
+      "Pinbi7 - Rock Around The Clock 2",
+      "No authored beat response"
+    ],
+    [
+      "Pinbi7 - Snake Skin",
+      "No authored beat response"
+    ],
+    [
+      "Pithlit - Deep Vent",
+      "No authored beat response"
+    ],
+    [
+      "Pithlit - Fractal Tune",
+      "No authored beat response"
+    ],
+    [
+      "Pithlit - Gooey Tower",
+      "No authored beat response"
+    ],
+    [
+      "Pithlit - Hyperspace",
+      "No authored beat response"
+    ],
+    [
+      "Pithlit - Nova",
+      "No authored beat response"
+    ],
+    [
+      "Pithlit - Peaceful Flow",
+      "No authored beat response"
+    ],
+    [
+      "Pithlit - Slow Cyclone",
+      "No authored beat response"
+    ],
+    [
+      "Pithlit - Swarmers",
+      "No authored beat response"
+    ],
+    [
+      "Pithlit - You know it!",
+      "No authored beat response"
+    ],
+    [
+      "Redi Jedi - This is your brain on drugs",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Robert E. James - Rej 04",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - Alice",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - Cold Love 1",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - Dragon",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - Dragon (Remix)",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - Loz Tribute",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - Loz Tribute (Remix)",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - Personal Comet",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - Universe Of Music",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - What You Want (Original Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - What You Want 1",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - What You Want 2",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - What You Want 3",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - What You Want 4",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - What You Want 5",
+      "No authored beat response"
+    ],
+    [
+      "Rocke - What You Want 6",
+      "No authored beat response"
+    ],
+    [
+      "Rocke-personalcomet",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar & Adair - The Echo Tube",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar & Che - Adela The Flower (Altars Of Madness Mix 1)",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Rovastar & Geiss - Many More Colours",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar & Geiss - Tokamak (Naked Intrusion Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar & Illusion - Dual Wave",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar & Illusion - Dual Wave 1",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar & Illusion - Good Moods",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar & Krash - Aenema Waves",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar & Krash - Aenematic",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar & Unchained - The Echo Echo Tube",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar & Zylot - Urza's Revenge",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Ace of Spades",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Aquarius",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Basic Electronica",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Bytes",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Celestial Sphere",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Decreasing Dreams (Orginal)",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Dreamtime",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Enchanting Signs",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Encounters Of The 7th Kind (Part I)",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Encounters Of The 7th Kind (Part II)",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Encounters Of The 7th Kind (Part III)",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Harlequin's Dynamic Fractal (Crazed Spiral Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Harlequin's Fluid Wallpaper 1",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Harlequin's Fluid Wallpaper 2",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Harlequin's Fluid Wallpaper 3",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Harlequin's Meditation",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Harmony",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Moebuis",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Multiverse Starfield 1",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Multiverse Starfield 2",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Multiverse Starfield 3",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Negative Harmony",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Requiem",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Return To The Source",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - River Of Illusion",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Shadows And Angels",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Shango 1",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Shango 2",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Twisted Tubes",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar - Virtual Horizons",
+      "No authored beat response"
+    ],
+    [
+      "Rovastar-multiversestarfield1",
+      "No authored beat response"
+    ],
+    [
+      "Ryjhan - Attempt 2",
+      "No authored beat response"
+    ],
+    [
+      "StudioMusic - Electrifying Bacteria",
+      "No authored beat response"
+    ],
+    [
+      "StudioMusic - Explicit Love",
+      "No authored beat response"
+    ],
+    [
+      "StudioMusic - Somaesthesia",
+      "No authored beat response"
+    ],
+    [
+      "StudioMusic - Somaesthesia (Remix)",
+      "No authored beat response"
+    ],
+    [
+      "Stuttler - Eye of Conformity 2",
+      "No authored beat response"
+    ],
+    [
+      "Stuttler - LSD Bloom 1",
+      "No authored beat response"
+    ],
+    [
+      "TEcHNO - Vip (fast)",
+      "No authored beat response"
+    ],
+    [
+      "Telek & EMPR - Harlequin Sinks!",
+      "No authored beat response"
+    ],
+    [
+      "Telek & EMPR - Harlequins Kaleidoscope Trip",
+      "No authored beat response"
+    ],
+    [
+      "Telek & EMPR - Signature",
+      "No authored beat response"
+    ],
+    [
+      "Telek - Recirculate (Centre Tap Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Telek - Simple Slide",
+      "No authored beat response"
+    ],
+    [
+      "Telek - Spiral Tabletop",
+      "No authored beat response"
+    ],
+    [
+      "Telek___Fireworks3__rapid_",
+      "No authored beat response"
+    ],
+    [
+      "Timmy - Batty",
+      "No authored beat response"
+    ],
+    [
+      "Tobias Wolf Boi - Cataract",
+      "No authored beat response"
+    ],
+    [
+      "Tobias Wolf Boi - The Pit",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Bellows",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Bizzare Sandstorm",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Black Hole",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Cataract",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Chaotic Blindness",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Churning Honeypot",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Churning Rebounds",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Circling Dragons",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Diseased Blindness",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Mercury Doughnut",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Nauseous Checkerboard",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Stargate",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - The Pit",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Tunnel",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Twirling Snowflake",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Underwater High",
+      "No authored beat response"
+    ],
+    [
+      "TobiasWolfBoi - Vortex",
+      "No authored beat response"
+    ],
+    [
+      "Tschoey - Devil's Eye",
+      "No authored beat response"
+    ],
+    [
+      "Tschoey - Music Flower",
+      "No authored beat response"
+    ],
+    [
+      "Tschoey - PsycoTunnelTrance",
+      "No authored beat response"
+    ],
+    [
+      "Tschoey - PsycoTunnelTrance 2",
+      "No authored beat response"
+    ],
+    [
+      "Tschoey - PsycoTunnelTrance 3",
+      "No authored beat response"
+    ],
+    [
+      "Tschoey - PsycoTunnelTrance 4",
+      "No authored beat response"
+    ],
+    [
+      "Tschoey - PsycoTunnelTrance 5",
+      "No authored beat response"
+    ],
+    [
+      "Unchained & Rovastar - The Echo Echo Tube",
+      "No authored beat response"
+    ],
+    [
+      "Unchained & Studio Music - Ghostly Export",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - All Lines Of Force",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - All You Can Eat",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Unchained - Ambrosia Legend",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Ambrosia Mystic",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Another Formal System",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Armed Resistance",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Closure Space",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Curious Methods",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Eye Chamber Underwater",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - French Clothing",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Inner Plane Boundary",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Inside of the Boom-Room (no beat detection)",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Lucky Enough To Lick",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Unchained - Mind Of Morat",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Mixed Blessing",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Modal Rotation",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Much Too Happy",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Photonic Planer Map",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Roach Motel",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Royal Jelly",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Scientific Dance",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Shamed Into Silence",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Simple Times",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - The Logic Bomb",
+      "No authored beat response"
+    ],
+    [
+      "Unchained - Vanity Sponge (Remix)",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "XXL - Swirlie 2",
+      "No authored beat response"
+    ],
+    [
+      "Zylot & Rovastar - Harlequin's Lost Memory",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Zylot & Rovastar - Requiem For A Dream",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Benevolent Unexposure",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Chaos Cones",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Chronoscism",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Colour Curtains",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Crptomanifestia",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Cyberia",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Cyberia Tranced",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Deep Blue Sea",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Digiscape",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Digiscape Accelerated",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Digiscape Advanced Processor",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Digiscape Moderated",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Displacer",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Endless Passage",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Ether Storm",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Forboding Skies",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Holium Effect",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Ion",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Lense",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Liquid Skies",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Magma Crawl",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Magma Flow",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Magma Pool",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Magma Vein",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Open Your Mind",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Over The Ocean",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - PinWheel",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Plane Of Sights",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Planet Portal",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Prismatic Gate",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Prismatic Portal",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Rip in Time",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Rystic Pond",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Rystic Pond (Surface Disturbance Mix)",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Sound Blast",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Spirits Of The Night Sky",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Tentacle Horror",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - The Rainbow Planet",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Through Crystal Eyes",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Twisted Thoughts",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Wall Of Water",
+      "No authored beat response"
+    ],
+    [
+      "Zylot - Wormhole",
+      "No authored beat response"
+    ],
+    [
+      "Zylot and Phat - Hypnotic Artifacts - lesbians2",
+      "Invalid geometry across audio profiles"
+    ],
+    [
+      "Zylot-etherstorm",
+      "No authored beat response"
+    ],
+    [
+      "aberration 3D testa",
+      "No authored beat response"
+    ],
+    [
+      "aberration 3D testb",
+      "No authored beat response"
+    ],
+    [
+      "aberration 3D testc",
+      "No authored beat response"
+    ],
+    [
+      "cartographie",
+      "No authored beat response"
+    ],
+    [
+      "cycloid",
+      "No authored beat response"
+    ],
+    [
+      "diko mou - UNDER FURTHER DESTRUCTION 0009",
+      "No authored beat response"
+    ],
+    [
+      "downward spiral",
+      "No authored beat response"
+    ],
+    [
+      "fiShbRaiN - molecule mind",
+      "No authored beat response"
+    ],
+    [
+      "fiShbRaiN - planet x",
+      "No authored beat response"
+    ],
+    [
+      "fiShbRaiN - planet x (Phat+E.Os intense starfield edit)",
+      "No authored beat response"
+    ],
+    [
+      "fiShbRaiN - swarm (3d)",
+      "No authored beat response"
+    ],
+    [
+      "inkblot",
+      "No authored beat response"
+    ],
+    [
+      "monotone ripples",
+      "No authored beat response"
+    ],
+    [
+      "nil - Disco Comet",
+      "No authored beat response"
+    ],
+    [
+      "nil - Eqlectrik",
+      "No authored beat response"
+    ],
+    [
+      "phat_O MY GOD ITS 3D!!!_mounds_mix",
+      "No authored beat response"
+    ],
+    [
+      "phat_O MY GOD ITS 3D!!!_mounds_mix_v2",
+      "No authored beat response"
+    ],
+    [
+      "phat_O MY GOD ITS 3D!!!_mounds_mix_v3",
+      "No authored beat response"
+    ],
+    [
+      "phat_O MY GOD ITS 3D!!!_mounds_mix_v4",
+      "No authored beat response"
+    ],
+    [
+      "phat_O MY GOD ITS 3D!!!_the_80s",
+      "No authored beat response"
+    ],
+    [
+      "phat_fightingDAfight_Eo.S-remix",
+      "No authored beat response"
+    ],
+    [
+      "phat_shapeprogress",
+      "No authored beat response"
+    ],
+    [
+      "retina",
+      "No authored beat response"
+    ],
+    [
+      "starfish",
+      "No authored beat response"
+    ],
+    [
+      "starfish 2",
+      "No authored beat response"
+    ],
+    [
+      "sunsets",
+      "No authored beat response"
+    ],
+    [
+      "theaftershock - Cat Eye Orb",
+      "No authored beat response"
+    ],
+    [
+      "theaftershock - Flag of Flames",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix - 147",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 01",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 02",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 03",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 05",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 06",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 07",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 08",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 09",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 10",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 11",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 116",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 118",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 122",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 123",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 125",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 126",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 13",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 139",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 143",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 144",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 145",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 147",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 149",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 151",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 152",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 161",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 17",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 175",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 18",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 185",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 187",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 190",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 194",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 195",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 197",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 198",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 199",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 20",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 201",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 202",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 204",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 205",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 206",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 207",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 208",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 209",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 21",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 210",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 211",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 212",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 213",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 215",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 216",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 222",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 223",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 224",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 225",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 226",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 227",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 228",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 229",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 233",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 234",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 236",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 239",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 24",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 244",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 245",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 246",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 247",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 249",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 25",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 250",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 251",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 252",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 253",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 255",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 256",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 257",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 258",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 259",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 260",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 261",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 262",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 263",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 264",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 269",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 270",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 271",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 272",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 273",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 274",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 277",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 278",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 279",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 28",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 280",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 281",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 282",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 284",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 285",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 286",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 288",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 29",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 294",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 295",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 296",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 297",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 298",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 30",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 300",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 301",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 32",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 33",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 336",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 338",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 340",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 341",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 342",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 343",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 344",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 345",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 346",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 347",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 352",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 358",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 36",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 367",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 369",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 37",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 379",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 380",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 381",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 384",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 385",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 391",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 392",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 394",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 396",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 417",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 420",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 421",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 423",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 424",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 427",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 430",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 433",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 434",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 435",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 446",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 447",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 448",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 449",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 450",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 451",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 453",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 458",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 512",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 513",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 520",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 521",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 522",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 523",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 63",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 65",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 73",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 74",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 75",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 76",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 77",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 79",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 80",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 81",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 83",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 84",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 85",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 89",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 91",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 93",
+      "No authored beat response"
+    ],
+    [
+      "va ultramix2 - 94",
+      "No authored beat response"
+    ],
+    [
+      "yin - 060 - PLU",
+      "No authored beat response"
+    ],
+    [
+      "yin - 080 - Dream Universe",
+      "No authored beat response"
+    ],
+    [
+      "yin - 180 - Pyrotechnics",
+      "No authored beat response"
+    ],
+    [
+      "yin - 181 - Pyrotechnics (windy mix)",
+      "No authored beat response"
+    ],
+    [
+      "yin - 310 - Ocean of Light",
+      "No authored beat response"
+    ],
+    [
+      "yin - 311 - Ocean of Light (bouncing off mix)",
+      "No authored beat response"
+    ],
+    [
+      "yin - 312 - Ocean of Light (dot3 lighting)",
+      "No authored beat response"
+    ],
+    [
+      "yin - 313 - Ocean of Light (ESP)",
+      "No authored beat response"
+    ],
+    [
+      "yin - Hue2RGB demo",
+      "No authored beat response"
     ]
   ]
 }
