@@ -85,7 +85,13 @@
     if (presets) return;
     if (typeof butterchurnPresets==='undefined') library('presets');
     presets=butterchurnPresets.getPresets();
-    builtInNames=Object.keys(presets).filter(name => name!=='Flexi + Martin - astral projection');
+    const excluded=new Set([
+      'Flexi + Martin - astral projection',
+      'Aderrasi + Geiss - Airhandler (Kali Mix) - Canvas Mix',
+      'Flexi - truly soft piece of software - this is generic texturing (Jelly) ',
+      'martin - mandelbox explorer - high speed demo version',
+    ]);
+    builtInNames=Object.keys(presets).filter(name => !excluded.has(name));
     names=[...builtInNames,...projectmIndexes.keys()];
     send({type:'presets',presets:builtInNames});
   }
