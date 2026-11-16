@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import {butterchurnAudio} from './visualizer-audio-fixture.mjs';
+import inspectPreset from './visualizer-preset-quality.cjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const source = fs.readFileSync(`${root}assets/visualizer/bridge.js`, 'utf8');
@@ -15,6 +16,9 @@ let lastLevels, lastPreset, lastEquation, lastElapsed;
 const registered = new Map();
 const testPresets={A:{id:'A',baseVals:{zoom:1,wave_scale:1,warp:.1},frame_eqs_str:''},
   B:{id:'B',baseVals:{zoom:1,wave_scale:1,warp:.1},frame_eqs_str:''}};
+testPresets['Aderrasi + Geiss - Airhandler (Kali Mix) - Canvas Mix']={
+  id:'excluded',baseVals:{},frame_eqs_str:'',
+};
 const math=Object.create(Math);
 math.cos=value=>{trigCalls++;return Math.cos(value);};
 math.sin=value=>{trigCalls++;return Math.sin(value);};
@@ -146,6 +150,13 @@ assert(Analyzer.current.options.radial);
 assert.equal(Analyzer.current.options.gradient,'classic');
 api.configure({mode:'visualizer',active:true,cycle:true,songMotion:false,cycleSeconds:15,fps:30});
 assert.equal(presetReads,1);
+assert.deepEqual(messages.find(message => message.type==='presets').presets, ['A','B'],
+  'Excluded stock presets must stay out of both the picker and the rotation');
+assert.equal(inspectPreset({frame_eqs_str:"a['rot'] = a['time'];"}), 'No authored beat response');
+assert.equal(inspectPreset({baseVals:{wave_a:0,mv_a:0},frame_eqs_str:'a.zoom=a.bass;'}),
+  'No visible drawing layer');
+assert.equal(inspectPreset({frame_eqs_str:'a.zoom+=a.bass_att;'}), null);
+assert.equal(inspectPreset({waves:[{baseVals:{enabled:1},point_eqs_str:'a.y=.5+a.value1;'}]}), null);
 
 assert.deepEqual(createdSize,[1200,675], 'Initial render targets must also use the full drawing size');
 assert.deepEqual([elements.get('milk').width,elements.get('milk').height],[1200,675],
