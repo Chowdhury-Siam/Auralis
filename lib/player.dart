@@ -361,6 +361,8 @@ class PlayerController extends ChangeNotifier {
   Future<void>? _openingAudio, _clearing;
   final List<Track> queue = [];
   int index = -1, _generation = 0;
+  int _playbackRevision = 0;
+  int get playbackRevision => _playbackRevision;
   bool loading = false, _closed = false, _pauseAfterOpen = false;
   bool _focusInterrupted = false,
       _videoInterrupted = false,
@@ -619,8 +621,10 @@ class PlayerController extends ChangeNotifier {
     } else if (repeatMode == PlaybackRepeat.one && current != null) {
       try {
         await seek(Duration.zero);
-        if (generation == _generation && !audio.playing) {
-          await setPlayback(true);
+        if (generation == _generation && !_closed) {
+          _playbackRevision++;
+          notifyListeners();
+          if (!audio.playing) await setPlayback(true);
         }
       } catch (_) {
         if (!_closed) {
@@ -718,6 +722,7 @@ class PlayerController extends ChangeNotifier {
         loading = false;
         _pauseAfterOpen = false;
         if (opened) {
+          _playbackRevision++;
           _listeningTrack = track;
           _sessionListened = 0;
           _qualifiedPlay = false;
