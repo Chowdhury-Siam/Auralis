@@ -37,6 +37,8 @@ class MusicVisualizerSettings {
   String spectrum = 'line', palette = 'prism', preset = '';
   bool cycle = true, songMotion = true;
   int fps = 30, cycleSeconds = 30;
+  String presetCatalogue = '';
+  int presetSeed = 0, presetPosition = 0;
 
   Map<String, Object> toJson() => {
     'spectrum': spectrum,
@@ -46,6 +48,11 @@ class MusicVisualizerSettings {
     'songMotion': songMotion,
     'fps': fps,
     'cycleSeconds': cycleSeconds,
+    'rotation': {
+      'catalogue': presetCatalogue,
+      'seed': presetSeed,
+      'position': presetPosition,
+    },
   };
 
   static MusicVisualizerSettings fromJson(Object? value) {
@@ -65,6 +72,22 @@ class MusicVisualizerSettings {
     if (frameLimits.contains(value['fps'])) result.fps = value['fps'] as int;
     if ([15, 30, 60].contains(value['cycleSeconds'])) {
       result.cycleSeconds = value['cycleSeconds'] as int;
+    }
+    if (value['rotation']
+        case {
+          'catalogue': final String catalogue,
+          'seed': final int seed,
+          'position': final int position,
+        }
+        when catalogue.length <= 64 &&
+            seed > 0 &&
+            seed < (1 << 32) &&
+            position >= 0 &&
+            position < (1 << 48)) {
+      result
+        ..presetCatalogue = catalogue
+        ..presetSeed = seed
+        ..presetPosition = position;
     }
     return result;
   }
