@@ -12,6 +12,8 @@ void nativeEnsureInitialized({String? libmpv}) {}
 class NativePlayer extends PlatformPlayer {
   NativePlayer({required super.configuration});
 
+  Stream<int> get playbackErrors => const Stream.empty();
+
   /// Whether the [NativePlayer] is initialized for unit-testing.
   @visibleForTesting
   static bool test = false;
