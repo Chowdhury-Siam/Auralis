@@ -1,5 +1,15 @@
 # Auralis changes
 
+## 0.1.221
+
+- Adapt Windows Visualizer resolution under rendering pressure and recover the full drawing size when there is enough headroom.
+- Use fresh Windows loopback samples and let the renderer release its reaction between audio packets.
+
+## 0.1.220
+
+- Reduce desktop Now Playing transition stutter by reusing a small asynchronously blurred image of the origin page while the card moves.
+- Keep transition preview controls at a stable layout size while expanding and collapsing the mini-player.
+
 ## 0.1.219
 
 - Add the compatible MilkDrop presets from the supplied ProjectM Add on Presets 2.0 pack. Load preset pages on demand and make the full catalogue searchable.
