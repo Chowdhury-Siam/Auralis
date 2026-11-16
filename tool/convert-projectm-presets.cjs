@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const inspectPreset = require('./visualizer-preset-quality.cjs');
 const { execFileSync } = require('node:child_process');
 const { Worker, isMainThread, parentPort } = require('node:worker_threads');
 const { splitPreset, createBasePresetFuns, prepareShader, processUnOptimizedShader } =
@@ -107,7 +108,8 @@ async function main() {
     const prior = JSON.parse(fs.readFileSync(reportPath,'utf8'));
     if (prior.sourceHash === sourceHash) {
       for (const [name,reason] of prior.skipped) {
-        if (['Butterchurn equation runtime failed','Renderer shader did not compile or link'].includes(reason))
+        if (['Butterchurn equation runtime failed','Renderer shader did not compile or link',
+            'Invalid geometry across audio profiles'].includes(reason))
           rendererExclusions.set(name,reason);
       }
     }
@@ -148,7 +150,7 @@ async function main() {
   }));
   for (const [index,[name,key]] of entries.entries()) {
     const {preset,error}=results[index];
-    let reason=error;
+    let reason=error || inspectPreset(preset);
     if (!reason) {
       const canonical = JSON.stringify(preset, (_,value) =>
         value && typeof value==='object' && !Array.isArray(value)
