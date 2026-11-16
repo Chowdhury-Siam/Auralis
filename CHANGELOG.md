@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.219
+
+- Add the compatible MilkDrop presets from the supplied ProjectM Add on Presets 2.0 pack. Load preset pages on demand and make the full catalogue searchable.
+- Save the shuffled preset rotation across tracks and restarts. Keep song-driven transitions and vary the animation with the music.
+
 ## 0.1.218
 
 - Use sustained changes in loudness, tone, or rhythm to switch Visualizer presets in Song-driven mode. Individual beats continue to animate the current preset.
