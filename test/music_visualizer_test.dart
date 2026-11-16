@@ -92,7 +92,10 @@ void main() {
         ..preset = 'Preset A'
         ..cycleSeconds = 60
         ..songMotion = false
-        ..cycle = false;
+        ..cycle = false
+        ..presetCatalogue = 'fixture'
+        ..presetSeed = 417
+        ..presetPosition = 1382;
       expect(settings.toJson().containsKey('_musicVisualizer'), isFalse);
       await settings.save();
       final restored = AppSettings(file);
