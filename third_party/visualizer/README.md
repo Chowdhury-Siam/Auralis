@@ -53,8 +53,9 @@ Run `python tool/verify-visualizer-sources.py` to verify all retained hashes,
 source members, asset byte equality and license texts without network access.
 Run `node tool/verify-visualizer.mjs` for waveform/FFT/renderer bridge checks.
 
-Only the base preset pack is loaded (99 presets). Extra upstream packs remain
-in the source/package archives, not in the runtime. Preserve upstream preset
+The runtime includes the original built-in preset pack and the converted
+[ProjectM add-on catalogue](projectm/README.md). Other upstream Butterchurn
+packs are retained in the source and package archives. Preserve upstream preset
 authorship. Auralis's original offline HTML/bridge, Dart integration and native
 output-analysis bridges are covered by Auralis's AGPL-3.0-or-later license.
 The renderer performs no network requests and receives no media URLs or secrets.
