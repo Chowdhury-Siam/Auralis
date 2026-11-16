@@ -28,16 +28,21 @@ class _TestPlayerCore extends mpv.PlatformPlayer {
   void seeked(Duration position) => positionController.add(position);
   void rateChanged(double rate) => rateController.add(rate);
   void bufferingChanged(bool buffering) => bufferingController.add(buffering);
+  void decoderWarning() => errorController.add('Recoverable decoder error');
   void completed() {
     playingController.add(false);
     completedController.add(true);
   }
+
   void tracksChanged(mpv.Tracks tracks) => tracksController.add(tracks);
   void trackChanged(mpv.Track track) => trackController.add(track);
 }
 
 class _NativeVideo implements mpv.NativePlayer {
   final _core = _TestPlayerCore();
+  final _playbackErrors = StreamController<int>.broadcast();
+  @override
+  Stream<int> get playbackErrors => _playbackErrors.stream;
   @override
   mpv.PlayerConfiguration get configuration => _core.configuration;
   @override
@@ -66,6 +71,7 @@ class _NativeVideo implements mpv.NativePlayer {
   final subtitleSelections = <String>[];
   VoidCallback? beforeStop;
   Future<void> Function()? beforeDispose;
+  bool warnOnOpen = false;
   final properties = <String, String>{
     'chapter-list/count': '2',
     'chapter-list/0/time': '0',
@@ -92,6 +98,14 @@ class _NativeVideo implements mpv.NativePlayer {
     );
     _core.opened(play, duration);
     _core.tracksChanged(availableTracks);
+    if (warnOnOpen) warn();
+  }
+
+  void warn() => _core.decoderWarning();
+
+  void abortPlayback() {
+    state = state.copyWith(playing: false);
+    _playbackErrors.add(-13);
   }
 
   void publishTracks(mpv.Tracks tracks) {
@@ -181,6 +195,7 @@ class _NativeVideo implements mpv.NativePlayer {
   @override
   Future<void> dispose({bool synchronized = true}) async {
     await beforeDispose?.call();
+    await _playbackErrors.close();
     await _core.dispose();
   }
 
@@ -445,6 +460,73 @@ void main() {
     );
     expect(restored.videoPlayback.positions, isEmpty);
   });
+
+  testWidgets(
+    'decoder warnings leave video playing and a real abort offers Retry',
+    (tester) async {
+      final native = _NativeVideo()..warnOnOpen = true;
+      final proxy = _RecordingVideoProxy();
+      final music = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy((_) async => {}),
+        MemorySettings(),
+      );
+      final telegram = TelegramService(
+        Directory('unused'),
+        MemoryVault(),
+        transport: FakeTd(),
+      );
+      final source = VideoSource.file(Uri.file('/movies/one.mp4'), 'One video');
+      final opened = <VideoSource>[];
+      addTearDown(proxy.close);
+      addTearDown(telegram.shutdown);
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: VideoPlayback(
+              sources: [source],
+              initialIndex: 0,
+              telegram: telegram,
+              music: music,
+              proxy: proxy,
+              onOpened: opened.add,
+              createController: () => _VideoController(native),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(opened, [source]);
+        expect(find.text('Retry'), findsNothing);
+        await native.seek(const Duration(seconds: 12));
+        native.warn();
+        await native.seek(const Duration(seconds: 13));
+        await tester.idle();
+        await tester.pump();
+        expect(native.state.playing, isTrue);
+        expect(find.text('The video could not be played.'), findsNothing);
+
+        native.abortPlayback();
+        await tester.idle();
+        await tester.pump();
+        expect(find.text('The video could not be played.'), findsOneWidget);
+        await tester.tap(find.text('Retry'));
+        await tester.pumpAndSettle();
+        expect(opened, [source, source]);
+        expect(native.state.playing, isTrue);
+        expect(find.text('Retry'), findsNothing);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        var shutdown = false;
+        unawaited(music.shutdown().then((_) => shutdown = true));
+        for (var frame = 0; frame < 20 && !shutdown; frame++) {
+          await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+          tester.binding.scheduleFrame();
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        expect(shutdown, isTrue);
+      }
+    },
+  );
 
   testWidgets('finishing and closing a video resume the interrupted song', (
     tester,
