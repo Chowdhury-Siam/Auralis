@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 using Microsoft::WRL::ComPtr;
 using flutter::EncodableMap;
@@ -34,11 +35,18 @@ MusicVisualizer::MusicVisualizer(flutter::BinaryMessenger* messenger) {
       if (status_ < 0) {
         result->Error("capture", "Windows output audio is unavailable. Check the output device and try again.");
       } else {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (samples_.empty()) result->Success();
+        std::vector<uint8_t> samples;
+        int rate;
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          samples = samples_;
+          samples_.clear();
+          rate = rate_;
+        }
+        if (samples.empty()) result->Success();
         else result->Success(EncodableValue(EncodableMap{
-          {EncodableValue("samples"), EncodableValue(samples_)},
-          {EncodableValue("rate"), EncodableValue(rate_)}
+          {EncodableValue("samples"), EncodableValue(std::move(samples))},
+          {EncodableValue("rate"), EncodableValue(rate)}
         }));
       }
     } else {
@@ -112,6 +120,7 @@ void MusicVisualizer::Capture() {
         DWORD flags = 0;
         hr = reader->GetBuffer(&bytes, &frames, &flags, nullptr, nullptr);
         if (FAILED(hr)) break;
+        if (!frames) break;
         const unsigned step = format->wBitsPerSample / 8;
         for (UINT32 i = 0; i < frames; ++i) {
           double mono = 0;
@@ -151,12 +160,14 @@ void MusicVisualizer::Capture() {
         if (FAILED(hr)) break;
       }
       if (FAILED(hr)) break;
-      {
+      // An empty WASAPI poll has no new samples. Leave the last new frame
+      // available to the reader and let the renderer release stale input.
+      if (changed) {
         std::lock_guard<std::mutex> lock(mutex_);
         rate_ = static_cast<int>(format->nSamplesPerSec);
         samples_.resize(ring.size());
         for (size_t i = 0; i < ring.size(); ++i)
-          samples_[i] = changed ? ring[(cursor + i) % ring.size()] : 128;
+          samples_[i] = ring[(cursor + i) % ring.size()];
       }
       Sleep(15);
     }
