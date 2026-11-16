@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.223
+
+- Keep playback controls available during recoverable decoder errors and show Retry when the video actually aborts.
+
 ## 0.1.222
 
 - Remove Visualizer presets with no authored beat response and ProjectM presets with consistently broken warp geometry.
