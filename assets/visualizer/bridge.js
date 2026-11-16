@@ -16,8 +16,11 @@
   let song='', take=0, order=[], cursor=0, songInitialized=false;
   let lastTransform='', lastOpacity='', audioRevision=0, silent=true;
   let lastBeat=-Infinity, energyAverage=0, bassAverage=0, highAverage=0;
-  const beatsPerPreset=12;
-  let presetBeats=0;
+  let sectionAudioMs=0, sectionShiftMs=0;
+  const sectionSample=new Float32Array(5);
+  const sectionRecent=new Float32Array(5), sectionReference=new Float32Array(5);
+  const sectionMinAudioMs=9000, sectionHoldMs=1600;
+  let blendElapsed=0, blendDuration=0;
   let energyRms=0, lastEnergyRender=0;
   let outputEnergy=0, outputPulse=0;
   const bandRms=new Float32Array(3), bandAverage=new Float32Array(3);
@@ -164,14 +167,9 @@
     }
     const attack=Math.max(energy/(energyAverage+.008),bass/(bassAverage+.004),
       high/(highAverage+.008));
-    if ((strongOnset || (energy>.012 && attack>1.35)) && time-lastBeat>=120) {
-      lastBeat=time;
-      // Count fresh musical attacks. The first buffer after a gap only
-      // establishes audio levels and cannot make a preset change due.
-      if (options.songMotion && options.cycle && time-lastAudio<=250) {
-        presetBeats=Math.min(beatsPerPreset,presetBeats+1);
-      }
-    }
+    const onset=(strongOnset || (energy>.012 && attack>1.35)) && time-lastBeat>=120;
+    if (onset) lastBeat=time;
+    if (options.songMotion && options.cycle) updateSection(elapsed,onset);
     const weight=1-Math.exp(-Math.min(elapsed,100)/300);
     const established=energyAverage>0;
     energyAverage=established?energyAverage+weight*(energy-energyAverage):energy;
@@ -181,6 +179,45 @@
     for (let i=0;i<3;i++) {
       bandAverage[i]=bandAverage[i]>0
         ?bandAverage[i]+slow*(bandRms[i]-bandAverage[i]):bandRms[i];
+    }
+  }
+  function updateSection(elapsed,onset) {
+    if (elapsed>250 || energyRms<.012) {
+      sectionShiftMs=0;
+      return;
+    }
+    const dt=Math.min(elapsed,100);
+    if (dt<=0) return;
+    const power=bandRms[0]**2+bandRms[1]**2+bandRms[2]**2+.000001;
+    // Loudness in dB, relative bass/mid/treble power, and attacks per second.
+    sectionSample[0]=20*Math.log10(energyRms);
+    for (let i=0;i<3;i++) sectionSample[i+1]=bandRms[i]**2/power;
+    sectionSample[4]=onset && sectionAudioMs>0?1000/dt:0;
+    if (sectionAudioMs===0) {
+      sectionRecent.set(sectionSample);
+      sectionReference.set(sectionSample);
+    } else {
+      const recentWeight=1-Math.exp(-dt/1000);
+      for (let i=0;i<5;i++) {
+        sectionRecent[i]+=recentWeight*(sectionSample[i]-sectionRecent[i]);
+      }
+    }
+    sectionAudioMs+=dt;
+    const levelDelta=Math.abs(sectionRecent[0]-sectionReference[0]);
+    let toneDelta=0;
+    for (let i=1;i<4;i++) toneDelta+=Math.abs(sectionRecent[i]-sectionReference[i]);
+    const rhythmDelta=Math.abs(sectionRecent[4]-sectionReference[4]);
+    const changed=levelDelta>=4.5 || toneDelta>=.38 ||
+      rhythmDelta>=Math.max(1.65,.38*sectionReference[4]);
+    if (sectionAudioMs>=3200 && changed) {
+      // Keep the previous section as a reference until the new one persists.
+      sectionShiftMs+=dt;
+    } else {
+      sectionShiftMs=0;
+      const referenceWeight=1-Math.exp(-dt/(sectionAudioMs<3200?750:8000));
+      for (let i=0;i<5;i++) {
+        sectionReference[i]+=referenceWeight*(sectionRecent[i]-sectionReference[i]);
+      }
     }
   }
   function installEnergyResponse() {
@@ -245,7 +282,11 @@
     const kick=impulses[0]*Math.exp(-Math.max(0,age)/110)*fresh;
     const pulseWeight=1-Math.exp(-elapsed/(kick>outputPulse?18:110));
     outputPulse+=pulseWeight*(kick-outputPulse);
-    const opacity=Math.min(1,outputEnergy*(.84+.16*outputPulse));
+    // Dim the middle of the native crossfade without a readback or extra pass.
+    const progress=blendDuration>0?blendElapsed/blendDuration:1;
+    blendElapsed=Math.min(blendDuration,blendElapsed+elapsed);
+    const shade=1-1.28*progress*(1-progress);
+    const opacity=Math.min(1,outputEnergy*(.84+.16*outputPulse))*shade;
     // At most 3.5% outward movement, never shrink/reveal unpainted edges.
     const nextOpacity=opacity.toFixed(3);
     const nextTransform=`scale(${(1+.035*outputPulse).toFixed(4)})`;
@@ -370,7 +411,9 @@
       visualizer.loadPreset(preset,blend);
     }
     lastCycle=performance.now();
-    presetBeats=0;
+    blendElapsed=0;
+    blendDuration=blend*1000;
+    sectionAudioMs=sectionShiftMs=0;
     send({type:'preset',name:names[presetIndex]});
   }
   function resize() {
@@ -402,6 +445,7 @@
     energyRms=0;lastEnergyRender=0;bandRms.fill(0);bandAverage.fill(0);bandRelease.fill(0);
     previousMagnitude.fill(0);flux.fill(0);impulses.fill(0);impulseAt.fill(-Infinity);
     outputEnergy=0;outputPulse=0;
+    sectionAudioMs=sectionShiftMs=0;
     // Keep the last displayed frame when paused; histories reset so it cannot
     // produce a stale beat on resume.
     if (!options.songMotion) {
@@ -435,8 +479,9 @@
       const onBeat=time-lastBeat<120;
       if (options.cycle) {
         if (options.songMotion) {
-          if (presetBeats>=beatsPerPreset && onBeat && energyRms>.008) {
-            nextPreset(options.mobile?.2:.35);
+          if (sectionAudioMs>=sectionMinAudioMs && sectionShiftMs>=sectionHoldMs &&
+              time-lastAudio<=120 && energyRms>=.012) {
+            nextPreset(options.mobile?1:1.35);
           }
         } else {
           const due=options.cycleSeconds*1000;
@@ -469,7 +514,7 @@
         const activityChanged=options.active!==previous.active;
         const songChanged=options.song!==previous.song;
         if (options.cycle!==previous.cycle) {
-          presetBeats=0;
+          sectionAudioMs=sectionShiftMs=0;
           lastCycle=performance.now();
         }
         if (songChanged && !Object.prototype.hasOwnProperty.call(next,'preset')) options.preset='';
