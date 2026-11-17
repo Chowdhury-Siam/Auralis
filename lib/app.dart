@@ -4311,13 +4311,13 @@ class Artwork extends StatelessWidget {
         },
       );
     } else if (telegram != null && fileId != null) {
-      child = FutureBuilder<String?>(
+      child = FutureBuilder<Uint8List?>(
         key: ValueKey(fileId),
         future: telegram!.image(fileId!),
         builder: (context, snapshot) =>
             snapshot.connectionState == ConnectionState.done &&
                 snapshot.data != null
-            ? image(FileImage(File(snapshot.data!)), fallback)
+            ? image(MemoryImage(snapshot.data!), fallback)
             : fallback,
       );
     }
