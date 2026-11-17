@@ -9,7 +9,7 @@ import 'fakes.dart';
 
 void main() {
   test(
-    'startup removes old audio and documents without sweeping artwork',
+    'startup clears TDLib media before playback',
     () async {
       final dir = await Directory.systemTemp.createTemp('auralis-audio-cache-');
       addTearDown(() => dir.delete(recursive: true));
@@ -48,10 +48,7 @@ void main() {
       final cleanup = td.requests.singleWhere(
         (r) => r['@type'] == 'optimizeStorage',
       );
-      expect(cleanup['file_types'], [
-        {'@type': 'fileTypeAudio'},
-        {'@type': 'fileTypeDocument'},
-      ]);
+      expect(cleanup['file_types'], isEmpty);
       expect(cleanup['size'], 0);
       expect(cleanup['immunity_delay'], 0);
       finish.complete();
