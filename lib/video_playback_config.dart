@@ -29,6 +29,7 @@ extension _VideoPlaybackConfig on _VideoPlaybackState {
       _customKeysLoaded = true;
     } else {
       await _native.loadConfiguration(file.path);
+      if (_canPlay) await _native.setProperty('cache-on-disk', 'no');
     }
   }
 
