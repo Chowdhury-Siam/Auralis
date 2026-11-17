@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:auralis/models.dart';
+import 'package:auralis/video_playback_data.dart';
 import 'package:auralis/video_track_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart' as mpv;
@@ -115,6 +119,67 @@ void main() {
       isNull,
     );
   });
+
+  test(
+    'channel preferences survive a settings reload and follow the channel ID',
+    () {
+      VideoSource source(String message, String channel) =>
+          VideoSource.telegram(
+            Track(id: message, title: 'Episode', artist: '', source: channel),
+          );
+
+      final first = source('-1001:20', 'Anime');
+      final next = source('-1001:21', 'Renamed channel');
+      final other = source('-1002:20', 'Anime');
+      final preferences = VideoPlaybackData();
+      preferences.channels[first.channelId!] = VideoChannelSettings()
+        ..audio = const VideoTrackChoice('2', 'English dub', 'eng')
+        ..subtitles = const VideoTrackChoice('no', null, null)
+        ..volume = 55
+        ..brightness = .4
+        ..pictureBrightness = 18;
+
+      final restored = VideoPlaybackData.fromJson(
+        jsonDecode(jsonEncode(preferences.toJson())),
+      );
+      final channel = restored.channels[next.channelId]!;
+      expect(channel.volume, 55);
+      expect(channel.brightness, .4);
+      expect(channel.pictureBrightness, 18);
+      expect(restored.channels[other.channelId], isNull);
+      expect(
+        VideoSource.file(Uri.file('/movies/video.mp4'), 'Episode').channelId,
+        isNull,
+      );
+
+      const japanese = mpv.AudioTrack('2', 'Japanese', 'jpn');
+      const english = mpv.AudioTrack('4', 'English dub', 'en-US');
+      expect(
+        preferredVideoAudio([japanese, english], choice: channel.audio),
+        english,
+      );
+      expect(preferredVideoAudio([japanese], choice: channel.audio), japanese);
+      expect(
+        preferredVideoSubtitle([
+          const mpv.SubtitleTrack('2', 'English', 'en'),
+        ], choice: channel.subtitles)?.id,
+        'no',
+      );
+
+      restored.clearTelegram(keepActivity: true);
+      expect(restored.channels, isEmpty);
+    },
+  );
+
+  test(
+    'saved subtitle title identifies the correct track when its ID changes',
+    () {
+      const dialogue = mpv.SubtitleTrack('5', 'Dialogue', 'en');
+      const signs = mpv.SubtitleTrack('9', 'Signs & Songs', 'eng');
+      const choice = VideoTrackChoice('5', 'Signs & Songs', 'en');
+      expect(preferredVideoSubtitle([dialogue, signs], choice: choice), signs);
+    },
+  );
 
   test('external tracks are never automatically loaded again', () {
     expect(
