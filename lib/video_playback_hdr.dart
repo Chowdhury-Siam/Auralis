@@ -42,8 +42,8 @@ extension _VideoHdrPipeline on _VideoPlaybackState {
   }
 
   Future<String> _cacheVideoShader(String name) async {
-    final cache = await getTemporaryDirectory();
-    final target = File.fromUri(cache.uri.resolve('auralis-shaders-v1/$name'));
+    final directory = await _videoToolsDirectory();
+    final target = File.fromUri(directory.uri.resolve('shaders/$name'));
     if (!await target.exists()) {
       final asset = await rootBundle.load('assets/shaders/$name');
       await target.parent.create(recursive: true);
