@@ -331,7 +331,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
           Icons.volume_up_rounded,
           position: side,
         );
-        unawaited(_perform(() => player.setVolume(value * 100)));
+        unawaited(_perform(() => session._setVideoVolume(value * 100)));
       case _DragMode.brightness:
         final value = (_gestureValue - delta.dy / size.height * 1.5).clamp(
           .01,
@@ -444,7 +444,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
         Icons.volume_up_rounded,
         position: _FeedbackPosition.right,
       );
-      unawaited(_perform(() => player.setVolume(volume)));
+      unawaited(_perform(() => session._setVideoVolume(volume)));
     } else if (session._mpvKey(event) case final String name) {
       unawaited(_perform(() => session._native.command(['keypress', name])));
     } else {
