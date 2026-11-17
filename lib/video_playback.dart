@@ -171,7 +171,14 @@ class _VideoPlaybackState extends State<VideoPlayback>
   String _decoder = 'auto-safe';
   String _secondarySubtitle = 'no';
   double? _brightness;
+  double? _localBrightness;
   bool _brightnessChanged = false;
+  double _defaultVolume = 100;
+  double? _localVolume;
+  String _defaultPictureBrightness = '0';
+  double? _localPictureBrightness;
+  bool _pictureBrightnessChanged = false;
+  Timer? _channelSettingsSave;
   double _zoom = 0, _panX = 0, _panY = 0;
   Duration? _skipStart;
   Duration? _autoSkipEnd;
@@ -308,6 +315,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appInBackground = state == AppLifecycleState.paused;
     if (_appInBackground) {
+      _flushChannelSettings();
       _saveProgress();
       if (!_pip && !_data.background) unawaited(_pauseOutsidePip());
     }
@@ -480,6 +488,15 @@ class _VideoPlaybackState extends State<VideoPlayback>
         await _native.setProperty('alang', 'ja,jpn,jp,japan,japanese');
         await _native.setProperty('slang', 'en,eng,english');
         await _applySavedConfigurations();
+        _defaultVolume = _player!.state.volume;
+        try {
+          final brightness = await _native.getProperty('brightness');
+          if (double.tryParse(brightness)?.isFinite == true) {
+            _defaultPictureBrightness = brightness;
+          }
+        } catch (_) {
+          // Picture controls are optional on some video outputs.
+        }
         for (final entry in _data.subtitleStyle.entries.toList()) {
           if (!_canPlay) return;
           await _setOption(entry.key, entry.value);
@@ -530,17 +547,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
       await _player!.setAudioTrack(mpv.AudioTrack.auto());
       await _player!.setSubtitleTrack(mpv.SubtitleTrack.auto());
       await _native.setProperty('start', 'none');
-      if (Platform.isAndroid && _brightness == null) {
-        try {
-          _brightness = await _videoWindow.invokeMethod<double>(
-            'getBrightness',
-          );
-        } on PlatformException {
-          // Brightness stays controlled by Android when unavailable.
-        } on MissingPluginException {
-          // Playback can run without a window integration.
-        }
-      }
+      await _restorePlaybackLevels(source);
       if (!_canPlay) return;
       _acceptVideoParams = true;
       _armVideoStartupTimeout(track);
@@ -786,12 +793,79 @@ class _VideoPlaybackState extends State<VideoPlayback>
     }
   }
 
+  void _rememberChannelSettings(void Function(VideoChannelSettings) edit) {
+    final channel = _source.channelId;
+    if (channel == null) return;
+    edit(_data.channels.putIfAbsent(channel, VideoChannelSettings.new));
+    _channelSettingsSave?.cancel();
+    _channelSettingsSave = Timer(
+      const Duration(milliseconds: 300),
+      _flushChannelSettings,
+    );
+  }
+
+  void _flushChannelSettings() {
+    final pending = _channelSettingsSave;
+    if (pending == null) return;
+    pending.cancel();
+    _channelSettingsSave = null;
+    _saveSettings();
+  }
+
+  Future<void> _restorePlaybackLevels(VideoSource source) async {
+    if (!_canPlay) return;
+    final channelId = source.channelId;
+    final settings = _data.channels[channelId];
+    final player = _player!;
+    final volume = (channelId == null ? _localVolume : settings?.volume) ??
+        _defaultVolume;
+    final level = volume.clamp(0, _data.volumeBoost ? 130 : 100).toDouble();
+    if (player.state.volume != level) await player.setVolume(level);
+    if (!_canPlay) return;
+    final picture = channelId == null
+        ? _localPictureBrightness
+        : settings?.pictureBrightness;
+    if (picture != null || _pictureBrightnessChanged) {
+      try {
+        await _native.setProperty(
+          'brightness',
+          picture?.toString() ?? _defaultPictureBrightness,
+        );
+        _pictureBrightnessChanged = picture != null;
+      } catch (_) {
+        // Picture controls are optional on some video outputs.
+      }
+    }
+    if (_canPlay && Platform.isAndroid) {
+      await _applyWindowBrightness(
+        channelId == null ? _localBrightness : settings?.brightness,
+      );
+    }
+  }
+
+  Future<void> _setVideoVolume(double volume) async {
+    if (!_canPlay || _opening) return;
+    if (_source.channelId == null) _localVolume = volume;
+    _rememberChannelSettings((settings) => settings.volume = volume);
+    await _player!.setVolume(volume);
+  }
+
   Future<void> _setBrightness(double value) async {
-    if (!Platform.isAndroid || _closed) return;
-    _brightness = value.clamp(.01, 1);
-    _brightnessChanged = true;
+    if (!_canPlay || _opening || !Platform.isAndroid) return;
+    final level = value.clamp(.01, 1.0);
+    if (_source.channelId == null) _localBrightness = level;
+    _rememberChannelSettings((settings) => settings.brightness = level);
+    await _applyWindowBrightness(level);
+  }
+
+  Future<void> _applyWindowBrightness(double? value) async {
     try {
-      await _videoWindow.invokeMethod<void>('brightness', _brightness);
+      if (value != null || _brightnessChanged) {
+        await _videoWindow.invokeMethod<void>('brightness', value);
+        _brightnessChanged = value != null;
+      }
+      _brightness = value ??
+          await _videoWindow.invokeMethod<double>('getBrightness');
     } on PlatformException {
       // Ignore devices that do not expose per-window brightness.
     } on MissingPluginException {
@@ -887,6 +961,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
   Future<void> _beginRelease({required bool detachSurface}) {
     if (_releaseTask case final Future<void> release) return release;
     _saveProgress();
+    _flushChannelSettings();
     _closed = true;
     _closing.complete(null);
     _checkpoint?.cancel();
