@@ -20,6 +20,7 @@ void main() {
   late File photo;
   final png = File('test/fixtures/cover.png').readAsBytesSync();
   final audio = id3(png);
+  final thumbnail = File('assets/branding/auralis.png').readAsBytesSync();
   Track song(int id, {int? thumbnail}) => Track(
     id: '1:$id',
     title: 'Song',
@@ -194,31 +195,18 @@ void main() {
   );
 
   test(
-    'refresh downloads a thumbnail again when TDLib removed its local file',
+    'a thumbnail stays usable in memory after its disk copy is released',
     () async {
       final track = song(1, thumbnail: 90);
-      expect(await service.image(90), photo.path);
+      expect(await service.image(90), thumbnail);
       await photo.delete();
-      final replacement = await File('${dir.path}/redownload.png')
-          .writeAsBytes(png);
-      td.onRequest = (request) async {
-        if (request['@type'] == 'downloadFile') {
-          return {
-            'local': {
-              'path': replacement.path,
-              'is_downloading_completed': true,
-            },
-          };
-        }
-        return null;
-      };
-      expect(await service.cacheCover(track, active: () => true), png);
+      expect(await service.cacheCover(track, active: () => true), thumbnail);
       expect(await service.hasCachedCover(track), isTrue);
       expect(
         td.requests.where(
           (r) => r['@type'] == 'downloadFile' && r['file_id'] == 90,
         ),
-        hasLength(2),
+        hasLength(1),
       );
     },
   );
@@ -229,8 +217,8 @@ void main() {
       final first = service.image(90);
       final second = service.image(90);
       expect(identical(first, second), isTrue);
-      expect(await first, photo.path);
-      expect(await second, photo.path);
+      expect(await first, thumbnail);
+      expect(await second, thumbnail);
       final requests = td.requests
           .where((r) => r['@type'] == 'downloadFile')
           .toList();
@@ -394,7 +382,7 @@ void main() {
       expect(await service.image(3), isNull);
       service.clearImageCache();
       td.onRequest = normal;
-      expect(await service.image(3), photo.path);
+      expect(await service.image(3), thumbnail);
     },
   );
 
@@ -485,7 +473,9 @@ void main() {
           finish.complete();
         }
       });
-      expect(await service.image(90), photo.path);
+      expect(await service.image(90), thumbnail);
+      expect(td.requests.last, {'@type': 'deleteFile', 'file_id': 90});
+      td.requests.clear();
       cachedAudio();
       final normal = td.onRequest!;
       td.onRequest = (r) async {
@@ -508,7 +498,7 @@ void main() {
       ]);
       final requests = td.requests.length;
       expect(await service.cover(song(1)), png);
-      expect(await service.image(90), photo.path);
+      expect(await service.image(90), thumbnail);
       expect(
         td.requests,
         hasLength(requests),
@@ -691,7 +681,7 @@ void main() {
     'artwork request cache is bounded instead of retaining every viewed cover',
     () async {
       for (var id = 1; id <= 129; id++) {
-        expect(await service.image(id), photo.path);
+        expect(await service.image(id), thumbnail);
       }
       await service.image(129);
       await service.image(1);
