@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -1474,12 +1473,12 @@ class _VideoArtwork extends StatelessWidget {
           );
     return thumbnail == null
         ? fallback
-        : FutureBuilder<String?>(
+        : FutureBuilder<Uint8List?>(
             future: telegram.image(thumbnail),
             builder: (context, snapshot) => snapshot.data == null
                 ? fallback
-                : Image.file(
-                    File(snapshot.data!),
+                : Image.memory(
+                    snapshot.data!,
                     fit: BoxFit.cover,
                     cacheWidth: 480,
                     errorBuilder: (_, _, _) => fallback,
