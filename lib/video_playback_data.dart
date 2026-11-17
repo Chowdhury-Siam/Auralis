@@ -25,6 +25,13 @@ class VideoSource {
       ? 'telegram:${telegram!.id}'
       : 'file:${sha256.convert(utf8.encode(uri.toString()))}';
 
+  String? get channelId {
+    final message = telegram?.id;
+    return message != null && TelegramVideoActivity.isMessage(message)
+        ? message.split(':').first
+        : null;
+  }
+
   Map<String, Object?> toJson() => {
     'title': title,
     if (telegram case final Track track) ...{
@@ -276,6 +283,55 @@ enum VideoHdrProfile {
   final String label;
 }
 
+class VideoTrackChoice {
+  const VideoTrackChoice(this.id, this.title, this.language);
+
+  final String id;
+  final String? title, language;
+
+  static VideoTrackChoice? fromJson(Object? json) {
+    if (json is! Map || json['id'] is! String) return null;
+    final id = json['id'] as String;
+    if (id != 'no' && int.tryParse(id) == null) return null;
+    String? label(Object? value) =>
+        value is String && value.length <= 512 ? value : null;
+    return VideoTrackChoice(id, label(json['title']), label(json['language']));
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    if (title != null) 'title': title,
+    if (language != null) 'language': language,
+  };
+}
+
+class VideoChannelSettings {
+  VideoTrackChoice? audio, subtitles;
+  double? volume, brightness, pictureBrightness;
+
+  static VideoChannelSettings? fromJson(Object? json) {
+    if (json is! Map) return null;
+    double? level(Object? value, num min, num max) =>
+        value is num && value.isFinite && value >= min && value <= max
+            ? value.toDouble()
+            : null;
+    return VideoChannelSettings()
+      ..audio = VideoTrackChoice.fromJson(json['audio'])
+      ..subtitles = VideoTrackChoice.fromJson(json['subtitles'])
+      ..volume = level(json['volume'], 0, 130)
+      ..brightness = level(json['brightness'], .01, 1)
+      ..pictureBrightness = level(json['pictureBrightness'], -100, 100);
+  }
+
+  Map<String, Object?> toJson() => {
+    if (audio != null) 'audio': audio!.toJson(),
+    if (subtitles != null) 'subtitles': subtitles!.toJson(),
+    if (volume != null) 'volume': volume,
+    if (brightness != null) 'brightness': brightness,
+    if (pictureBrightness != null) 'pictureBrightness': pictureBrightness,
+  };
+}
+
 class VideoPlaybackData {
   static const playlistItemLimit = 1000;
 
@@ -283,6 +339,7 @@ class VideoPlaybackData {
   final playlists = <String, List<VideoSource>>{};
   final history = <String, VideoHistoryEntry>{};
   final _watched = <String>{};
+  final channels = <String, VideoChannelSettings>{};
   final subtitleStyle = <String, String>{};
   bool snapshotSubtitles = true;
   String ambientMode = 'off';
@@ -479,6 +536,7 @@ class VideoPlaybackData {
   }
 
   void clearTelegram({bool keepActivity = false}) {
+    channels.clear();
     if (keepActivity) {
       // TDLib file IDs and previews belong to the old Telegram session.
       history.updateAll((_, entry) {
@@ -539,6 +597,16 @@ class VideoPlaybackData {
   }) {
     final data = VideoPlaybackData()..librarySort = fallbackSort;
     if (json is! Map) return data;
+    if (json['channelSettings'] case final Map channels) {
+      for (final entry in channels.entries) {
+        if (entry.key case final String id
+            when TelegramVideoActivity.isMessage('$id:0')) {
+          if (VideoChannelSettings.fromJson(entry.value) case final settings?) {
+            data.channels[id] = settings;
+          }
+        }
+      }
+    }
     data.librarySort = LibrarySort.values.firstWhere(
       (sort) => sort.name == json['librarySort'],
       orElse: () => fallbackSort,
@@ -689,6 +757,9 @@ class VideoPlaybackData {
 
   Map<String, dynamic> toJson() => {
     'librarySort': librarySort.name,
+    'channelSettings': {
+      for (final entry in channels.entries) entry.key: entry.value.toJson(),
+    },
     'watched': _watched.toList(),
     'ambientMode': ambientMode,
     'snapshotSubtitles': snapshotSubtitles,
