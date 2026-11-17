@@ -221,6 +221,10 @@ class _NativeVideo implements mpv.NativePlayer {
 class _RecordingVideoProxy extends TelegramStreamProxy {
   _RecordingVideoProxy() : super((_) async => {});
 
+  @override
+  Future<Uri> uri(Track track) async =>
+      Uri.parse('http://127.0.0.1/video/${track.fileId}');
+
   VoidCallback? onStop;
 
   @override
@@ -592,6 +596,88 @@ void main() {
     expect(released, isTrue);
     expect(audio.playing, isTrue);
     expect(audio.position, position);
+  });
+
+  testWidgets('Telegram episodes restore only their channel playback settings', (
+    tester,
+  ) async {
+    final native = _NativeVideo();
+    final proxy = _RecordingVideoProxy();
+    final settings = MemorySettings();
+    final music = PlayerController(
+      FakeAudio(),
+      TelegramStreamProxy((_) async => {}),
+      settings,
+    );
+    final telegram = TelegramService(
+      Directory('unused'),
+      MemoryVault(),
+      transport: FakeTd(),
+    )..state = 'authorizationStateReady';
+    addTearDown(proxy.close);
+    addTearDown(telegram.shutdown);
+    VideoSource episode(int channel, int fileId) => VideoSource.telegram(
+      Track(
+        id: '$channel:$fileId',
+        title: 'Episode $fileId',
+        artist: '',
+        source: 'Anime',
+        fileId: fileId,
+        size: 100,
+      ),
+    );
+    settings.videoPlayback.channels['-1001'] = VideoChannelSettings()
+      ..audio = const VideoTrackChoice('18', 'English audio', 'eng')
+      ..subtitles = const VideoTrackChoice('no', null, null)
+      ..pictureBrightness = 24;
+
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: VideoPlayback(
+            sources: [episode(-1001, 1), episode(-1002, 2), episode(-1001, 3)],
+            initialIndex: 0,
+            telegram: telegram,
+            music: music,
+            proxy: proxy,
+            onOpened: (_) {},
+            createController: () => _VideoController(native),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(native.state.track.audio.id, '3');
+      expect(native.state.track.subtitle.id, 'no');
+      expect(double.parse(native.properties['brightness']!), 24);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(native.state.volume, 95);
+      expect(settings.videoPlayback.channels['-1001']!.volume, 95);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.pumpAndSettle();
+      expect(native.state.track.audio.id, '1');
+      expect(native.state.track.subtitle.id, '2');
+      expect(native.state.volume, 100);
+      expect(native.properties['brightness'], '0');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.pumpAndSettle();
+      expect(native.state.track.audio.id, '3');
+      expect(native.state.track.subtitle.id, 'no');
+      expect(native.state.volume, 95);
+      expect(double.parse(native.properties['brightness']!), 24);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      var shutdown = false;
+      unawaited(music.shutdown().then((_) => shutdown = true));
+      for (var frame = 0; frame < 20 && !shutdown; frame++) {
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        tester.binding.scheduleFrame();
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(shutdown, isTrue);
+    }
   });
 
   for (final size in [const Size(390, 844), const Size(1280, 720)]) {
