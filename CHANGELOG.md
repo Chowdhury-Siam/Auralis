@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.224
+
+- Remember audio track, subtitles, volume and brightness for each Telegram video channel.
+- Release video and music playback files after use and retain only lyrics and cover art in the music cache.
+
 ## 0.1.223
 
 - Keep playback controls available during recoverable decoder errors and show Retry when the video actually aborts.
