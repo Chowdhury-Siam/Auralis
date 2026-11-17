@@ -161,7 +161,7 @@ void main() {
       expect(find.text('Choose your music channels'), findsOneWidget);
       // Original test artwork is embedded in an MP3 with no Telegram thumbnail.
       await tester.runAsync(() async {
-        expect(await telegram.image(90), photoPath);
+        expect(await telegram.image(90), await File(photoPath).readAsBytes());
         final bytes = await telegram.cover(
           Track(
             id: 'fixture',
