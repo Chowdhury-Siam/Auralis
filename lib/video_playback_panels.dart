@@ -180,7 +180,9 @@ extension _PlaybackPanels on _VideoPlaybackState {
       context: context,
       builder: (dialog) => _VideoPanel(
         title: 'Audio tracks',
-        detail: 'Choose the soundtrack for this video.',
+        detail: _source.channelId == null
+            ? 'Choose the soundtrack for this video.'
+            : 'Your soundtrack choice is saved for this channel.',
         icon: Icons.headphones_rounded,
         content: _trackChoices<_PanelAction>([
           for (final track in player.state.tracks.audio)
@@ -254,7 +256,11 @@ extension _PlaybackPanels on _VideoPlaybackState {
           void select(_PanelAction action) => Navigator.pop(dialog, action);
           return _VideoPanel(
             title: showOptions ? 'Subtitle options' : 'Subtitles',
-            detail: showOptions ? null : 'Choose a subtitle track for this video.',
+            detail: showOptions
+                ? null
+                : _source.channelId == null
+                ? 'Choose a subtitle track for this video.'
+                : 'Your subtitle track choice is saved for this channel.',
             icon: Icons.subtitles_outlined,
             onBack: showOptions ? () => update(() => showOptions = false) : null,
             content: showOptions
@@ -422,7 +428,20 @@ extension _PlaybackPanels on _VideoPlaybackState {
   Future<void> _setOption(String name, String value) async {
     if (_canPlay && _player != null) {
       try {
+        final generation = _trackGeneration;
         await _native.setProperty(name, value);
+        final level = name == 'brightness' ? double.tryParse(value) : null;
+        if (level != null &&
+            level.isFinite &&
+            _canPlay &&
+            !_opening &&
+            generation == _trackGeneration) {
+          if (_source.channelId == null) _localPictureBrightness = level;
+          _pictureBrightnessChanged = true;
+          _rememberChannelSettings(
+            (settings) => settings.pictureBrightness = level,
+          );
+        }
         if (VideoPlaybackData.isSubtitleStyle(name, value) &&
             _data.subtitleStyle[name] != value) {
           _data.subtitleStyle[name] = value;
@@ -835,7 +854,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
             onVolumeBoostDisabled: () {
               final player = _player;
               if (_canPlay && player != null && player.state.volume > 100) {
-                unawaited(player.setVolume(100));
+                unawaited(_setVideoVolume(100));
               }
             },
             onFrameRateChanged: () => unawaited(_updateRefreshRate()),
