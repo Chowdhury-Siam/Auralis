@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.225
+
+- Restore Visualizer response to quiet beats and energy changes in imported presets.
+- Drive added motion from bass, midrange and treble attacks, and prevent held notes from producing repeated false beats.
+- Let quiet passages recover their beat sensitivity quickly after louder sections.
+
 ## 0.1.224
 
 - Remember audio track, subtitles, volume and brightness for each Telegram video channel.
