@@ -14,8 +14,8 @@ let presetReads=0, renderCost=0, trigCalls=0;
 const {audio,levels}=butterchurnAudio();
 let lastLevels, lastPreset, lastEquation, lastElapsed;
 const registered = new Map();
-const testPresets={A:{id:'A',baseVals:{zoom:1,wave_scale:1,warp:.1},frame_eqs_str:''},
-  B:{id:'B',baseVals:{zoom:1,wave_scale:1,warp:.1},frame_eqs_str:''}};
+const testPresets={A:{id:'A',baseVals:{zoom:1,wave_scale:1,warp:.1,rot:0},frame_eqs_str:''},
+  B:{id:'B',baseVals:{zoom:1,wave_scale:1,warp:.1,rot:0},frame_eqs_str:''}};
 testPresets['Aderrasi + Geiss - Airhandler (Kali Mix) - Canvas Mix']={
   id:'excluded',baseVals:{},frame_eqs_str:'',
 };
@@ -109,9 +109,9 @@ function advance(ms) {
   callbacks.clear();
   for (const fn of work) fn(time);
 }
-function tone(frequency, amplitude=100) {
+function tone(frequency, amplitude=100, offset=0) {
   return Buffer.from(Array.from({length:1024}, (_, i) =>
-    Math.round(128+amplitude*Math.sin(2*Math.PI*frequency*i/44100)))).toString('base64');
+    Math.round(128+amplitude*Math.sin(2*Math.PI*frequency*(i+offset)/44100)))).toString('base64');
 }
 assert.equal(messages[0].type, 'ready');
 assert.equal(presetReads,0,'Preset data must stay lazy until animated visuals are selected');
@@ -246,6 +246,13 @@ assert(Math.max(...lastWave)<=255 && Math.min(...lastWave)>=1,
   'Transient emphasis must respect available sample headroom');
 api.feed(Buffer.alloc(1024,128).toString('base64'),44100);advance(34);
 assert(lastWave.every(sample=>sample===128),'Live silence must stay silent, not generate pulses');
+// Android as-played capture can have only a few quantization steps at low volume.
+// Such attacks still need to cross the pack's authored beat thresholds.
+api.configure({mode:'visualizer',active:true,cycle:false,songMotion:true,song:'quiet beats'});
+for (let i=0;i<90;i++) { api.feed(tone(86,1),44100);advance(34); }
+api.feed(tone(86,4),44100);advance(34);
+assert(lastLevels.instant[0]>1.3,
+  'A quiet real bass attack must cross the imported presets beat thresholds');
 const quiet=tone(90,16), accent=tone(90,110);
 const silence=Buffer.alloc(1024,128).toString('base64');
 function capture(samples) {
@@ -400,6 +407,34 @@ assert(scale()>1.003,'A constant-loudness bass spectral attack must drive visibl
 assert(lastLevels.instant[0]>beforeBandShift,'Spectral attacks must also accent preset equations');
 for (let i=0;i<30;i++) advance(34);
 assert(Number(milkStyle.opacity)<.01,'Missing sample release also reaches the master compositor');
+// Exercise quantized phone-level attacks at different user frame limits.
+for (const fps of [20,23,29,30,60,90,100,120,144]) {
+  for (const [frequency,band] of [[86,0],[1200,1],[6000,2]]) {
+    api.configure({song:`quiet attack ${fps}/${frequency}`,fps,cycle:false,songMotion:true});
+    const frameMs=1000/fps;
+    for (let i=0;i<Math.ceil(3000/frameMs);i++) {
+      api.feed(tone(frequency,1),44100);advance(frameMs);
+    }
+    api.feed(tone(frequency,4),44100);advance(frameMs);
+    assert(lastLevels.instant[band]>1.3,
+      `Quiet ${frequency} Hz attacks must trigger preset beats at ${fps} FPS`);
+    assert(scale()>1.002,'Each measured frequency band must move the visualizer');
+    assert(lastEquation.zoom>1,'Each band attack must reach the preset geometry');
+    for (let i=0;i<Math.ceil(1500/frameMs);i++) {
+      // Real captures have continuously advancing phase, even on held notes.
+      api.feed(tone(frequency,4,Math.round(i*frameMs*44.1)),44100);
+      advance(frameMs);
+    }
+    assert(scale()<1.002,'A phase-changing held note must not generate false beats');
+    assert(Math.abs(lastEquation.rot)<.0001,'Extra rotation must follow attacks instead of steady volume');
+  }
+}
+api.configure({song:'quiet verse after loud chorus',fps:30,cycle:false,songMotion:true});
+hold(tone(86,90),4000);
+hold(tone(86,1),3000);
+capture(tone(86,4));
+assert(lastLevels.instant[0]>1.3,'A preceding loud passage must not suppress the next quiet beat');
+api.configure({fps:30});
 api.configure({mode:'visualizer',active:true,cycle:false,song:'Japanese song'});
 const firstEquation=lastPreset.frame_eqs_str;
 const nextSet=new Set();
@@ -471,4 +506,4 @@ secondSession.destroy();
 const html=fs.readFileSync(`${root}assets/visualizer/index.html`,'utf8');
 assert.match(html, /#spectrum canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/,
   'Spectrum canvases must fill the CSS panel at every pixel density');
-console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, Android and Windows adaptation/recovery, refresh-aware pacing, DPI, section-driven cycling, softened blends, lazy preset loading, persistent rotation and cleanup.');
+console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, quiet beat thresholds at every frame limit, held-note rejection, loud-to-quiet recovery, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, Android and Windows adaptation/recovery, refresh-aware pacing, DPI, section-driven cycling, softened blends, lazy preset loading, persistent rotation and cleanup.');
