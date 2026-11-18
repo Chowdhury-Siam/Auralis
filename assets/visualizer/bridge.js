@@ -28,6 +28,7 @@
   let energyRms=0, lastEnergyRender=0;
   let outputEnergy=0, outputPulse=0;
   const bandRms=new Float32Array(3), bandAverage=new Float32Array(3);
+  const previousBandRms=new Float32Array(3);
   const bandRelease=new Float32Array(3);
   const previousMagnitude=new Float32Array(512), flux=new Float32Array(3);
   const bandMagnitude=new Float32Array(3), impulses=new Float32Array(3);
@@ -159,6 +160,7 @@
       const sample=(waveform[i]-128)/128-mean;
       energy+=sample*sample;
     }
+    const previousEnergy=energyRms;
     energyRms=energy=Math.sqrt(energy/1024);
     const bass=bandRms[0], high=Math.hypot(bandRms[1],bandRms[2]);
     const elapsed=Number.isFinite(lastAudio)?Math.max(0,time-lastAudio):33;
@@ -167,8 +169,11 @@
       impulses[i]*=Math.exp(-Math.min(elapsed,250)/110);
       // Positive spectral change catches drum attacks even under compressed
       // music with nearly constant overall RMS. No oscillator/BPM clock.
-      const rise=bandRms[i]/(bandAverage[i]+.006)-1;
+      // Compare adjacent captures so a held note above its slow average does
+      // not retrigger every 100 ms while that average is catching up.
+      const rise=(bandRms[i]-previousBandRms[i])/Math.max(.006,bandAverage[i]);
       const novelty=Math.max((flux[i]-.18)*1.6,(rise-.18)*.65);
+      previousBandRms[i]=bandRms[i];
       if (energy>.008 && bandRms[i]>.004 && novelty>0 &&
           time-impulseAt[i]>100) {
         impulses[i]=Math.max(impulses[i],Math.min(1,novelty));
@@ -178,7 +183,8 @@
     }
     const attack=Math.max(energy/(energyAverage+.008),bass/(bassAverage+.004),
       high/(highAverage+.008));
-    const onset=(strongOnset || (energy>.012 && attack>1.35)) && time-lastBeat>=120;
+    const onset=(strongOnset ||
+      (energy>.012 && energy>previousEnergy*1.12 && attack>1.35)) && time-lastBeat>=120;
     if (onset) lastBeat=time;
     if (options.songMotion && options.cycle) updateSection(elapsed,onset);
     const weight=1-Math.exp(-Math.min(elapsed,100)/300);
@@ -186,8 +192,9 @@
     energyAverage=established?energyAverage+weight*(energy-energyAverage):energy;
     bassAverage=established?bassAverage+weight*(bass-bassAverage):bass;
     highAverage=established?highAverage+weight*(high-highAverage):high;
-    const slow=1-Math.exp(-Math.min(elapsed,100)/2000);
     for (let i=0;i<3;i++) {
+      // A quiet verse must quickly establish its own reference after a chorus.
+      const slow=1-Math.exp(-Math.min(elapsed,100)/(bandRms[i]<bandAverage[i]?350:800));
       bandAverage[i]=bandAverage[i]>0
         ?bandAverage[i]+slow*(bandRms[i]-bandAverage[i]):bandRms[i];
     }
@@ -270,7 +277,12 @@
           ?Math.min(1,bandRms[i]/Math.max(.008,energyRms*.15)):0;
         const contrast=Math.min(2,bandRms[i]/(bandAverage[i]+.008));
         const pulse=impulses[i]*Math.exp(-Math.max(0,age)/110);
-        const value=Math.min(4,loudness*presence*(contrast+pulse*1.25));
+        // An onset is relative to its own band history. Multiplying that
+        // contrast by output loudness again suppresses quiet drums below the
+        // imported presets' beat thresholds, especially with Android's
+        // as-played 8-bit capture. Keep sustained energy volume-sensitive,
+        // while a measured attack retains its strength at listening volume.
+        const value=Math.min(4,presence*(loudness*contrast+pulse*1.6*fresh));
         const weight=1-Math.exp(-elapsed/(value>bandRelease[i]?45:140));
         bandRelease[i]+=weight*(value-bandRelease[i]);
         levels.val[i]=value;
@@ -290,9 +302,12 @@
     const target=energyRms>=.006?Math.min(1,3*Math.sqrt(energyRms))*fresh:0;
     const weight=1-Math.exp(-elapsed/(target>outputEnergy?30:160));
     outputEnergy+=weight*(target-outputEnergy);
-    const kick=impulses[0]*Math.exp(-Math.max(0,age)/110)*fresh;
-    const pulseWeight=1-Math.exp(-elapsed/(kick>outputPulse?18:110));
-    outputPulse+=pulseWeight*(kick-outputPulse);
+    // Snare and cymbal attacks can carry the rhythm without a bass hit.
+    // Each impulse still comes from positive spectral change in that band.
+    const attack=Math.max(impulses[0],impulses[1]*.85,impulses[2]*.7)
+      *Math.exp(-Math.max(0,age)/110)*fresh;
+    const pulseWeight=1-Math.exp(-elapsed/(attack>outputPulse?18:110));
+    outputPulse+=pulseWeight*(attack-outputPulse);
     // Dim the middle of the native crossfade without a readback or extra pass.
     const progress=blendDuration>0?blendElapsed/blendDuration:1;
     blendElapsed=Math.min(blendDuration,blendElapsed+elapsed);
@@ -432,13 +447,14 @@
       };
       if (options.songMotion && typeof source.frame_eqs_str==='string') {
         preset.frame_eqs_str=`
-          const __auralisKick=Math.min(1,Math.max(0,a.bass-a.bass_att));
+          const __auralisKick=Math.min(1,Math.max(0,a.bass-a.bass_att,
+            .85*(a.mid-a.mid_att),.7*(a.treb-a.treb_att)));
           const __auralisEnergy=Math.min(1.5,Math.max(0,(a.bass_att+a.mid_att+a.treb_att)/3));
           ${source.frame_eqs_str}
           if(Number.isFinite(a.zoom)) a.zoom*=1+${.009+variation*.021}*__auralisKick;
           if(Number.isFinite(a.wave_scale)) a.wave_scale*=.9+${.14+variation*.16}*__auralisEnergy+.35*__auralisKick;
           if(Number.isFinite(a.warp)) a.warp+=${.02+variation*.07}*__auralisKick;
-          if(Number.isFinite(a.rot)) a.rot+=${(variation-.5)*.045}*__auralisEnergy;
+          if(Number.isFinite(a.rot)) a.rot+=${(variation-.5)*.045}*__auralisKick;
         `;
       }
       visualizer.loadPreset(preset,blend);
@@ -492,7 +508,8 @@
     if (analyzer) analyzer.stop();
     clearWaveform();smooth.fill(-100);lastAudio=-Infinity;
     energyRms=0;lastEnergyRender=0;bandRms.fill(0);bandAverage.fill(0);bandRelease.fill(0);
-    previousMagnitude.fill(0);flux.fill(0);impulses.fill(0);impulseAt.fill(-Infinity);
+    previousMagnitude.fill(0);previousBandRms.fill(0);
+    flux.fill(0);impulses.fill(0);impulseAt.fill(-Infinity);
     outputEnergy=0;outputPulse=0;
     sectionAudioMs=sectionShiftMs=0;
     // Keep the last displayed frame when paused; histories reset so it cannot
