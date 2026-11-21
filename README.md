@@ -59,6 +59,11 @@ Music and Video keep independent Library sort choices, including in Settings.
 Changing one mode's order does not change the other. Video sorting is saved with
 its device-local settings; Music sorting keeps its existing backup and sync behavior.
 
+Version **0.1.228+229** adds Most played Music sorting, independent video gesture customization, full-window
+video controls, and pasted bilingual lyrics with optional audio-tag export.
+See [gesture and translation details](docs/INPUT_AND_TRANSLATIONS.md) and the
+[performance audit, verification and profiling limits](docs/PERFORMANCE_0228.md).
+
 Playback uses **libmpv**, and Telegram connectivity uses **TDLib**. Auralis streams the original file bytes without re-encoding; the source file and your audio device determine the resulting quality.
 
 ---
@@ -260,6 +265,18 @@ See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality note
 All videos and Playlists have separate search filters. Playlist searches match names and video titles. Clear a video playlist filter to restore drag-to-reorder handles. Filtering does not change saved queues or playback indices.
 
 The full player supports audio/subtitle track selection, external and secondary subtitles, chapters/bookmarks, speed, sleep timer, snapshots, video sizing, and picture-processing options. Japanese audio and English subtitles are preferred when available; manual choices apply to the current video. Android supports immersive full-player controls and picture in picture where the device permits it. Video settings and playback diagnostics stay separate from Music's Lyrics & artwork settings.
+
+**Skip intro/opening and ending/outro:** a skip button appears during recognized
+timed chapters, including OP/ED and common variants, without first importing
+them. It stays tappable even when controls are locked or auto-hidden, and
+skipping does not unlock or pause/resume the video. The button seeks to the
+section's end/next chapter, preserving a following post-credit scene. Saved
+manual/AniSkip ranges override overlapping chapter timings. Videos without
+chapter timings can use **More player controls → Playback → Skip segments**
+to mark a range or choose **Find AniSkip segments** with a MyAnimeList ID and
+episode. No section lengths are guessed and no new automatic network lookup
+is added. Existing automatic skipping remains limited to saved ranges.
+See [video skip-button behavior and verification](docs/VIDEO_SKIP.md).
 
 Telegram videos and local files play their **original sources**. There is no quality selector or alternate-stream switching. Picture processing does not create new source resolutions. Telegram history/resume/watched metadata can sync; local file access, video playlists, snapshots and playlist photos remain device-local.
 
