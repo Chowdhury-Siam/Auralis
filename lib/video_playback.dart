@@ -185,8 +185,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
   Directory? _scripts;
   bool _customKeysLoaded = false;
   List<VideoBookmark> _chapters = const [];
+  List<VideoSkipSegment> _chapterSegments = const [];
+  int _chapterReadGeneration = 0;
   _VideoFit _fit = _VideoFit.fit;
-  Size _controlReferenceSize = const Size(16, 9);
   _Upscale _upscale = _Upscale.off;
   _ShaderQuality _quality = _ShaderQuality.balanced;
   late _Ambient _ambient = _Ambient.values.firstWhere(
@@ -224,6 +225,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
         (segment) => segment.end <= _duration && segment.contains(_position),
       )
       .lastOrNull;
+  VideoSkipSegment? get _skipButtonSegment =>
+      videoActiveSkipSegment(_segments, _chapterSegments, _position, _duration);
 
   @override
   void initState() {
@@ -369,12 +372,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
     _acceptVideoParams = false;
     _trackGeneration++;
     _automaticAudio = _automaticSubtitles = true;
-    // Pick the control bounds before the decoder can publish a texture.
-    final width = _source.telegram?.videoWidth ?? 0;
-    final height = _source.telegram?.videoHeight ?? 0;
-    _controlReferenceSize = width > 0 && height > 0
-        ? Size(width.toDouble(), height.toDouble())
-        : const Size(16, 9);
     _positionReady = false;
     _resumeSeek =
         resume &&
@@ -382,6 +379,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
         _data.positions[_source.id] != null;
     _error = null;
     _chapters = const [];
+    _chapterSegments = const [];
+    _chapterReadGeneration++;
     _skipStart = _autoSkipEnd = null;
     _secondarySubtitle = 'no';
     _changed();
@@ -558,6 +557,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
       if (!_canPlay || _error != null) return;
       await _preferVideoTracks();
       if (!_canPlay || _error != null) return;
+      // Some containers expose chapters after the first duration event. Refresh
+      // once after opening as well, without delaying playback.
+      unawaited(_readChapters());
       widget.onOpened(source);
       _hasHistoryRecord = _data.history.containsKey(source.id);
       await _applyOrientation();
@@ -595,14 +597,23 @@ class _VideoPlaybackState extends State<VideoPlayback>
   Future<void> _readChapters() async {
     if (!_canPlay || _player == null) return;
     final id = _source.id;
+    final generation = ++_chapterReadGeneration;
+    final native = _native;
     try {
       final count =
-          (int.tryParse(await _native.getProperty('chapter-list/count')) ?? 0)
+          (int.tryParse(await native.getProperty('chapter-list/count')) ?? 0)
               .clamp(0, 500);
       final result = <VideoBookmark>[];
-      for (var i = 0; i < count && _canPlay && id == _source.id; i++) {
+      for (
+        var i = 0;
+        i < count &&
+            _canPlay &&
+            id == _source.id &&
+            generation == _chapterReadGeneration;
+        i++
+      ) {
         final seconds = double.tryParse(
-          await _native.getProperty('chapter-list/$i/time'),
+          await native.getProperty('chapter-list/$i/time'),
         );
         if (seconds == null ||
             !seconds.isFinite ||
@@ -610,7 +621,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
             seconds > 31536000) {
           continue;
         }
-        final title = await _native.getProperty('chapter-list/$i/title');
+        final title = await native.getProperty('chapter-list/$i/title');
         result.add(
           VideoBookmark(
             Duration(milliseconds: (seconds * 1000).round()),
@@ -618,8 +629,13 @@ class _VideoPlaybackState extends State<VideoPlayback>
           ),
         );
       }
-      if (!_canPlay || id != _source.id) return;
+      if (!_canPlay ||
+          id != _source.id ||
+          generation != _chapterReadGeneration) {
+        return;
+      }
       _chapters = result;
+      _chapterSegments = videoChapterSegments(result, _duration);
       _changed();
     } catch (_) {
       // Chapter metadata is optional.
@@ -817,8 +833,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
     final channelId = source.channelId;
     final settings = _data.channels[channelId];
     final player = _player!;
-    final volume = (channelId == null ? _localVolume : settings?.volume) ??
-        _defaultVolume;
+    final volume =
+        (channelId == null ? _localVolume : settings?.volume) ?? _defaultVolume;
     final level = volume.clamp(0, _data.volumeBoost ? 130 : 100).toDouble();
     if (player.state.volume != level) await player.setVolume(level);
     if (!_canPlay) return;
@@ -864,8 +880,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
         await _videoWindow.invokeMethod<void>('brightness', value);
         _brightnessChanged = value != null;
       }
-      _brightness = value ??
-          await _videoWindow.invokeMethod<double>('getBrightness');
+      _brightness =
+          value ?? await _videoWindow.invokeMethod<double>('getBrightness');
     } on PlatformException {
       // Ignore devices that do not expose per-window brightness.
     } on MissingPluginException {
