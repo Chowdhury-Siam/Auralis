@@ -71,6 +71,7 @@ class TelegramService extends ChangeNotifier {
     if (json['@type'] == 'downloadFile' && json['priority'] == 32) {
       // Metadata cleanup or startup migration may still own this disk file.
       await _mediaSweep;
+      await _storageCleanup;
       await _audioDeletes[json['file_id']];
     }
     return _transport.request(json);
@@ -104,6 +105,9 @@ class TelegramService extends ChangeNotifier {
   bool get ready => state == 'authorizationStateReady';
   String connection = 'Offline';
   final Map<int, Future<Uint8List?>> _images = {};
+  final _videoThumbnails =
+      <int, ({String title, Future<Uint8List?> pending})>{};
+  final _videoThumbnailBytes = <int, Uint8List>{};
   final _videoArtworkTracks = <String, Future<Track?>>{};
   int _imageGeneration = 0;
   final Map<int, Future<Uint8List?>> _covers = {};
@@ -116,27 +120,69 @@ class TelegramService extends ChangeNotifier {
   Completer<void>? _coverSlot;
   bool Function(int) isStreaming = (_) => false;
   bool Function() hasActiveStream = () => false;
-  Future<void>? _mediaSweep;
+  Future<void>? _mediaSweep, _storageCleanup;
   final Map<int, int> _metadataUsers = {};
   final Map<int, Future<void>> _audioDeletes = {};
 
+  Future<Json> _optimizeMedia(List<Json> types) => transport.request({
+    '@type': 'optimizeStorage',
+    'size': 0,
+    'ttl': 0,
+    'count': 0,
+    'immunity_delay': 0,
+    'file_types': types,
+    'chat_ids': <int>[],
+    'exclude_chat_ids': <int>[],
+    'return_deleted_file_statistics': false,
+    'chat_limit': 0,
+  });
+
   Future<void> _purgeOldMedia() async {
     try {
-      await transport.request({
-        '@type': 'optimizeStorage',
-        'size': 0,
-        'ttl': 0,
-        'count': 0,
-        'immunity_delay': 0,
-        'file_types': <Json>[],
-        'chat_ids': <int>[],
-        'exclude_chat_ids': <int>[],
-        'return_deleted_file_statistics': false,
-        'chat_limit': 0,
-      });
+      await _optimizeMedia(const []);
     } catch (_) {
       // Offline cleanup must not prevent sign-in or streaming. Retry next login.
     }
+  }
+
+  bool get mediaCacheInUse => hasActiveStream() || _metadataUsers.isNotEmpty;
+
+  Future<int> playbackCacheBytes({required bool video}) async {
+    if (!ready) return 0;
+    await _mediaSweep;
+    final result = await transport.request({
+      '@type': 'getStorageStatistics',
+      'chat_limit': 0,
+    }, timeout: const Duration(seconds: 5));
+    final type = _playbackCacheType(video);
+    var bytes = 0;
+    for (final chat
+        in (result['by_chat'] as List? ?? const []).whereType<Json>()) {
+      for (final item
+          in (chat['by_file_type'] as List? ?? const []).whereType<Json>()) {
+        if (item['file_type']?['@type'] == type) bytes += item['size'] as int;
+      }
+    }
+    return bytes;
+  }
+
+  String _playbackCacheType(bool video) =>
+      video ? 'fileTypeVideo' : 'fileTypeAudio';
+
+  Future<void> clearPlaybackCache({required bool video}) async {
+    final client = transport;
+    await _mediaSweep;
+    while (_storageCleanup != null) {
+      await _storageCleanup;
+    }
+    if (!ready || !identical(client, transport) || mediaCacheInUse) {
+      throw StateError(
+        'Playback cache in use or the Telegram session changed.',
+      );
+    }
+    await (_storageCleanup = _optimizeMedia([
+      {'@type': _playbackCacheType(video)},
+    ]).then<void>((_) {}).whenComplete(() => _storageCleanup = null));
   }
 
   /// Releases a temporary Telegram file after its last playback or metadata read.
@@ -176,14 +222,18 @@ class TelegramService extends ChangeNotifier {
   Future<T?> _withTemporaryFile<T>(
     int fileId,
     int generation,
-    Future<T?> Function() read,
-  ) async {
+    Future<T?> Function() read, {
+    bool Function()? isCurrent,
+  }) async {
     final client = transport;
     _metadataUsers.update(fileId, (count) => count + 1, ifAbsent: () => 1);
     try {
       await _mediaSweep;
+      await _storageCleanup;
       await _audioDeletes[fileId];
-      if (!ready || generation != _imageGeneration) return null;
+      if (!ready || !(isCurrent?.call() ?? generation == _imageGeneration)) {
+        return null;
+      }
       return await read();
     } finally {
       final remaining = _metadataUsers[fileId]! - 1;
@@ -199,10 +249,16 @@ class TelegramService extends ChangeNotifier {
   }
 
   void clearImageCache() {
+    clearMusicArtworkMemory();
+    _videoArtworkTracks.clear();
+    _videoThumbnails.clear();
+    _videoThumbnailBytes.clear();
+  }
+
+  void clearMusicArtworkMemory() {
     ++_imageGeneration;
     _wakeCoverJobs();
     _images.clear();
-    _videoArtworkTracks.clear();
     _covers.clear();
     _coverBytes.clear();
     _coverSuccess.clear();
@@ -446,23 +502,19 @@ class TelegramService extends ChangeNotifier {
           (result == null || !_sharpEnough(track, result))) {
         try {
           var complete = true;
-          final bytes = await _withTemporaryFile(
-            id,
-            generation,
-            () {
-              final source = _metadataSource(id, generation);
-              return readEmbeddedCover((offset, count) async {
-                try {
-                  final bytes = await source(offset, count);
-                  if (bytes == null) complete = false;
-                  return bytes;
-                } catch (_) {
-                  complete = false;
-                  rethrow;
-                }
-              }, track.size);
-            },
-          );
+          final bytes = await _withTemporaryFile(id, generation, () {
+            final source = _metadataSource(id, generation);
+            return readEmbeddedCover((offset, count) async {
+              try {
+                final bytes = await source(offset, count);
+                if (bytes == null) complete = false;
+                return bytes;
+              } catch (_) {
+                complete = false;
+                rethrow;
+              }
+            }, track.size);
+          });
           embeddedChecked = complete;
           final embedded = bytes == null ? null : await _inspectCover(bytes);
           if (embedded != null &&
@@ -744,34 +796,74 @@ class TelegramService extends ChangeNotifier {
     if (!ready) return Future.value(null);
     if (_images[fileId] case final cached?) return cached;
     if (_images.length >= 128) _images.remove(_images.keys.first);
-    return _images[fileId] = _downloadImage(fileId, _imageGeneration);
+    final generation = _imageGeneration;
+    return _images[fileId] = _downloadImage(
+      fileId,
+      () => ready && generation == _imageGeneration,
+    );
   }
 
-  Future<Uint8List?> _downloadImage(int fileId, int generation) async {
+  Future<Uint8List?> videoThumbnail(int fileId, String title) {
+    if (!ready) return Future.value(null);
+    if (_videoThumbnails[fileId] case final cached?) return cached.pending;
+    if (_videoThumbnails.length >= 128) {
+      discardVideoThumbnail(_videoThumbnails.keys.first);
+    }
+    late final Future<Uint8List?> pending;
+    bool current() => ready && _videoThumbnails[fileId]?.pending == pending;
+    pending = _downloadImage(fileId, current).then((bytes) {
+      if (bytes != null && current()) _videoThumbnailBytes[fileId] = bytes;
+      return bytes;
+    });
+    _videoThumbnails[fileId] = (title: title, pending: pending);
+    return pending;
+  }
+
+  Iterable<({int id, String title, Uint8List bytes})>
+  get cachedVideoThumbnails sync* {
+    for (final entry in _videoThumbnailBytes.entries) {
+      yield (
+        id: entry.key,
+        title: _videoThumbnails[entry.key]!.title,
+        bytes: entry.value,
+      );
+    }
+  }
+
+  void discardVideoThumbnail(int fileId) {
+    _videoThumbnails.remove(fileId);
+    _videoThumbnailBytes.remove(fileId);
+  }
+
+  Future<Uint8List?> _downloadImage(int fileId, bool Function() current) async {
     try {
-      final bytes = await _withTemporaryFile(fileId, generation, () async {
-        final result = await transport.request({
-          '@type': 'downloadFile',
-          'file_id': fileId,
-          'priority': 1,
-          'offset': 0,
-          'limit': 0,
-          'synchronous': true,
-        }, timeout: const Duration(seconds: 20));
-        final local = result['local'] as Json?;
-        final path = local?['path'];
-        if (local?['is_downloading_completed'] != true ||
-            path is! String ||
-            path.isEmpty ||
-            generation != _imageGeneration ||
-            !ready) {
-          return null;
-        }
-        final file = File(path);
-        if (await file.length() > maxCoverBytes) return null;
-        return file.readAsBytes();
-      });
-      return generation == _imageGeneration && ready ? bytes : null;
+      final bytes = await _withTemporaryFile(
+        fileId,
+        _imageGeneration,
+        () async {
+          final result = await transport.request({
+            '@type': 'downloadFile',
+            'file_id': fileId,
+            'priority': 1,
+            'offset': 0,
+            'limit': 0,
+            'synchronous': true,
+          }, timeout: const Duration(seconds: 20));
+          final local = result['local'] as Json?;
+          final path = local?['path'];
+          if (local?['is_downloading_completed'] != true ||
+              path is! String ||
+              path.isEmpty ||
+              !current()) {
+            return null;
+          }
+          final file = File(path);
+          if (await file.length() > maxCoverBytes) return null;
+          return file.readAsBytes();
+        },
+        isCurrent: current,
+      );
+      return current() ? bytes : null;
     } catch (_) {
       // Artwork failure must not interrupt playback or channel selection.
       return null;
@@ -1010,7 +1102,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.228',
+          'application_version': '0.1.229',
         }));
       } on TdException catch (e) {
         throw FormatException(
@@ -1200,16 +1292,19 @@ class TelegramService extends ChangeNotifier {
     if (_videoArtworkTracks.length >= 128) {
       _videoArtworkTracks.remove(_videoArtworkTracks.keys.first);
     }
-    final generation = _imageGeneration;
-    return _videoArtworkTracks[reference.id] = () async {
+    late final Future<Track?> pending;
+    pending = () async {
       try {
         final track = await restoreVideo(reference);
-        return generation == _imageGeneration ? track : null;
+        return identical(_videoArtworkTracks[reference.id], pending)
+            ? track
+            : null;
       } catch (_) {
         // Deleted posts and disconnected channels can still appear in History.
         return null;
       }
     }();
+    return _videoArtworkTracks[reference.id] = pending;
   }
 
   Future<Track?> restoreVideo(Track reference) async {
@@ -1226,7 +1321,6 @@ class TelegramService extends ChangeNotifier {
     if (!ready || !identical(client, transport)) return null;
     return Track.fromVideoMessage(message, reference.source);
   }
-
 
   Future<({List<Track> tracks, int nextMessageId})> _searchMedia(
     int chatId, {
