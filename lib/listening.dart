@@ -62,6 +62,22 @@ class ListeningStats {
         final result = b.value.milliseconds.compareTo(a.value.milliseconds);
         return result == 0 ? a.key.compareTo(b.key) : result;
       });
+
+  /// The Home card needs one result, not an allocation and full history sort
+  /// on every position update. Preserve topTracks' ID tie-breaking exactly.
+  MapEntry<String, ListeningTrack>? get topTrack {
+    MapEntry<String, ListeningTrack>? best;
+    for (final entry in tracks.entries) {
+      if (best == null ||
+          entry.value.milliseconds > best.value.milliseconds ||
+          (entry.value.milliseconds == best.value.milliseconds &&
+              entry.key.compareTo(best.key) < 0)) {
+        best = entry;
+      }
+    }
+    return best;
+  }
+
   List<MapEntry<String, int>> get topArtists {
     final values = <String, int>{};
     for (final track in tracks.values) {
