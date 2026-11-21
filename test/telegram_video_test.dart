@@ -621,6 +621,45 @@ void main() {
       await tester.tap(gestures);
       await tester.pumpAndSettle();
       expect(player.settings.videoPlayback.gestures, !gesturesEnabled);
+      await tester.tap(find.text('Customize each gesture'));
+      await tester.pumpAndSettle();
+      final musicVolume = player.settings.volume;
+      final toggles = find.byWidgetPredicate(
+        (widget) =>
+            widget is SwitchListTile &&
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'video-gesture-',
+            ),
+      );
+      final keys = tester
+          .widgetList<SwitchListTile>(toggles)
+          .map((widget) => widget.key!)
+          .toList();
+      expect(keys.length, greaterThanOrEqualTo(11));
+      for (final key in keys) {
+        final toggle = find.byKey(key);
+        await tester.ensureVisible(toggle);
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      }
+      final reset = find.text('Reset gestures');
+      await tester.ensureVisible(reset);
+      await tester.tap(reset);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(player.settings.videoPlayback.gestureOptions.disabled, isNotEmpty);
+      await tester.tap(reset);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Reset gestures'));
+      await tester.pumpAndSettle();
+      expect(player.settings.videoPlayback.gestureOptions.disabled, isEmpty);
+      expect(player.settings.videoPlayback.gestures, isTrue);
+      expect(player.settings.volume, musicVolume);
+      await tester.tap(find.text('Done').last);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
       await tester.tap(find.byType(BackButton));
