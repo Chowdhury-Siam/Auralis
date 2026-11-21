@@ -19,7 +19,8 @@ class AndroidAudioHandler extends BaseAudioHandler {
     this.artworkDirectory,
     this.artworkChanges,
   }) {
-    player.addListener(_sync);
+    player.addListener(_syncPlayback);
+    player.viewChanges.addListener(_sync);
     artworkChanges?.addListener(_sync);
     _sync();
   }
@@ -78,7 +79,9 @@ class AndroidAudioHandler extends BaseAudioHandler {
         await directory.create(recursive: true);
         if (!active()) return;
         // A content-derived path refreshes Android's image cache on upgrades.
-        final file = File(p.join(directory.path, '${sha256.convert(bytes)}.art'));
+        final file = File(
+          p.join(directory.path, '${sha256.convert(bytes)}.art'),
+        );
         if (!await file.exists()) {
           final pending = File('${file.path}.$generation.tmp');
           try {
@@ -97,8 +100,12 @@ class AndroidAudioHandler extends BaseAudioHandler {
         // Keep the app-private image cache bounded across app restarts.
         final files = await directory
             .list()
-            .where((entry) => entry is File &&
-                RegExp(r'^[a-f0-9]{64}\.art$').hasMatch(p.basename(entry.path)))
+            .where(
+              (entry) =>
+                  entry is File &&
+                  RegExp(r'^[a-f0-9]{64}\.art$')
+                      .hasMatch(p.basename(entry.path)),
+            )
             .cast<File>()
             .toList();
         final dated = [
@@ -116,6 +123,7 @@ class AndroidAudioHandler extends BaseAudioHandler {
         // Keep a usable preview (or no art) if storage is unavailable.
       }
     }
+
     await publish(track.coverPreview);
     await publish(await safeCover);
   }
@@ -151,7 +159,7 @@ class AndroidAudioHandler extends BaseAudioHandler {
       _tracks = List.of(player.queue);
       queue.add(_tracks.map(_item).toList());
     }
-    final audio = player.audio, track = player.current;
+    final track = player.current;
     final item = track == null ? null : _item(track);
     final previous = mediaItem.value;
     // MediaItem equality compares IDs only; the native duration can arrive later.
@@ -163,6 +171,14 @@ class AndroidAudioHandler extends BaseAudioHandler {
         previous?.artUri != item?.artUri) {
       mediaItem.add(item);
     }
+    _syncPlayback(forcePlaybackState: forcePlaybackState);
+  }
+
+  /// Progress must still reach system controls, without scanning the queue or
+  /// starting metadata work. Structural/duration/artwork events use _sync.
+  void _syncPlayback({bool forcePlaybackState = false}) {
+    if (_closed) return;
+    final audio = player.audio, track = player.current;
     final processing = track == null
         ? AudioProcessingState.idle
         : player.loading
@@ -224,6 +240,7 @@ class AndroidAudioHandler extends BaseAudioHandler {
     await player.seek(position);
     _sync(forcePlaybackState: true);
   }
+
   @override
   Future<void> skipToNext() => player.next();
   @override
@@ -239,7 +256,8 @@ class AndroidAudioHandler extends BaseAudioHandler {
     if (_closed) return;
     _closed = true;
     ++_artworkGeneration;
-    player.removeListener(_sync);
+    player.removeListener(_syncPlayback);
+    player.viewChanges.removeListener(_sync);
     artworkChanges?.removeListener(_sync);
     for (final subscription in _subscriptions) {
       await subscription.cancel();
