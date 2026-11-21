@@ -230,6 +230,13 @@ class _RecordingVideoProxy extends TelegramStreamProxy {
       Uri.parse('http://127.0.0.1/video/${track.fileId}');
 
   VoidCallback? onStop;
+  int interruptions = 0;
+
+  @override
+  Future<void> interrupt() {
+    interruptions++;
+    return super.interrupt();
+  }
 
   @override
   Future<void> stop() {
@@ -288,7 +295,7 @@ class _SkipVideoFixture {
     transport: FakeTd(),
   );
 
-  Future<void> mount(WidgetTester tester) async {
+  Future<void> mount(WidgetTester tester, {VideoSource? videoSource}) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1280, 800);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -302,7 +309,7 @@ class _SkipVideoFixture {
               Directionality(textDirection: value, child: child!),
         ),
         home: VideoPlayback(
-          sources: [source],
+          sources: [videoSource ?? source],
           initialIndex: 0,
           telegram: telegram,
           music: music,
@@ -332,6 +339,103 @@ class _SkipVideoFixture {
 }
 
 void main() {
+  testWidgets(
+    'foreground recovery reopens a stalled Telegram video at its last position',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      fixture.telegram.state = 'authorizationStateReady';
+      final source = VideoSource.telegram(
+        const Track(
+          id: '-100:1',
+          title: 'Episode one',
+          artist: '',
+          source: 'Test channel',
+          mime: 'video/mp4',
+          fileId: 21,
+          size: 4096,
+          duration: Duration(minutes: 2),
+        ),
+      );
+      const position = Duration(seconds: 26);
+      try {
+        await fixture.mount(tester, videoSource: source);
+        await fixture.native.seek(position);
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        await tester.pump();
+        expect(fixture.native.state.playing, isFalse);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        expect(fixture.native.state.playing, isTrue);
+        fixture.native.setBuffering(true);
+        await tester.pump(const Duration(seconds: 12));
+        await tester.pumpAndSettle();
+        expect(fixture.proxy.interruptions, 1);
+        expect(fixture.native.opened, hasLength(2));
+        expect(fixture.native.opened.last.start, position);
+        expect(fixture.native.state.playing, isTrue);
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
+
+  testWidgets('85 percent marks watched and reopening uses the last position', (
+    tester,
+  ) async {
+    final fixture = _SkipVideoFixture();
+    final source = fixture.source;
+    final data = fixture.settings.videoPlayback;
+    try {
+      await fixture.mount(tester);
+      await fixture.native.seek(
+        const Duration(seconds: 101, milliseconds: 999),
+      );
+      await tester.pump();
+      expect(data.isWatched(source), isFalse);
+      await fixture.native.seek(const Duration(seconds: 102));
+      await tester.pump();
+      expect(data.isWatched(source), isTrue);
+      expect(data.positions[source.id], const Duration(seconds: 102));
+      data.setWatched(source, false);
+      expect(data.positions[source.id], const Duration(seconds: 102));
+      data.setWatched(source, true);
+      await fixture.native.seek(const Duration(seconds: 108));
+      await tester.pump();
+    } finally {
+      await fixture.close(tester);
+    }
+
+    final reopened = _SkipVideoFixture();
+    reopened.settings.videoPlayback = VideoPlaybackData.fromJson(data.toJson());
+    try {
+      await reopened.mount(tester, videoSource: source);
+      expect(reopened.settings.videoPlayback.isWatched(source), isTrue);
+      expect(reopened.native.opened.single.start, const Duration(seconds: 108));
+    } finally {
+      await reopened.close(tester);
+    }
+  });
+
+  testWidgets('backgrounding preserves a manual pause', (tester) async {
+    final fixture = _SkipVideoFixture();
+    try {
+      await fixture.mount(tester);
+      await fixture.native.pause();
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump(const Duration(seconds: 13));
+      expect(fixture.native.state.playing, isFalse);
+      expect(fixture.native.opened, hasLength(1));
+    } finally {
+      await fixture.close(tester);
+    }
+  });
+
   testWidgets(
     'video progress rebuilds only the live timeline, preserving controls',
     (tester) async {
@@ -1113,7 +1217,10 @@ void main() {
       const Duration(seconds: 118),
       const Duration(minutes: 2),
     );
-    expect(restored.videoPlayback.positions, isEmpty);
+    expect(
+      restored.videoPlayback.positions['file:example'],
+      const Duration(seconds: 118),
+    );
   });
 
   testWidgets(
