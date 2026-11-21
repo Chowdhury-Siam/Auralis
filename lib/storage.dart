@@ -11,6 +11,7 @@ import 'models.dart';
 import 'listening.dart';
 import 'playlist_photo_data.dart';
 import 'music_visualizer_data.dart';
+import 'json_processing.dart';
 
 final class _Blob extends Struct {
   @Uint32()
@@ -165,8 +166,11 @@ class AppSettings {
 
   Future<void> load() async {
     if (!await file.exists()) return;
-    final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-    musicVisualizer = MusicVisualizerSettings.fromJson(json['_musicVisualizer']);
+    final json =
+        await decodeJsonBytes(await file.readAsBytes()) as Map<String, dynamic>;
+    musicVisualizer = MusicVisualizerSettings.fromJson(
+      json['_musicVisualizer'],
+    );
     videoPlayback = VideoPlaybackData.fromJson(
       json['_videoPlayback'],
       // Before independent Video sorting, both modes used the Music value.
@@ -274,11 +278,11 @@ class AppSettings {
           final ids = _ids(entry.value, 5000);
           final previous = previousPlaylists[key];
           // An unchanged sync snapshot must not invalidate a pending photo edit.
-          playlists[key] = previous != null &&
+          playlists[key] =
+              previous != null &&
                   previous.length == ids.length &&
-                  Iterable<int>.generate(ids.length).every(
-                    (index) => previous[index] == ids[index],
-                  )
+                  Iterable<int>.generate(ids.length)
+                      .every((index) => previous[index] == ids[index])
               ? previous
               : ids;
         }
