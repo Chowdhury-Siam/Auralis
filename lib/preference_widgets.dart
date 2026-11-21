@@ -151,3 +151,78 @@ class PreferenceChoice<T> extends StatelessWidget {
     ),
   );
 }
+
+/// A compact row shared by the Settings directory and Video settings.
+class SettingsActionTile extends StatelessWidget {
+  const SettingsActionTile({
+    super.key,
+    this.tileKey,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onTap,
+    this.first = false,
+    this.last = false,
+  });
+
+  final Key? tileKey;
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+  final bool first, last;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Material(
+        color: colors.surfaceContainerLow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(first ? 20 : 6),
+            bottom: Radius.circular(last ? 20 : 6),
+          ),
+          side: BorderSide(color: colors.outlineVariant.withValues(alpha: .35)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          key: tileKey,
+          minTileHeight: 56,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 2,
+          ),
+          horizontalTitleGap: 12,
+          leading: PreferenceIcon(icon),
+          trailing: onTap == null
+              ? null
+              : Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: colors.onSurfaceVariant,
+                ),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: colors.onSurface,
+            ),
+          ),
+          subtitle: subtitle == null
+              ? null
+              : Text(
+                  subtitle!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
