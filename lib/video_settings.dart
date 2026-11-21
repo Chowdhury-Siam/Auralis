@@ -59,7 +59,6 @@ class VideoSettingsOptions extends StatelessWidget {
     this.onFrameRateChanged,
     this.onAutoPipChanged,
     this.diagnostics = const {},
-    this.inDialog = false,
   });
 
   final AppSettings settings;
@@ -68,162 +67,59 @@ class VideoSettingsOptions extends StatelessWidget {
       onFrameRateChanged,
       onAutoPipChanged;
   final Map<VideoDiagnostic, Future<void> Function(BuildContext)> diagnostics;
-  final bool inDialog;
   VideoPlaybackData get _data => settings.videoPlayback;
 
   @override
-  Widget build(BuildContext context) => inDialog
-      ? _content(context, false)
-      : LayoutBuilder(
-          builder: (context, box) => _content(
-            context,
-            box.maxWidth >= 640 &&
-                MediaQuery.textScalerOf(context).scale(14) < 21,
-          ),
-        );
-
-  Widget _content(BuildContext context, bool twoColumns) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final actions = [
-      for (final (label, detail, icon, open) in [
-        (
-          'Player settings',
-          'Playback, gestures, audio and snapshots.',
-          Icons.tune_rounded,
-          _settingsPanel,
-        ),
-        (
-          'Player control layout',
-          'Arrange each area in portrait and landscape.',
-          Icons.dashboard_customize_outlined,
-          _layoutPanel,
-        ),
-        (
-          'Custom buttons',
-          'Give your own mpv commands a place in the player.',
-          Icons.extension_outlined,
-          _customControlsPanel,
-        ),
-        (
-          'mpv configuration',
-          'Edit player options and keyboard shortcuts.',
-          Icons.code_rounded,
-          _configurationPanel,
-        ),
-      ])
-        VideoSettingsAction(
-          title: label,
-          description: detail,
-          icon: icon,
-          onTap: () => open(context),
-        ),
+  Widget build(BuildContext context) {
+    final active = [
+      for (final diagnostic in VideoDiagnostic.values)
+        if (diagnostics[diagnostic] case final open?) (diagnostic, open),
     ];
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (!inDialog) ...[
-          Container(
-            key: const ValueKey('video-settings-intro'),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: colors.primaryContainer.withValues(alpha: .45),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const VideoSettingsIcon(icon: Icons.movie_outlined),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Your player, your way',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Personalize Video without changing Music settings.',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-        ],
-        for (var index = 0; index < actions.length; index += twoColumns ? 2 : 1)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: twoColumns
-                ? IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: actions[index]),
-                        const SizedBox(width: 12),
-                        Expanded(child: actions[index + 1]),
-                      ],
-                    ),
-                  )
-                : actions[index],
-          ),
+        SettingsActionTile(
+          title: 'Player settings',
+          icon: Icons.tune_rounded,
+          first: true,
+          onTap: () => _settingsPanel(context),
+        ),
+        SettingsActionTile(
+          title: 'Player control layout',
+          icon: Icons.dashboard_customize_outlined,
+          onTap: () => _layoutPanel(context),
+        ),
+        SettingsActionTile(
+          title: 'Custom buttons',
+          icon: Icons.extension_outlined,
+          onTap: () => _customControlsPanel(context),
+        ),
+        SettingsActionTile(
+          title: 'mpv configuration',
+          icon: Icons.code_rounded,
+          last: true,
+          onTap: () => _configurationPanel(context),
+        ),
         const SizedBox(height: 8),
-        if (diagnostics.isEmpty)
-          VideoSettingsGroup(
-            key: const ValueKey('video-diagnostics-idle'),
+        if (active.isEmpty)
+          const SettingsActionTile(
+            key: ValueKey('video-diagnostics-idle'),
             title: 'Live diagnostics',
-            description: 'Available while a video is open',
-            children: [
-              Text(
-                'Open a video, then choose More → Video settings for decoder controls, '
-                'playback information, the mpv console and player scripts.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-            ],
+            subtitle: 'Open a video and choose More → Video settings.',
+            icon: Icons.monitor_heart_outlined,
+            first: true,
+            last: true,
           )
-        else ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              'Live diagnostics',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+        else
+          for (var i = 0; i < active.length; i++)
+            SettingsActionTile(
+              title: active[i].$1.label,
+              icon: active[i].$1.icon,
+              first: i == 0,
+              last: i == active.length - 1,
+              onTap: () => active[i].$2(context),
             ),
-          ),
-          for (final diagnostic in VideoDiagnostic.values)
-            if (diagnostics[diagnostic] case final open?)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: VideoSettingsAction(
-                  title: diagnostic.label,
-                  description: switch (diagnostic) {
-                    VideoDiagnostic.decoder =>
-                      'Choose hardware or software decoding.',
-                    VideoDiagnostic.information =>
-                      'Live codecs, frame rate and playback health.',
-                    VideoDiagnostic.console =>
-                      'Run a command and inspect recent player logs.',
-                    VideoDiagnostic.script =>
-                      'Load a local script for the current player.',
-                  },
-                  icon: diagnostic.icon,
-                  onTap: () => open(context),
-                ),
-              ),
-        ],
       ],
     );
   }
