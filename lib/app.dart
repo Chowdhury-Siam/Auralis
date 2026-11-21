@@ -45,6 +45,8 @@ import 'app_theme.dart';
 import 'app_motion.dart';
 import 'setup_view.dart';
 import 'settings_view.dart';
+import 'cache_management.dart';
+import 'media_cache.dart';
 import 'preference_widgets.dart';
 
 import 'discovery_widgets.dart';
@@ -1107,7 +1109,7 @@ class _PlayerShellState extends State<PlayerShell>
       _cachedTracks = 0;
       _cacheReport = null;
     });
-    telegram.clearImageCache();
+    telegram.clearMusicArtworkMemory();
     await library.refresh();
     if (!mounted || generation != _cacheGeneration || !telegram.ready) return;
     final tracks = List<Track>.of(library.tracks);
@@ -1385,7 +1387,7 @@ class _PlayerShellState extends State<PlayerShell>
             child: Scaffold(
               appBar: AppBar(
                 leading: BackButton(onPressed: _back),
-                title: Text(_settingsSection?.title ?? 'Settings'),
+                title: Text(_settingsTitle),
               ),
               body: SafeArea(
                 child: Padding(
@@ -1632,7 +1634,7 @@ class _PlayerShellState extends State<PlayerShell>
                     const SizedBox(height: 7),
                   ],
                   Text(
-                    _settingsSection?.title ?? 'Settings',
+                    _settingsTitle,
                     key: const ValueKey('page-title'),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -3758,6 +3760,84 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
+  String get _settingsTitle => _settingsSection == SettingsSection.cache
+      ? (_videoMode ? 'Video cache' : 'Music cache')
+      : _settingsSection?.title ?? 'Settings';
+
+  Future<({List<CacheEntry> entries, String? message})> _loadCache(bool video) async {
+    final client = telegram.transport;
+    final disk = telegram.mediaCache;
+    bool sameAccount() => identical(telegram.transport, client) &&
+        telegram.mediaCache.directory?.path == disk.directory?.path;
+    final entries = video
+        ? [
+            for (final preview in telegram.cachedVideoThumbnails)
+              CacheEntry(
+                id: 'video-thumbnail:${preview.id}',
+                category: CacheCategory.videoThumbnails,
+                title: preview.title,
+                bytes: preview.bytes.length,
+                detail: 'In memory',
+                remove: () async {
+                  if (!sameAccount()) throw StateError('Cache account changed.');
+                  telegram.discardVideoThumbnail(preview.id);
+                  await ResizeImage(MemoryImage(preview.bytes), width: 480).evict();
+                },
+              ),
+          ]
+        : await musicCacheEntries(
+            disk, [...library.tracks, ...player.queue], sameAccount,
+          );
+    String? message;
+    try {
+      final bytes = await telegram.playbackCacheBytes(video: video);
+      if (!sameAccount()) throw StateError('Cache account changed.');
+      if (bytes > 0) {
+        final inUse = telegram.mediaCacheInUse;
+        entries.add(CacheEntry(
+          id: 'telegram-playback',
+          category: CacheCategory.playback,
+          title: video ? 'Cached Telegram video' : 'Cached Telegram audio',
+          detail: inUse ? 'Stop playback before clearing' : 'Temporary files',
+          bytes: bytes,
+          inUse: inUse,
+          remove: () {
+            if (!sameAccount()) throw StateError('Cache account changed.');
+            return telegram.clearPlaybackCache(video: video);
+          },
+        ));
+      }
+    } catch (_) {
+      message = telegram.ready ? 'Telegram storage usage is unavailable.' : null;
+    }
+    return (entries: entries, message: message);
+  }
+
+  Future<void> _prepareCacheRemoval(Set<CacheCategory> categories) async {
+    final artwork = categories.contains(CacheCategory.artwork);
+    final originalLyrics = categories.contains(CacheCategory.lyrics);
+    final translations = categories.contains(CacheCategory.translations);
+    if (!artwork && !originalLyrics && !translations) return;
+    ++_cacheGeneration;
+    if (mounted) {
+      setState(() {
+        _cachingLibrary = false;
+        _cacheReport = null;
+      });
+    }
+    if (artwork) {
+      ++_artworkGeneration;
+      telegram.clearMusicArtworkMemory();
+    }
+    if (originalLyrics || translations) {
+      ++_lyricGeneration;
+      lyrics.clearCacheMemory(includeLyrics: originalLyrics);
+    }
+    if (telegram.mediaCache.directory case final root?) {
+      await MediaCache.drain(root);
+    }
+  }
+
   List<Widget> _settingsContent(SettingsSection section) => switch (section) {
     SettingsSection.general => [
       DefaultInterfacePreference(
@@ -3816,6 +3896,7 @@ class _PlayerShellState extends State<PlayerShell>
     ],
     SettingsSection.media => [_lyricPreferences()],
     SettingsSection.video => [VideoSettingsOptions(settings: player.settings)],
+    SettingsSection.cache => const [],
     SettingsSection.data => [
       ListTile(
         leading: const PreferenceIcon(Icons.bar_chart_rounded),
@@ -3943,6 +4024,14 @@ class _PlayerShellState extends State<PlayerShell>
                 ],
                 onSelected: (section) =>
                     setState(() => _settingsSection = section),
+                bottomPadding: _dockPadding,
+              )
+            : _settingsSection == SettingsSection.cache
+            ? CacheManagement(
+                key: ValueKey(_videoMode),
+                video: _videoMode,
+                load: () => _loadCache(_videoMode),
+                prepareRemoval: _prepareCacheRemoval,
                 bottomPadding: _dockPadding,
               )
             : ListTileTheme(
