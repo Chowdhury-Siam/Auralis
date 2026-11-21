@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.226
+
+- Keep the Visualizer visible through quiet passages and compensate for desktop listening-volume changes.
+- Preserve Windows output samples at full precision so quiet music still drives beats and energy.
+- Prevent listening-volume adjustments from being treated as song section changes.
+
 ## 0.1.225
 
 - Restore Visualizer response to quiet beats and energy changes in imported presets.
