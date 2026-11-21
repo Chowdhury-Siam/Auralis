@@ -121,14 +121,8 @@ Future<String?> showVideoItemSheet({
         ('Mode', 'Video'),
         ('Source', 'On your device'),
       ],
-      (
-        'Status',
-        watched
-            ? 'Watched'
-            : position == null
-            ? 'Not watched'
-            : 'Resume at ${clockText(position)}',
-      ),
+      ('Status', watched ? 'Watched' : 'Not watched'),
+      if (position != null) ('Resume at', clockText(position)),
     ],
     actions: [
       const MediaItemAction(
@@ -144,15 +138,14 @@ Future<String?> showVideoItemSheet({
         'Add to playlist',
         Icons.playlist_add_rounded,
       ),
-      if (source.telegram != null)
-        MediaItemAction(
-          'watched',
-          watched ? 'Mark as unwatched' : 'Mark as watched',
-          watched
-              ? Icons.check_circle_rounded
-              : Icons.radio_button_unchecked_rounded,
-          selected: watched,
-        ),
+      MediaItemAction(
+        'watched',
+        watched ? 'Mark as unwatched' : 'Mark as watched',
+        watched
+            ? Icons.check_circle_rounded
+            : Icons.radio_button_unchecked_rounded,
+        selected: watched,
+      ),
       if (removeLabel != null)
         MediaItemAction(
           'remove',
@@ -421,24 +414,19 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
         .where((entry) => _data.isWatched(entry.source))
         .length;
     final resumeCount = history
-        .where(
-          (entry) =>
-              !_data.isWatched(entry.source) &&
-              _data.positions.containsKey(entry.source.id),
-        )
+        .where((entry) => _data.positions.containsKey(entry.source.id))
         .length;
     void back() =>
         inPlaylist ? setState(() => _selected = null) : Navigator.pop(context);
     String status(VideoSource source) {
-      if (_data.isWatched(source)) return 'Watched';
+      final watched = _data.isWatched(source);
       final position = _data.positions[source.id];
-      return position == null
-          ? 'Ready to play'
-          : 'Resume at ${clockText(position)}';
+      if (position == null) return watched ? 'Watched' : 'Ready to play';
+      final resume = 'Resume at ${clockText(position)}';
+      return watched ? 'Watched · $resume' : resume;
     }
 
     double? progress(VideoSource source) {
-      if (_data.isWatched(source)) return 1;
       final position = _data.positions[source.id];
       return position == null || source.duration <= Duration.zero
           ? null
@@ -561,7 +549,8 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                 ? 'Your next viewing session, in your order. Drag the handles to rearrange videos.'
                 : 'Keep favorite episodes and movie nights together. Your files stay where they are.'
           : null,
-      trailing: !widget.playlists &&
+      trailing:
+          !widget.playlists &&
               (_data.history.isNotEmpty || _data.positions.isNotEmpty)
           ? IconButton(
               tooltip: 'Clear history',
@@ -655,12 +644,11 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                 progress: progress(source),
                 onTap: () => _play([source], 0),
                 actions: [
-                  if (source.telegram != null)
-                    VideoWatchButton(
-                      watched: watched,
-                      onPressed: () =>
-                          _change(() => _data.setWatched(source, !watched)),
-                    ),
+                  VideoWatchButton(
+                    watched: watched,
+                    onPressed: () =>
+                        _change(() => _data.setWatched(source, !watched)),
+                  ),
                   IconButton(
                     tooltip: 'Remove from history',
                     icon: const Icon(Icons.close),
@@ -868,12 +856,12 @@ class _VideoSnapshotsPageState extends State<VideoSnapshotsPage> {
             ? 'Loading saved frames…'
             : '${files.length} ${files.length == 1 ? 'snapshot' : 'snapshots'} · Saved on this device',
         trailing: snapshot.hasError
-          ? IconButton(
-              tooltip: 'Try again',
-              onPressed: _reload,
-              icon: const Icon(Icons.refresh_rounded),
-            )
-          : null,
+            ? IconButton(
+                tooltip: 'Try again',
+                onPressed: _reload,
+                icon: const Icon(Icons.refresh_rounded),
+              )
+            : null,
         slivers: [
           if (snapshot.hasError)
             const SliverToBoxAdapter(
