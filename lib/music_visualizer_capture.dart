@@ -14,7 +14,7 @@ class MusicVisualizerCapture {
   }) : _channel = channel ?? const MethodChannel('app.auralis/visualizer');
 
   final MethodChannel _channel;
-  final void Function(Uint8List samples, int sampleRate) onFrame;
+  final void Function(Uint8List samples, int sampleRate, String format) onFrame;
   final void Function(String message) onError;
   final bool Function()? canRead;
   Timer? _timer;
@@ -62,13 +62,21 @@ class MusicVisualizerCapture {
       final frame = await _channel.invokeMapMethod<String, dynamic>('read');
       if (_disposed || generation != _generation || frame == null) return;
       final samples = frame['samples'], rate = frame['rate'];
-      if (samples is Uint8List &&
-          samples.length >= 128 &&
-          samples.length <= 4096 &&
+      final format = frame['format'] ?? 'uint8';
+      final sampleBytes = switch (format) {
+        'uint8' => 1,
+        'float32le' => 4,
+        _ => 0,
+      };
+      if (sampleBytes > 0 &&
+          samples is Uint8List &&
+          samples.length >= 128 * sampleBytes &&
+          samples.length <= 4096 * sampleBytes &&
+          samples.length % sampleBytes == 0 &&
           rate is int &&
           rate >= 8000 &&
           rate <= 192000) {
-        onFrame(samples, rate);
+        onFrame(samples, rate, format);
       }
     } catch (_) {
       if (!_disposed && generation == _generation) {
