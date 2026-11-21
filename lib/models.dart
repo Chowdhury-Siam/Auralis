@@ -218,12 +218,15 @@ enum LibrarySort {
   oldest('Oldest first'),
   title('Title (A–Z)'),
   artist('Artist (A–Z)'),
-  duration('Duration (shortest first)');
+  duration('Duration (shortest first)'),
+  mostPlayed('Most played');
 
   const LibrarySort(this.label);
   final String label;
+  // Video does not contribute to Music listening statistics.
+  static const videoValues = [newest, oldest, title, artist, duration];
 
-  int compare(Track a, Track b) {
+  int compare(Track a, Track b, {int Function(String id)? playCount}) {
     final result = switch (this) {
       newest || oldest =>
         a.date == 0 || b.date == 0
@@ -239,6 +242,9 @@ enum LibrarySort {
                 b.duration == Duration.zero ? 1 : 0,
               )
             : a.duration.compareTo(b.duration),
+      mostPlayed => (playCount?.call(b.id) ?? 0).compareTo(
+        playCount?.call(a.id) ?? 0,
+      ),
     };
     if (result != 0) return result;
     final byTitle = a.title.toLowerCase().compareTo(b.title.toLowerCase());
