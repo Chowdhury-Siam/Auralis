@@ -378,7 +378,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(data.isWatched(second), isTrue);
-      expect(data.positions.containsKey(second.id), isFalse);
+      expect(data.positions[second.id], const Duration(minutes: 19, seconds: 21));
+      expect(find.text('Watched · Resume at 19:21'), findsOneWidget);
       await tester.tap(
         find.descendant(
           of: card,
