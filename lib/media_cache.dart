@@ -58,6 +58,8 @@ class MediaCache {
       )
       .toString();
 
+  Iterable<String> keys(Track track) => [key(track), _legacyKey(track)];
+
   // Read pre-0.1.107 entries without discarding already downloaded media.
   String _legacyKey(Track track) => sha256
       .convert(
@@ -80,7 +82,7 @@ class MediaCache {
     if (directory == null) return null;
     try {
       final current = key(track);
-      for (final candidate in [current, _legacyKey(track)]) {
+      for (final candidate in keys(track)) {
         final file = File('${directory!.path}/$candidate.$kind');
         if (!await file.exists() || await file.length() > limit) continue;
         final bytes = await file.readAsBytes();
