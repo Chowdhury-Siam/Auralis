@@ -9,6 +9,8 @@ import 'models.dart';
 import 'storage.dart';
 import 'lyrics_translation.dart';
 import 'media_cache.dart';
+import 'lyrics_added_translation.dart';
+import 'json_processing.dart';
 
 class LyricLine {
   const LyricLine(this.time, this.text);
@@ -100,13 +102,12 @@ class Lyrics {
     ).firstMatch(text);
     final offset = int.tryParse(offsetTag?[1] ?? '') ?? 0;
     final stamp = RegExp(r'\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]');
-    final lines = <LyricLine>[];
+    final byTime = <Duration, List<String>>{};
+    var lineCount = 0;
+    final wordStamp = RegExp(r'<\d+:\d+(?:\.\d+)?>');
     for (final row in rows) {
       final times = stamp.allMatches(row).toList();
-      final words = row
-          .replaceAll(stamp, '')
-          .replaceAll(RegExp(r'<\d+:\d+(?:\.\d+)?>'), '')
-          .trim();
+      final words = row.replaceAll(stamp, '').replaceAll(wordStamp, '').trim();
       for (final time in times) {
         final seconds = int.parse(time[2]!);
         if (seconds >= 60) continue;
@@ -116,29 +117,20 @@ class Lyrics {
             seconds * 1000 +
             int.parse(fraction) +
             offset;
-        lines.add(
-          LyricLine(
-            Duration(milliseconds: ms.clamp(0, 24 * 60 * 60 * 1000)),
-            words,
-          ),
+        final timeKey = Duration(
+          milliseconds: ms.clamp(0, 24 * 60 * 60 * 1000),
         );
-        if (lines.length > 2000) {
+        byTime.putIfAbsent(timeKey, () => []).add(words);
+        if (++lineCount > 2000) {
           throw const FormatException('Too many lyric lines.');
         }
       }
     }
     // Stable ordering preserves simultaneous translation/original lines.
-    final times = lines.map((line) => line.time).toSet().toList()..sort();
+    final times = byTime.keys.toList()..sort();
     final grouped = <LyricLine>[
       for (final time in times)
-        LyricLine(
-          time,
-          lines
-              .where((line) => line.time == time)
-              .map((line) => line.text)
-              .join('\n')
-              .trim(),
-        ),
+        LyricLine(time, byTime[time]!.join('\n').trim()),
     ];
     final fallback = grouped.isEmpty
         ? rows
@@ -199,6 +191,32 @@ class LyricsRepository extends ChangeNotifier {
   final _translations = <Object, Lyrics>{};
   final _translationJobs = <Object, Future<Lyrics>>{};
   final _translationReaders = <Object, Set<bool Function()>>{};
+  final _addedTranslations = <Object, ({String text, Lyrics lyrics})>{};
+  Object _addedTranslationKey(Track track, Lyrics source) =>
+      (_key(track), source.timestampedText);
+  Lyrics? addedTranslation(Track track, Lyrics source) =>
+      _addedTranslations[_addedTranslationKey(track, source)]?.lyrics;
+
+  Future<Lyrics> addTranslation(Track track, Lyrics source, String text) async {
+    if (_closed || !identical(cached(track), source)) {
+      throw StateError(
+        'The original lyrics changed. Open this song and try again.',
+      );
+    }
+    final result = addLyricsTranslation(source, text);
+    _addedTranslations[_addedTranslationKey(track, source)] = (
+      text: text,
+      lyrics: result,
+    );
+    if (_addedTranslations.length > 32) {
+      _addedTranslations.remove(_addedTranslations.keys.first);
+    }
+    final writing = persist(track, source);
+    notifyListeners();
+    await writing;
+    return result;
+  }
+
   Object _translationKey(Track track, Lyrics source) => (
     _key(track),
     source,
@@ -209,6 +227,7 @@ class LyricsRepository extends ChangeNotifier {
     preferences?.translationDirection ?? TranslationDirection.japaneseEnglish,
   );
   Lyrics? translated(Track track, Lyrics source) =>
+      addedTranslation(track, source) ??
       _translations[_translationKey(track, source)];
   late final _translator = LyricsTranslator(
     createClient: _createClient,
@@ -221,6 +240,9 @@ class LyricsRepository extends ChangeNotifier {
     required bool Function() active,
   }) {
     final key = _translationKey(track, source);
+    if (addedTranslation(track, source) case final saved?) {
+      return Future.value(saved);
+    }
     if (_translations[key] case final saved?) return Future.value(saved);
     final readers = _translationReaders.putIfAbsent(key, () => {});
     readers.add(active);
@@ -346,6 +368,21 @@ class LyricsRepository extends ChangeNotifier {
         embedded: data['embedded'] == true,
         imported: data['imported'] == true,
       );
+      if (data['addedTranslation'] case final String text) {
+        // Bad optional translation data must not invalidate original lyrics.
+        try {
+          final bilingual = addLyricsTranslation(result, text);
+          _addedTranslations[_addedTranslationKey(track, result)] = (
+            text: text,
+            lyrics: bilingual,
+          );
+          if (_addedTranslations.length > 32) {
+            _addedTranslations.remove(_addedTranslations.keys.first);
+          }
+        } on FormatException {
+          // Keep the original.
+        }
+      }
       return result.instrumental ||
               result.plain.trim().isNotEmpty ||
               result.lines.any((line) => line.text.trim().isNotEmpty)
@@ -372,6 +409,9 @@ class LyricsRepository extends ChangeNotifier {
           'online': value.online,
           'embedded': value.embedded,
           'imported': value.imported,
+          if (_addedTranslations[_addedTranslationKey(track, value)]
+              case final added?)
+            'addedTranslation': added.text,
         }),
       ),
     );
@@ -602,7 +642,7 @@ class LyricsRepository extends ChangeNotifier {
           }
           bytes.add(chunk);
         }
-        return jsonDecode(utf8.decode(bytes.takeBytes()));
+        return decodeJsonBytes(bytes.takeBytes());
       })().timeout(const Duration(seconds: 7));
     } finally {
       _clients.remove(client);
@@ -679,6 +719,7 @@ class LyricsRepository extends ChangeNotifier {
   void close() {
     if (_closed) return;
     _translations.clear();
+    _addedTranslations.clear();
     _translationJobs.clear();
     _translationReaders.clear();
     _translator.close();
