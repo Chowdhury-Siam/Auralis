@@ -75,7 +75,7 @@ public class VideoOutput implements TextureRegistry.SurfaceProducer.Callback {
         synchronized (lock) {
             if (disposed) return;
             try {
-                if (wid != 0 && surfaceProducer.getWidth() == width && surfaceProducer.getHeight() == height) {
+                if (wid != 0 && surface != null && surface.isValid() && surfaceProducer.getWidth() == width && surfaceProducer.getHeight() == height) {
                     return;
                 }
                 surfaceProducer.setSize(width, height);
@@ -86,11 +86,20 @@ public class VideoOutput implements TextureRegistry.SurfaceProducer.Callback {
         }
     }
 
+    void ensureSurface() {
+        synchronized (lock) {
+            if (disposed || surfaceProducer.getWidth() <= 0 || surfaceProducer.getHeight() <= 0) return;
+            if (surface == null || !surface.isValid()) onSurfaceAvailable();
+        }
+    }
+
     @Override
     public void onSurfaceAvailable() {
         synchronized (lock) {
             if (disposed) return;
-            final Surface next = surfaceProducer.getSurface();
+            Surface next = surfaceProducer.getSurface();
+            if (!next.isValid()) next = surfaceProducer.getForcedNewSurface();
+            if (!next.isValid()) return;
             long previous = 0;
             if (surface != next || wid == 0) {
                 previous = retireSurfaceReference();
