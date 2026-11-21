@@ -59,8 +59,10 @@ Music and Video keep independent Library sort choices, including in Settings.
 Changing one mode's order does not change the other. Video sorting is saved with
 its device-local settings; Music sorting keeps its existing backup and sync behavior.
 
-Version **0.1.228+229** adds Most played Music sorting, independent video gesture customization, full-window
-video controls, and pasted bilingual lyrics with optional audio-tag export.
+Version **0.1.229+230** restores video playback after backgrounding and adds separate
+Music and Video cache controls under **Settings → Cache management**. Video
+Library sorts season and episode numbers numerically. Videos are marked watched
+at 85%, and resume from the last saved position.
 See [gesture and translation details](docs/INPUT_AND_TRANSLATIONS.md) and the
 [performance audit, verification and profiling limits](docs/PERFORMANCE_0228.md).
 
