@@ -4,6 +4,11 @@ import {DatabaseSync} from 'node:sqlite';
 import worker,{AuralisRoom,merge} from './worker.mjs';
 const actor='a'.repeat(32), other='b'.repeat(32), key=JSON.stringify;
 const r=(value,clock=1,device=actor)=>({value,clock,device});
+test('Most played sort is a valid synced Music preference',()=>{
+ const preference=key(['pref','librarySort']);
+ assert.equal(merge(preference,null,r('mostPlayed')).value,'mostPlayed');
+ assert.throws(()=>merge(preference,null,r('unknown-sort')));
+});
 function backend() {
  const db=new DatabaseSync(':memory:');
  const state={getWebSockets:()=>[],storage:{
