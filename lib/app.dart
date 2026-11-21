@@ -2580,7 +2580,12 @@ class _PlayerShellState extends State<PlayerShell>
           ),
         )
         .toList();
-    if (!preserveOrder) visible.sort(player.settings.librarySort.compare);
+    if (!preserveOrder) {
+      final sort = player.settings.librarySort;
+      final history = player.settings.listening.tracks;
+      int playCount(String id) => history[id]?.plays ?? 0;
+      visible.sort((a, b) => sort.compare(a, b, playCount: playCount));
+    }
     return visible;
   }
 
@@ -3785,7 +3790,7 @@ class _PlayerShellState extends State<PlayerShell>
         value: _videoMode
             ? player.settings.videoPlayback.librarySort
             : player.settings.librarySort,
-        values: LibrarySort.values,
+        values: _videoMode ? LibrarySort.videoValues : LibrarySort.values,
         label: (sort) => sort.label,
         onSelected: (sort) => _savePreferences(() {
           if (_videoMode) {
