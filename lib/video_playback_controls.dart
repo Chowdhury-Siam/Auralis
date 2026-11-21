@@ -25,7 +25,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       session._error == null &&
       (session._loading ||
           player.state.buffering ||
-          session._startupTimeout?.isActive == true);
+          session._waitingForVideo);
   bool get _gestures =>
       session._data.gestures &&
       !session._locked &&
