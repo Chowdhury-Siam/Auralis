@@ -248,6 +248,7 @@ class LyricsRepository extends ChangeNotifier {
     readers.add(active);
     bool stillNeeded() =>
         !_closed &&
+        identical(_translationReaders[key], readers) &&
         readers.any((reader) => reader()) &&
         (cached(track) == null || identical(cached(track), source));
     if (_translationJobs[key] case final pending?) return pending;
@@ -327,8 +328,9 @@ class LyricsRepository extends ChangeNotifier {
 
   Future<Lyrics?> loadCached(Track track) async {
     if (cached(track) case final value?) return value;
+    final generation = _cacheGeneration;
     final saved = await _readSavedLyrics(track);
-    if (saved == null) return null;
+    if (saved == null || generation != _cacheGeneration) return null;
     if (cached(track) == null) {
       _cache.remove(_key(track));
       _cache[_key(track)] = saved;
@@ -342,9 +344,11 @@ class LyricsRepository extends ChangeNotifier {
 
   Future<Lyrics?> _readSavedLyrics(Track track) async {
     final disk = cache?.call();
+    final generation = _cacheGeneration;
     final bytes = await disk?.read(track, 'lyrics', 2 * 1024 * 1024);
     if (bytes == null ||
         _closed ||
+        generation != _cacheGeneration ||
         cache?.call().directory?.path != disk?.directory?.path) {
       return null;
     }
@@ -417,6 +421,7 @@ class LyricsRepository extends ChangeNotifier {
     );
   }
 
+  int _cacheGeneration = 0;
   final _cache = <String, Lyrics?>{};
   final _pending = <String, Object>{};
   final _lookups = <Object, Future<Lyrics?>>{};
@@ -714,6 +719,20 @@ class LyricsRepository extends ChangeNotifier {
       }
     }
     return best;
+  }
+
+  void clearCacheMemory({required bool includeLyrics}) {
+    _translations.clear();
+    _translationJobs.clear();
+    _translationReaders.clear();
+    if (includeLyrics) {
+      ++_cacheGeneration;
+      _addedTranslations.clear();
+      _pending.clear();
+      _lookups.clear();
+      _cache.clear();
+    }
+    notifyListeners();
   }
 
   void close() {
