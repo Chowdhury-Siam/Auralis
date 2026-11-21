@@ -848,7 +848,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
           icon: Icons.tune_rounded,
           description: 'Personalize Video and inspect the current playback.',
           content: VideoSettingsOptions(
-            inDialog: true,
             settings: widget.music.settings,
             onChanged: _changed,
             onVolumeBoostDisabled: () {
