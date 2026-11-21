@@ -118,7 +118,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           find.byKey(const ValueKey('video-settings-intro')),
-          findsOneWidget,
+          findsNothing,
         );
         expect(find.widgetWithText(ListTile, 'Video decoder'), findsNothing);
         expect(
