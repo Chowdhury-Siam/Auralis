@@ -55,6 +55,13 @@ public class VideoOutputManager {
         }
     }
 
+    public void ensureSurface(long handle) {
+        synchronized (lock) {
+            final VideoOutput output = videoOutputs.get(handle);
+            if (output != null) output.ensureSurface();
+        }
+    }
+
     public void releaseSurfaceReference(long handle, long reference) {
         synchronized (lock) {
             final VideoOutput output = videoOutputs.get(handle);
