@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.229
+
+- Restore the Android video surface after it is reclaimed in the background. Resume from the current position and reopen a stalled stream without restarting the app.
+- Mark videos watched at 85% and keep resume positions independently, including for watched videos.
+- Sort season and episode numbers numerically in the Video Library Title (A–Z) order, including mixed leading zeros.
+- Match the Settings & diagnostics page to the compact Settings rows.
+- Manage Music and Video caches separately. Review usage and delete individual entries, categories or all available entries.
+
 ## 0.1.228
 
 - Add Most played to Music Library sorting and Music settings, using recorded play counts with stable title/ID ties and independent Video sorting.
