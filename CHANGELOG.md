@@ -1,5 +1,20 @@
 # Auralis changes
 
+## 0.1.228
+
+- Add Most played to Music Library sorting and Music settings, using recorded play counts with stable title/ID ties and independent Video sorting.
+- Reduce video progress rebuilds, collection swipe rebuilds, lyric parsing work and Home listening-history sorting without changing effects or animation timing.
+- Separate Android system-control progress updates from queue and artwork work, decode large settings and sync replies in a background isolate, and reduce sync response buffer allocations.
+- Keep video control bars across the full player window, including black side bars, while preserving video aspect ratio and safe insets.
+- Add pasted DeepL or other translations alongside original lyrics and optionally export both in MP3, FLAC and M4A metadata without re-encoding audio.
+- Customize individual video gestures, seek zones, swipe and zoom sensitivity, temporary speed and control timing in Video settings. Preserve locked skip access and provide a Show controls fallback.
+
+## 0.1.227
+
+- Show video skip buttons automatically for timed intro/opening, OP, ED/ending, outro and other marked chapters, without needing to import those chapters first.
+- Keep the skip button usable while video controls are locked or hidden. Skipping preserves the lock and play/pause state.
+- Prefer saved/manual or AniSkip ranges over overlapping chapter timings, retain post-credit scenes, and avoid guessing sections in videos without timing metadata.
+
 ## 0.1.226
 
 - Keep the Visualizer visible through quiet passages and compensate for desktop listening-volume changes.
