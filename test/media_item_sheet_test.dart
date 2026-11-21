@@ -306,7 +306,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Add to playlist'), findsOneWidget);
     expect(find.text('Play next'), findsNothing);
-    expect(find.text('Mark as watched'), findsNothing);
+    expect(find.text('Mark as watched'), findsOneWidget);
     expect(find.text('Remove from queue'), findsNothing);
     expect(tester.takeException(), isNull);
   });
