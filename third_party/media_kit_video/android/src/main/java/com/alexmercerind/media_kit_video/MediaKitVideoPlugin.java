@@ -61,6 +61,12 @@ public class MediaKitVideoPlugin implements FlutterPlugin, MethodCallHandler {
                 result.success(null);
                 break;
             }
+            case "VideoOutputManager.EnsureSurface": {
+                final long handle = Long.parseLong(call.argument("handle"));
+                videoOutputManager.ensureSurface(handle);
+                result.success(null);
+                break;
+            }
             case "VideoOutputManager.Dispose": {
                 final long handle = Long.parseLong(call.argument("handle"));
                 videoOutputManager.dispose(handle);
