@@ -304,6 +304,9 @@ void main() {
             'test-password',
           );
           await controller!.syncTelegramAccount();
+          // Sign-in starts sync in the real-I/O zone. Complete that work before
+          // fake-time pumpAndSettle waits on the page's progress indicator.
+          await controller!.sync();
         }, createHttpClient: (_) => client),
       );
       final sync = controller!;
