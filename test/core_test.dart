@@ -120,6 +120,7 @@ void main() {
       LibrarySort.title: ['2', '3', '1', '4'],
       LibrarySort.artist: ['2', '3', '4', '1'],
       LibrarySort.duration: ['1', '3', '2', '4'],
+      LibrarySort.mostPlayed: ['2', '3', '1', '4'],
     };
     for (final sort in LibrarySort.values) {
       final ordered = [...original]..sort(sort.compare);
