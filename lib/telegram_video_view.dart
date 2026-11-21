@@ -518,7 +518,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       context,
       title: 'Library sort order',
       choices: [
-        for (final option in LibrarySort.values)
+        for (final option in LibrarySort.videoValues)
           (
             value: option,
             label: option.label,
@@ -526,7 +526,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
           ),
       ],
     );
-    if (!mounted || sort == null || sort == settings.videoPlayback.librarySort) return;
+    if (!mounted || sort == null || sort == settings.videoPlayback.librarySort) {
+      return;
+    }
     setState(() => settings.videoPlayback.librarySort = sort);
     widget.music.refreshSettings();
     try {
@@ -1240,7 +1242,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     final searching = _tab == 1;
     final results = _library;
     final allVideos =
-        results?.sortedVideos(widget.music.settings.videoPlayback.librarySort) ??
+        results?.sortedVideos(
+          widget.music.settings.videoPlayback.librarySort,
+        ) ??
         const <Track>[];
     final query = searching ? '' : _librarySearch.text.trim().toLowerCase();
     final videos = query.isEmpty
