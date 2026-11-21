@@ -4,14 +4,16 @@ import 'dart:math' as math;
 import 'package:crypto/crypto.dart';
 
 import 'models.dart';
+import 'video_gesture_options.dart';
+
+export 'video_gesture_options.dart';
 
 class VideoSource {
   const VideoSource.telegram(Track track)
     : telegram = track,
       uri = null,
       name = null;
-  const VideoSource.file(this.uri, this.name)
-    : telegram = null;
+  const VideoSource.file(this.uri, this.name) : telegram = null;
 
   final Track? telegram;
   final Uri? uri;
@@ -19,8 +21,8 @@ class VideoSource {
 
   String get title => telegram?.title ?? name ?? 'Video';
   Duration get duration => telegram?.duration ?? Duration.zero;
-  bool get canPlay => telegram != null ||
-      (uri != null && _isLocalVideoUri(uri!, title));
+  bool get canPlay =>
+      telegram != null || (uri != null && _isLocalVideoUri(uri!, title));
   String get id => telegram != null
       ? 'telegram:${telegram!.id}'
       : 'file:${sha256.convert(utf8.encode(uri.toString()))}';
@@ -48,8 +50,12 @@ class VideoSource {
         when RegExp(r'^-?\d+:\d+$').hasMatch(id)) {
       return VideoSource.telegram(
         Track(
-          id: id, title: title, artist: '',
-          source: raw['channel'] is String ? raw['channel'] as String : 'Telegram',
+          id: id,
+          title: title,
+          artist: '',
+          source: raw['channel'] is String
+              ? raw['channel'] as String
+              : 'Telegram',
         ),
       );
     }
@@ -70,7 +76,8 @@ class VideoSource {
       return false;
     }
     return switch (uri.scheme) {
-      'file' => uri.path.isNotEmpty && (uri.host.isEmpty || uri.host == 'localhost'),
+      'file' =>
+        uri.path.isNotEmpty && (uri.host.isEmpty || uri.host == 'localhost'),
       'content' => uri.host.isNotEmpty,
       _ => false,
     };
@@ -111,9 +118,13 @@ class TelegramVideoActivity {
     }
     final recent = value['recent'];
     final watched = value['watched'];
-    if (recent is! Map || recent.length > recentLimit ||
-        recent.entries.any((entry) => !isMessage(entry.key) || !isRecent(entry.value)) ||
-        watched is! List || watched.length > watchedLimit ||
+    if (recent is! Map ||
+        recent.length > recentLimit ||
+        recent.entries.any(
+          (entry) => !isMessage(entry.key) || !isRecent(entry.value),
+        ) ||
+        watched is! List ||
+        watched.length > watchedLimit ||
         watched.any((id) => !isMessage(id)) ||
         watched.toSet().length != watched.length) {
       throw const FormatException('Invalid video activity.');
@@ -127,7 +138,6 @@ class VideoBookmark {
   final String name;
 }
 
-
 class VideoSkipSegment {
   const VideoSkipSegment(this.start, this.end, this.label);
 
@@ -135,29 +145,104 @@ class VideoSkipSegment {
   final String label;
 
   bool contains(Duration position) => position >= start && position < end;
+
+  String get buttonLabel {
+    final name = videoSkipChapterLabel(label) ?? label.trim();
+    return 'Skip ${name.isEmpty ? 'segment' : name}';
+  }
+}
+
+/// Recognize named sections, never guess timings from a file name or length.
+/// Word boundaries keep OP/ED from matching Operation, Education, etc.
+String? videoSkipChapterLabel(String name) {
+  var title = name.trim();
+  title = title.replaceFirst(
+    RegExp(r'^(?:chapter\s+)?\d{1,3}\s*[.:\-–—]\s*', caseSensitive: false),
+    '',
+  );
+  title = title.replaceFirst(RegExp(r'^[\[(]\s*'), '');
+  const boundary = r'(?:$|[\s:;.,_/\-–—()\[\]])';
+  bool starts(String pattern) =>
+      RegExp('^(?:$pattern)$boundary', caseSensitive: false).hasMatch(title);
+  if (starts(r'(?:nc)?op(?:\s*#?\d{1,2})?|opening|オープニング')) {
+    return 'Opening';
+  }
+  if (starts(r'(?:nc)?ed(?:\s*#?\d{1,2})?|ending|end|エンディング')) {
+    return 'Ending';
+  }
+  if (starts(r'intro(?:duction)?')) return 'Intro';
+  if (starts(r'outro|outtro') ||
+      RegExp(
+        r'^outer(?:$|[\]\):\-–—]|\s+credits?\b)',
+        caseSensitive: false,
+      ).hasMatch(title)) {
+    return 'Outro';
+  }
+  if (starts(r'recap|previously\s+on')) return 'Recap';
+  if (starts(r'credits?')) return 'Credits';
+  if (starts(r'(?:next\s+episode\s+)?preview')) return 'Preview';
+  return null;
 }
 
 List<VideoSkipSegment> videoChapterSegments(
-  List<VideoBookmark> chapters, Duration duration,
+  List<VideoBookmark> chapters,
+  Duration duration,
 ) {
-  final names = RegExp(
-    r'^(?:intro(?:duction)?|opening(?: credits)?|recap|previously on|outro|end(?:ing)? credits|credits|next episode preview)(?:$|[\s:–-])',
-    caseSensitive: false,
-  );
+  if (duration <= Duration.zero) return const [];
+  final byTime = <Duration, List<VideoBookmark>>{};
+  for (final chapter in chapters) {
+    if (chapter.position >= Duration.zero && chapter.position <= duration) {
+      byTime.putIfAbsent(chapter.position, () => []).add(chapter);
+    }
+  }
+  final times = byTime.keys.toList()..sort();
   return [
-    for (var i = 0; i < chapters.length; i++)
-      if (names.hasMatch(chapters[i].name.trim()) &&
-          chapters[i].position >= Duration.zero &&
-          chapters[i].position < duration &&
-          (i + 1 < chapters.length ? chapters[i + 1].position : duration) >
-              chapters[i].position)
+    for (var i = 0; i < times.length; i++)
+      // Conflicting names at the same timestamp are not reliable skip metadata.
+      if (times[i] < duration &&
+          videoSkipChapterLabel(byTime[times[i]]!.first.name) != null &&
+          byTime[times[i]]!.every(
+            (chapter) =>
+                videoSkipChapterLabel(chapter.name) ==
+                videoSkipChapterLabel(byTime[times[i]]!.first.name),
+          ))
         VideoSkipSegment(
-          chapters[i].position,
-          i + 1 < chapters.length && chapters[i + 1].position < duration
-              ? chapters[i + 1].position : duration,
-          chapters[i].name,
+          times[i],
+          i + 1 < times.length ? times[i + 1] : duration,
+          byTime[times[i]]!.first.name.trim(),
         ),
   ];
+}
+
+/// Saved/manual/AniSkip ranges take precedence over derived chapter ranges.
+/// Return the existing object so hidden HUDs only rebuild on segment changes.
+VideoSkipSegment? videoActiveSkipSegment(
+  List<VideoSkipSegment> saved,
+  List<VideoSkipSegment> chapters,
+  Duration position,
+  Duration duration,
+) {
+  if (duration <= Duration.zero || position < Duration.zero) return null;
+  bool valid(VideoSkipSegment segment) =>
+      segment.start >= Duration.zero &&
+      segment.end > segment.start &&
+      segment.end <= duration;
+  for (final source in [saved, chapters]) {
+    for (final segment in source.reversed) {
+      if (valid(segment) &&
+          segment.contains(position) &&
+          (identical(source, saved) ||
+              !saved.any(
+                (override) =>
+                    valid(override) &&
+                    override.start < segment.end &&
+                    segment.start < override.end,
+              ))) {
+        return segment;
+      }
+    }
+  }
+  return null;
 }
 
 class VideoCommand {
@@ -313,8 +398,8 @@ class VideoChannelSettings {
     if (json is! Map) return null;
     double? level(Object? value, num min, num max) =>
         value is num && value.isFinite && value >= min && value <= max
-            ? value.toDouble()
-            : null;
+        ? value.toDouble()
+        : null;
     return VideoChannelSettings()
       ..audio = VideoTrackChoice.fromJson(json['audio'])
       ..subtitles = VideoTrackChoice.fromJson(json['subtitles'])
@@ -374,6 +459,7 @@ class VideoPlaybackData {
 
   int seekSeconds = 10;
   bool gestures = true, strictDoubleTap = false, swapSides = false;
+  VideoGestureOptions gestureOptions = VideoGestureOptions();
   bool autoAdvance = true, background = false, autoPip = false;
   bool volumeBoost = false, autoplay = true;
   bool autoSkip = false;
@@ -407,8 +493,9 @@ class VideoPlaybackData {
     if (!source.canPlay) return;
     history.remove(source.id);
     history[source.id] = VideoHistoryEntry(source, at ?? DateTime.now());
-    final sameKind = history.values
-        .where((entry) => (entry.source.telegram != null) == (source.telegram != null));
+    final sameKind = history.values.where(
+      (entry) => (entry.source.telegram != null) == (source.telegram != null),
+    );
     if (sameKind.length > _limit) history.remove(sameKind.first.source.id);
   }
 
@@ -433,43 +520,76 @@ class VideoPlaybackData {
           track.id: {
             'title': String.fromCharCodes(track.title.runes.take(256)),
             'channel': String.fromCharCodes(track.source.runes.take(128)),
-            'openedAt': entry.playedAt.millisecondsSinceEpoch.clamp(0, 8640000000000000),
-            'position': (positions[entry.source.id]?.inMilliseconds ?? 0).clamp(0, 31536000000),
+            'openedAt': entry.playedAt.millisecondsSinceEpoch.clamp(
+              0,
+              8640000000000000,
+            ),
+            'position': (positions[entry.source.id]?.inMilliseconds ?? 0).clamp(
+              0,
+              31536000000,
+            ),
           },
     },
     'watched': _watched.toList()..sort(),
   };
 
   void applyTelegramActivity(Object? value) {
-    if (value is! Map || value['recent'] is! Map || value['watched'] is! List) return;
+    if (value is! Map || value['recent'] is! Map || value['watched'] is! List) {
+      return;
+    }
     final old = Map<String, VideoHistoryEntry>.of(history);
     history.removeWhere((_, entry) => entry.source.telegram != null);
-    positions.removeWhere((id, _) => id.startsWith('telegram:') && old.containsKey(id));
+    positions.removeWhere(
+      (id, _) => id.startsWith('telegram:') && old.containsKey(id),
+    );
     _watched
       ..clear()
-      ..addAll((value['watched'] as List)
-          .whereType<String>().where(TelegramVideoActivity.isMessage)
-          .take(TelegramVideoActivity.watchedLimit));
-    final entries = (value['recent'] as Map).entries
-        .where((entry) => TelegramVideoActivity.isMessage(entry.key) &&
-            TelegramVideoActivity.isRecent(entry.value))
-        .take(TelegramVideoActivity.recentLimit)
-        .toList()
-      ..sort((a, b) => ((a.value as Map)['openedAt'] as int)
-          .compareTo((b.value as Map)['openedAt'] as int));
+      ..addAll(
+        (value['watched'] as List)
+            .whereType<String>()
+            .where(TelegramVideoActivity.isMessage)
+            .take(TelegramVideoActivity.watchedLimit),
+      );
+    final entries =
+        (value['recent'] as Map).entries
+            .where(
+              (entry) =>
+                  TelegramVideoActivity.isMessage(entry.key) &&
+                  TelegramVideoActivity.isRecent(entry.value),
+            )
+            .take(TelegramVideoActivity.recentLimit)
+            .toList()
+          ..sort(
+            (a, b) => ((a.value as Map)['openedAt'] as int).compareTo(
+              (b.value as Map)['openedAt'] as int,
+            ),
+          );
     for (final entry in entries) {
       final id = entry.key as String;
       final record = entry.value as Map;
       final saved = old['telegram:$id']?.source;
-      final source = saved != null &&
-              String.fromCharCodes(saved.title.runes.take(256)) == record['title'] &&
-              String.fromCharCodes(saved.telegram!.source.runes.take(128)) == record['channel']
+      final source =
+          saved != null &&
+              String.fromCharCodes(saved.title.runes.take(256)) ==
+                  record['title'] &&
+              String.fromCharCodes(saved.telegram!.source.runes.take(128)) ==
+                  record['channel']
           ? saved
-          : VideoSource.telegram(Track(
-              id: id, title: record['title'] as String, artist: '',
-              source: record['channel'] as String,
-            ));
-      recordVideo(source, at: DateTime.fromMillisecondsSinceEpoch(record['openedAt'] as int, isUtc: true));
+          : VideoSource.telegram(
+              Track(
+                id: id,
+                title: record['title'] as String,
+                artist: '',
+                source: record['channel'] as String,
+              ),
+            );
+      recordVideo(
+        source,
+        at: DateTime.fromMillisecondsSinceEpoch(
+          record['openedAt'] as int,
+          isUtc: true,
+        ),
+      );
       final ms = record['position'] as int;
       if (ms > 0 && !isWatched(source)) {
         _storePosition(source.id, Duration(milliseconds: ms));
@@ -491,16 +611,21 @@ class VideoPlaybackData {
 
   void putPlaylist(String name, Iterable<VideoSource> items) {
     name = name.trim();
-    if (name.isEmpty || name.length > 80 ||
+    if (name.isEmpty ||
+        name.length > 80 ||
         (playlists.length >= 100 && !playlists.containsKey(name))) {
-      throw const FormatException('Use a name of 1–80 characters and up to 100 playlists.');
+      throw const FormatException(
+        'Use a name of 1–80 characters and up to 100 playlists.',
+      );
     }
     final entries = <String, VideoSource>{};
     for (final item in items) {
       if (!item.canPlay) continue;
       entries.putIfAbsent(item.id, () => item);
       if (entries.length > playlistItemLimit) {
-        throw const FormatException('A video playlist can hold up to 1,000 videos.');
+        throw const FormatException(
+          'A video playlist can hold up to 1,000 videos.',
+        );
       }
     }
     playlists[name] = entries.values.toList();
@@ -543,9 +668,14 @@ class VideoPlaybackData {
         final track = entry.source.telegram;
         if (track == null) return entry;
         return VideoHistoryEntry(
-          VideoSource.telegram(Track(
-            id: track.id, title: track.title, artist: '', source: track.source,
-          )),
+          VideoSource.telegram(
+            Track(
+              id: track.id,
+              title: track.title,
+              artist: '',
+              source: track.source,
+            ),
+          ),
           entry.playedAt,
         );
       });
@@ -595,7 +725,10 @@ class VideoPlaybackData {
     Object? json, {
     LibrarySort fallbackSort = LibrarySort.title,
   }) {
-    final data = VideoPlaybackData()..librarySort = fallbackSort;
+    final videoFallback = LibrarySort.videoValues.contains(fallbackSort)
+        ? fallbackSort
+        : LibrarySort.title;
+    final data = VideoPlaybackData()..librarySort = videoFallback;
     if (json is! Map) return data;
     if (json['channelSettings'] case final Map channels) {
       for (final entry in channels.entries) {
@@ -607,13 +740,17 @@ class VideoPlaybackData {
         }
       }
     }
-    data.librarySort = LibrarySort.values.firstWhere(
+    data.librarySort = LibrarySort.videoValues.firstWhere(
       (sort) => sort.name == json['librarySort'],
-      orElse: () => fallbackSort,
+      orElse: () => videoFallback,
     );
     if (json['watched'] case final List watched) {
-      data._watched.addAll(watched.whereType<String>()
-          .where(TelegramVideoActivity.isMessage).take(TelegramVideoActivity.watchedLimit));
+      data._watched.addAll(
+        watched
+            .whereType<String>()
+            .where(TelegramVideoActivity.isMessage)
+            .take(TelegramVideoActivity.watchedLimit),
+      );
     }
     data.snapshotSubtitles = json['snapshotSubtitles'] != false;
     if (json['ambientMode'] case final String mode when mode.length <= 32) {
@@ -621,7 +758,8 @@ class VideoPlaybackData {
     }
     if (json['subtitleStyle'] case final Map style) {
       for (final entry in style.entries.take(16)) {
-        if (entry.key is String && entry.value is String &&
+        if (entry.key is String &&
+            entry.value is String &&
             isSubtitleStyle(entry.key as String, entry.value as String)) {
           data.subtitleStyle[entry.key as String] = entry.value as String;
         }
@@ -632,8 +770,13 @@ class VideoPlaybackData {
         if (entry.key case final String name
             when name.trim().isNotEmpty && name.length <= 80) {
           if (entry.value case final List items) {
-            data.putPlaylist(name, items.take(playlistItemLimit).map(VideoSource.restore)
-                .whereType<VideoSource>());
+            data.putPlaylist(
+              name,
+              items
+                  .take(playlistItemLimit)
+                  .map(VideoSource.restore)
+                  .whereType<VideoSource>(),
+            );
           }
         }
       }
@@ -649,6 +792,7 @@ class VideoPlaybackData {
       }
     }
     final seek = json['seekSeconds'];
+    data.gestureOptions = VideoGestureOptions.fromJson(json['gestureOptions']);
     if (seek is int) data.seekSeconds = math.max(1, math.min(60, seek));
     data
       ..gestures = json['gestures'] != false
@@ -770,10 +914,14 @@ class VideoPlaybackData {
     },
     'history': [
       for (final entry in history.values)
-        {'source': entry.source.toJson(), 'at': entry.playedAt.toIso8601String()},
+        {
+          'source': entry.source.toJson(),
+          'at': entry.playedAt.toIso8601String(),
+        },
     ],
     'seekSeconds': seekSeconds,
     'gestures': gestures,
+    'gestureOptions': gestureOptions.toJson(),
     'strictDoubleTap': strictDoubleTap,
     'swapSides': swapSides,
     'autoAdvance': autoAdvance,
