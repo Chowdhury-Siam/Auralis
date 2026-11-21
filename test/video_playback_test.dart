@@ -69,6 +69,8 @@ class _NativeVideo implements mpv.NativePlayer {
   );
   final audioSelections = <String>[];
   final subtitleSelections = <String>[];
+  final seeks = <Duration>[];
+  Future<void> Function(Duration)? beforeSeek;
   VoidCallback? beforeStop;
   Future<void> Function()? beforeDispose;
   bool warnOnOpen = false;
@@ -135,6 +137,8 @@ class _NativeVideo implements mpv.NativePlayer {
 
   @override
   Future<void> seek(Duration duration, {bool synchronized = true}) async {
+    seeks.add(duration);
+    await beforeSeek?.call(duration);
     state = state.copyWith(position: duration);
     _core.seeked(duration);
   }
@@ -263,7 +267,644 @@ class _VideoController implements VideoController {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _SkipVideoFixture {
+  final native = _NativeVideo();
+  late final controller = _VideoController(native);
+  final direction = ValueNotifier(TextDirection.ltr);
+  final settings = MemorySettings();
+  final proxy = _RecordingVideoProxy();
+  final source = VideoSource.file(
+    Uri.file('/movies/segments.mp4'),
+    'Segment video',
+  );
+  late final music = PlayerController(
+    FakeAudio(),
+    TelegramStreamProxy((_) async => {}),
+    settings,
+  );
+  final telegram = TelegramService(
+    Directory('unused'),
+    MemoryVault(),
+    transport: FakeTd(),
+  );
+
+  Future<void> mount(WidgetTester tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => ValueListenableBuilder(
+          valueListenable: direction,
+          builder: (context, value, _) =>
+              Directionality(textDirection: value, child: child!),
+        ),
+        home: VideoPlayback(
+          sources: [source],
+          initialIndex: 0,
+          telegram: telegram,
+          music: music,
+          proxy: proxy,
+          onOpened: (_) {},
+          createController: () => controller,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> close(WidgetTester tester) async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    var finished = false;
+    unawaited(music.shutdown().then((_) => finished = true));
+    for (var frame = 0; frame < 30 && !finished; frame++) {
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(finished, isTrue);
+    await proxy.close();
+    await telegram.shutdown();
+    direction.dispose();
+  }
+}
+
 void main() {
+  testWidgets(
+    'video progress rebuilds only the live timeline, preserving controls',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      try {
+        await fixture.mount(tester);
+        await fixture.native.seek(const Duration(seconds: 1));
+        await tester.pumpAndSettle();
+        final top = tester.widget(
+          find.byKey(const ValueKey('video-top-controls')),
+        );
+        final pause = tester.widget(find.byTooltip('Pause video'));
+        for (var second = 2; second <= 12; second++) {
+          await fixture.native.seek(Duration(seconds: second));
+          await tester.idle();
+          await tester.pump();
+          expect(
+            tester.widget(find.byKey(const ValueKey('video-top-controls'))),
+            same(top),
+          );
+          expect(tester.widget(find.byTooltip('Pause video')), same(pause));
+          final slider = tester.widget<Slider>(
+            find.byKey(const ValueKey('video-seek')),
+          );
+          expect(slider.value, closeTo(second / 120, .00001));
+        }
+        expect(
+          find.byKey(const ValueKey('video-skip-segment')),
+          findsOneWidget,
+        );
+        await fixture.native.seek(const Duration(seconds: 46));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('video-skip-segment')), findsNothing);
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
+
+  testWidgets(
+    'all surface gestures can be disabled without trapping controls or locked skip',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      for (final gesture in VideoGesture.values) {
+        fixture.settings.videoPlayback.gestureOptions.setEnabled(
+          gesture,
+          false,
+        );
+      }
+      try {
+        await fixture.mount(tester);
+        final surface = tester.widget<GestureDetector>(
+          find.byKey(const ValueKey('video-gesture-surface')),
+        );
+        expect(surface.onDoubleTap, isNull);
+        expect(surface.onLongPressStart, isNull);
+        expect(surface.onScaleStart, isNull);
+        await tester.tapAt(const Offset(640, 300));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Pause video').hitTestable(), findsOneWidget);
+        await tester.sendKeyEvent(LogicalKeyboardKey.space);
+        await tester.pumpAndSettle();
+        expect(fixture.native.state.playing, isTrue);
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Show controls').hitTestable(), findsOneWidget);
+        await tester.tap(find.byTooltip('Show controls'));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Pause video').hitTestable(), findsOneWidget);
+        await tester.tap(find.byTooltip('Lock controls'));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('video-skip-segment')).hitTestable(),
+          findsOneWidget,
+        );
+        await tester.tap(find.byTooltip('Unlock controls'));
+        await tester.pumpAndSettle();
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
+
+  testWidgets(
+    'disabling Space hold retains Space play/pause and custom boost restores speed',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      final options = fixture.settings.videoPlayback.gestureOptions;
+      options.setEnabled(VideoGesture.spaceHold, false);
+      try {
+        await fixture.mount(tester);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
+        await tester.pump(const Duration(milliseconds: 900));
+        expect(fixture.native.state.rate, 1);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
+        await tester.pumpAndSettle();
+        expect(fixture.native.state.playing, isFalse);
+        await tester.sendKeyEvent(LogicalKeyboardKey.space);
+        await tester.pumpAndSettle();
+        expect(fixture.native.state.playing, isTrue);
+        options.setEnabled(VideoGesture.spaceHold, true);
+        options.boostRate = 1.75;
+        options.spaceHoldMs = 600;
+        await fixture.native.setRate(1.25);
+        await tester.pump();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(fixture.native.state.rate, 1.25);
+        await tester.pump(const Duration(milliseconds: 150));
+        expect(fixture.native.state.rate, 1.75);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
+        await tester.pumpAndSettle();
+        expect(fixture.native.state.rate, 1.25);
+        expect(fixture.native.state.playing, isTrue);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
+        await tester.pump(const Duration(milliseconds: 650));
+        options.setEnabled(VideoGesture.keyboard, false);
+        fixture.native.setBuffering(true);
+        await tester.pump();
+        fixture.native.setBuffering(false);
+        await tester.pumpAndSettle();
+        expect(fixture.native.state.rate, 1.25);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
+
+  for (final enabled in [
+    VideoGesture.seekDoubleTap,
+    VideoGesture.pauseDoubleTap,
+    VideoGesture.swipeSeek,
+    VideoGesture.swipeVolume,
+    VideoGesture.holdSpeed,
+  ]) {
+    testWidgets(
+      '${enabled.name} works independently with other surface actions disabled',
+      (tester) async {
+        final fixture = _SkipVideoFixture();
+        final options = fixture.settings.videoPlayback.gestureOptions;
+        for (final gesture in VideoGesture.values) {
+          options.setEnabled(gesture, gesture == enabled);
+        }
+        options.boostRate = 1.5;
+        try {
+          await fixture.mount(tester);
+          final surface = tester.widget<GestureDetector>(
+            find.byKey(const ValueKey('video-gesture-surface')),
+          );
+          switch (enabled) {
+            case VideoGesture.seekDoubleTap:
+            case VideoGesture.pauseDoubleTap:
+              final point = Offset(
+                enabled == VideoGesture.seekDoubleTap ? 1100 : 640,
+                300,
+              );
+              await tester.tapAt(point);
+              await tester.pump(const Duration(milliseconds: 60));
+              await tester.tapAt(point);
+              await tester.pumpAndSettle();
+              expect(
+                fixture.native.state.playing,
+                enabled == VideoGesture.seekDoubleTap,
+              );
+              expect(
+                fixture.native.seeks.isNotEmpty,
+                enabled == VideoGesture.seekDoubleTap,
+              );
+            case VideoGesture.swipeSeek:
+              surface.onScaleStart!(
+                ScaleStartDetails(localFocalPoint: const Offset(600, 500)),
+              );
+              surface.onScaleUpdate!(
+                ScaleUpdateDetails(
+                  localFocalPoint: const Offset(800, 500),
+                  focalPointDelta: const Offset(200, 0),
+                ),
+              );
+              surface.onScaleEnd!(ScaleEndDetails());
+              await tester.pumpAndSettle();
+              expect(fixture.native.seeks.last, greaterThan(Duration.zero));
+            case VideoGesture.swipeVolume:
+              final original = fixture.native.state.volume;
+              surface.onScaleStart!(
+                ScaleStartDetails(localFocalPoint: const Offset(1100, 500)),
+              );
+              surface.onScaleUpdate!(
+                ScaleUpdateDetails(
+                  localFocalPoint: const Offset(1100, 600),
+                  focalPointDelta: const Offset(0, 100),
+                ),
+              );
+              surface.onScaleEnd!(ScaleEndDetails());
+              await tester.pumpAndSettle();
+              expect(fixture.native.state.volume, lessThan(original));
+            case VideoGesture.holdSpeed:
+              await tester.longPressAt(const Offset(640, 300));
+              await tester.pumpAndSettle();
+              expect(fixture.native.state.rate, 1);
+              final gesture = await tester.startGesture(const Offset(640, 300));
+              await tester.pump(const Duration(milliseconds: 600));
+              expect(fixture.native.state.rate, 1.5);
+              await gesture.up();
+              await tester.pumpAndSettle();
+              expect(fixture.native.state.rate, 1);
+            default:
+              fail('Unexpected gesture');
+          }
+          expect(tester.takeException(), isNull);
+        } finally {
+          await fixture.close(tester);
+        }
+      },
+    );
+  }
+
+  testWidgets(
+    'pinch and pan are independent and master switch cancels recognition',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      final options = fixture.settings.videoPlayback.gestureOptions;
+      for (final gesture in VideoGesture.values) {
+        options.setEnabled(gesture, gesture == VideoGesture.pinchZoom);
+      }
+      GestureDetector surface() => tester.widget<GestureDetector>(
+        find.byKey(const ValueKey('video-gesture-surface')),
+      );
+      try {
+        await fixture.mount(tester);
+        surface().onScaleStart!(
+          ScaleStartDetails(localFocalPoint: const Offset(600, 500)),
+        );
+        surface().onScaleUpdate!(
+          ScaleUpdateDetails(
+            localFocalPoint: const Offset(700, 500),
+            scale: 2,
+            pointerCount: 2,
+            focalPointDelta: const Offset(100, 0),
+          ),
+        );
+        surface().onScaleEnd!(ScaleEndDetails());
+        await tester.pumpAndSettle();
+        expect(fixture.native.properties['video-zoom'], '1.000');
+        expect(fixture.native.properties['video-pan-x'], '0.000');
+        options.setEnabled(VideoGesture.pinchZoom, false);
+        options.setEnabled(VideoGesture.panZoom, true);
+        fixture.native._core.rateChanged(1);
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 40)),
+        );
+        surface().onScaleStart!(
+          ScaleStartDetails(localFocalPoint: const Offset(600, 500)),
+        );
+        surface().onScaleUpdate!(
+          ScaleUpdateDetails(
+            localFocalPoint: const Offset(728, 500),
+            scale: 4,
+            pointerCount: 2,
+            focalPointDelta: const Offset(128, 0),
+          ),
+        );
+        surface().onScaleEnd!(ScaleEndDetails());
+        await tester.pumpAndSettle();
+        expect(fixture.native.properties['video-zoom'], '1.000');
+        expect(fixture.native.properties['video-pan-x'], '0.200');
+        fixture.settings.videoPlayback.gestures = false;
+        fixture.native.setBuffering(true);
+        await tester.idle();
+        await tester.pump();
+        expect(surface().onScaleStart, isNull);
+        expect(surface().onLongPressStart, isNull);
+        expect(surface().onDoubleTap, isNull);
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
+
+  for (final pixelRatio in [1.0, 2.0]) {
+    testWidgets(
+      'video bars span the viewport and safe areas, independent of picture at DPR $pixelRatio',
+      (tester) async {
+        final fixture = _SkipVideoFixture();
+        try {
+          await fixture.mount(tester);
+          tester.view.devicePixelRatio = pixelRatio;
+          for (final (size, scale, leftSafe, rightSafe, rtl) in [
+            (const Size(1600, 720), 1.0, 0.0, 0.0, false),
+            (const Size(1920, 800), 1.0, 0.0, 0.0, false),
+            (const Size(1280, 800), 1.0, 0.0, 0.0, false),
+            (const Size(740, 360), 1.0, 48.0, 14.0, false),
+            (const Size(740, 360), 1.0, 14.0, 48.0, true),
+            (const Size(390, 844), 1.0, 0.0, 0.0, false),
+            (const Size(360, 640), 1.7, 0.0, 0.0, false),
+          ]) {
+            tester.view.physicalSize = size * pixelRatio;
+            tester.view.padding = FakeViewPadding(
+              left: leftSafe * pixelRatio,
+              right: rightSafe * pixelRatio,
+              top: 24 * pixelRatio,
+              bottom: 16 * pixelRatio,
+            );
+            tester.platformDispatcher.textScaleFactorTestValue = scale;
+            final direction = rtl ? TextDirection.rtl : TextDirection.ltr;
+            fixture.direction.value = direction;
+            await tester.pumpAndSettle();
+
+            final top = find.byKey(const ValueKey('video-top-controls'));
+            final bottom = find.byKey(const ValueKey('video-bottom-controls'));
+            final bounds = Rect.fromLTRB(
+              leftSafe > 10 ? leftSafe : 10,
+              0,
+              size.width - (rightSafe > 10 ? rightSafe : 10),
+              size.height,
+            );
+            final rects = <Rect>[];
+            for (final texture in [
+              null,
+              const Rect.fromLTWH(0, 0, 1920, 1080),
+              const Rect.fromLTWH(0, 0, 1080, 1920),
+              const Rect.fromLTWH(0, 0, 1440, 1080),
+            ]) {
+              fixture.controller.rect.value = texture;
+              await tester.pumpAndSettle();
+              for (final bar in [top, bottom]) {
+                final rect = tester.getRect(bar);
+                expect(
+                  rect.left,
+                  closeTo(bounds.left, .01),
+                  reason: '$size DPR $pixelRatio $direction',
+                );
+                expect(rect.right, closeTo(bounds.right, .01));
+                expect(rect.top, greaterThanOrEqualTo(24));
+                expect(rect.bottom, lessThanOrEqualTo(size.height - 16));
+              }
+              final current = [
+                tester.getRect(top),
+                tester.getRect(bottom),
+                tester.getRect(find.byKey(const ValueKey('video-seek'))),
+              ];
+              if (rects.isEmpty) {
+                rects.addAll(current);
+              } else {
+                expect(
+                  current,
+                  rects,
+                  reason:
+                      'Decoder aspect changes must not pull controls inward.',
+                );
+              }
+              expect(
+                tester.widget<Video>(find.byType(Video)).fit,
+                BoxFit.contain,
+                reason:
+                    'Do not stretch/crop the actual video to widen controls.',
+              );
+              expect(
+                find.byTooltip('Back to videos').hitTestable(),
+                findsOneWidget,
+              );
+              expect(
+                find.byTooltip('More player controls').hitTestable(),
+                findsOneWidget,
+              );
+              expect(
+                find.byTooltip('Lock controls').hitTestable(),
+                findsOneWidget,
+              );
+              expect(
+                find.byTooltip('Now playing queue').hitTestable(),
+                findsOneWidget,
+              );
+              expect(tester.takeException(), isNull);
+            }
+          }
+        } finally {
+          tester.view.resetPadding();
+          await fixture.close(tester);
+        }
+      },
+    );
+  }
+
+  testWidgets(
+    'chapter skip stays usable while locked and auto-hidden across layouts',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      final native = fixture.native;
+      native.properties.addAll({
+        'chapter-list/count': '5',
+        'chapter-list/0/time': '0',
+        'chapter-list/0/title': '[OP] Theme',
+        'chapter-list/1/time': '10',
+        'chapter-list/1/title': 'Story',
+        'chapter-list/2/time': '80',
+        'chapter-list/2/title': 'ED',
+        'chapter-list/3/time': '100',
+        'chapter-list/3/title': 'Post-credit scene',
+        'chapter-list/4/time': '110',
+        'chapter-list/4/title': 'Outro',
+      });
+      // Automatic chapter prompts must not silently expand saved auto-skip.
+      fixture.settings.videoPlayback.autoSkip = true;
+      try {
+        await fixture.mount(tester);
+        final skip = find.byKey(const ValueKey('video-skip-segment'));
+        expect(find.text('Skip Opening'), findsOneWidget);
+        expect(fixture.settings.videoPlayback.skipSegments, isEmpty);
+        await tester.tap(find.byTooltip('Lock controls'));
+        await tester.pumpAndSettle();
+        for (final (size, scale) in [
+          (const Size(390, 844), 1.0),
+          (const Size(740, 360), 1.0),
+          (const Size(1280, 800), 1.0),
+          (const Size(360, 640), 2.0),
+        ]) {
+          tester.view.physicalSize = size;
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          await native.seek(const Duration(seconds: 2));
+          await tester.pump();
+          await tester.pump(const Duration(seconds: 5));
+          expect(native.state.position, const Duration(seconds: 2));
+          expect(find.byTooltip('Unlock controls'), findsNothing);
+          expect(find.byTooltip('Pause video'), findsNothing);
+          expect(find.byTooltip('More player controls'), findsNothing);
+          expect(skip.hitTestable(), findsOneWidget, reason: '$size / $scale');
+          expect(tester.getRect(skip).left, greaterThanOrEqualTo(0));
+          expect(tester.getRect(skip).right, lessThanOrEqualTo(size.width));
+          await tester.tap(skip);
+          await tester.pumpAndSettle();
+          expect(native.state.position, const Duration(seconds: 10));
+          expect(native.state.playing, isTrue);
+          expect(skip, findsNothing);
+          // Skip must not unlock ordinary controls or change playback.
+          await tester.tapAt(Offset(size.width / 2, size.height / 2));
+          await tester.pumpAndSettle();
+          expect(find.byTooltip('Unlock controls'), findsOneWidget);
+          expect(find.byTooltip('Pause video'), findsNothing);
+          expect(tester.takeException(), isNull);
+        }
+        await tester.pump(const Duration(seconds: 5));
+        expect(find.byTooltip('Unlock controls'), findsNothing);
+        await native.seek(const Duration(seconds: 85));
+        await tester.pumpAndSettle();
+        expect(find.text('Skip Ending'), findsOneWidget);
+        expect(
+          find.byTooltip('Unlock controls'),
+          findsNothing,
+          reason:
+              'Entering a segment must not expose ordinary locked controls.',
+        );
+        await tester.tap(skip);
+        await tester.pumpAndSettle();
+        expect(
+          native.state.position,
+          const Duration(seconds: 100),
+          reason: 'Preserve the post-credit scene.',
+        );
+        expect(skip, findsNothing);
+        await native.seek(const Duration(seconds: 115));
+        await tester.pumpAndSettle();
+        expect(find.text('Skip Outro'), findsOneWidget);
+        await tester.tap(skip);
+        await tester.pumpAndSettle();
+        expect(native.state.position, const Duration(minutes: 2));
+        expect(skip, findsNothing);
+        expect(fixture.settings.videoPlayback.skipSegments, isEmpty);
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
+
+  testWidgets(
+    'saved ranges take priority and skipping while locked preserves pause',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      fixture.settings.videoPlayback.setSkipSegments(fixture.source.id, const [
+        VideoSkipSegment(Duration.zero, Duration(seconds: 20), 'Introduction'),
+        VideoSkipSegment(Duration(seconds: 80), Duration(seconds: 100), 'ED'),
+      ]);
+      try {
+        await fixture.mount(tester);
+        final skip = find.byKey(const ValueKey('video-skip-segment'));
+        expect(find.text('Skip Intro'), findsOneWidget);
+        await tester.tap(find.byTooltip('Lock controls'));
+        await tester.pumpAndSettle();
+        await fixture.native.pause();
+        await tester.pump();
+        await tester.tap(skip);
+        await tester.pumpAndSettle();
+        expect(fixture.native.state.position, const Duration(seconds: 20));
+        expect(fixture.native.state.playing, isFalse);
+        expect(
+          skip,
+          findsNothing,
+          reason:
+              'Do not offer the wider chapter after a corrected saved range.',
+        );
+        expect(find.byTooltip('Unlock controls'), findsOneWidget);
+        expect(find.byTooltip('Play video'), findsNothing);
+        await fixture.native.seek(const Duration(seconds: 85));
+        await tester.pumpAndSettle();
+        expect(find.text('Skip Ending'), findsOneWidget);
+        await tester.tap(skip);
+        await tester.pumpAndSettle();
+        expect(fixture.native.state.position, const Duration(seconds: 100));
+        expect(fixture.native.state.playing, isFalse);
+        expect(skip, findsNothing);
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
+
+  testWidgets('unmarked videos never get guessed intro or ending buttons', (
+    tester,
+  ) async {
+    final fixture = _SkipVideoFixture();
+    fixture.native.properties['chapter-list/count'] = '0';
+    try {
+      await fixture.mount(tester);
+      await tester.tap(find.byTooltip('Lock controls'));
+      await tester.pumpAndSettle();
+      for (final seconds in [0, 5, 30, 100, 119]) {
+        await fixture.native.seek(Duration(seconds: seconds));
+        await tester.pump();
+        expect(find.byKey(const ValueKey('video-skip-segment')), findsNothing);
+      }
+    } finally {
+      await fixture.close(tester);
+    }
+  });
+
+  testWidgets(
+    'skip prevents overlapping requests and recovers after a seek failure',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      try {
+        await fixture.mount(tester);
+        await tester.tap(find.byTooltip('Lock controls'));
+        await tester.pumpAndSettle();
+        final gate = Completer<void>();
+        fixture.native.beforeSeek = (_) => gate.future;
+        final skip = find.byKey(const ValueKey('video-skip-segment'));
+        final activate = tester.widget<FilledButton>(skip).onPressed!;
+        activate();
+        activate();
+        await tester.pump();
+        expect(fixture.native.seeks, [const Duration(seconds: 45)]);
+        expect(tester.widget<FilledButton>(skip).onPressed, isNull);
+        gate.completeError(StateError('Test seek failure'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<FilledButton>(skip).onPressed, isNotNull);
+        expect(
+          find.text('This playback action could not be applied.'),
+          findsOneWidget,
+        );
+        expect(find.byTooltip('Unlock controls'), findsOneWidget);
+        fixture.native.beforeSeek = null;
+        await tester.tap(skip);
+        await tester.pumpAndSettle();
+        expect(fixture.native.state.position, const Duration(seconds: 45));
+        expect(skip, findsNothing);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
+
   test('playlist and history restore Telegram and local videos only', () {
     final data = VideoPlaybackData();
     final local = VideoSource.file(
@@ -327,49 +968,59 @@ void main() {
     expect(restored.playlists['Queue']!.length, 2);
   });
 
-  test('adding to a full Video playlist reports the limit without losing entries', () {
-    VideoSource video(int id) => VideoSource.file(Uri.file('/movies/$id.mp4'), 'Video $id');
-    final data = VideoPlaybackData();
-    final items = List.generate(1000, video);
-    data.putPlaylist('Full', items);
-    expect(() => data.putPlaylist('Full', [...items, video(1000)]), throwsFormatException);
-    expect(data.playlists['Full'], items);
-    data.putPlaylist('Full', [...items, items.first]);
-    expect(data.playlists['Full'], items);
-  });
-
-  test('local and Telegram resume points survive each other’s history limit', () {
-    final data = VideoPlaybackData();
-    const position = Duration(seconds: 18);
-    final local = VideoSource.file(Uri.file('/movies/local.mp4'), 'Local');
-    data.recordVideo(local);
-    data.remember(local.id, position, Duration.zero);
-
-    for (var i = 1; i <= 301; i++) {
-      final episode = VideoSource.telegram(
-        Track(id: '-100:$i', title: 'Episode $i', artist: '', source: 'TV'),
+  test(
+    'adding to a full Video playlist reports the limit without losing entries',
+    () {
+      VideoSource video(int id) =>
+          VideoSource.file(Uri.file('/movies/$id.mp4'), 'Video $id');
+      final data = VideoPlaybackData();
+      final items = List.generate(1000, video);
+      data.putPlaylist('Full', items);
+      expect(
+        () => data.putPlaylist('Full', [...items, video(1000)]),
+        throwsFormatException,
       );
-      data.recordVideo(episode);
-      data.remember(episode.id, position, Duration.zero);
-    }
-    final reloaded = VideoPlaybackData.fromJson(data.toJson());
-    reloaded.applyTelegramActivity(data.telegramActivity());
-    expect(reloaded.positions[local.id], position);
-    expect(reloaded.positions['telegram:-100:1'], isNull);
-    expect(reloaded.positions['telegram:-100:2'], position);
+      expect(data.playlists['Full'], items);
+      data.putPlaylist('Full', [...items, items.first]);
+      expect(data.playlists['Full'], items);
+    },
+  );
 
-    for (var i = 1; i <= 300; i++) {
-      final source = VideoSource.file(Uri.file('/movies/$i.mp4'), 'Video $i');
-      reloaded.recordVideo(source);
-      reloaded.remember(source.id, position, Duration.zero);
-    }
-    expect(reloaded.positions[local.id], isNull);
-    expect(reloaded.positions['telegram:-100:2'], position);
-    expect(reloaded.positions, hasLength(600));
-    final restored = VideoPlaybackData.fromJson(reloaded.toJson());
-    restored.applyTelegramActivity(reloaded.telegramActivity());
-    expect(restored.positions, reloaded.positions);
-  });
+  test(
+    'local and Telegram resume points survive each other’s history limit',
+    () {
+      final data = VideoPlaybackData();
+      const position = Duration(seconds: 18);
+      final local = VideoSource.file(Uri.file('/movies/local.mp4'), 'Local');
+      data.recordVideo(local);
+      data.remember(local.id, position, Duration.zero);
+
+      for (var i = 1; i <= 301; i++) {
+        final episode = VideoSource.telegram(
+          Track(id: '-100:$i', title: 'Episode $i', artist: '', source: 'TV'),
+        );
+        data.recordVideo(episode);
+        data.remember(episode.id, position, Duration.zero);
+      }
+      final reloaded = VideoPlaybackData.fromJson(data.toJson());
+      reloaded.applyTelegramActivity(data.telegramActivity());
+      expect(reloaded.positions[local.id], position);
+      expect(reloaded.positions['telegram:-100:1'], isNull);
+      expect(reloaded.positions['telegram:-100:2'], position);
+
+      for (var i = 1; i <= 300; i++) {
+        final source = VideoSource.file(Uri.file('/movies/$i.mp4'), 'Video $i');
+        reloaded.recordVideo(source);
+        reloaded.remember(source.id, position, Duration.zero);
+      }
+      expect(reloaded.positions[local.id], isNull);
+      expect(reloaded.positions['telegram:-100:2'], position);
+      expect(reloaded.positions, hasLength(600));
+      final restored = VideoPlaybackData.fromJson(reloaded.toJson());
+      restored.applyTelegramActivity(reloaded.telegramActivity());
+      expect(restored.positions, reloaded.positions);
+    },
+  );
 
   test('skip chapter import respects boundaries and known labels', () {
     final segments = videoChapterSegments(const [
@@ -548,8 +1199,14 @@ void main() {
       MemoryVault(),
       transport: FakeTd(),
     );
-    const song = Track(id: 'song', title: 'Song', artist: '', source: 'Music',
-        fileId: 1, size: 100);
+    const song = Track(
+      id: 'song',
+      title: 'Song',
+      artist: '',
+      source: 'Music',
+      fileId: 1,
+      size: 100,
+    );
     final video = VideoSource.file(Uri.file('/movies/one.mp4'), 'One video');
     addTearDown(proxy.close);
     addTearDown(telegram.shutdown);
@@ -598,87 +1255,92 @@ void main() {
     expect(audio.position, position);
   });
 
-  testWidgets('Telegram episodes restore only their channel playback settings', (
-    tester,
-  ) async {
-    final native = _NativeVideo();
-    final proxy = _RecordingVideoProxy();
-    final settings = MemorySettings();
-    final music = PlayerController(
-      FakeAudio(),
-      TelegramStreamProxy((_) async => {}),
-      settings,
-    );
-    final telegram = TelegramService(
-      Directory('unused'),
-      MemoryVault(),
-      transport: FakeTd(),
-    )..state = 'authorizationStateReady';
-    addTearDown(proxy.close);
-    addTearDown(telegram.shutdown);
-    VideoSource episode(int channel, int fileId) => VideoSource.telegram(
-      Track(
-        id: '$channel:$fileId',
-        title: 'Episode $fileId',
-        artist: '',
-        source: 'Anime',
-        fileId: fileId,
-        size: 100,
-      ),
-    );
-    settings.videoPlayback.channels['-1001'] = VideoChannelSettings()
-      ..audio = const VideoTrackChoice('18', 'English audio', 'eng')
-      ..subtitles = const VideoTrackChoice('no', null, null)
-      ..pictureBrightness = 24;
-
-    try {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: VideoPlayback(
-            sources: [episode(-1001, 1), episode(-1002, 2), episode(-1001, 3)],
-            initialIndex: 0,
-            telegram: telegram,
-            music: music,
-            proxy: proxy,
-            onOpened: (_) {},
-            createController: () => _VideoController(native),
-          ),
+  testWidgets(
+    'Telegram episodes restore only their channel playback settings',
+    (tester) async {
+      final native = _NativeVideo();
+      final proxy = _RecordingVideoProxy();
+      final settings = MemorySettings();
+      final music = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy((_) async => {}),
+        settings,
+      );
+      final telegram = TelegramService(
+        Directory('unused'),
+        MemoryVault(),
+        transport: FakeTd(),
+      )..state = 'authorizationStateReady';
+      addTearDown(proxy.close);
+      addTearDown(telegram.shutdown);
+      VideoSource episode(int channel, int fileId) => VideoSource.telegram(
+        Track(
+          id: '$channel:$fileId',
+          title: 'Episode $fileId',
+          artist: '',
+          source: 'Anime',
+          fileId: fileId,
+          size: 100,
         ),
       );
-      await tester.pumpAndSettle();
-      expect(native.state.track.audio.id, '3');
-      expect(native.state.track.subtitle.id, 'no');
-      expect(double.parse(native.properties['brightness']!), 24);
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pumpAndSettle();
-      expect(native.state.volume, 95);
-      expect(settings.videoPlayback.channels['-1001']!.volume, 95);
+      settings.videoPlayback.channels['-1001'] = VideoChannelSettings()
+        ..audio = const VideoTrackChoice('18', 'English audio', 'eng')
+        ..subtitles = const VideoTrackChoice('no', null, null)
+        ..pictureBrightness = 24;
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
-      await tester.pumpAndSettle();
-      expect(native.state.track.audio.id, '1');
-      expect(native.state.track.subtitle.id, '2');
-      expect(native.state.volume, 100);
-      expect(native.properties['brightness'], '0');
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: VideoPlayback(
+              sources: [
+                episode(-1001, 1),
+                episode(-1002, 2),
+                episode(-1001, 3),
+              ],
+              initialIndex: 0,
+              telegram: telegram,
+              music: music,
+              proxy: proxy,
+              onOpened: (_) {},
+              createController: () => _VideoController(native),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(native.state.track.audio.id, '3');
+        expect(native.state.track.subtitle.id, 'no');
+        expect(double.parse(native.properties['brightness']!), 24);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pumpAndSettle();
+        expect(native.state.volume, 95);
+        expect(settings.videoPlayback.channels['-1001']!.volume, 95);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
-      await tester.pumpAndSettle();
-      expect(native.state.track.audio.id, '3');
-      expect(native.state.track.subtitle.id, 'no');
-      expect(native.state.volume, 95);
-      expect(double.parse(native.properties['brightness']!), 24);
-    } finally {
-      await tester.pumpWidget(const SizedBox.shrink());
-      var shutdown = false;
-      unawaited(music.shutdown().then((_) => shutdown = true));
-      for (var frame = 0; frame < 20 && !shutdown; frame++) {
-        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-        tester.binding.scheduleFrame();
-        await tester.pump(const Duration(milliseconds: 16));
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+        await tester.pumpAndSettle();
+        expect(native.state.track.audio.id, '1');
+        expect(native.state.track.subtitle.id, '2');
+        expect(native.state.volume, 100);
+        expect(native.properties['brightness'], '0');
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+        await tester.pumpAndSettle();
+        expect(native.state.track.audio.id, '3');
+        expect(native.state.track.subtitle.id, 'no');
+        expect(native.state.volume, 95);
+        expect(double.parse(native.properties['brightness']!), 24);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        var shutdown = false;
+        unawaited(music.shutdown().then((_) => shutdown = true));
+        for (var frame = 0; frame < 20 && !shutdown; frame++) {
+          await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+          tester.binding.scheduleFrame();
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        expect(shutdown, isTrue);
       }
-      expect(shutdown, isTrue);
-    }
-  });
+    },
+  );
 
   for (final size in [const Size(390, 844), const Size(1280, 720)]) {
     testWidgets('video language defaults and manual overrides at $size', (
@@ -1004,10 +1666,24 @@ void main() {
             final seek = tester.getRect(
               find.byKey(const ValueKey('video-seek')),
             );
-            expect(back.left, greaterThan(pictureLeft));
-            expect(more.right, lessThan(pictureRight));
-            expect(seek.left, greaterThan(pictureLeft));
-            expect(seek.right, lessThan(pictureRight));
+            expect(back.left, closeTo(10, .01));
+            expect(more.right, closeTo(size.width - 10, .01));
+            expect(back.left, lessThan(pictureLeft));
+            expect(more.right, greaterThan(pictureRight));
+            expect(seek.left, greaterThanOrEqualTo(10));
+            expect(seek.right, lessThanOrEqualTo(size.width - 10));
+            expect(
+              tester
+                  .getRect(find.byKey(const ValueKey('video-bottom-controls')))
+                  .left,
+              closeTo(10, .01),
+            );
+            expect(
+              tester
+                  .getRect(find.byKey(const ValueKey('video-bottom-controls')))
+                  .right,
+              closeTo(size.width - 10, .01),
+            );
           }
           await tester.tap(find.byTooltip('Now playing queue'));
           await tester.pumpAndSettle();
@@ -1045,7 +1721,19 @@ void main() {
         expect(native.state.position, const Duration(seconds: 10));
         final transportCenter = tester.getCenter(pauseButton);
         expect(
-          tester.getCenter(find.byIcon(Icons.fast_forward_rounded)).dy,
+          tester
+              .getCenter(
+                find.descendant(
+                  of: find
+                      .ancestor(
+                        of: find.text('+10 s'),
+                        matching: find.byType(Row),
+                      )
+                      .first,
+                  matching: find.byIcon(Icons.fast_forward_rounded),
+                ),
+              )
+              .dy,
           lessThan(tester.getTopLeft(pauseButton).dy),
         );
         for (final x in [200.0, 1080.0]) {
