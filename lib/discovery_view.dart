@@ -190,7 +190,7 @@ extension _DiscoveryPages on _PlayerShellState {
                       style: TextStyle(color: _colors.onSurfaceVariant),
                     ),
                     Text(
-                      stats.topTracks.first.value.title,
+                      stats.topTrack!.value.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w700),
