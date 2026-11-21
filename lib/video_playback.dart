@@ -147,7 +147,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
   VideoController? _video;
   AudioSession? _session;
   Timer? _checkpoint, _sleepTimer, _thermalTimer;
-  Timer? _startupTimeout;
+  Timer? _startupTimeout, _foregroundCheck;
+  Future<void>? _lifecyclePause;
+  bool _resumePlaying = false, _recovering = false, _openingShouldPlay = false;
+  bool _waitingForVideo = false;
+  Duration? _interruptedPosition;
   DateTime? _sleepAt;
   String? _error;
   bool _loading = true,
@@ -156,10 +160,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
       _surfaceDetached = false,
       _positionReady = false;
   bool _invalidated = false, _pip = false, _locked = false, _shuffle = false;
-  bool _mirror = false,
-      _flip = false,
-      _repeatVideo = false,
-      _resumeSeek = false;
+  bool _mirror = false, _flip = false, _repeatVideo = false;
+  bool _reachedWatchedThreshold = false;
   bool _appInBackground = false, _selectingFile = false;
   bool _acceptVideoParams = false;
   bool _automaticAudio = true, _automaticSubtitles = true;
@@ -265,7 +267,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
     if (call.method != 'pipChanged') return;
     _pip = call.arguments == true;
     _changed();
-    if (!_pip && _appInBackground && !_data.background) await _player?.pause();
+    if (!_pip && _appInBackground && !_data.background) {
+      await _pauseForBackground();
+    }
   }
 
   Future<void> _setVideoImmersive(bool enabled) async {
@@ -310,17 +314,26 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   void _musicChanged() {
     if (widget.music.audio.playing && _player?.state.playing == true) {
+      _foregroundCheck?.cancel();
       unawaited(_player?.pause());
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _appInBackground = state == AppLifecycleState.paused;
-    if (_appInBackground) {
+    if (state == AppLifecycleState.paused && !_appInBackground) {
+      _appInBackground = true;
+      _foregroundCheck?.cancel();
+      _startupTimeout?.cancel();
       _flushChannelSettings();
       _saveProgress();
+      _resumePlaying =
+          _player?.state.playing == true || (_opening && _openingShouldPlay);
+      _interruptedPosition = _position > Duration.zero ? _position : null;
       if (!_pip && !_data.background) unawaited(_pauseOutsidePip());
+    } else if (state == AppLifecycleState.resumed && _appInBackground) {
+      _appInBackground = false;
+      _restoreForegroundPlayback();
     }
   }
 
@@ -330,15 +343,123 @@ class _VideoPlaybackState extends State<VideoPlayback>
       await Future<void>.delayed(const Duration(milliseconds: 240));
     }
     if (_canPlay && _appInBackground && !_pip && !_data.background) {
-      await _player?.pause();
+      await _pauseForBackground();
+    }
+  }
+
+  Future<void> _pauseForBackground() async {
+    final player = _player;
+    if (player == null) return;
+    await (_lifecyclePause ??= _releaseStep(
+      player.pause,
+      'pause in background',
+    ).whenComplete(() => _lifecyclePause = null));
+  }
+
+  void _restoreForegroundPlayback() {
+    if (!_canPlay) return;
+    if (Platform.isAndroid && !_pip) {
+      unawaited(_setVideoImmersive(!widget.minimized));
+    }
+    if (_player?.state.completed == true && _error == null) return;
+    final play = _resumePlaying && !widget.music.audio.playing;
+    final position = _position > Duration.zero
+        ? _position
+        : _interruptedPosition;
+    if (_error != null) {
+      unawaited(_retry(position: position, play: play));
+      return;
+    }
+    if (_waitingForVideo || _opening || play) {
+      final opening = _openingTask;
+      final initialPosition = _position;
+      _foregroundCheck = Timer(const Duration(seconds: 12), () {
+        final player = _player;
+        if (!_canPlay ||
+            _appInBackground ||
+            opening != _openingTask ||
+            player?.state.completed == true) {
+          return;
+        }
+        final stalled =
+            _opening ||
+            _waitingForVideo ||
+            _error != null ||
+            (play &&
+                !widget.music.audio.playing &&
+                _position == initialPosition);
+        if (stalled) {
+          unawaited(
+            _retry(
+              position: _position > Duration.zero ? _position : position,
+              play: play && !widget.music.audio.playing,
+            ),
+          );
+        }
+      });
+    }
+    if (play && !_pip && !_data.background) {
+      final pause = _lifecyclePause;
+      unawaited(_continueForegroundPlayback(_openingTask, pause));
+    }
+  }
+
+  Future<void> _continueForegroundPlayback(
+    Future<void>? opening,
+    Future<void>? pause,
+  ) async {
+    await pause;
+    await opening;
+    final player = _player;
+    if (!_canPlay ||
+        _appInBackground ||
+        _recovering ||
+        opening != _openingTask ||
+        _error != null ||
+        player == null ||
+        player.state.completed ||
+        player.state.playing ||
+        widget.music.audio.playing) {
+      return;
+    }
+    try {
+      await _takeAudioFocus();
+      if (_canPlay && !_appInBackground && opening == _openingTask) {
+        await player.play();
+      }
+    } catch (_) {
+      _setError('Could not resume the video.');
+    }
+  }
+
+  Future<void> _retry({Duration? position, bool? play}) async {
+    if (!_canPlay || _recovering) return;
+    _recovering = true;
+    _changed();
+    try {
+      // Closing the old loopback socket unblocks mpv even if its current range
+      // was left waiting for data when Android suspended the app.
+      if (_source.telegram != null) await widget.proxy.interrupt();
+      await _openingTask?.timeout(const Duration(seconds: 12));
+      if (_canPlay && !_appInBackground) {
+        unawaited(_open(position: position, play: play));
+      }
+    } catch (_) {
+      _setError('Could not reopen the video. Try again.');
+    } finally {
+      _recovering = false;
+      _changed();
     }
   }
 
   void _setError(String message) {
     if (!_canPlay || _error != null) return;
+    _saveProgress();
     _startupTimeout?.cancel();
+    _waitingForVideo = false;
     _error = message;
     _loading = false;
+    setState(() {});
     _changed();
   }
 
@@ -361,28 +482,36 @@ class _VideoPlaybackState extends State<VideoPlayback>
     );
   }
 
-  Future<void> _open({bool resume = true}) {
+  Future<void> _open({bool resume = true, Duration? position, bool? play}) {
     if (_opening || !_canPlay) return Future<void>.value();
-    return _openingTask = _openVideo(resume: resume);
+    _foregroundCheck?.cancel();
+    return _openingTask = _openVideo(
+      resume: resume,
+      position: position,
+      play: play ?? _data.autoplay,
+    );
   }
 
-  Future<void> _openVideo({required bool resume}) async {
+  Future<void> _openVideo({
+    required bool resume,
+    required Duration? position,
+    required bool play,
+  }) async {
     _opening = _loading = true;
-    _startupTimeout?.cancel();
+    _openingShouldPlay = play;
     _acceptVideoParams = false;
     _trackGeneration++;
     _automaticAudio = _automaticSubtitles = true;
     _positionReady = false;
-    _resumeSeek =
-        resume &&
-        !_data.isWatched(_source) &&
-        _data.positions[_source.id] != null;
+    _reachedWatchedThreshold = false;
+    final savedPosition = resume ? _data.positions[_source.id] : null;
     _error = null;
     _chapters = const [];
     _chapterSegments = const [];
     _chapterReadGeneration++;
     _skipStart = _autoSkipEnd = null;
     _secondarySubtitle = 'no';
+    _armVideoStartupTimeout();
     _changed();
     unawaited(_applyOrientation());
     try {
@@ -427,7 +556,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
               if (!player.state.playing &&
                   (player.state.width ?? 0) > 0 &&
                   (player.state.height ?? 0) > 0) {
-                _startupTimeout?.cancel();
+                _videoStarted();
               }
               unawaited(_applyOrientation());
             }),
@@ -439,14 +568,29 @@ class _VideoPlaybackState extends State<VideoPlayback>
           player.stream.position.listen((position) {
             if (_acceptVideoParams &&
                 position > Duration.zero &&
-                _startupTimeout?.isActive == true) {
-              _startupTimeout!.cancel();
+                _waitingForVideo) {
+              _videoStarted();
               unawaited(_applyOrientation());
             }
             if (position > Duration.zero && !_opening && !_positionReady) {
               _positionReady = true;
               if (_data.hdrProfile != _activeHdr) unawaited(_updateUpscaling());
               unawaited(_updateRefreshRate());
+            }
+            if (!_reachedWatchedThreshold &&
+                _positionReady &&
+                !_opening &&
+                _canPlay &&
+                _error == null &&
+                player.state.playing &&
+                _duration > Duration.zero &&
+                position.inMicroseconds * 100 >=
+                    _duration.inMicroseconds * 85) {
+              _reachedWatchedThreshold = true;
+              if (!_data.isWatched(_source)) {
+                _saveProgress();
+                _markWatched();
+              }
             }
             if (_autoSkipEnd case final Duration end when position >= end) {
               _autoSkipEnd = null;
@@ -468,11 +612,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
           }),
           player.stream.completed.listen((completed) {
             if (completed && !_opening && _error == null && _canPlay) {
-              _data.setWatched(_source, true);
-              _data.positions.remove(_source.id);
+              _saveProgress();
               _positionReady = false;
-              _saveSettings();
-              widget.onWatched?.call();
+              _markWatched();
               if (!_repeatVideo) unawaited(_advanceOrResumeMusic());
             }
           }),
@@ -538,21 +680,20 @@ class _VideoPlaybackState extends State<VideoPlayback>
       final track = source.telegram;
       if (track == null) await widget.proxy.stop();
       final uri = track == null ? source.uri! : await widget.proxy.uri(track);
+      if (!_canPlay || _error != null) return;
+      if (play) await _takeAudioFocus();
       if (!_canPlay) return;
-      if (_data.autoplay) await _takeAudioFocus();
-      if (!_canPlay) return;
-      final start = _resumeSeek ? _data.positions[source.id] : null;
+      final start = position ?? savedPosition;
       // Manual track IDs (including Off) belong to the previous video only.
       await _player!.setAudioTrack(mpv.AudioTrack.auto());
       await _player!.setSubtitleTrack(mpv.SubtitleTrack.auto());
       await _native.setProperty('start', 'none');
       await _restorePlaybackLevels(source);
-      if (!_canPlay) return;
+      if (!_canPlay || _error != null) return;
       _acceptVideoParams = true;
-      _armVideoStartupTimeout(track);
       await _player!.open(
         mpv.Media(uri.toString(), start: start),
-        play: _data.autoplay,
+        play: play && !(_appInBackground && !_pip && !_data.background),
       );
       if (!_canPlay || _error != null) return;
       await _preferVideoTracks();
@@ -581,12 +722,21 @@ class _VideoPlaybackState extends State<VideoPlayback>
     }
   }
 
-  void _armVideoStartupTimeout(Track? track) {
+  void _videoStarted() {
+    if (!_waitingForVideo) return;
+    _waitingForVideo = false;
+    _startupTimeout?.cancel();
+    _changed();
+  }
+
+  void _armVideoStartupTimeout() {
     _startupTimeout?.cancel();
     if (!Platform.isAndroid) return;
+    _waitingForVideo = true;
+    if (_appInBackground && !_pip && !_data.background) return;
     _startupTimeout = Timer(const Duration(seconds: 45), () {
       _setError('The video took too long to start. Try again.');
-      if (_opening && track != null) {
+      if (_source.telegram != null) {
         unawaited(
           _releaseStep(widget.proxy.interrupt, 'interrupt video reads'),
         );
@@ -645,6 +795,12 @@ class _VideoPlaybackState extends State<VideoPlayback>
   void _saveSettings() =>
       unawaited(widget.music.settings.save().catchError((Object _) {}));
 
+  void _markWatched() {
+    if (!_data.setWatched(_source, true)) return;
+    _saveSettings();
+    widget.onWatched?.call();
+  }
+
   void _saveProgress() {
     if (!_positionReady ||
         _closed ||
@@ -654,7 +810,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
       return;
     }
     final id = _source.id;
-    if (_data.isWatched(_source)) return;
     if (_hasHistoryRecord && !_data.history.containsKey(id)) return;
     final old = _data.positions[id];
     if (old == _position) return;
@@ -663,7 +818,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
   }
 
   Future<void> _switchTo(int index) async {
-    if (_opening || index < 0 || index >= _queue.length || index == _index) {
+    if (_opening ||
+        _recovering ||
+        index < 0 ||
+        index >= _queue.length ||
+        index == _index) {
       return;
     }
     if (_queue[index].telegram != null && !widget.telegram.ready) {
@@ -719,6 +878,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   Future<void> _togglePlayback() async {
     if (!_canPlay || _opening || _player == null) return;
+    _foregroundCheck?.cancel();
     final player = _player!;
     if (player.state.playing) {
       await player.pause();
@@ -981,6 +1141,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     _closed = true;
     _closing.complete(null);
     _checkpoint?.cancel();
+    _foregroundCheck?.cancel();
     _startupTimeout?.cancel();
     _sleepTimer?.cancel();
     _thermalTimer?.cancel();
@@ -1154,7 +1315,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
           Text(_error ?? '', textAlign: TextAlign.center),
           if (_canPlay)
             FilledButton.tonal(
-              onPressed: _opening ? null : _open,
+              onPressed: _recovering
+                  ? null
+                  : () => _retry(
+                      position: _position > Duration.zero ? _position : null,
+                    ),
               child: const Text('Retry'),
             ),
         ],
