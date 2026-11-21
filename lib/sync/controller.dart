@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data' show BytesBuilder;
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data_backup.dart';
+import '../json_processing.dart';
 import '../storage.dart';
 import '../telegram/telegram_service.dart';
 import '../video_playback_data.dart';
@@ -232,17 +234,17 @@ class SyncController extends ChangeNotifier {
     request.headers.contentType = ContentType.json;
     request.add(utf8.encode(jsonEncode({...data, 'videoActivity': true})));
     final response = await request.close().timeout(const Duration(seconds: 15));
-    final bytes = <int>[];
+    final bytes = BytesBuilder(copy: false);
     await for (final chunk in response.timeout(const Duration(seconds: 15))) {
       if (bytes.length + chunk.length > 4 * 1024 * 1024) {
         throw const FormatException('Sync response is too large.');
       }
-      bytes.addAll(chunk);
+      bytes.add(chunk);
     }
     if (response.statusCode != HttpStatus.ok) {
       throw _SyncRequestFailure(response.statusCode);
     }
-    final result = jsonDecode(utf8.decode(bytes));
+    final result = await decodeJsonBytes(bytes.takeBytes());
     if (result is! Map<String, dynamic> ||
         result['cursor'] is! int ||
         (result['cursor'] as int) < 0 ||
@@ -250,7 +252,8 @@ class SyncController extends ChangeNotifier {
         result['records'] is! Map<String, dynamic>) {
       throw const FormatException('Invalid sync response.');
     }
-    if (result['more'] == true && (result['cursor'] as int) <= (data['cursor'] as int)) {
+    if (result['more'] == true &&
+        (result['cursor'] as int) <= (data['cursor'] as int)) {
       throw const FormatException('Sync cursor did not advance.');
     }
     return result;
@@ -329,7 +332,9 @@ class SyncController extends ChangeNotifier {
         final doc = document;
         final sent = <String, dynamic>{
           for (final k
-              in doc.dirty.where((k) => _canSend(k) && !sentKeys.contains(k)).take(100))
+              in doc.dirty
+                  .where((k) => _canSend(k) && !sentKeys.contains(k))
+                  .take(100))
             k: detached(Map<String, dynamic>.from(doc.records[k] as Map)),
         };
         sentKeys.addAll(sent.keys);
