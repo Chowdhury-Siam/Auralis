@@ -424,6 +424,8 @@ class VideoPlaybackData {
   final playlists = <String, List<VideoSource>>{};
   final history = <String, VideoHistoryEntry>{};
   final _watched = <String>{};
+  final _watchedFiles = <String>{};
+  static final _localVideoId = RegExp(r'^file:[a-f0-9]{64}$');
   final channels = <String, VideoChannelSettings>{};
   final subtitleStyle = <String, String>{};
   bool snapshotSubtitles = true;
@@ -499,17 +501,23 @@ class VideoPlaybackData {
     if (sameKind.length > _limit) history.remove(sameKind.first.source.id);
   }
 
-  bool isWatched(VideoSource source) => _watched.contains(source.telegram?.id);
+  bool isWatched(VideoSource source) => source.telegram == null
+      ? _watchedFiles.contains(source.id)
+      : _watched.contains(source.telegram!.id);
 
-  void setWatched(VideoSource source, bool watched) {
-    final message = source.telegram?.id;
-    if (message == null || !TelegramVideoActivity.isMessage(message)) return;
-    if (watched) {
-      _watched.add(message);
-      positions.remove(source.id);
-    } else {
-      _watched.remove(message);
+  bool setWatched(VideoSource source, bool watched) {
+    if (source.telegram case final Track track) {
+      if (!TelegramVideoActivity.isMessage(track.id)) return false;
+      return watched ? _watched.add(track.id) : _watched.remove(track.id);
     }
+    if (!source.canPlay) return false;
+    final id = source.id;
+    if (!watched) return _watchedFiles.remove(id);
+    final added = _watchedFiles.add(id);
+    if (_watchedFiles.length > _limit) {
+      _watchedFiles.remove(_watchedFiles.first);
+    }
+    return added;
   }
 
   Map<String, dynamic> telegramActivity() => {
@@ -591,7 +599,7 @@ class VideoPlaybackData {
         ),
       );
       final ms = record['position'] as int;
-      if (ms > 0 && !isWatched(source)) {
+      if (ms > 0) {
         _storePosition(source.id, Duration(milliseconds: ms));
       } else {
         positions.remove(source.id);
@@ -633,10 +641,11 @@ class VideoPlaybackData {
 
   void remember(String id, Duration position, Duration duration) {
     positions.remove(id);
-    if (position >= const Duration(seconds: 3) &&
-        (duration == Duration.zero ||
-            duration - position >= const Duration(seconds: 3))) {
-      _storePosition(id, position);
+    if (position > Duration.zero) {
+      _storePosition(
+        id,
+        duration > Duration.zero && position > duration ? duration : position,
+      );
     }
   }
 
@@ -750,6 +759,11 @@ class VideoPlaybackData {
             .whereType<String>()
             .where(TelegramVideoActivity.isMessage)
             .take(TelegramVideoActivity.watchedLimit),
+      );
+    }
+    if (json['watchedFiles'] case final List watched) {
+      data._watchedFiles.addAll(
+        watched.whereType<String>().where(_localVideoId.hasMatch).take(_limit),
       );
     }
     data.snapshotSubtitles = json['snapshotSubtitles'] != false;
@@ -905,6 +919,7 @@ class VideoPlaybackData {
       for (final entry in channels.entries) entry.key: entry.value.toJson(),
     },
     'watched': _watched.toList(),
+    'watchedFiles': _watchedFiles.toList(),
     'ambientMode': ambientMode,
     'snapshotSubtitles': snapshotSubtitles,
     'subtitleStyle': subtitleStyle,
