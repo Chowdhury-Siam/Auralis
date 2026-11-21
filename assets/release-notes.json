@@ -1,6 +1,14 @@
 {
-  "current": "0.1.225",
+  "current": "0.1.226",
   "releases": [
+    {
+      "version": "0.1.226",
+      "changes": [
+        "Keep the Visualizer visible through quiet passages and compensate for desktop listening-volume changes.",
+        "Preserve Windows output samples at full precision so quiet music still drives beats and energy.",
+        "Prevent listening-volume adjustments from being treated as song section changes."
+      ]
+    },
     {
       "version": "0.1.225",
       "changes": [
