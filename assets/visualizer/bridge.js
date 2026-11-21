@@ -26,7 +26,8 @@
   const sectionMinAudioMs=9000, sectionHoldMs=1600;
   let blendElapsed=0, blendDuration=0;
   let energyRms=0, lastEnergyRender=0;
-  let outputEnergy=0, outputPulse=0;
+  let outputEnergy=0, outputPulse=0, outputPresence=0;
+  let inputGain=1, gainChangedAt=-Infinity;
   const bandRms=new Float32Array(3), bandAverage=new Float32Array(3);
   const previousBandRms=new Float32Array(3);
   const bandRelease=new Float32Array(3);
@@ -60,6 +61,9 @@
     sand:['#b46b43','#eda961','#fff1b1'],
   };
   const waveform = new Uint8Array(1024).fill(128);
+  const signal = new Float32Array(1024);
+  const captureBytes = new Uint8Array(16384);
+  const captureView = new DataView(captureBytes.buffer);
   const real = new Float64Array(1024), imag = new Float64Array(1024);
   const smooth = new Float32Array(512).fill(-100);
   const hann=new Float64Array(1024), cosine=new Float64Array(512), sine=new Float64Array(512);
@@ -110,10 +114,10 @@
   }
   function fft() {
     let mean = 0;
-    for (let i=0;i<1024;i++) mean += (waveform[i]-128)/128;
+    for (let i=0;i<1024;i++) mean += signal[i];
     mean /= 1024;
     for (let i=0;i<1024;i++) {
-      real[reversed[i]] = ((waveform[i]-128)/128-mean) * hann[i];
+      real[reversed[i]] = (signal[i]-mean) * hann[i];
       imag[i] = 0;
     }
     for (let size=2;size<=1024;size*=2) {
@@ -154,16 +158,19 @@
   }
   function react(time) {
     let mean=0,energy=0;
-    for (let i=0;i<1024;i++) mean+=(waveform[i]-128)/128;
+    for (let i=0;i<1024;i++) mean+=signal[i];
     mean/=1024;
     for (let i=0;i<1024;i++) {
-      const sample=(waveform[i]-128)/128-mean;
+      const sample=signal[i]-mean;
       energy+=sample*sample;
     }
     const previousEnergy=energyRms;
     energyRms=energy=Math.sqrt(energy/1024);
     const bass=bandRms[0], high=Math.hypot(bandRms[1],bandRms[2]);
     const elapsed=Number.isFinite(lastAudio)?Math.max(0,time-lastAudio):33;
+    // A native output buffer may straddle a software-volume update. Allow it
+    // to settle without interpreting the gain adjustment as a musical attack.
+    const gainSettling=time-gainChangedAt<100;
     let strongOnset=false;
     for (let i=0;i<3;i++) {
       impulses[i]*=Math.exp(-Math.min(elapsed,250)/110);
@@ -174,7 +181,7 @@
       const rise=(bandRms[i]-previousBandRms[i])/Math.max(.006,bandAverage[i]);
       const novelty=Math.max((flux[i]-.18)*1.6,(rise-.18)*.65);
       previousBandRms[i]=bandRms[i];
-      if (energy>.008 && bandRms[i]>.004 && novelty>0 &&
+      if (!gainSettling && energy>.008 && bandRms[i]>.004 && novelty>0 &&
           time-impulseAt[i]>100) {
         impulses[i]=Math.max(impulses[i],Math.min(1,novelty));
         impulseAt[i]=time;
@@ -183,10 +190,10 @@
     }
     const attack=Math.max(energy/(energyAverage+.008),bass/(bassAverage+.004),
       high/(highAverage+.008));
-    const onset=(strongOnset ||
+    const onset=!gainSettling && (strongOnset ||
       (energy>.012 && energy>previousEnergy*1.12 && attack>1.35)) && time-lastBeat>=120;
     if (onset) lastBeat=time;
-    if (options.songMotion && options.cycle) updateSection(elapsed,onset);
+    if (options.songMotion && options.cycle && !gainSettling) updateSection(elapsed,onset);
     const weight=1-Math.exp(-Math.min(elapsed,100)/300);
     const established=energyAverage>0;
     energyAverage=established?energyAverage+weight*(energy-energyAverage):energy;
@@ -302,6 +309,11 @@
     const target=energyRms>=.006?Math.min(1,3*Math.sqrt(energyRms))*fresh:0;
     const weight=1-Math.exp(-elapsed/(target>outputEnergy?30:160));
     outputEnergy+=weight*(target-outputEnergy);
+    // Keep quiet music visible. Only real silence or missing capture fades the
+    // canvas; its opacity must not act as another listening-volume control.
+    const presence=energyRms>.001?fresh:0;
+    const presenceWeight=1-Math.exp(-elapsed/(presence>outputPresence?30:160));
+    outputPresence+=presenceWeight*(presence-outputPresence);
     // Snare and cymbal attacks can carry the rhythm without a bass hit.
     // Each impulse still comes from positive spectral change in that band.
     const attack=Math.max(impulses[0],impulses[1]*.85,impulses[2]*.7)
@@ -312,7 +324,7 @@
     const progress=blendDuration>0?blendElapsed/blendDuration:1;
     blendElapsed=Math.min(blendDuration,blendElapsed+elapsed);
     const shade=1-1.28*progress*(1-progress);
-    const opacity=Math.min(1,outputEnergy*(.84+.16*outputPulse))*shade;
+    const opacity=outputPresence*(.84+.16*outputEnergy)*shade;
     // At most 3.5% outward movement, never shrink/reveal unpainted edges.
     const nextOpacity=opacity.toFixed(3);
     const nextTransform=`scale(${(1+.035*outputPulse).toFixed(4)})`;
@@ -500,6 +512,7 @@
   function clearWaveform() {
     if (silent) return;
     waveform.fill(128);
+    signal.fill(0);
     silent=true;
     audioRevision++;
   }
@@ -507,10 +520,11 @@
     cancelAnimationFrame(request);request=0;
     if (analyzer) analyzer.stop();
     clearWaveform();smooth.fill(-100);lastAudio=-Infinity;
+    gainChangedAt=-Infinity;
     energyRms=0;lastEnergyRender=0;bandRms.fill(0);bandAverage.fill(0);bandRelease.fill(0);
     previousMagnitude.fill(0);previousBandRms.fill(0);
     flux.fill(0);impulses.fill(0);impulseAt.fill(-Infinity);
-    outputEnergy=0;outputPulse=0;
+    outputEnergy=0;outputPulse=0;outputPresence=0;
     sectionAudioMs=sectionShiftMs=0;
     // Keep the last displayed frame when paused; histories reset so it cannot
     // produce a stale beat on resume.
@@ -676,16 +690,36 @@
         }
       } catch (error) { fail(error); }
     },
-    feed(encoded,rate) {
+    feed(encoded,rate,input={}) {
       if (!options.active || destroyed || !Number.isFinite(rate) || rate<8000 || rate>192000) return;
+      if (!input || typeof input!=='object') return;
+      const format=input.format ?? 'uint8';
+      if (format!=='uint8' && format!=='float32le') return;
+      const gain=input.gain ?? 1;
+      if (!Number.isFinite(gain) || gain<0 || gain>1) return;
       const bytes=atob(encoded);
-      if (bytes.length<128 || bytes.length>4096) return;
-      // Native capture is mono 8-bit unsigned. Resample to the engines' 44.1 kHz.
-      for (let i=0;i<1024;i++) {
-        const source=bytes.length-1-(1023-i)*rate/44100;
-        waveform[i]=source<0?128:bytes.charCodeAt(Math.min(bytes.length-1,Math.round(source)));
+      const stride=format==='float32le'?4:1;
+      const count=bytes.length/stride;
+      if (!Number.isInteger(count) || count<128 || count>4096) return;
+      if (stride===4) {
+        for (let i=0;i<bytes.length;i++) captureBytes[i]=bytes.charCodeAt(i);
       }
       const time=performance.now();
+      if (Math.abs(gain-inputGain)>Math.max(gain,inputGain,1e-9)*1e-6) {
+        inputGain=gain;
+        if (Number.isFinite(lastAudio)) gainChangedAt=time;
+      }
+      // Preserve full native precision through gain compensation and FFT.
+      // Only Butterchurn's pinned waveform API needs unsigned 8-bit samples.
+      for (let i=0;i<1024;i++) {
+        const source=count-1-(1023-i)*rate/44100;
+        const index=Math.min(count-1,Math.round(source));
+        const sample=source<0?0:stride===4
+          ?captureView.getFloat32(index*4,true):(bytes.charCodeAt(index)-128)/128;
+        const value=gain>0 && Number.isFinite(sample)?sample/gain:0;
+        signal[i]=Math.max(-1,Math.min(1,value));
+        waveform[i]=Math.max(0,Math.min(255,Math.round(128+signal[i]*128)));
+      }
       audioRevision++;
       silent=false;
       fft();
