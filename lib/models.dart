@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
 
 Uint8List? decodePreview(dynamic value) {
@@ -250,6 +251,24 @@ enum LibrarySort {
     final byTitle = a.title.toLowerCase().compareTo(b.title.toLowerCase());
     return byTitle != 0 ? byTitle : a.id.compareTo(b.id);
   }
+}
+
+final _episodeNumber = RegExp(r's0*(\d+)e0*(\d+)');
+
+List<Track> sortVideoLibrary(Iterable<Track> videos, LibrarySort order) {
+  final sorted = videos.toList();
+  if (order != LibrarySort.title) return sorted..sort(order.compare);
+  final titles = {
+    for (final video in sorted)
+      video: video.title.toLowerCase().replaceAllMapped(
+        _episodeNumber,
+        (episode) => 's${episode[1]}e${episode[2]}',
+      ),
+  };
+  return sorted..sort((a, b) {
+    final result = compareNatural(titles[a]!, titles[b]!);
+    return result != 0 ? result : order.compare(a, b);
+  });
 }
 
 class MusicChat {
