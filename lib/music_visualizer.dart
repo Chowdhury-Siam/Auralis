@@ -45,13 +45,20 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   late final _web = widget.webController ?? MusicVisualizerWebController();
   late final _capture = MusicVisualizerCapture(
     canRead: () => !_sending && _ready && _active,
-    onFrame: (samples, rate) {
+    onFrame: (samples, rate, format) {
       if (!_ready || !_active || _sending) return;
+      // Desktop mpv applies a cubic software volume curve. Restore the song's
+      // dynamics for analysis before reducing it to the renderer's byte input.
+      // Android playback uses full mpv gain and retains its native capture path.
+      final gain = _windows
+          ? pow(widget.player.settings.volume / 100, 3).toDouble()
+          : 1.0;
+      final input = jsonEncode({'format': format, 'gain': gain});
       _sending = true;
       unawaited(
         _web
             .execute(
-              'window.auralisVisuals?.feed(${jsonEncode(base64Encode(samples))},$rate)',
+              'window.auralisVisuals?.feed(${jsonEncode(base64Encode(samples))},$rate,$input)',
             )
             .catchError(
               (_) => _failed('Could not send output audio to the visualizer.'),
