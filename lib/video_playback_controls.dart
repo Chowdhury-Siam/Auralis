@@ -32,12 +32,26 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       session._canPlay &&
       session._error == null;
   bool get _fullscreen => isFullscreen(context);
+  VideoGestureOptions get _gestureOptions => session._data.gestureOptions;
+  bool _gesture(VideoGesture gesture) =>
+      _gestures && _gestureOptions.enabled(gesture);
+  bool get _doubleTapGestures =>
+      _gesture(VideoGesture.seekDoubleTap) ||
+      _gesture(VideoGesture.pauseDoubleTap);
+  bool get _dragGestures => [
+    VideoGesture.swipeSeek,
+    VideoGesture.swipeVolume,
+    VideoGesture.swipeBrightness,
+    VideoGesture.pinchZoom,
+    VideoGesture.panZoom,
+  ].any(_gesture);
   final _subscriptions = <StreamSubscription<dynamic>>[];
+  final _timelineChanges = ValueNotifier(0);
   Timer? _hide, _feedbackTimer, _spaceHold;
-  bool _visible = true,
-      _exitArmed = false,
-      _remaining = true;
+  bool _spaceDown = false, _spaceBoosted = false;
+  bool _visible = true, _exitArmed = false, _remaining = true;
   _BoostInput? _boostInput;
+  double? _boostRateRequested;
   double _startRate = 1, _gestureValue = 0, _startZoom = 0;
   int _lastSeekDirection = 0, _accumulated = 0;
   Offset _tap = Offset.zero, _dragOrigin = Offset.zero;
@@ -52,6 +66,8 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   static const _transportGap = 12.0;
   DateTime? _lastZoomUpdate;
   VideoSkipSegment? _lastSegment;
+  bool _skippingSegment = false;
+  int _lastHideSeconds = 4;
 
   @override
   void initState() {
@@ -65,14 +81,15 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
         _armHide();
       }),
       player.stream.position.listen((_) {
-        final segment = session._currentSegment;
-        if (_visible || !identical(segment, _lastSegment)) _refresh();
+        final segment = session._skipButtonSegment;
+        if (_visible) _timelineChanges.value++;
+        if (!identical(segment, _lastSegment)) _refresh();
         _lastSegment = segment;
       }),
       player.stream.duration.listen((_) => _refresh()),
       player.stream.buffering.listen((_) => _refresh()),
       player.stream.buffer.listen((_) {
-        if (_visible) _refresh();
+        if (_visible) _timelineChanges.value++;
       }),
       player.stream.rate.listen((_) => _refresh()),
       player.stream.volume.listen((_) => _refresh()),
@@ -81,12 +98,34 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   }
 
   void _refresh() {
+    if (_lastHideSeconds != _gestureOptions.hideSeconds) {
+      if (_gestureOptions.hideSeconds == 0) _visible = true;
+      _armHide();
+    }
+    if (!_gestureOptions.enabled(VideoGesture.keyboard) ||
+        session._locked ||
+        !session._canPlay) {
+      _cancelSpaceHold();
+    } else if (!_gestureOptions.enabled(VideoGesture.spaceHold)) {
+      _spaceHold?.cancel();
+      _spaceHold = null;
+      _stopBoost(_BoostInput.space);
+    }
+    if (!_gesture(VideoGesture.holdSpeed)) _stopBoost(_BoostInput.pointer);
+    if (_drag == _DragMode.seek && !_gesture(VideoGesture.swipeSeek)) {
+      _drag = null;
+      _scrub = null;
+      _armHide();
+    }
     if (mounted) setState(() {});
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _cancelSpaceHold();
+    if (state != AppLifecycleState.resumed) {
+      _cancelSpaceHold();
+      _stopBoost(_BoostInput.pointer);
+    }
   }
 
   @override
@@ -100,13 +139,15 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     for (final subscription in _subscriptions) {
       unawaited(subscription.cancel());
     }
+    _timelineChanges.dispose();
     super.dispose();
   }
 
   void _armHide() {
     _hide?.cancel();
-    if (_playing && _scrub == null) {
-      _hide = Timer(const Duration(seconds: 4), () {
+    _lastHideSeconds = _gestureOptions.hideSeconds;
+    if (_playing && _scrub == null && _gestureOptions.hideSeconds > 0) {
+      _hide = Timer(Duration(seconds: _gestureOptions.hideSeconds), () {
         if (mounted) setState(() => _visible = false);
       });
     }
@@ -127,6 +168,25 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       }
     } finally {
       if (mounted) _armHide();
+    }
+  }
+
+  Future<void> _skipSegment() async {
+    if (_skippingSegment ||
+        !session._canPlay ||
+        session._opening ||
+        session._pip ||
+        session._error != null) {
+      return;
+    }
+    // Resolve at activation time, not from an older frame's button callback.
+    final segment = session._skipButtonSegment;
+    if (segment == null) return;
+    setState(() => _skippingSegment = true);
+    try {
+      await _perform(() => session._seek(segment.end));
+    } finally {
+      if (mounted) setState(() => _skippingSegment = false);
     }
   }
 
@@ -159,9 +219,10 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     });
   }
 
-  int _seekZone(double x, double width) => x < width * .36
+  int _seekZone(double x, double width) =>
+      x < width * (_gestureOptions.seekZonePercent / 100)
       ? -1
-      : x > width * .64
+      : x > width * (1 - _gestureOptions.seekZonePercent / 100)
       ? 1
       : 0;
 
@@ -195,12 +256,12 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       return;
     }
     final zone = _seekZone(details.localPosition.dx, width);
-    if (_gestures &&
+    if (_gesture(VideoGesture.seekDoubleTap) &&
         !session._data.strictDoubleTap &&
         zone != 0 &&
         zone == _lastSeekDirection) {
       _skip(zone);
-    } else {
+    } else if (_gesture(VideoGesture.tapControls)) {
       setState(() => _visible = !_visible);
       _armHide();
     }
@@ -210,9 +271,11 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     if (!_gestures) return;
     final zone = _seekZone(_tap.dx, width);
     if (zone == 0) {
+      if (!_gesture(VideoGesture.pauseDoubleTap)) return;
       unawaited(_perform(session._togglePlayback));
       _show();
     } else {
+      if (!_gesture(VideoGesture.seekDoubleTap)) return;
       _skip(zone);
     }
   }
@@ -227,7 +290,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     }
     _boostInput = input;
     _startRate = player.state.rate;
-    _boostAt(input, 2);
+    _boostAt(input, _gestureOptions.boostRate);
   }
 
   void _boostAt(_BoostInput input, double rate) {
@@ -236,12 +299,20 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       rate == 2 ? '2×' : '${rate.toStringAsFixed(2)}×',
       Icons.speed_rounded,
     );
+    // Pointer motion often remains within the same speed step. Keep feedback
+    // timing, but don't queue identical platform calls for each input pixel.
+    if (_boostRateRequested == rate) {
+      _armHide();
+      return;
+    }
+    _boostRateRequested = rate;
     unawaited(_perform(() => player.setRate(rate)));
   }
 
   void _stopBoost(_BoostInput input) {
     if (_boostInput != input) return;
     _boostInput = null;
+    _boostRateRequested = null;
     final rate = _startRate;
     if (session._canPlay) {
       unawaited(_perform(() => player.setRate(rate)));
@@ -251,22 +322,37 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   void _cancelSpaceHold() {
     _spaceHold?.cancel();
     _spaceHold = null;
+    _spaceDown = false;
+    _spaceBoosted = false;
     _stopBoost(_BoostInput.space);
   }
 
   KeyEventResult _spaceKey(KeyEvent event) {
+    if (!_gestureOptions.enabled(VideoGesture.keyboard)) {
+      return KeyEventResult.ignored;
+    }
     if (event is KeyDownEvent &&
         !event.synthesized &&
         !session._locked &&
         session._canPlay) {
-      _spaceHold ??= Timer(
-        const Duration(milliseconds: 400),
-        () => _startBoost(_BoostInput.space),
-      );
+      if (_spaceDown) return KeyEventResult.handled;
+      _spaceDown = true;
+      _spaceBoosted = false;
+      if (_gestureOptions.enabled(VideoGesture.spaceHold)) {
+        _spaceHold = Timer(
+          Duration(milliseconds: _gestureOptions.spaceHoldMs),
+          () {
+            if (_gestureOptions.enabled(VideoGesture.spaceHold)) {
+              _spaceBoosted = true;
+              _startBoost(_BoostInput.space);
+            }
+          },
+        );
+      }
     }
-    if (_spaceHold == null) return KeyEventResult.ignored;
+    if (!_spaceDown) return KeyEventResult.ignored;
     if (event is KeyUpEvent) {
-      final tap = _spaceHold!.isActive && !event.synthesized;
+      final tap = !_spaceBoosted && !event.synthesized;
       _cancelSpaceHold();
       if (tap && !session._locked) {
         unawaited(_perform(session._togglePlayback));
@@ -288,16 +374,30 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     final delta = details.localFocalPoint - _dragOrigin;
     final left = _dragOrigin.dx < size.width / 2;
     final side = left ? _FeedbackPosition.left : _FeedbackPosition.right;
-    if (details.pointerCount > 1 || (_startZoom > .02 && _drag == null)) {
+    if (details.pointerCount > 1) {
+      if (!_gesture(VideoGesture.pinchZoom) &&
+          !_gesture(VideoGesture.panZoom)) {
+        return;
+      }
+      _drag = _DragMode.zoom;
+    } else if (_startZoom > .02 &&
+        _drag == null &&
+        _gesture(VideoGesture.panZoom)) {
       _drag = _DragMode.zoom;
     }
     if (_drag == null) {
       if (delta.distance < 7) return;
       if (delta.dx.abs() >= delta.dy.abs()) {
+        if (!_gesture(VideoGesture.swipeSeek)) return;
         _drag = _DragMode.seek;
       } else {
         final brightness =
             Platform.isAndroid && left != session._data.swapSides;
+        if (!_gesture(
+          brightness ? VideoGesture.swipeBrightness : VideoGesture.swipeVolume,
+        )) {
+          return;
+        }
         _drag = brightness ? _DragMode.brightness : _DragMode.volume;
         _gestureValue = brightness
             ? (session._brightness ?? .5)
@@ -306,7 +406,11 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     }
     switch (_drag!) {
       case _DragMode.seek:
-        final span = math.min(240000, session._duration.inMilliseconds);
+        if (!_gesture(VideoGesture.swipeSeek)) return;
+        final span = math.min(
+          _gestureOptions.swipeSeekSeconds * 1000,
+          session._duration.inMilliseconds,
+        );
         final offset = (delta.dx / size.width * span).round();
         final target = Duration(
           milliseconds: (_seekOrigin.inMilliseconds + offset).clamp(
@@ -321,11 +425,15 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
           Icons.swap_horiz_rounded,
         );
       case _DragMode.volume:
+        if (!_gesture(VideoGesture.swipeVolume)) return;
         final max = session._data.volumeBoost ? 1.3 : 1.0;
-        final value = (_gestureValue - delta.dy / size.height * 1.5).clamp(
-          0.0,
-          max,
-        );
+        final value =
+            (_gestureValue -
+                    delta.dy /
+                        size.height *
+                        1.5 *
+                        _gestureOptions.swipeSensitivity)
+                .clamp(0.0, max);
         _feedbackFor(
           '${(value * 100).round()}%',
           Icons.volume_up_rounded,
@@ -333,10 +441,14 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
         );
         unawaited(_perform(() => session._setVideoVolume(value * 100)));
       case _DragMode.brightness:
-        final value = (_gestureValue - delta.dy / size.height * 1.5).clamp(
-          .01,
-          1.0,
-        );
+        if (!_gesture(VideoGesture.swipeBrightness)) return;
+        final value =
+            (_gestureValue -
+                    delta.dy /
+                        size.height *
+                        1.5 *
+                        _gestureOptions.swipeSensitivity)
+                .clamp(.01, 1.0);
         _feedbackFor(
           '${(value * 100).round()}%',
           Icons.brightness_6_rounded,
@@ -351,10 +463,18 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
           return;
         }
         _lastZoomUpdate = now;
-        final zoom = (_startZoom + math.log(details.scale) / math.ln2).clamp(
-          -1.0,
-          2.0,
-        );
+        if (!_gesture(VideoGesture.pinchZoom) &&
+            !_gesture(VideoGesture.panZoom)) {
+          return;
+        }
+        final zoom =
+            (_startZoom +
+                    (_gesture(VideoGesture.pinchZoom)
+                        ? math.log(details.scale) /
+                              math.ln2 *
+                              _gestureOptions.zoomSensitivity
+                        : 0))
+                .clamp(-1.0, 2.0);
         _feedbackFor(
           '${math.pow(2, zoom).toStringAsFixed(2)}×',
           Icons.zoom_in_rounded,
@@ -363,8 +483,12 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
           _perform(
             () => session._setZoom(
               zoom,
-              x: session._panX + details.focalPointDelta.dx / size.width * 2,
-              y: session._panY + details.focalPointDelta.dy / size.height * 2,
+              x: _gesture(VideoGesture.panZoom)
+                  ? session._panX + details.focalPointDelta.dx / size.width * 2
+                  : session._panX,
+              y: _gesture(VideoGesture.panZoom)
+                  ? session._panY + details.focalPointDelta.dy / size.height * 2
+                  : session._panY,
             ),
           ),
         );
@@ -372,7 +496,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   }
 
   void _dragEnd(ScaleEndDetails _) {
-    final target = _scrub;
+    final target = _gesture(VideoGesture.swipeSeek) ? _scrub : null;
     _drag = null;
     _scrub = null;
     if (target != null) unawaited(_perform(() => session._seek(target)));
@@ -408,6 +532,13 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
 
   KeyEventResult _keys(FocusNode node, KeyEvent event) {
     final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
+      if (event is KeyDownEvent) unawaited(_back());
+      return KeyEventResult.handled;
+    }
+    if (!_gestureOptions.enabled(VideoGesture.keyboard)) {
+      return KeyEventResult.ignored;
+    }
     if (key == LogicalKeyboardKey.space && _desktopVideo) {
       return _spaceKey(event);
     }
@@ -492,7 +623,10 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
 
   Widget _pill(
     Widget child, {
-    EdgeInsets padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+    EdgeInsets padding = const EdgeInsets.symmetric(
+      horizontal: 14,
+      vertical: 9,
+    ),
   }) => DecoratedBox(
     decoration: BoxDecoration(
       color: colors.surfaceContainerHigh.withValues(alpha: .74),
@@ -528,6 +662,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       () => session._morePanel(context, widget.video),
     );
     return Column(
+      key: const ValueKey('video-top-controls'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -728,6 +863,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       children: _zone(VideoControlZone.bottomEnd, wide),
     );
     return Column(
+      key: const ValueKey('video-bottom-controls'),
       mainAxisSize: MainAxisSize.min,
       children: [
         if (wide)
@@ -755,7 +891,13 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
             children: [left, right],
           ),
         const SizedBox(height: 2),
-        _timeline(),
+        RepaintBoundary(
+          child: ListenableBuilder(
+            key: const ValueKey('video-live-timeline'),
+            listenable: _timelineChanges,
+            builder: (context, _) => _timeline(),
+          ),
+        ),
       ],
     );
   }
@@ -843,7 +985,9 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
           ),
         ),
         InkWell(
-          onTap: () => setState(() => _remaining = !_remaining),
+          onTap: _gesture(VideoGesture.tapTime)
+              ? () => setState(() => _remaining = !_remaining)
+              : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(shownTime, style: style),
@@ -853,25 +997,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     );
   }
 
-  double _horizontalControlInset(Size viewport) {
-    final picture = applyBoxFit(
-      session._fit.boxFit,
-      session._controlReferenceSize,
-      viewport,
-    ).destination;
-    final pictureInset = picture.isEmpty
-        ? 0.0
-        : (viewport.width - picture.width) / 2;
-    // A portrait video in a wide window can be narrower than the toolbar.
-    final maxInset = math.max(10.0, (viewport.width - 380) / 2);
-    final padding = MediaQuery.paddingOf(context);
-    return math.max(
-      math.max(padding.left, padding.right),
-      math.min(10 + pictureInset, maxInset),
-    );
-  }
-
-  Widget _feedbackOverlay(String text, Size viewport, double inset) {
+  Widget _feedbackOverlay(String text, Size viewport, EdgeInsets insets) {
     final icon = Icon(_feedbackIcon, size: 20, color: colors.primary);
     final label = Text(
       text,
@@ -886,15 +1012,21 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
           child: _pill(
             Row(
               mainAxisSize: MainAxisSize.min,
-              children: [icon, const SizedBox(width: 8), Flexible(child: label)],
+              children: [
+                icon,
+                const SizedBox(width: 8),
+                Flexible(child: label),
+              ],
             ),
           ),
         ),
       );
     }
 
-    const transportWidth = _playButtonSize + 2 * (_skipButtonSize + _transportGap);
-    final sideWidth = (viewport.width - 2 * inset - transportWidth) / 2 - 6;
+    const transportWidth =
+        _playButtonSize + 2 * (_skipButtonSize + _transportGap);
+    final sideWidth =
+        (viewport.width - insets.horizontal - transportWidth) / 2 - 6;
     if (sideWidth <= 0) return const SizedBox.shrink();
     return Align(
       alignment: _feedbackPosition == _FeedbackPosition.left
@@ -984,7 +1116,10 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                   ),
                   SafeArea(
                     minimum: EdgeInsets.fromLTRB(
-                      horizontalInset, 6, horizontalInset, 2,
+                      horizontalInset,
+                      6,
+                      horizontalInset,
+                      2,
                     ),
                     child: Align(
                       alignment: Alignment.topCenter,
@@ -994,7 +1129,10 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                   Center(child: _transport()),
                   SafeArea(
                     minimum: EdgeInsets.fromLTRB(
-                      horizontalInset, 2, horizontalInset, 2,
+                      horizontalInset,
+                      2,
+                      horizontalInset,
+                      2,
                     ),
                     child: Align(
                       alignment: Alignment.bottomCenter,
@@ -1010,7 +1148,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     if (session._pip) return const SizedBox.expand();
-    final segment = session._currentSegment;
+    final segment = session._skipButtonSegment;
     return PopScope(
       canPop:
           session.widget.minimized ||
@@ -1018,7 +1156,8 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop &&
             !session.widget.minimized &&
-            (session._locked || (!_fullscreen && session.widget.onBack != null))) {
+            (session._locked ||
+                (!_fullscreen && session.widget.onBack != null))) {
           unawaited(_back());
         }
       },
@@ -1029,7 +1168,9 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
           if (!focused) _cancelSpaceHold();
         },
         child: MouseRegion(
-          onHover: (_) => _show(),
+          onHover: _gestureOptions.enabled(VideoGesture.hoverControls)
+              ? (_) => _show()
+              : null,
           child: LayoutBuilder(
             builder: (context, box) => Stack(
               fit: StackFit.expand,
@@ -1042,74 +1183,129 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                     thermalLimit: session._thermalLimit,
                   ),
                 GestureDetector(
+                  key: const ValueKey('video-gesture-surface'),
                   behavior: HitTestBehavior.opaque,
                   onTapUp: (details) => _tapUp(details, box.maxWidth),
-                  onDoubleTapDown: _gestures
+                  onDoubleTapDown: _doubleTapGestures
                       ? (details) => _tap = details.localPosition
                       : null,
-                  onDoubleTap: _gestures
+                  onDoubleTap: _doubleTapGestures
                       ? () => _doubleTap(box.maxWidth)
                       : null,
-                  onLongPressStart: _gestures
+                  onLongPressStart: _gesture(VideoGesture.holdSpeed)
                       ? (_) => _startBoost(_BoostInput.pointer)
                       : null,
-                  onLongPressMoveUpdate: _gestures
+                  onLongPressMoveUpdate: _gesture(VideoGesture.holdSpeed)
                       ? (details) {
                           final step = (details.offsetFromOrigin.dx / 40)
                               .round();
                           _boostAt(
                             _BoostInput.pointer,
-                            (2 + step * .25).clamp(.5, 3.0),
+                            (_gestureOptions.boostRate + step * .25).clamp(
+                              .5,
+                              3.0,
+                            ),
                           );
                         }
                       : null,
-                  onLongPressEnd: _gestures
+                  onLongPressEnd: _gesture(VideoGesture.holdSpeed)
                       ? (_) => _stopBoost(_BoostInput.pointer)
                       : null,
-                  onLongPressCancel: _gestures
+                  onLongPressCancel: _gesture(VideoGesture.holdSpeed)
                       ? () => _stopBoost(_BoostInput.pointer)
                       : null,
-                  onScaleStart: _gestures ? _dragStart : null,
-                  onScaleUpdate: _gestures
+                  onScaleStart: _dragGestures ? _dragStart : null,
+                  onScaleUpdate: _dragGestures
                       ? (details) => _dragUpdate(details, box.biggest)
                       : null,
-                  onScaleEnd: _gestures ? _dragEnd : null,
+                  onScaleEnd: _dragGestures ? _dragEnd : null,
                 ),
                 Builder(
                   builder: (context) {
-                    final inset = _horizontalControlInset(box.biggest);
+                    // Controls belong to the full player viewport, including
+                    // pillarboxes, not the fitted video image. SafeArea below
+                    // applies each device inset independently.
+                    const inset = 10.0;
+                    final padding = MediaQuery.paddingOf(context);
+                    final insets = EdgeInsets.only(
+                      left: math.max(inset, padding.left),
+                      right: math.max(inset, padding.right),
+                    );
                     return Stack(
                       fit: StackFit.expand,
                       children: [
                         _overlay(
-                          box.maxWidth - 2 * inset >= 640,
+                          box.maxWidth - insets.horizontal >= 640,
                           inset,
                         ),
                         if (_feedback case final String text)
                           IgnorePointer(
                             child: Padding(
-                              padding: EdgeInsets.symmetric(horizontal: inset),
-                              child: _feedbackOverlay(text, box.biggest, inset),
+                              padding: insets,
+                              child: _feedbackOverlay(
+                                text,
+                                box.biggest,
+                                insets,
+                              ),
                             ),
                           ),
                       ],
                     );
                   },
                 ),
-                if (!session._locked &&
-                    !session._pip &&
+                // This is intentionally outside the hidden/locked controls
+                // overlay: lock still blocks ordinary gestures and transport.
+                if (session._canPlay &&
+                    !session._opening &&
                     session._error == null &&
                     segment != null)
                   SafeArea(
-                    minimum: const EdgeInsets.symmetric(horizontal: 16),
+                    minimum: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Align(
                       alignment: const AlignmentDirectional(.95, .4),
-                      child: FilledButton.tonalIcon(
-                        onPressed: () => unawaited(
-                          _perform(() => session._seek(segment.end)),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: math.max(
+                            0,
+                            math.min(280, box.maxWidth - 32),
+                          ),
                         ),
-                        icon: const Icon(Icons.fast_forward_rounded),
-                        label: Text('Skip ${segment.label}'),
+                        child: Tooltip(
+                          message: 'Skip to ${clockText(segment.end)}',
+                          child: FilledButton.tonalIcon(
+                            key: const ValueKey('video-skip-segment'),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(0, 48),
+                            ),
+                            onPressed: _skippingSegment
+                                ? null
+                                : () => unawaited(_skipSegment()),
+                            icon: const Icon(Icons.fast_forward_rounded),
+                            label: Text(
+                              segment.buttonLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (!session._locked &&
+                    !_visible &&
+                    !_gesture(VideoGesture.tapControls) &&
+                    session._error == null)
+                  SafeArea(
+                    minimum: const EdgeInsets.all(12),
+                    child: Align(
+                      alignment: AlignmentDirectional.topEnd,
+                      child: _button(
+                        'Show controls',
+                        Icons.touch_app_rounded,
+                        () async => _show(),
                       ),
                     ),
                   ),
@@ -1194,7 +1390,7 @@ class _VideoMarkers extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _VideoMarkers oldDelegate) =>
-      oldDelegate.marks != marks ||
+      !listEquals(oldDelegate.marks, marks) ||
       oldDelegate.accent != accent ||
       oldDelegate.base != base;
 }
