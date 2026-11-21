@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:auralis/lyrics.dart';
+import 'package:auralis/lyrics_added_translation.dart';
 import 'package:auralis/telegram/embedded_cover.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,6 +34,63 @@ Future<String?> extract(Uint8List data) => readEmbeddedLyrics(
 );
 
 void main() {
+  for (final extension in ['mp3', 'flac', 'm4a']) {
+    test(
+      'bilingual $extension metadata round-trip preserves original audio and source file',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('auralis-bilingual-');
+        addTearDown(() => dir.delete(recursive: true));
+        final source = File('${dir.path}/source.$extension');
+        final audio = List<int>.generate(1024, (index) => index % 251);
+        final ftyp = atom('ftyp', 'M4A 0000'.codeUnits);
+        final mp3Tag = tag('TIT2', [3, ...utf8.encode('Title')]);
+        final original = switch (extension) {
+          'mp3' => Uint8List.fromList([
+            ...mp3Tag.take(mp3Tag.length - 1024),
+            ...audio,
+          ]),
+          'flac' => Uint8List.fromList([
+            ...'fLaC'.codeUnits,
+            128,
+            0,
+            0,
+            34,
+            ...List.filled(34, 0),
+            ...audio,
+          ]),
+          _ => Uint8List.fromList([
+            ...ftyp,
+            ...atom('mdat', audio),
+            ...atom(
+              'moov',
+              atom('udta', atom('meta', [0, 0, 0, 0, ...atom('ilst', [])])),
+            ),
+          ]),
+        };
+        await source.writeAsBytes(original);
+        final bilingual = addLyricsTranslation(
+          Lyrics.parse('[00:01.123]日本語\n[00:03.456]次の行'),
+          'English\nNext line',
+        );
+        final output = File(
+          await writeEmbeddedLyrics(
+            source,
+            dir,
+            bilingual.timestampedText,
+            name: 'bilingual',
+          ),
+        );
+        final bytes = await output.readAsBytes();
+        final parsed = Lyrics.parse((await extract(bytes))!);
+        expect(parsed.timestampedText, bilingual.timestampedText);
+        expect(await source.readAsBytes(), original);
+        final start = extension == 'm4a'
+            ? ftyp.length + 8
+            : bytes.length - audio.length;
+        expect(bytes.sublist(start, start + audio.length), audio);
+      },
+    );
+  }
   for (final version in [2, 3, 4]) {
     test(
       'ID3v2.$version reads embedded plain and LRC Unicode lyrics without audio',
