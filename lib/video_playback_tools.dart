@@ -46,11 +46,14 @@ extension _VideoPlaybackTools on _VideoPlaybackState {
 
   Future<void> _skipSegmentsPanel(BuildContext context) async {
     final id = _source.id;
-    final active = _currentSegment;
+    final active = _skipButtonSegment;
     final chapterSegments = videoChapterSegments(_chapters, _duration)
-        .where((candidate) => !_segments.any(
-          (saved) => candidate.start < saved.end && saved.start < candidate.end,
-        ))
+        .where(
+          (candidate) => !_segments.any(
+            (saved) =>
+                candidate.start < saved.end && saved.start < candidate.end,
+          ),
+        )
         .take(math.max(0, 30 - _segments.length))
         .toList();
     final action = await _choose<_PanelAction>(context, 'Skip segments', [
@@ -72,7 +75,7 @@ extension _VideoPlaybackTools on _VideoPlaybackState {
       if (active != null)
         (
           value: () => _seek(active.end),
-          label: 'Skip ${active.label}',
+          label: active.buttonLabel,
           selected: false,
         ),
       (
