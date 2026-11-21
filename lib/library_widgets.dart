@@ -97,28 +97,79 @@ class _LibraryCollectionPagerState extends State<LibraryCollectionPager> {
               }
             },
             itemBuilder: (context, index) => _LibraryCollectionPage(
-              child: AnimatedBuilder(
-                animation: _controller,
+              child: _LibraryPageVisibility(
+                controller: _controller,
+                index: index,
+                fallback: widget.index,
                 child: widget.itemBuilder(context, index),
-                builder: (context, child) {
-                  final page =
-                      _controller.hasClients &&
-                          _controller.position.hasContentDimensions
-                      ? _controller.page ?? widget.index.toDouble()
-                      : widget.index.toDouble();
-                  final visible = (page - index).abs() < .9999;
-                  // Retain scroll state, but remove settled off-screen pages
-                  // from focus, hit testing and accessibility traversal.
-                  return Offstage(
-                    offstage: !visible,
-                    child: TickerMode(enabled: visible, child: child!),
-                  );
-                },
               ),
             ),
           ),
         ),
       );
+}
+
+/// Only the visible/offstage crossing changes widgets, not every scroll pixel.
+/// PageView still lays out and animates each frame with the original timing.
+class _LibraryPageVisibility extends StatefulWidget {
+  const _LibraryPageVisibility({
+    required this.controller,
+    required this.index,
+    required this.fallback,
+    required this.child,
+  });
+  final PageController controller;
+  final int index, fallback;
+  final Widget child;
+
+  @override
+  State<_LibraryPageVisibility> createState() => _LibraryPageVisibilityState();
+}
+
+class _LibraryPageVisibilityState extends State<_LibraryPageVisibility> {
+  late bool _visible;
+  bool get _isVisible {
+    final controller = widget.controller;
+    final page =
+        controller.hasClients && controller.position.hasContentDimensions
+        ? controller.page ?? widget.fallback.toDouble()
+        : widget.fallback.toDouble();
+    return (page - widget.index).abs() < .9999;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _visible = _isVisible;
+    widget.controller.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(_LibraryPageVisibility oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_changed);
+      widget.controller.addListener(_changed);
+    }
+    _visible = _isVisible;
+  }
+
+  void _changed() {
+    final visible = _isVisible;
+    if (_visible != visible) setState(() => _visible = visible);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Offstage(
+    offstage: !_visible,
+    child: TickerMode(enabled: _visible, child: widget.child),
+  );
 }
 
 class _LibraryCollectionPage extends StatefulWidget {
