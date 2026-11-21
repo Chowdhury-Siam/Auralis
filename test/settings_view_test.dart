@@ -94,8 +94,15 @@ void main() {
     expect(find.byKey(const ValueKey('settings-video')), findsNothing);
     expect(find.byKey(const ValueKey('settings-search')), findsNothing);
     expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('settings-cache')));
+    await tester.pumpAndSettle();
+    expect(find.text('Music cache'), findsOneWidget);
+    expect(find.text('Cover artwork'), findsOneWidget);
+    expect(find.text('Video thumbnails'), findsNothing);
+    await tester.tap(find.byTooltip('Back to Settings'));
+    await tester.pumpAndSettle();
     for (final section in SettingsSection.values.where(
-      (section) => section != SettingsSection.video,
+      (section) => section != SettingsSection.video && section != SettingsSection.cache,
     )) {
       await tester.ensureVisible(
         find.byKey(ValueKey('settings-${section.name}')),
