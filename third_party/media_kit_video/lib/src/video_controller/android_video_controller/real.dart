@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:synchronized/synchronized.dart';
 
 import 'package:media_kit/media_kit.dart';
@@ -23,7 +24,8 @@ import 'package:media_kit_video/src/video_controller/platform_video_controller.d
 /// The [PlatformVideoController] implementation based on native JNI & C/C++ used on Android.
 ///
 /// {@endtemplate}
-class AndroidVideoController extends PlatformVideoController {
+class AndroidVideoController extends PlatformVideoController
+    with WidgetsBindingObserver {
   /// Whether [AndroidVideoController] is supported on the current platform or not.
   static bool get supported => Platform.isAndroid;
 
@@ -78,7 +80,8 @@ class AndroidVideoController extends PlatformVideoController {
         waitUntilFirstFrameRenderedCompleter.complete();
       }
       if (previousSurface != 0) {
-        await _channel.invokeMethod('VideoOutputManager.ReleaseSurfaceReference', {
+        await _channel
+            .invokeMethod('VideoOutputManager.ReleaseSurfaceReference', {
           'handle': handle.toString(),
           'reference': previousSurface.toString(),
         });
@@ -208,7 +211,7 @@ class AndroidVideoController extends PlatformVideoController {
       },
     );
 
-    // Return the [PlatformVideoController].
+    WidgetsBinding.instance.addObserver(controller);
     return controller;
   }
 
@@ -228,8 +231,31 @@ class AndroidVideoController extends PlatformVideoController {
     );
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Android can trim the renderer's ImageReader while leaving mpv and its
+    // dimensions intact. Reattach even when video parameters never change.
+    if (state == AppLifecycleState.resumed && _surfaceBounds != null) {
+      unawaited(_ensureSurface());
+    }
+  }
+
+  Future<void> _ensureSurface() async {
+    try {
+      final handle = await player.handle;
+      if (platform.disposed || _controllers[handle] != this) return;
+      await _channel.invokeMethod<void>(
+        'VideoOutputManager.EnsureSurface',
+        {'handle': handle.toString()},
+      );
+    } on PlatformException catch (error) {
+      debugPrint('Video surface could not be restored: ${error.code}');
+    }
+  }
+
   /// Disposes the instance. Releases allocated resources back to the system.
   Future<void> _dispose() async {
+    WidgetsBinding.instance.removeObserver(this);
     await videoParamsSubscription?.cancel();
     final handle = await player.handle;
     _controllers.remove(handle);
