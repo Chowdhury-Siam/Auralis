@@ -46,7 +46,8 @@ MusicVisualizer::MusicVisualizer(flutter::BinaryMessenger* messenger) {
         if (samples.empty()) result->Success();
         else result->Success(EncodableValue(EncodableMap{
           {EncodableValue("samples"), EncodableValue(std::move(samples))},
-          {EncodableValue("rate"), EncodableValue(rate)}
+          {EncodableValue("rate"), EncodableValue(rate)},
+          {EncodableValue("format"), EncodableValue("float32le")}
         }));
       }
     } else {
@@ -107,7 +108,9 @@ void MusicVisualizer::Capture() {
     if (FAILED(hr)) return hr;
     hr = client->Start();
     if (FAILED(hr)) return hr;
-    std::vector<uint8_t> ring(1024, 128);
+    // Preserve quiet samples before compensating the player's software gain.
+    // Reducing them to 8-bit here loses the music at low listening volumes.
+    std::vector<float> ring(1024, 0.0f);
     size_t cursor = 0;
     status_ = 2;
     while (running_) {
@@ -150,7 +153,7 @@ void MusicVisualizer::Capture() {
             }
             mono /= format->nChannels;
           }
-          ring[cursor] = static_cast<uint8_t>(std::clamp(mono * 127.0 + 128.0, 0.0, 255.0));
+          ring[cursor] = static_cast<float>(std::clamp(mono, -1.0, 1.0));
           cursor = (cursor + 1) % ring.size();
         }
         hr = reader->ReleaseBuffer(frames);
@@ -165,9 +168,11 @@ void MusicVisualizer::Capture() {
       if (changed) {
         std::lock_guard<std::mutex> lock(mutex_);
         rate_ = static_cast<int>(format->nSamplesPerSec);
-        samples_.resize(ring.size());
-        for (size_t i = 0; i < ring.size(); ++i)
-          samples_[i] = ring[(cursor + i) % ring.size()];
+        samples_.resize(ring.size() * sizeof(float));
+        for (size_t i = 0; i < ring.size(); ++i) {
+          const float sample = ring[(cursor + i) % ring.size()];
+          std::memcpy(samples_.data() + i * sizeof(float), &sample, sizeof(sample));
+        }
       }
       Sleep(15);
     }
