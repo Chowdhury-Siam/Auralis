@@ -261,6 +261,34 @@ void main() {
         tester.getTopLeft(find.text('Song -1')).dy,
         lessThan(tester.getTopLeft(find.text('Song -2')).dy),
       );
+      player.settings.listening.record(
+        const Track(
+          id: '-2:1',
+          title: 'Song -2',
+          artist: 'Artist',
+          source: 'Channel -2',
+        ),
+        1000,
+        5,
+        DateTime(2026, 11, 21),
+      );
+      await tester.tap(find.byTooltip('Sort Library'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(PopupMenuItem<LibrarySort>, 'Most played'),
+      );
+      await tester.pumpAndSettle();
+      expect(player.settings.librarySort, LibrarySort.mostPlayed);
+      expect(
+        tester.getTopLeft(find.text('Song -2')).dy,
+        lessThan(tester.getTopLeft(find.text('Song -1')).dy),
+      );
+      await tester.tap(find.byTooltip('Sort Library'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(PopupMenuItem<LibrarySort>, 'Title (A–Z)'),
+      );
+      await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'Channel -2');
       await tester.pumpAndSettle();
       expect(find.byTooltip('Track actions for Song -1'), findsNothing);
@@ -385,7 +413,9 @@ void main() {
       await tester.tap(find.text('Channel -1').first);
       await tester.pumpAndSettle();
       expect(find.text('1 track'), findsOneWidget);
-      expect(player.settings.selectedChannels.map((channel) => channel.id), [-2]);
+      expect(player.settings.selectedChannels.map((channel) => channel.id), [
+        -2,
+      ]);
       await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Track actions for Song -1'), findsNothing);
