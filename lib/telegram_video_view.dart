@@ -87,7 +87,7 @@ class _VideoResults {
       sorted = null;
       sortOrder = order;
     }
-    return sorted ??= (videos.values.toList()..sort(order.compare));
+    return sorted ??= sortVideoLibrary(videos.values, order);
   }
 
   bool recentPending = true;
@@ -1188,6 +1188,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
               selected: selected,
               artwork: _VideoArtwork(
                 telegram: _telegram,
+                title: channel.title,
                 fileId: channel.photoFileId,
                 preview: channel.photoPreview,
                 placeholderIcon: Icons.video_library_outlined,
@@ -1228,6 +1229,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   Widget _videoArtwork(Track video, {bool watched = false}) {
     final artwork = _VideoArtwork(
       telegram: _telegram,
+      title: video.title,
       fileId: video.coverFileId,
       preview: video.coverPreview,
     );
@@ -1447,12 +1449,14 @@ class _VideoListRow extends StatelessWidget {
 class _VideoArtwork extends StatelessWidget {
   const _VideoArtwork({
     required this.telegram,
+    required this.title,
     required this.fileId,
     required this.preview,
     this.placeholderIcon = Icons.movie_outlined,
   });
 
   final TelegramService telegram;
+  final String title;
   final int? fileId;
   final Uint8List? preview;
   final IconData placeholderIcon;
@@ -1478,7 +1482,7 @@ class _VideoArtwork extends StatelessWidget {
     return thumbnail == null
         ? fallback
         : FutureBuilder<Uint8List?>(
-            future: telegram.image(thumbnail),
+            future: telegram.videoThumbnail(thumbnail, title),
             builder: (context, snapshot) => snapshot.data == null
                 ? fallback
                 : Image.memory(
