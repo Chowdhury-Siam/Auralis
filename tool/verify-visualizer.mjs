@@ -435,6 +435,53 @@ hold(tone(86,1),3000);
 capture(tone(86,4));
 assert(lastLevels.instant[0]>1.3,'A preceding loud passage must not suppress the next quiet beat');
 api.configure({fps:30});
+// Keep the same song and its dynamics while changing mpv's cubic volume.
+// Float capture must retain the signal even when 8-bit capture would be silent.
+function capturedFloatTone(frequency,amplitude,gain) {
+  const samples=Buffer.alloc(4096);
+  for (let i=0;i<1024;i++) {
+    samples.writeFloatLE(amplitude*gain*Math.sin(2*Math.PI*frequency*i/44100),i*4);
+  }
+  return samples.toString('base64');
+}
+api.configure({song:'listening volume regression',cycle:true,fps:30,songMotion:true});
+const volumePresets=loaded.length;
+let referenceLevel,referenceOpacity;
+for (const volume of [100,75,50,25,10,1,25,50,100,1]) {
+  const gain=(volume/100)**3;
+  for (let i=0;i<90;i++) {
+    api.feed(capturedFloatTone(1200,.1,gain),44100,{format:'float32le',gain});
+    advance(34);
+  }
+  if (referenceLevel===undefined) {
+    referenceLevel=lastLevels.instant[1];
+    referenceOpacity=Number(milkStyle.opacity);
+  }
+  assert(Math.abs(lastLevels.instant[1]-referenceLevel)<.002,
+    `Listening volume ${volume}% must preserve the song's measured energy`);
+  assert(Math.abs(Number(milkStyle.opacity)-referenceOpacity)<.003,
+    'The canvas must not fade away when listening volume changes');
+  assert(scale()<1.001,'A volume change must not become a musical beat');
+}
+assert.equal(loaded.length,volumePresets,'Volume changes must not change song sections');
+api.feed(capturedFloatTone(1200,.4,.000001),44100,{format:'float32le',gain:.000001});
+advance(34);
+assert(scale()>1.002,'A genuine beat must still respond at one percent volume');
+const quietGain=.000001;
+for (let i=0;i<90;i++) {
+  api.feed(capturedFloatTone(1200,.002,quietGain),44100,{format:'float32le',gain:quietGain});
+  advance(34);
+}
+assert(Number(milkStyle.opacity)>.8,'An actual quiet passage must remain visible');
+const muted=Buffer.alloc(4096).toString('base64');
+for (let i=0;i<60;i++) {
+  api.feed(muted,44100,{format:'float32le',gain:0});advance(34);
+}
+assert(lastLevels.instant.every(value=>value===0),'Mute must not synthesize music');
+assert(Number(milkStyle.opacity)<.01,'True silence must still release the visual response');
+api.feed(Buffer.alloc(4097).toString('base64'),44100,{format:'float32le',gain:1});
+api.feed(muted,44100,{format:'unsupported',gain:1});
+api.feed(muted,44100,{format:'float32le',gain:NaN});
 api.configure({mode:'visualizer',active:true,cycle:false,song:'Japanese song'});
 const firstEquation=lastPreset.frame_eqs_str;
 const nextSet=new Set();
@@ -506,4 +553,4 @@ secondSession.destroy();
 const html=fs.readFileSync(`${root}assets/visualizer/index.html`,'utf8');
 assert.match(html, /#spectrum canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/,
   'Spectrum canvases must fill the CSS panel at every pixel density');
-console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, quiet beat thresholds at every frame limit, held-note rejection, loud-to-quiet recovery, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, Android and Windows adaptation/recovery, refresh-aware pacing, DPI, section-driven cycling, softened blends, lazy preset loading, persistent rotation and cleanup.');
+console.log('Visualizer bridge checks passed: real Butterchurn audio/equation energy, quiet beat thresholds at every frame limit, float capture and cubic volume compensation, held-note rejection, loud-to-quiet recovery, sustained loud/quiet contrast, independent bands, silence/stale release, unmodified samples, lazy presets, FFT tables, Android and Windows adaptation/recovery, refresh-aware pacing, DPI, section-driven cycling, softened blends, lazy preset loading, persistent rotation and cleanup.');
