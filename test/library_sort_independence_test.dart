@@ -16,6 +16,48 @@ import 'package:flutter_test/flutter_test.dart';
 import 'fakes.dart';
 
 void main() {
+  test('Video title sort ignores padding and orders seasons and episodes numerically', () {
+    final titles = [
+      'S10E1',
+      'S01E10',
+      'S01E3',
+      'S02E01',
+      'S01E1',
+      'S01E11',
+      'S01E01',
+      'S1E2',
+    ];
+    final videos = [
+      for (var index = 0; index < titles.length; index++)
+        Track(
+          id: '$index',
+          title: titles[index],
+          artist: '',
+          source: 'Video',
+          date: index + 1,
+          duration: Duration(minutes: index + 1),
+        ),
+    ];
+    expect(
+      sortVideoLibrary(videos, LibrarySort.title).map((video) => video.title),
+      [
+        'S01E01',
+        'S01E1',
+        'S1E2',
+        'S01E3',
+        'S01E10',
+        'S01E11',
+        'S02E01',
+        'S10E1',
+      ],
+    );
+    for (final order in LibrarySort.videoValues.where(
+      (value) => value != LibrarySort.title,
+    )) {
+      expect(sortVideoLibrary(videos, order), [...videos]..sort(order.compare));
+    }
+  });
+
   test(
     'Most played sorts by recorded plays, not time, with stable title/ID ties',
     () {
