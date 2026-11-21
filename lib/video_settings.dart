@@ -339,6 +339,14 @@ class VideoSettingsOptions extends StatelessWidget {
                       _data.gestures,
                       (value) => _data.gestures = value,
                     ),
+                    TextButton.icon(
+                      onPressed: () async {
+                        await _gesturePanel(context);
+                        if (context.mounted) update(() {});
+                      },
+                      icon: const Icon(Icons.touch_app_outlined),
+                      label: const Text('Customize each gesture'),
+                    ),
                     toggle(
                       'Require double tap for every seek',
                       _data.strictDoubleTap,
@@ -423,6 +431,150 @@ class VideoSettingsOptions extends StatelessWidget {
                     ],
                   ),
                 ],
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(dialog),
+                child: const Text('Done'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _gesturePanel(BuildContext context) async {
+    await showAuralisDialog<void>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (context, update) {
+          void change(VoidCallback action) {
+            update(action);
+            _saveVideoSettings(context, settings, onChanged);
+          }
+
+          Widget choice<T>(
+            String title,
+            T value,
+            List<T> values,
+            String Function(T) label,
+            ValueChanged<T> set,
+          ) => PreferenceChoice<T>(
+            title: title,
+            value: value,
+            values: values,
+            label: label,
+            onSelected: (value) => change(() => set(value)),
+          );
+          final options = _data.gestureOptions;
+          final desktop =
+              Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+          return VideoSettingsDialog(
+            title: 'Gesture customization',
+            icon: Icons.touch_app_outlined,
+            description:
+                'Toggle each input independently. The master Tap and swipe switch '
+                'still controls touch gestures. Buttons, Back/unlock and the locked skip button stay available.',
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                VideoSettingsGroup(
+                  title: 'Individual gestures',
+                  children: [
+                    for (final gesture in VideoGesture.values)
+                      if ((gesture != VideoGesture.swipeBrightness ||
+                              Platform.isAndroid) &&
+                          (gesture != VideoGesture.spaceHold || desktop))
+                        SwitchListTile(
+                          key: ValueKey('video-gesture-${gesture.name}'),
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(gesture.label),
+                          value: options.enabled(gesture),
+                          onChanged: (value) =>
+                              change(() => options.setEnabled(gesture, value)),
+                        ),
+                  ],
+                ),
+                VideoSettingsGroup(
+                  title: 'Sensitivity & timing',
+                  children: [
+                    choice<int>(
+                      'Side seek zones',
+                      options.seekZonePercent,
+                      [25, 30, 36, 40],
+                      (value) => '$value% each side',
+                      (value) => options.seekZonePercent = value,
+                    ),
+                    choice<int>(
+                      'Swipe seek range',
+                      options.swipeSeekSeconds,
+                      [30, 60, 120, 240, 600],
+                      (value) => '$value seconds per width',
+                      (value) => options.swipeSeekSeconds = value,
+                    ),
+                    choice<double>(
+                      'Volume / brightness sensitivity',
+                      options.swipeSensitivity,
+                      [.5, 1, 1.5, 2],
+                      (value) => '$value×',
+                      (value) => options.swipeSensitivity = value,
+                    ),
+                    choice<double>(
+                      'Pinch zoom sensitivity',
+                      options.zoomSensitivity,
+                      [.5, 1, 1.5, 2],
+                      (value) => '$value×',
+                      (value) => options.zoomSensitivity = value,
+                    ),
+                    choice<double>(
+                      'Temporary speed',
+                      options.boostRate,
+                      [1.25, 1.5, 1.75, 2, 2.5, 3],
+                      (value) => '$value×',
+                      (value) => options.boostRate = value,
+                    ),
+                    if (desktop)
+                      choice<int>(
+                        'Space-hold delay',
+                        options.spaceHoldMs,
+                        [250, 400, 600, 800],
+                        (value) => '$value ms',
+                        (value) => options.spaceHoldMs = value,
+                      ),
+                    choice<int>(
+                      'Hide controls after',
+                      options.hideSeconds,
+                      [0, 2, 4, 6, 10],
+                      (value) => value == 0 ? 'Never' : '$value seconds',
+                      (value) => options.hideSeconds = value,
+                    ),
+                  ],
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    final confirmed = await confirmAuralisAction(
+                      context,
+                      title: 'Reset video gestures?',
+                      message:
+                          'Restore gesture switches, sensitivity, timing, seek interval and sides. '
+                          'Other Video and Music settings are unchanged.',
+                      confirmLabel: 'Reset gestures',
+                    );
+                    if (confirmed == true && context.mounted) {
+                      change(() {
+                        _data.gestureOptions = VideoGestureOptions();
+                        _data.gestures = true;
+                        _data.strictDoubleTap = false;
+                        _data.swapSides = false;
+                        _data.seekSeconds = 10;
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  label: const Text('Reset gestures'),
+                ),
               ],
             ),
             actions: [
