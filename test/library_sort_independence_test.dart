@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:auralis/app.dart';
 import 'package:auralis/models.dart';
+import 'package:auralis/data_backup.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/preference_widgets.dart';
 import 'package:auralis/storage.dart';
@@ -16,13 +17,47 @@ import 'fakes.dart';
 
 void main() {
   test(
+    'Most played sorts by recorded plays, not time, with stable title/ID ties',
+    () {
+      const tracks = [
+        Track(id: 'z', title: 'Alpha', artist: '', source: ''),
+        Track(id: 'a', title: 'alpha', artist: '', source: ''),
+        Track(id: 'b', title: 'Beta', artist: '', source: ''),
+        Track(id: 'c', title: 'Never played', artist: '', source: ''),
+      ];
+      final counts = {'z': 4, 'a': 4, 'b': 12};
+      List<String> order() =>
+          (tracks.toList()..sort(
+                (a, b) => LibrarySort.mostPlayed.compare(
+                  a,
+                  b,
+                  playCount: (id) => counts[id] ?? 0,
+                ),
+              ))
+              .map((track) => track.id)
+              .toList();
+      expect(order(), ['b', 'a', 'z', 'c']);
+      counts['c'] = 20;
+      expect(order(), ['c', 'b', 'a', 'z']);
+      counts.clear();
+      expect(order(), ['a', 'z', 'b', 'c']);
+      final settings = MemorySettings()..librarySort = LibrarySort.mostPlayed;
+      final backup = DataBackup.create(settings, DateTime.utc(2026));
+      expect(
+        DataBackup.parse(backup.encode()).snapshot['librarySort'],
+        'mostPlayed',
+      );
+    },
+  );
+
+  test(
     'Music and Video sort choices persist separately across restarts',
     () async {
       final directory = await Directory.systemTemp.createTemp('auralis-sort-');
       addTearDown(() => directory.delete(recursive: true));
       final file = File('${directory.path}/settings.json');
       for (final music in LibrarySort.values) {
-        for (final video in LibrarySort.values) {
+        for (final video in LibrarySort.videoValues) {
           final settings = AppSettings(file)..librarySort = music;
           settings.videoPlayback.librarySort = video;
           await settings.save();
@@ -77,6 +112,12 @@ void main() {
       'librarySort': 'unknown',
     });
     expect(settings.videoPlayback.librarySort, LibrarySort.title);
+    expect(
+      VideoPlaybackData.fromJson({
+        'librarySort': 'mostPlayed',
+      }, fallbackSort: LibrarySort.mostPlayed).librarySort,
+      LibrarySort.title,
+    );
     settings.videoPlayback.librarySort = LibrarySort.newest;
     final musicSnapshot = settings.toJson()..['librarySort'] = 'oldest';
     expect(musicSnapshot.containsKey('_videoPlayback'), isFalse);
@@ -146,7 +187,8 @@ void main() {
             preference,
           );
           expect(choice.value, video ? beforeVideo : beforeMusic);
-          final next = video ? LibrarySort.artist : LibrarySort.duration;
+          expect(choice.values.contains(LibrarySort.mostPlayed), !video);
+          final next = video ? LibrarySort.artist : LibrarySort.mostPlayed;
           final trigger = find.byTooltip(
             'Library sort order: ${choice.value.label}',
           );
