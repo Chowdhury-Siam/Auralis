@@ -165,6 +165,7 @@ Widget view(
   Future<Lyrics?> Function(Track)? embedded,
   DataFiles files = const DataFiles(),
   Future<void> Function(String) openLink = openExternalLink,
+  Future<void> Function(Track, Lyrics, {required bool publish})? saveSong,
 }) => MaterialApp(
   theme: ThemeData.dark().copyWith(
     textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Segoe UI'),
@@ -178,6 +179,7 @@ Widget view(
         loadEmbedded: embedded,
         files: files,
         openLink: openLink,
+        saveSongWithLyrics: saveSong,
         artwork: const Icon(Icons.album),
         onBack: () {},
       ),
@@ -194,6 +196,116 @@ void main() {
   });
   tearDown(() {
     wakelock.wakelockPlusPlatformInstance = originalScreenAwake;
+  });
+
+  for (final size in [const Size(390, 844), const Size(1280, 800)]) {
+    testWidgets(
+      'DeepL adds bilingual lyrics and explicitly exports both at $size',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = size;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final player = controller();
+        const taggedSong = Track(
+          id: 'tagged',
+          title: 'Song',
+          artist: 'Artist',
+          source: 'Music',
+          fileId: 1,
+          size: 100,
+        );
+        player.queue[0] = taggedSong;
+        final original = Lyrics.parse('[00:00]日本語\n[00:03]次の行');
+        final repository = LyricsRepository()..save(taggedSong, original);
+        addTearDown(player.shutdown);
+        addTearDown(repository.close);
+        Lyrics? exported;
+        await tester.pumpWidget(
+          view(
+            player,
+            repository,
+            saveSong: (track, lyrics, {required publish}) async {
+              expect(track, same(taggedSong));
+              expect(publish, isFalse);
+              exported = lyrics;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        await chooseTranslation(tester, 'Translate with DeepL');
+        await tester.tap(find.text('Add translation').last);
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField).last, 'Mismatch');
+        await tester.tap(find.widgetWithText(TextButton, 'Add translation'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Use one translated line'), findsOneWidget);
+        expect(repository.addedTranslation(taggedSong, original), isNull);
+        await tester.enterText(
+          find.byType(TextField).last,
+          'English\nNext line',
+        );
+        await tester.tap(find.text('Add & save song'));
+        await tester.pumpAndSettle();
+        expect(exported, isNotNull);
+        expect(exported!.lines.first.text, '日本語\nEnglish');
+        expect(repository.cached(taggedSong), same(original));
+        expect(find.text('日本語\nEnglish'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+
+  testWidgets('cancelled/stale additions cannot change a different song', (
+    tester,
+  ) async {
+    final player = controller();
+    final original = Lyrics.parse('[00:00]Original');
+    final repository = LyricsRepository()
+      ..save(song, original)
+      ..save(second, Lyrics.parse('[00:00]Second'));
+    addTearDown(player.shutdown);
+    addTearDown(repository.close);
+    await tester.pumpWidget(view(player, repository));
+    await tester.pumpAndSettle();
+    await chooseTranslation(tester, 'Add translation');
+    await tester.enterText(find.byType(TextField).last, 'Cancelled');
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(repository.addedTranslation(song, original), isNull);
+    await chooseTranslation(tester, 'Add translation');
+    await tester.enterText(find.byType(TextField).last, 'Stale');
+    player.queue.add(second);
+    player.index = 1;
+    player.notifyListeners();
+    await tester.pump();
+    await tester.tap(find.widgetWithText(TextButton, 'Add translation'));
+    await tester.pumpAndSettle();
+    expect(repository.addedTranslation(song, original), isNull);
+    expect(repository.cached(second)!.plain, 'Second');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('manual translation wins a late automatic provider response', (
+    tester,
+  ) async {
+    final player = controller()..settings.automaticTranslation = true;
+    final original = Lyrics.parse('[00:00]日本語');
+    final repository = TranslationLyrics()..save(song, original);
+    addTearDown(player.shutdown);
+    addTearDown(repository.close);
+    await tester.pumpWidget(view(player, repository));
+    await tester.pump();
+    expect(repository.translations, 1);
+    await repository.addTranslation(song, original, 'Manual English');
+    await tester.pump();
+    repository.result.complete(Lyrics.parse('[00:00]日本語\n[00:00]Automatic'));
+    await tester.pumpAndSettle();
+    expect(find.text('日本語\nManual English'), findsOneWidget);
+    expect(find.textContaining('Automatic'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets(
@@ -582,7 +694,7 @@ void main() {
         final before = opened.length, oldClipboard = copied;
         await chooseTranslation(tester, 'Translate with DeepL');
         expect(
-          find.textContaining('Results stay in the browser.'),
+          find.textContaining('Then use Add translation here'),
           findsOneWidget,
         );
         await tester.tap(find.text('Cancel'));
