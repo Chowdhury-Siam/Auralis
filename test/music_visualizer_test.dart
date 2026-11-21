@@ -201,7 +201,7 @@ void main() {
         return null;
       });
       final capture = MusicVisualizerCapture(
-        onFrame: (_, _) => frames++,
+        onFrame: (_, _, _) => frames++,
         onError: errors.add,
       );
       capture.setActive(true);
@@ -220,6 +220,86 @@ void main() {
     },
   );
 
+  testWidgets(
+    'capture validates float frames and retains legacy waveform support',
+    (tester) async {
+      final received = <(int, int, String)>[];
+      final frames = [
+        {'samples': Uint8List(4096), 'rate': 48000, 'format': 'float32le'},
+        {'samples': Uint8List(513), 'rate': 48000, 'format': 'float32le'},
+        {'samples': Uint8List(16388), 'rate': 48000, 'format': 'float32le'},
+        {'samples': Uint8List(4096), 'rate': 48000, 'format': 'unsupported'},
+        {'samples': Uint8List(1024), 'rate': 44100},
+      ];
+      var next = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'read' && next < frames.length) {
+          return frames[next++];
+        }
+        return null;
+      });
+      final capture = MusicVisualizerCapture(
+        onFrame: (samples, rate, format) =>
+            received.add((samples.length, rate, format)),
+        onError: (_) => fail('No capture error expected'),
+      );
+      capture.setActive(true);
+      await tester.pump();
+      for (var i = 0; i < frames.length; i++) {
+        await tester.pump(const Duration(milliseconds: 34));
+      }
+      expect(received, [(4096, 48000, 'float32le'), (1024, 44100, 'uint8')]);
+      await capture.dispose();
+    },
+  );
+
+  testWidgets('desktop volume compensation follows each captured frame', (
+    tester,
+  ) async {
+    final settings = MemorySettings()..volume = 25;
+    final player = PlayerController(
+      FakeAudio()..playing = true,
+      TelegramStreamProxy((_) async => {}),
+      settings,
+    );
+    addTearDown(player.shutdown);
+    final scripts = <String>[];
+    messenger.setMockMethodCallHandler(
+      channel,
+      (call) async => call.method == 'read'
+          ? {'samples': Uint8List(4096), 'rate': 48000, 'format': 'float32le'}
+          : null,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.windows),
+        home: Scaffold(
+          body: MusicVisualizerPane(
+            player: player,
+            mode: MusicPanel.visualizer,
+            fullscreen: false,
+            onFullscreen: () {},
+            webController: MusicVisualizerWebController(
+              runScript: (script) async => scripts.add(script),
+            ),
+            rendererBuilder: (message, _) => ReadyVisualizer(message),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 40));
+    final feeds = scripts.where(
+      (script) => script.contains('auralisVisuals?.feed('),
+    );
+    expect(feeds.last, contains('"format":"float32le","gain":0.015625'));
+    await player.setVolume(50, persist: false);
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(feeds.last, contains('"format":"float32le","gain":0.125'));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
   testWidgets('sample reads never overlap and stale frames are discarded', (
     tester,
   ) async {
@@ -233,7 +313,7 @@ void main() {
       return null;
     });
     final capture = MusicVisualizerCapture(
-      onFrame: (_, _) => frames++,
+      onFrame: (_, _, _) => frames++,
       onError: (_) => fail('No error expected'),
     );
     capture.setActive(true);
@@ -262,7 +342,7 @@ void main() {
       });
       final capture = MusicVisualizerCapture(
         canRead: () => available,
-        onFrame: (_, _) => frames++,
+        onFrame: (_, _, _) => frames++,
         onError: (_) => fail('No capture error expected'),
       );
       capture.setActive(true);
@@ -476,7 +556,7 @@ void main() {
         return null;
       });
       final capture = MusicVisualizerCapture(
-        onFrame: (_, _) => frames++,
+        onFrame: (_, _, _) => frames++,
         onError: errors.add,
       );
       capture.setActive(true);
