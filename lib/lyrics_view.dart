@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 
 import 'lyrics.dart';
 import 'lyrics_translation.dart';
+import 'lyrics_added_translation.dart';
 import 'external_links.dart';
 import 'data_files.dart';
 import 'models.dart';
@@ -96,7 +97,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
   Track? _track;
   Lyrics? _lyrics, _translation;
   bool _translating = false, _showTranslation = false;
-  bool _openingDeepL = false;
+  bool _openingDeepL = false, _addingTranslation = false;
   String? _error;
   bool _importing = false, _savingSong = false;
   bool _loading = false, _synced = true, _looked = false;
@@ -224,7 +225,8 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
         _synced = source.lines.isNotEmpty;
       });
     }
-    if (widget.player.settings.automaticTranslation &&
+    if ((widget.player.settings.automaticTranslation ||
+            widget.repository.addedTranslation(_track!, source) != null) &&
         translated != null &&
         !identical(translated, _translation)) {
       setState(() {
@@ -270,6 +272,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
     _showTranslation = false;
     _track = widget.player.current;
     _lyrics = _track == null ? null : widget.repository.cached(_track!);
+    _restoreAddedTranslation();
     _looked = _track != null && widget.repository.contains(_track!);
     _loading = false;
     _error = null;
@@ -343,6 +346,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
       if (mounted && generation == _generation) {
         setState(() {
           _loading = false;
+          _restoreAddedTranslation();
         });
         _translateAutomatically();
       }
@@ -452,6 +456,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
       _loading = false;
       _error = null;
       _synced = lyrics.lines.isNotEmpty;
+      _restoreAddedTranslation();
     });
     unawaited(widget.repository.save(track, lyrics));
     _translateAutomatically();
@@ -665,7 +670,8 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
       );
       if (!active()) return;
       setState(() {
-        _translation = result;
+        _translation =
+            widget.repository.addedTranslation(track, source) ?? result;
         _showTranslation = true;
       });
     } catch (error) {
@@ -705,7 +711,8 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
             children: [
               const Text(
                 'Copy the original lyrics, including available timestamps, and open DeepL in your browser. '
-                'Paste the lyrics there to translate. Results stay in the browser. No API key is needed.',
+                'Paste the lyrics there to translate. Then use Add translation here to paste the result '
+                'alongside the original and optionally save both in the song metadata. No API key is needed.',
               ),
               const SizedBox(height: 16),
               PreferenceChoice<String>(
@@ -724,6 +731,10 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'add-translation'),
+              child: const Text('Add translation'),
+            ),
             FilledButton(
               onPressed: () => Navigator.pop(context, direction),
               child: const Text('Copy lyrics & open DeepL'),
@@ -733,6 +744,10 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
       ),
     );
     if (selected == null || !active()) return;
+    if (selected == 'add-translation') {
+      await _addTranslation();
+      return;
+    }
     setState(() => _openingDeepL = true);
     try {
       final text = source.timestampedText;
@@ -762,6 +777,123 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
     }
   }
 
+  void _restoreAddedTranslation() {
+    final source = _lyrics, track = _track;
+    if (source == null || track == null) return;
+    final value = widget.repository.addedTranslation(track, source);
+    if (value != null) {
+      _translation = value;
+      _showTranslation = true;
+    }
+  }
+
+  Future<void> _addTranslation() async {
+    final source = _lyrics, track = _track, repository = widget.repository;
+    if (source == null || track == null || _loading || _addingTranslation) {
+      return;
+    }
+    final generation = _generation;
+    bool active() =>
+        mounted &&
+        generation == _generation &&
+        identical(repository, widget.repository) &&
+        identical(source, _lyrics) &&
+        identical(track, _track) &&
+        identical(track, widget.player.current);
+    setState(() => _addingTranslation = true);
+    var text = '';
+    String? error;
+    try {
+      final result = await showAuralisDialog<({String text, bool saveSong})>(
+        context: context,
+        builder: (dialog) => StatefulBuilder(
+          builder: (context, update) {
+            void submit(bool saveSong) {
+              try {
+                addLyricsTranslation(source, text);
+                Navigator.pop(dialog, (text: text, saveSong: saveSong));
+              } on FormatException catch (failure) {
+                update(() => error = failure.message);
+              }
+            }
+
+            return AuralisDialog(
+              title: const Text('Add translation'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Paste your DeepL result or another translation. Keep one translated line '
+                    'per original lyric line, or keep the original LRC timestamps. '
+                    'The original stays intact; translated lines appear with it. '
+                    'Add & save song writes both into a separate audio file’s lyrics metadata.',
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('lyrics-translation-input'),
+                    minLines: 4,
+                    maxLines: 8,
+                    maxLength: Lyrics.maxFileBytes,
+                    onChanged: (value) => text = value,
+                    decoration: InputDecoration(
+                      labelText: 'Translated lyrics',
+                      hintText: 'Paste the translation here',
+                      errorText: error,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialog),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => submit(false),
+                  child: const Text('Add translation'),
+                ),
+                if (widget.saveSongWithLyrics != null && track.fileId != null)
+                  FilledButton(
+                    onPressed: () => submit(true),
+                    child: const Text('Add & save song'),
+                  ),
+              ],
+            );
+          },
+        ),
+      );
+      if (result == null || !active()) return;
+      final bilingual = await repository.addTranslation(
+        track,
+        source,
+        result.text,
+      );
+      if (!active()) return;
+      setState(() {
+        _translation = bilingual;
+        _showTranslation = true;
+      });
+      if (result.saveSong) {
+        await _saveTaggedSong(publish: false, includeTranslation: true);
+      }
+    } catch (failure) {
+      if (mounted && active()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              failure is FormatException
+                  ? failure.message
+                  : 'Could not add this translation. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _addingTranslation = false);
+    }
+  }
+
   Widget _message(String text) => Center(
     child: SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -773,12 +905,59 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
     ),
   );
 
-  Future<void> _saveTaggedSong({required bool publish}) async {
+  Future<void> _saveTaggedSong({
+    required bool publish,
+    bool? includeTranslation,
+  }) async {
     final track = _track, lyrics = _lyrics;
     if (track == null || lyrics == null || _savingSong) return;
+    final bilingual =
+        _translation ?? widget.repository.translated(track, lyrics);
+    if (bilingual != null && includeTranslation == null) {
+      var include = true;
+      final choice = await showAuralisDialog<bool>(
+        context: context,
+        builder: (dialog) => StatefulBuilder(
+          builder: (context, update) => AuralisDialog(
+            title: const Text('Lyrics metadata'),
+            content: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Include translation'),
+              subtitle: const Text(
+                'Keep original and translated lines together in the audio file.',
+              ),
+              value: include,
+              onChanged: (value) => update(() => include = value),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialog),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialog, include),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted ||
+          choice == null ||
+          !identical(track, _track) ||
+          !identical(lyrics, _lyrics) ||
+          !identical(track, widget.player.current)) {
+        return;
+      }
+      includeTranslation = choice;
+    }
     setState(() => _savingSong = true);
     try {
-      await widget.saveSongWithLyrics?.call(track, lyrics, publish: publish);
+      await widget.saveSongWithLyrics?.call(
+        track,
+        includeTranslation == true ? bilingual ?? lyrics : lyrics,
+        publish: publish,
+      );
     } finally {
       if (mounted) setState(() => _savingSong = false);
     }
@@ -842,6 +1021,18 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
           '${widget.player.settings.translationDirection.label} · ${widget.player.settings.translationFirst.label}',
     ),
     _menuAction(
+      value: 'add-translation',
+      enabled:
+          !_loading &&
+          !_addingTranslation &&
+          _lyrics != null &&
+          !_lyrics!.instrumental &&
+          _lyrics!.plain.trim().isNotEmpty,
+      icon: Icons.playlist_add_rounded,
+      title: 'Add translation',
+      subtitle: 'Paste translated lyrics alongside the original.',
+    ),
+    _menuAction(
       value: 'deepl',
       enabled:
           !_loading &&
@@ -867,6 +1058,8 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
         unawaited(_translateInApp());
       } else if (value == 'deepl') {
         unawaited(_openDeepL());
+      } else if (value == 'add-translation') {
+        unawaited(_addTranslation());
       } else if (value == 'embedded') {
         unawaited(_load(embedded: true, online: false));
       } else if (value == 'save-tagged' || value == 'publish-tagged') {
@@ -1085,8 +1278,13 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
                     color: _showTranslation ? _colors.primary : null,
                   ),
             itemBuilder: (_) => _translationActions(),
-            onSelected: (value) =>
-                unawaited(value == 'deepl' ? _openDeepL() : _translateInApp()),
+            onSelected: (value) => unawaited(
+              value == 'deepl'
+                  ? _openDeepL()
+                  : value == 'add-translation'
+                  ? _addTranslation()
+                  : _translateInApp(),
+            ),
           ),
         _options(),
         if (wide) const Spacer(),
