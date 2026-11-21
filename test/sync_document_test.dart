@@ -34,7 +34,7 @@ void main() {
     a.merge(b.records);
     aSettings.applyJson(a.project(aSettings.toJson()));
     expect(aSettings.videoPlayback.isWatched(episode), isTrue);
-    expect(aSettings.videoPlayback.positions[episode.id], isNull);
+    expect(aSettings.videoPlayback.positions[episode.id], const Duration(seconds: 23));
     expect(aSettings.videoPlayback.history, contains(local.id));
     aSettings.videoPlayback.setWatched(episode, false);
     aSettings.videoPlayback.removeHistory(episode.id);
