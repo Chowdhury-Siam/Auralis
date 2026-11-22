@@ -125,6 +125,8 @@ class AppSettings {
   bool setupComplete = false;
   AppInterface defaultInterface = AppInterface.music;
   int? videoChannelId;
+  bool musicLibraryOnDevice = false, videoLibraryOnDevice = false;
+  List<String> localMediaFolders = [];
   VideoPlaybackData videoPlayback = VideoPlaybackData();
   MusicVisualizerSettings musicVisualizer = MusicVisualizerSettings();
   void Function(Map<String, dynamic>)? captureSync;
@@ -162,6 +164,14 @@ class AppSettings {
             .toList()
       : [];
 
+  static List<String> _idsWithPathLength(Object? value) => value is List
+      ? value
+            .whereType<String>()
+            .where((path) => path.isNotEmpty && path.length <= 32768)
+            .toSet()
+            .toList()
+      : [];
+
   Future<void> _saving = Future.value();
 
   Future<void> load() async {
@@ -180,6 +190,9 @@ class AppSettings {
       ),
     );
     playlistPhotos.load(json['_playlistPhotos']);
+    musicLibraryOnDevice = json['_musicLibraryOnDevice'] == true;
+    videoLibraryOnDevice = json['_videoLibraryOnDevice'] == true;
+    localMediaFolders = _idsWithPathLength(json['_localMediaFolders']);
     applyJson(json);
     syncState = json['_sync'] is Map<String, dynamic>
         ? json['_sync'] as Map<String, dynamic>
@@ -193,6 +206,9 @@ class AppSettings {
     ...snapshot,
     '_sync': syncState,
     '_videoPlayback': videoPlayback.toJson(),
+    '_musicLibraryOnDevice': musicLibraryOnDevice,
+    '_videoLibraryOnDevice': videoLibraryOnDevice,
+    '_localMediaFolders': localMediaFolders,
     '_musicVisualizer': musicVisualizer.toJson(),
     '_playlistPhotos': playlistPhotos.toJson(),
     '_lastSeenRelease': lastSeenRelease,
