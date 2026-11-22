@@ -911,6 +911,69 @@ void main() {
     },
   );
 
+  for (final label in ['Opening', 'Intro']) {
+    testWidgets(
+      'Skip $label expires after 15 seconds and reappears on re-entry',
+      (tester) async {
+        final fixture = _SkipVideoFixture();
+        fixture.native.properties.addAll({
+          'chapter-list/count': '4',
+          'chapter-list/0/title': 'Prologue',
+          'chapter-list/1/time': '10',
+          'chapter-list/1/title': 'OP',
+          'chapter-list/2/time': '70',
+          'chapter-list/2/title': 'Episode',
+          'chapter-list/3/time': '95',
+          'chapter-list/3/title': 'ED',
+        });
+        if (label == 'Intro') {
+          fixture.settings.videoPlayback.setSkipSegments(
+            fixture.source.id,
+            const [
+              VideoSkipSegment(
+                Duration(seconds: 10),
+                Duration(seconds: 70),
+                'Introduction',
+              ),
+            ],
+          );
+        }
+        try {
+          await fixture.mount(tester);
+          await tester.tap(find.byTooltip('Lock controls'));
+          await tester.pumpAndSettle();
+          final prompt = find.text('Skip $label');
+          expect(prompt, findsNothing);
+
+          await fixture.native.seek(const Duration(seconds: 20));
+          await tester.idle();
+          await tester.pump();
+          expect(prompt.hitTestable(), findsOneWidget);
+          await tester.pump(const Duration(seconds: 14, milliseconds: 999));
+          expect(prompt.hitTestable(), findsOneWidget);
+          await tester.pump(const Duration(milliseconds: 1));
+          expect(prompt, findsNothing);
+          expect(fixture.native.state.position, const Duration(seconds: 20));
+          await fixture.native.seek(const Duration(seconds: 21));
+          await tester.idle();
+          await tester.pump();
+          expect(prompt, findsNothing);
+
+          await fixture.native.seek(const Duration(seconds: 100));
+          await tester.idle();
+          await tester.pump(const Duration(seconds: 16));
+          expect(find.text('Skip Ending'), findsOneWidget);
+          await fixture.native.seek(const Duration(seconds: 20));
+          await tester.idle();
+          await tester.pump();
+          expect(prompt.hitTestable(), findsOneWidget);
+        } finally {
+          await fixture.close(tester);
+        }
+      },
+    );
+  }
+
   testWidgets(
     'saved ranges take priority and skipping while locked preserves pause',
     (tester) async {
