@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.237
+
+- Make the lyrics options popup more compact with tighter rows and grouped actions while retaining every option and its description.
+
 ## 0.1.236
 
 - Fix the Windows CI smoke check by keeping saved media folder data independent of the Flutter folder picker.
