@@ -1,6 +1,12 @@
 {
-  "current": "0.1.236",
+  "current": "0.1.237",
   "releases": [
+    {
+      "version": "0.1.237",
+      "changes": [
+        "Make the lyrics options popup more compact with tighter rows and grouped actions while retaining every option and its description."
+      ]
+    },
     {
       "version": "0.1.236",
       "changes": [
