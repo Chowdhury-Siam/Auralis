@@ -278,7 +278,7 @@ extension _VideoHome on _TelegramVideoViewState {
   Widget _homeRecentRow(VideoSource source, VideoPlaybackData data) {
     final video = source.telegram;
     final watch = data.isWatched(source);
-    return _VideoListRow(
+    return VideoLibraryRow(
       key: ValueKey(('home-recent', source.id)),
       title: source.title,
       watched: watch,
