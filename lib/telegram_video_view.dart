@@ -835,36 +835,28 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
 
   Widget _videoLibrary(BuildContext context) {
     final settings = widget.music.settings;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (MediaQuery.viewInsetsOf(context).bottom == 0)
-          LibrarySourceSwitch(
-            local: settings.videoLibraryOnDevice,
-            onChanged: _setVideoLibrarySource,
-          ),
-        Expanded(
-          child: settings.videoLibraryOnDevice
-              ? LocalMediaViewPane(
-                  key: _localLibraryKey,
-                  settings: settings,
-                  video: true,
-                  bottomPadding: _bottomPadding(context),
-                  onPlay: (rows, index) => unawaited(
-                    _launchPlayer([for (final row in rows) row.video], index),
-                  ),
-                  onOpenFiles: _openHomeFiles,
-                  onSettings: MediaQuery.sizeOf(context).width < 900
-                      ? widget.onSettings
-                      : null,
-                )
-              : _telegramVideoLibrary(context),
-        ),
-      ],
+    final local = settings.videoLibraryOnDevice;
+    final sourceButton = LibrarySourceButton(
+      local: local,
+      onPressed: () => _setVideoLibrarySource(!local),
+    );
+    if (!local) return _telegramVideoLibrary(context, sourceButton);
+    return LocalMediaViewPane(
+      key: _localLibraryKey,
+      settings: settings,
+      video: true,
+      bottomPadding: _bottomPadding(context),
+      sourceButton: sourceButton,
+      onPlay: (rows, index) =>
+          unawaited(_launchPlayer([for (final row in rows) row.video], index)),
+      onOpenFiles: _openHomeFiles,
+      onSettings: MediaQuery.sizeOf(context).width < 900
+          ? widget.onSettings
+          : null,
     );
   }
 
-  Widget _telegramVideoLibrary(BuildContext context) {
+  Widget _telegramVideoLibrary(BuildContext context, Widget sourceButton) {
     final settings = widget.music.settings;
     final colors = Theme.of(context).colorScheme;
     final showHeader = MediaQuery.viewInsetsOf(this.context).bottom == 0;
@@ -872,14 +864,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (showHeader) ...[
-          Row(
-            children: [
-              Expanded(
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: _libraryMenu(context),
-                ),
-              ),
+          LibraryToolbar(
+            collection: _libraryMenu(context),
+            actions: [
+              sourceButton,
               if (_libraryCollection == 0) _sortButton(),
               if (widget.onSettings != null &&
                   MediaQuery.sizeOf(context).width < 900)
@@ -961,43 +949,25 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     Key searchKey = const ValueKey('video-library-search'),
     Key panelKey = const ValueKey(('video-library-panel', 0)),
   }) {
-    final colors = Theme.of(context).colorScheme;
     final search = searchController ?? _librarySearch;
-    return Material(
-      key: panelKey,
-      color: colors.surfaceContainerLowest,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (showSearch) ...[
-              TextField(
-                key: searchKey,
-                controller: search,
-                textInputAction: TextInputAction.search,
-                onChanged: (_) => setState(() {}),
-                onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                decoration: InputDecoration(
-                  hintText: searchHint,
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  suffixIcon: search.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear search',
-                          onPressed: () => setState(search.clear),
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                        ),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (loading) const LinearProgressIndicator(minHeight: 2),
-            Expanded(child: list),
+    return LibraryPanel(
+      panelKey: panelKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (showSearch) ...[
+            LibrarySearchField(
+              fieldKey: searchKey,
+              controller: search,
+              hint: searchHint,
+              onChanged: (_) => setState(() {}),
+              onCleared: () => setState(() {}),
+            ),
+            const SizedBox(height: 8),
           ],
-        ),
+          if (loading) const LinearProgressIndicator(minHeight: 2),
+          Expanded(child: list),
+        ],
       ),
     );
   }
@@ -1179,7 +1149,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       unit: 'video',
       selected: selected,
       builder: (subtitle) => _browseChannelsAsList
-          ? _VideoListRow(
+          ? VideoLibraryRow(
               title: channel.title,
               subtitle: subtitle == null ? null : Text(subtitle),
               selected: selected,
@@ -1285,7 +1255,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             final watched = _isWatched(video);
             final status = _episodeStatus(video, watched);
             final source = VideoSource.telegram(video);
-            return _VideoListRow(
+            return VideoLibraryRow(
               key: ValueKey(video.id),
               title: video.title,
               watched: watched,
@@ -1350,100 +1320,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         if (loading) const LinearProgressIndicator(minHeight: 2),
         Expanded(child: list),
       ],
-    );
-  }
-}
-
-class _VideoListRow extends StatelessWidget {
-  const _VideoListRow({
-    super.key,
-    required this.title,
-    this.subtitle,
-    this.selected = false,
-    this.watched = false,
-    required this.artwork,
-    this.trailing,
-    required this.onTap,
-  });
-
-  final String title;
-  final Widget? subtitle;
-  final bool selected, watched;
-  final Widget artwork;
-  final Widget? trailing;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
-        child: Material(
-          color: selected
-              ? colors.primaryContainer
-              : colors.surfaceContainerLow,
-          shape: auralisSurfaceShape(colors, radius: 18, borderOpacity: .35),
-          clipBehavior: Clip.antiAlias,
-          child: Semantics(
-            selected: selected,
-            child: InkWell(
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: SizedBox.square(dimension: 64, child: artwork),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: selected
-                                  ? colors.onPrimaryContainer
-                                  : watched
-                                  ? colors.onSurfaceVariant
-                                  : null,
-                            ),
-                          ),
-                          if (subtitle != null)
-                            DefaultTextStyle(
-                              style:
-                                  (theme.textTheme.labelSmall ??
-                                          const TextStyle())
-                                      .copyWith(
-                                        color: selected
-                                            ? colors.onPrimaryContainer
-                                            : colors.onSurfaceVariant,
-                                      ),
-                              child: subtitle!,
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (trailing case final action?) ...[
-                      const SizedBox(width: 8),
-                      action,
-                    ],
-                    const SizedBox(width: 4),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
