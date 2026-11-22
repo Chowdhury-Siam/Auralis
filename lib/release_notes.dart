@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 
 import 'storage.dart';
 
-const currentReleaseVersion = '0.1.229';
+const currentReleaseVersion = '0.1.232';
 Future<void> showReleaseChanges(
   BuildContext context,
   String version,
