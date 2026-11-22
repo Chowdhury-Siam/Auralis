@@ -196,7 +196,6 @@ class MainActivity : AudioServiceActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (musicVisualizer?.onPermissionsResult(requestCode) == true) return
-        if (localMedia?.onPermissionsResult(requestCode) == true) return
         setup.onPermissionsResult(requestCode)
     }
 
