@@ -1,6 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:auralis/app.dart';
 import 'package:auralis/library_widgets.dart';
@@ -13,6 +13,7 @@ import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
 import 'package:auralis/video_library.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -30,43 +31,52 @@ LocalMedia media(String name, {bool video = false, String? album}) =>
       'duration': 120000,
     }, isVideo: video);
 
-class _AndroidMedia extends LocalMediaPlatform {
+const _androidFolder = (
+  location: 'content://folder.test/tree/primary%3AMedia',
+  name: 'Media',
+);
+const _windowsFolder = (location: r'D:\Media', name: 'Media');
+
+class _DeviceMedia extends LocalMediaPlatform {
+  _DeviceMedia({this.android = true});
+
   final events = StreamController<void>.broadcast();
-  final requests = <bool>[];
-  final scans = <bool>[];
-  LocalMediaAccess permission = LocalMediaAccess.denied;
-  LocalMediaAccess grant = LocalMediaAccess.denied;
-  int settingsVisits = 0;
+  final scans = <(bool, List<String>)>[];
+  int picks = 0;
+  LocalMediaFolder? selectedFolder;
   List<LocalMedia> entries = [];
 
   @override
-  bool get android => true;
+  final bool android;
+
+  @override
+  bool get windows => !android;
 
   @override
   Stream<void> get changes => events.stream;
 
   @override
-  Future<LocalMediaAccess> access(bool video, {bool request = false}) async {
-    if (request) {
-      requests.add(video);
-      permission = grant;
-    }
-    return permission;
-  }
-
-  @override
-  Future<void> settings() async {
-    settingsVisits++;
+  Future<LocalMediaFolder?> chooseFolder() async {
+    picks++;
+    return selectedFolder;
   }
 
   @override
   Future<LocalMediaScan> scan(bool video, List<String> folders) async {
-    scans.add(video);
+    scans.add((video, folders));
     return (entries: entries, unavailable: 0);
   }
 
   @override
+  Future<LocalMedia> metadata(LocalMedia source) async => source;
+
+  @override
   Future<Uint8List?> artwork(LocalMedia item) async => null;
+}
+
+class _AndroidFolderChannel extends LocalMediaPlatform {
+  @override
+  bool get android => true;
 }
 
 Future<void> settleScan(WidgetTester tester) async {
@@ -78,6 +88,56 @@ Future<void> settleScan(WidgetTester tester) async {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('Android folder scans pass only selected trees and page the results', () async {
+    const channel = MethodChannel('app.auralis/local_media');
+    final calls = <MethodCall>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return switch (call.method) {
+        'chooseFolder' => {
+          'uri': _androidFolder.location,
+          'name': _androidFolder.name,
+        },
+        'scanFolders' => {'token': 4, 'count': 1, 'unavailable': 1},
+        'scanPage' => [
+          {
+            'uri':
+                '${_androidFolder.location}/document/primary%3AMedia%2FSong.mp3',
+            'name': 'Song.mp3',
+            'folder': 'Media',
+          },
+        ],
+        _ => null,
+      };
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    final platform = _AndroidFolderChannel();
+    expect((await platform.scan(false, [])).entries, isEmpty);
+    expect(calls, isEmpty);
+    final folder = await platform.chooseFolder();
+    expect(folder, _androidFolder);
+    final scan = await platform.scan(false, [folder!.location]);
+    expect(scan.entries.single.name, 'Song.mp3');
+    expect(scan.entries.single.uri.scheme, 'content');
+    expect(scan.unavailable, 1);
+    expect(calls.map((call) => call.method), [
+      'chooseFolder',
+      'scanFolders',
+      'scanPage',
+      'finishScan',
+    ]);
+    expect(calls[1].arguments, {
+      'video': false,
+      'folders': [_androidFolder.location],
+      'extensions': audioExtensions,
+    });
+  });
+
   test('folder scan deduplicates overlapping roots and reflects moves and deletion', () async {
     final folder = await Directory.systemTemp.createTemp('auralis-local-');
     addTearDown(() => folder.delete(recursive: true));
@@ -180,9 +240,19 @@ void main() {
         'auralis-local-settings-',
       );
       addTearDown(() => folder.delete(recursive: true));
-      final settings = AppSettings(File(p.join(folder.path, 'settings.json')))
-        ..musicLibraryOnDevice = true
-        ..localMediaFolders = [p.join(folder.path, 'media')];
+      final settings = AppSettings(File(p.join(folder.path, 'settings.json')));
+      final legacyPath = p.join(folder.path, 'media');
+      await settings.file.writeAsString(
+        jsonEncode({
+          '_musicLibraryOnDevice': true,
+          '_localMediaFolders': [legacyPath],
+        }),
+      );
+      await settings.load();
+      expect(settings.localMediaFolders, [
+        (location: legacyPath, name: 'media'),
+      ]);
+      settings.localMediaFolders.add(_androidFolder);
       Map<String, dynamic>? synced;
       settings.captureSync = (snapshot) => synced = snapshot;
       await settings.save();
@@ -191,10 +261,8 @@ void main() {
       expect(loaded.musicLibraryOnDevice, isTrue);
       expect(loaded.videoLibraryOnDevice, isFalse);
       expect(loaded.localMediaFolders, settings.localMediaFolders);
-      expect(
-        synced.toString(),
-        isNot(contains(settings.localMediaFolders.single)),
-      );
+      expect(synced.toString(), isNot(contains(legacyPath)));
+      expect(synced.toString(), isNot(contains(_androidFolder.location)));
       expect(synced!.keys, isNot(contains('_musicLibraryOnDevice')));
       loaded.videoLibraryOnDevice = true;
       loaded.musicLibraryOnDevice = false;
@@ -231,94 +299,99 @@ void main() {
     expect(settings.listening.tracks, isEmpty);
   });
 
-  testWidgets(
-    'local Video manages denied and limited access and refreshes changes',
-    (tester) async {
-      final platform = _AndroidMedia();
-      addTearDown(platform.events.close);
-      final settings = MemorySettings();
-      (List<LocalMedia>, int)? selected;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: LocalMediaViewPane(
-              settings: settings,
-              video: true,
-              bottomPadding: 8,
-              onPlay: (rows, index) => selected = (rows, index),
-              onOpenFiles: () {},
-              platform: platform,
-            ),
+  testWidgets('Android Video scans the chosen folder and refreshes changes', (
+    tester,
+  ) async {
+    final platform = _DeviceMedia();
+    addTearDown(platform.events.close);
+    final settings = MemorySettings();
+    (List<LocalMedia>, int)? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LocalMediaViewPane(
+            settings: settings,
+            video: true,
+            bottomPadding: 8,
+            onPlay: (rows, index) => selected = (rows, index),
+            onOpenFiles: () {},
+            platform: platform,
           ),
         ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(platform.scans, isEmpty);
+    expect(platform.picks, 0);
+    await tester.tap(find.text('Choose folder'));
+    await tester.pumpAndSettle();
+    expect(platform.scans, isEmpty);
+    expect(settings.localMediaFolders, isEmpty);
+
+    platform.selectedFolder = _androidFolder;
+    platform.entries = [
+      media('S01E10.mp4', video: true),
+      media('S01E02.mp4', video: true),
+      media('S01E1.mp4', video: true),
+    ];
+    settings.videoPlayback
+      ..setWatched(platform.entries[1].video, true)
+      ..remember(
+        platform.entries[1].video.id,
+        const Duration(seconds: 108),
+        const Duration(seconds: 120),
       );
-      await tester.pumpAndSettle();
-      expect(platform.requests, [true]);
-      expect(platform.scans, isEmpty);
-      expect(find.text('Allow access'), findsOneWidget);
-      await tester.tap(find.text('Open settings'));
-      await tester.pump();
-      expect(platform.settingsVisits, 1);
+    await tester.tap(find.text('Choose folder'));
+    await settleScan(tester);
+    expect(settings.localMediaFolders, [_androidFolder]);
+    expect(platform.picks, 2);
+    expect(find.byType(VideoLibraryRow), findsNWidgets(3));
+    expect(find.text('2:00 · Watched · Resume at 1:48'), findsOneWidget);
+    await tester.tap(find.text('S01E02.mp4'));
+    expect(selected!.$2, 1);
+    expect(selected!.$1.map((item) => item.name), [
+      'S01E1.mp4',
+      'S01E02.mp4',
+      'S01E10.mp4',
+    ]);
+    await tester.tap(find.byTooltip('Info for S01E02.mp4'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Info'));
+    await tester.pumpAndSettle();
+    expect(find.text('Duration'), findsOneWidget);
+    expect(find.widgetWithText(SelectableText, '2:00'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Duration'))).pop();
+    await tester.pumpAndSettle();
 
-      platform.grant = LocalMediaAccess.limited;
-      platform.entries = [
-        media('S01E10.mp4', video: true),
-        media('S01E02.mp4', video: true),
-        media('S01E1.mp4', video: true),
-      ];
-      settings.videoPlayback
-        ..setWatched(platform.entries[1].video, true)
-        ..remember(
-          platform.entries[1].video.id,
-          const Duration(seconds: 108),
-          const Duration(seconds: 120),
-        );
-      await tester.tap(find.text('Allow access'));
-      await settleScan(tester);
-      expect(find.text('Manage access'), findsOneWidget);
-      expect(find.byType(VideoLibraryRow), findsNWidgets(3));
-      expect(find.text('2:00 · Watched · Resume at 1:48'), findsOneWidget);
-      await tester.tap(find.text('S01E02.mp4'));
-      expect(selected!.$2, 1);
-      expect(selected!.$1.map((item) => item.name), [
-        'S01E1.mp4',
-        'S01E02.mp4',
-        'S01E10.mp4',
-      ]);
-      await tester.tap(find.byTooltip('Info for S01E02.mp4'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Info'));
-      await tester.pumpAndSettle();
-      expect(find.text('Duration'), findsOneWidget);
-      expect(find.widgetWithText(SelectableText, '2:00'), findsOneWidget);
-      Navigator.of(tester.element(find.text('Duration'))).pop();
-      await tester.pumpAndSettle();
-
-      platform.entries = [media('Added S01E4.mp4', video: true)];
-      platform.events.add(null);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      await settleScan(tester);
-      expect(find.text('S01E02.mp4'), findsNothing);
-      expect(find.text('Added S01E4.mp4'), findsOneWidget);
-      expect(platform.scans, [true, true]);
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
+    platform.entries = [media('Added S01E4.mp4', video: true)];
+    platform.events.add(null);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await settleScan(tester);
+    expect(find.text('S01E02.mp4'), findsNothing);
+    expect(find.text('Added S01E4.mp4'), findsOneWidget);
+    expect(platform.scans.map((scan) => scan.$1), [true, true]);
+    expect(platform.scans.map((scan) => scan.$2), [
+      [_androidFolder.location],
+      [_androidFolder.location],
+    ]);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets('local Music uses shared song rows and opens folders', (
     tester,
   ) async {
-    final platform = _AndroidMedia()
-      ..permission = LocalMediaAccess.full
+    final platform = _DeviceMedia(android: false)
+      ..selectedFolder = _windowsFolder
       ..entries = [media('Alpha.mp3'), media('Beta.mp3')];
+    final settings = MemorySettings();
     addTearDown(platform.events.close);
     (List<LocalMedia>, int)? selected;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: LocalMediaViewPane(
-            settings: MemorySettings(),
+            settings: settings,
             video: false,
             bottomPadding: 8,
             onPlay: (rows, index) => selected = (rows, index),
@@ -328,7 +401,10 @@ void main() {
         ),
       ),
     );
+    await tester.tap(find.text('Choose folder'));
     await settleScan(tester);
+    expect(settings.localMediaFolders, [_windowsFolder]);
+    expect(platform.scans.single.$2, [_windowsFolder.location]);
     expect(find.byType(MusicLibraryRow), findsNWidgets(2));
     expect(find.text('Test artist · 2:00'), findsNWidgets(2));
     await tester.tap(find.byTooltip('Show Folders'));
@@ -339,6 +415,18 @@ void main() {
     await tester.tap(find.text('Beta.mp3'));
     expect(selected!.$2, 1);
     expect(selected!.$1.map((item) => item.name), ['Alpha.mp3', 'Beta.mp3']);
+    final actions = find.byTooltip('Local library actions');
+    await tester.tap(actions);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manage folders'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Remove Media from library'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose folder'), findsOneWidget);
+    expect(settings.localMediaFolders, isEmpty);
+    expect(platform.scans, hasLength(1));
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -382,6 +470,7 @@ void main() {
       await tester.tap(toDevice);
       await settleScan(tester);
       expect(find.byType(LocalMediaViewPane), findsOneWidget);
+      expect(find.text('Choose folder'), findsOneWidget);
       expect(sourceButton, findsOneWidget);
       expect(
         find.descendant(of: toolbar, matching: toTelegram),
