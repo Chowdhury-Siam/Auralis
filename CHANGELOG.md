@@ -1,5 +1,20 @@
 # Auralis changes
 
+## 0.1.232
+
+- Browse MediaStore audio and video on Android or add recursive media folders on Windows. The Music and Video libraries remember their Telegram and On this device selections independently.
+- Search and sort local songs, albums, artists, genres, folders and videos. Play the displayed list in order with the existing players, and see video running times and watched and resume status in the local library.
+- Keep local media information on the device, with Android access management and refresh controls for both platforms.
+
+## 0.1.231
+
+- Redesign Video Home with Continue watching, an Open video files shortcut, channel access and recent videos from Telegram and this device.
+- Show durations in Video Library and Info. Read missing runtimes from supported video headers and remember durations discovered during playback.
+
+## 0.1.230
+
+- Dismiss Skip Intro and Skip Opening prompts after 15 seconds. The prompt returns if you leave the segment and seek back into it.
+
 ## 0.1.229
 
 - Restore the Android video surface after it is reclaimed in the background. Resume from the current position and reopen a stalled stream without restarting the app.
