@@ -235,6 +235,7 @@ class AuralisMenuRow extends StatelessWidget {
     this.trailing,
     this.selected,
     this.enabled = true,
+    this.compact = false,
   });
 
   final String title;
@@ -242,7 +243,7 @@ class AuralisMenuRow extends StatelessWidget {
   final IconData? icon;
   final Widget? trailing;
   final bool? selected;
-  final bool enabled;
+  final bool enabled, compact;
 
   @override
   Widget build(BuildContext context) {
@@ -258,7 +259,10 @@ class AuralisMenuRow extends StatelessWidget {
       selected: selected,
       child: Container(
         constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 10,
+          vertical: compact ? 4 : 8,
+        ),
         decoration: BoxDecoration(
           color: active ? colors.primaryContainer : null,
           borderRadius: BorderRadius.circular(14),
@@ -267,15 +271,17 @@ class AuralisMenuRow extends StatelessWidget {
           children: [
             if (selected != null || icon != null) ...[
               SizedBox.square(
-                dimension: 26,
+                dimension: compact ? 22 : 26,
                 child: active || icon != null
                     ? Icon(
                         active ? Icons.check_rounded : icon,
-                        size: 20,
+                        size: compact ? 18 : 20,
                         color: !enabled
                             ? foreground
                             : active
                             ? colors.onPrimaryContainer
+                            : compact
+                            ? colors.onSurfaceVariant
                             : colors.primary,
                       )
                     : null,
@@ -292,18 +298,20 @@ class AuralisMenuRow extends StatelessWidget {
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: foreground,
                       fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                      height: compact ? 1.2 : null,
                     ),
                   ),
                   if (subtitle case final text?) ...[
-                    const SizedBox(height: 2),
+                    SizedBox(height: compact ? 1 : 2),
                     Text(
                       text,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      maxLines: compact ? null : 2,
+                      overflow: compact ? null : TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: !enabled || active
                             ? foreground
                             : colors.onSurfaceVariant,
+                        height: compact ? 1.2 : null,
                       ),
                     ),
                   ],
