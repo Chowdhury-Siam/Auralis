@@ -17,6 +17,7 @@ class MainActivity : AudioServiceActivity() {
     private val setup by lazy { DeviceSetup(this) }
     private var pending: MethodChannel.Result? = null
     private var videoWindow: VideoWindow? = null
+    private var localMedia: LocalMediaLibrary? = null
     private var musicVisualizer: MusicVisualizer? = null
     private var selectedRead: Uri? = null
     private var selectedWrite: Uri? = null
@@ -28,6 +29,8 @@ class MainActivity : AudioServiceActivity() {
         videoWindow?.close()
         videoWindow = VideoWindow(this, flutterEngine.dartExecutor.binaryMessenger, io)
         intent?.let { videoWindow?.onIntent(it) }
+        localMedia?.close()
+        localMedia = LocalMediaLibrary(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.auralis/platform").setMethodCallHandler { call, result ->
             when (call.method) {
                 "setupStatus" -> {
@@ -144,6 +147,7 @@ class MainActivity : AudioServiceActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (updates.onActivityResult(requestCode)) return
+        if (localMedia?.onActivityResult(requestCode, resultCode, data) == true) return
         if (videoWindow?.onActivityResult(requestCode, resultCode, data) == true) return
         if (requestCode != 4101 && requestCode != 4102) return
         val uri = if (resultCode == Activity.RESULT_OK) data?.data else null
@@ -181,6 +185,8 @@ class MainActivity : AudioServiceActivity() {
         videoWindow = null
         pending?.success(null)
         pending = null
+        localMedia?.close()
+        localMedia = null
         updates.close()
         setup.close()
         io.shutdown()
@@ -190,6 +196,7 @@ class MainActivity : AudioServiceActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (musicVisualizer?.onPermissionsResult(requestCode) == true) return
+        if (localMedia?.onPermissionsResult(requestCode) == true) return
         setup.onPermissionsResult(requestCode)
     }
 
