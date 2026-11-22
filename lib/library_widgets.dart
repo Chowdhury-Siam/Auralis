@@ -3,6 +3,219 @@ import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
 import 'app_popups.dart';
+import 'models.dart';
+
+class LibrarySourceButton extends StatelessWidget {
+  const LibrarySourceButton({
+    super.key,
+    required this.local,
+    required this.onPressed,
+  });
+
+  final bool local;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton.filledTonal(
+    tooltip: local
+        ? 'On this device · Switch to Telegram'
+        : 'Telegram · Switch to On this device',
+    onPressed: () {
+      FocusManager.instance.primaryFocus?.unfocus();
+      onPressed();
+    },
+    icon: Icon(local ? Icons.devices_rounded : Icons.send_rounded, size: 20),
+  );
+}
+
+class LibraryToolbar extends StatelessWidget {
+  const LibraryToolbar({
+    super.key,
+    required this.collection,
+    required this.actions,
+  });
+
+  final Widget collection;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: collection,
+        ),
+      ),
+      ...actions,
+    ],
+  );
+}
+
+class LibraryPanel extends StatelessWidget {
+  const LibraryPanel({super.key, this.panelKey, required this.child});
+
+  final Key? panelKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    key: panelKey,
+    color: Theme.of(context).colorScheme.surfaceContainerLowest,
+    borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+      child: child,
+    ),
+  );
+}
+
+class LibrarySearchField extends StatelessWidget {
+  const LibrarySearchField({
+    super.key,
+    required this.controller,
+    required this.hint,
+    this.fieldKey,
+    this.onChanged,
+    this.onCleared,
+    this.autocorrect = true,
+  });
+
+  final TextEditingController controller;
+  final Key? fieldKey;
+  final String hint;
+  final ValueChanged<String>? onChanged;
+  final VoidCallback? onCleared;
+  final bool autocorrect;
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    key: fieldKey,
+    controller: controller,
+    autocorrect: autocorrect,
+    textInputAction: TextInputAction.search,
+    onChanged: onChanged,
+    onSubmitted: (_) => FocusScope.of(context).unfocus(),
+    decoration: InputDecoration(
+      hintText: hint,
+      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      suffixIcon: controller.text.isEmpty
+          ? null
+          : IconButton(
+              tooltip: 'Clear search',
+              onPressed: () {
+                controller.clear();
+                onCleared?.call();
+              },
+              icon: const Icon(Icons.close_rounded, size: 18),
+            ),
+    ),
+  );
+}
+
+class LibrarySortMenu extends StatelessWidget {
+  const LibrarySortMenu({
+    super.key,
+    required this.selected,
+    required this.options,
+    required this.onSelected,
+  });
+
+  final LibrarySort selected;
+  final Iterable<LibrarySort> options;
+  final ValueChanged<LibrarySort> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return AuralisPopupMenu<LibrarySort>(
+      tooltip: 'Sort Library',
+      itemBuilder: (_) => [
+        for (final sort in options)
+          PopupMenuItem<LibrarySort>(
+            value: sort,
+            padding: EdgeInsets.zero,
+            child: AuralisMenuRow(
+              title: sort.label,
+              selected: selected == sort,
+            ),
+          ),
+      ],
+      onSelected: onSelected,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Ink(
+          width: 48,
+          height: 40,
+          decoration: BoxDecoration(
+            color: colors.secondaryContainer,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(
+            Icons.sort_rounded,
+            color: colors.onSecondaryContainer,
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MusicLibraryRow extends StatelessWidget {
+  const MusicLibraryRow({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.artwork,
+    required this.onTap,
+    this.titleKey,
+    this.trailing,
+    this.active = false,
+  });
+
+  final String title, subtitle;
+  final Widget artwork;
+  final VoidCallback onTap;
+  final Key? titleKey;
+  final Widget? trailing;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: active ? colors.surfaceContainerHigh : Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: ListTile(
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        onTap: onTap,
+        leading: SizedBox.square(dimension: 42, child: artwork),
+        title: Text(
+          title,
+          key: titleKey,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: active ? colors.primary : null,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+        ),
+        trailing: trailing,
+      ),
+    );
+  }
+}
 
 /// Shared paging behavior for the existing Music and Video collections.
 class LibraryCollectionPager extends StatefulWidget {
@@ -275,63 +488,73 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
     final background = colors.primaryContainer;
     final foreground = colors.onPrimaryContainer;
     const outer = Radius.circular(32), inner = Radius.circular(6);
-    return AuralisPopupMenu<T>(
-      tooltip: tooltip,
-      constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
-      itemBuilder: itemBuilder,
-      onSelected: onSelected,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 52),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: const BorderRadiusDirectional.horizontal(
-                  start: outer,
-                  end: inner,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, color: foreground, size: 22),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      title,
-                      key: titleKey,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: foreground,
-                        fontSize: 25,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -.6,
-                      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 160;
+        return AuralisPopupMenu<T>(
+          tooltip: tooltip,
+          constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
+          itemBuilder: itemBuilder,
+          onSelected: onSelected,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 52),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 10 : 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: background,
+                    borderRadius: const BorderRadiusDirectional.horizontal(
+                      start: outer,
+                      end: inner,
                     ),
                   ),
-                ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!compact) ...[
+                        Icon(icon, color: foreground, size: 22),
+                        const SizedBox(width: 8),
+                      ],
+                      Flexible(
+                        child: Text(
+                          title,
+                          key: titleKey,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: foreground,
+                            fontSize: compact ? 19 : 25,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Container(
-            width: 48,
-            height: 52,
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: const BorderRadiusDirectional.horizontal(
-                start: inner,
-                end: outer,
+              const SizedBox(width: 4),
+              Container(
+                width: compact ? 36 : 48,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: background,
+                  borderRadius: const BorderRadiusDirectional.horizontal(
+                    start: inner,
+                    end: outer,
+                  ),
+                ),
+                child: Icon(Icons.expand_more_rounded, color: foreground),
               ),
-            ),
-            child: Icon(Icons.expand_more_rounded, color: foreground),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
