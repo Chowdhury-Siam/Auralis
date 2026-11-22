@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.234
+
+- Choose which folders appear in On this device on Android and Windows. Music and Video browse the selected folders and their subfolders.
+- Manage saved folders from the local Library menu. Android remembers access to the folders you choose.
+
 ## 0.1.233
 
 - Switch between Telegram and On this device with one compact button in the Music and Video Library headers.
