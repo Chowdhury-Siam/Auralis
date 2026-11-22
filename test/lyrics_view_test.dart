@@ -975,6 +975,56 @@ void main() {
     expect(find.text('Read lyrics from music file'), findsNothing);
   });
 
+  testWidgets('lyrics options fit all actions in a compact desktop popup', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 720);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    const track = Track(
+      id: 'menu',
+      title: 'Song',
+      artist: 'Artist',
+      source: 'Music channel',
+      fileId: 1,
+    );
+    final player = controller()..queue[0] = track;
+    final repository = LyricsRepository()
+      ..save(track, Lyrics.parse('Cached lyrics', provider: 'LRCLIB'));
+    addTearDown(player.shutdown);
+    addTearDown(repository.close);
+    await tester.pumpWidget(
+      view(
+        player,
+        repository,
+        embedded: (_) async => null,
+        saveSong: (_, _, {required publish}) async {},
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Lyrics options'));
+    await tester.pumpAndSettle();
+
+    final entries = find.byType(PopupMenuItem<String>);
+    expect(entries, findsNWidgets(9));
+    expect(find.byType(PopupMenuDivider), findsNWidgets(2));
+    expect(
+      find.text('Current: LRCLIB · Hold for search options.'),
+      findsOneWidget,
+    );
+    expect(find.text('Save song with lyrics'), findsOneWidget);
+    expect(find.text('Update Telegram song'), findsOneWidget);
+    expect(
+      tester.getRect(entries.last).bottom - tester.getRect(entries.first).top,
+      lessThanOrEqualTo(500),
+    );
+    expect(entries.hitTestable(), findsNWidgets(9));
+    await tester.tap(find.byTooltip('Search by song name or artist'));
+    await tester.pumpAndSettle();
+    expect(find.text('Search lyrics by'), findsOneWidget);
+  });
+
   testWidgets('hold or right-click to choose a song or artist lyrics search', (
     tester,
   ) async {
