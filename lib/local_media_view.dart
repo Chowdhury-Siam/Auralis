@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
 
 import 'app_popups.dart';
 import 'library_widgets.dart';
@@ -71,7 +70,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
   final _inFlight = <(Uri, int, int), Future<LocalMedia>>{};
   List<LocalMedia> _index = const [];
   String? _group, _groupLabel;
-  LocalMediaAccess? _access;
+  bool _choosingFolder = false;
   bool _scanning = false, _scanAgain = false, _failed = false;
   bool _projecting = false, _indexing = false;
   int _unavailable = 0, _projection = 0, _metadataGeneration = 0;
@@ -91,7 +90,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
       );
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_refresh(request: true));
+      if (mounted) unawaited(_refresh());
     });
   }
 
@@ -120,7 +119,8 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
     _changesTimer = Timer(const Duration(milliseconds: 350), _refresh);
   }
 
-  Future<void> _refresh({bool request = false}) async {
+  Future<void> _refresh() async {
+    if (widget.settings.localMediaFolders.isEmpty) return;
     if (_scanning) {
       _scanAgain = true;
       return;
@@ -130,26 +130,9 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
       _failed = false;
     });
     try {
-      final access = await _platform.access(widget.video);
-      if (!mounted) return;
-      final effective = request && access == LocalMediaAccess.denied
-          ? await _platform.access(widget.video, request: true)
-          : access;
-      if (!mounted) return;
-      if (_access != effective || effective == LocalMediaAccess.limited) {
-        _metadata.clear();
-        _inFlight.clear();
-        _index = const [];
-        _selection = const LocalMediaSelection([], []);
-        _projection++;
-        _metadataGeneration++;
-      }
-      setState(() => _access = effective);
-      if (effective == LocalMediaAccess.denied) return;
-      final scan = await _platform.scan(
-        widget.video,
-        List.of(widget.settings.localMediaFolders),
-      );
+      final scan = await _platform.scan(widget.video, [
+        for (final folder in widget.settings.localMediaFolders) folder.location,
+      ]);
       if (!mounted || _scanAgain) return;
       final keys = scan.entries.map((item) => item.revision).toSet();
       _metadata.removeWhere((key, _) => !keys.contains(key));
@@ -170,26 +153,9 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
     }
   }
 
-  Future<void> _changeAccess() async {
-    try {
-      await _platform.access(widget.video, request: true);
-      if (mounted) await _refresh();
-    } on Exception {
-      if (mounted) _notice('Could not request media access.');
-    }
-  }
-
   void _notice(String message) =>
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
-
-  Future<void> _accessSettings() async {
-    try {
-      await _platform.settings();
-    } on Exception {
-      if (mounted) _notice('Could not open Android settings.');
-    }
-  }
 
   bool backToGroups() {
     if (_group == null) return false;
@@ -239,8 +205,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
       return Future.value(cached);
     }
     if (_inFlight[item.revision] case final pending?) return pending;
-    if (!_platform.windows &&
-        (!item.isVideo || item.duration > Duration.zero)) {
+    if (item.isVideo && item.duration > Duration.zero) {
       return Future.value(item);
     }
     final result = Completer<LocalMedia>();
@@ -286,14 +251,13 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
 
   bool get _requiresIndex =>
       _sort == LibrarySort.duration ||
-      _platform.windows &&
+      !widget.video &&
           (_search.text.trim().isNotEmpty ||
-              (!widget.video &&
-                  (_sort == LibrarySort.title ||
-                      _sort == LibrarySort.artist ||
-                      _view == LocalMediaView.albums ||
-                      _view == LocalMediaView.artists ||
-                      _view == LocalMediaView.genres)));
+              _sort == LibrarySort.title ||
+              _sort == LibrarySort.artist ||
+              _view == LocalMediaView.albums ||
+              _view == LocalMediaView.artists ||
+              _view == LocalMediaView.genres);
 
   void _indexTagsIfNeeded() {
     if (_indexing || !_requiresIndex || _index.isEmpty) return;
@@ -321,9 +285,38 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
     }
   }
 
+  Future<LocalMediaFolder?> _pickFolder(List<LocalMediaFolder> folders) async {
+    if (_choosingFolder) return null;
+    _choosingFolder = true;
+    try {
+      final selected = await _platform.chooseFolder();
+      if (selected == null) return null;
+      final duplicate = folders.any(
+        (folder) => _platform.windows
+            ? folder.location.toLowerCase() == selected.location.toLowerCase()
+            : folder.location == selected.location,
+      );
+      return duplicate ? null : selected;
+    } on Exception {
+      if (mounted) _notice('Could not open the folder picker.');
+      return null;
+    } finally {
+      _choosingFolder = false;
+    }
+  }
+
+  Future<void> _chooseFirstFolder() async {
+    final folder = await _pickFolder(widget.settings.localMediaFolders);
+    if (mounted && folder != null) {
+      await _saveFolders([...widget.settings.localMediaFolders, folder]);
+    }
+  }
+
   Future<void> _manageFolders() async {
-    final folders = List<String>.of(widget.settings.localMediaFolders);
-    await showAuralisDialog<void>(
+    final folders = List<LocalMediaFolder>.of(
+      widget.settings.localMediaFolders,
+    );
+    final updated = await showAuralisDialog<List<LocalMediaFolder>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, update) => AuralisDialog(
@@ -339,12 +332,13 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.folder_outlined),
                   title: Text(
-                    folder,
+                    folder.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  subtitle: _platform.android ? null : Text(folder.location),
                   trailing: IconButton(
-                    tooltip: 'Remove ${p.basename(folder)} from library',
+                    tooltip: 'Remove ${folder.name} from library',
                     onPressed: () => update(() => folders.remove(folder)),
                     icon: const Icon(Icons.remove_circle_outline_rounded),
                   ),
@@ -354,44 +348,52 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
           actions: [
             TextButton.icon(
               onPressed: () async {
-                try {
-                  final path = await _platform.chooseFolder();
-                  if (!context.mounted || path == null) return;
-                  final normalized = p.normalize(path);
-                  if (folders.any(
-                    (folder) =>
-                        folder.toLowerCase() == normalized.toLowerCase(),
-                  )) {
-                    return;
-                  }
-                  update(() => folders.add(normalized));
-                } on Exception {
-                  if (mounted) _notice('Could not open the folder picker.');
-                }
+                final folder = await _pickFolder(folders);
+                if (!context.mounted || folder == null) return;
+                update(() => folders.add(folder));
               },
               icon: const Icon(Icons.create_new_folder_outlined),
               label: const Text('Add folder'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(context, folders),
               child: const Text('Done'),
             ),
           ],
         ),
       ),
     );
-    if (!mounted || listEquals(folders, widget.settings.localMediaFolders)) {
+    if (mounted && updated != null) await _saveFolders(updated);
+  }
+
+  Future<void> _saveFolders(List<LocalMediaFolder> folders) async {
+    final previous = widget.settings.localMediaFolders;
+    if (listEquals(folders, previous)) {
+      if (_unavailable != 0) await _refresh();
       return;
     }
-    final previous = widget.settings.localMediaFolders;
     widget.settings.localMediaFolders = folders;
     try {
       await widget.settings.save();
     } on Exception {
       widget.settings.localMediaFolders = previous;
       if (mounted) _notice('Could not save the media folders.');
+      return;
     }
-    if (mounted) await _refresh();
+    if (!mounted) return;
+    if (_scanning) _scanAgain = true;
+    setState(() {
+      _group = _groupLabel = null;
+      _index = const [];
+      _selection = const LocalMediaSelection([], []);
+      _unavailable = 0;
+      _failed = _projecting = false;
+      _projection++;
+      _metadataGeneration++;
+      _metadata.clear();
+      _inFlight.clear();
+    });
+    await _refresh();
   }
 
   void _play(List<LocalMedia> rows, int index) => widget.onPlay([
@@ -444,7 +446,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
     LocalMediaView.folders => Icons.folder_outlined,
   };
 
-  Widget _actions({required bool denied}) => AuralisPopupMenu<String>(
+  Widget _actions({required bool hasFolders}) => AuralisPopupMenu<String>(
     tooltip: 'Local library actions',
     icon: const Icon(Icons.more_vert_rounded, size: 20),
     onSelected: (value) {
@@ -455,8 +457,6 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
           unawaited(_refresh());
         case 'folders':
           unawaited(_manageFolders());
-        case 'access':
-          unawaited(_accessSettings());
         case 'settings':
           widget.onSettings?.call();
       }
@@ -470,7 +470,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
           icon: Icons.folder_open_rounded,
         ),
       ),
-      if (!denied)
+      if (hasFolders)
         PopupMenuItem(
           value: 'refresh',
           enabled: !_scanning,
@@ -481,24 +481,14 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
             enabled: !_scanning,
           ),
         ),
-      if (_platform.windows)
-        const PopupMenuItem(
-          value: 'folders',
-          padding: EdgeInsets.zero,
-          child: AuralisMenuRow(
-            title: 'Manage folders',
-            icon: Icons.create_new_folder_outlined,
-          ),
+      const PopupMenuItem(
+        value: 'folders',
+        padding: EdgeInsets.zero,
+        child: AuralisMenuRow(
+          title: 'Manage folders',
+          icon: Icons.create_new_folder_outlined,
         ),
-      if (_platform.android)
-        const PopupMenuItem(
-          value: 'access',
-          padding: EdgeInsets.zero,
-          child: AuralisMenuRow(
-            title: 'Access settings',
-            icon: Icons.lock_outline_rounded,
-          ),
-        ),
+      ),
       if (widget.onSettings != null)
         const PopupMenuItem(
           value: 'settings',
@@ -514,7 +504,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
   @override
   Widget build(BuildContext context) {
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final denied = _access == LocalMediaAccess.denied;
+    final hasFolders = widget.settings.localMediaFolders.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -540,7 +530,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
             ),
             actions: [
               ?widget.sourceButton,
-              if (!denied)
+              if (hasFolders)
                 LibrarySortMenu(
                   selected: _sort,
                   options: LibrarySort.values.where(
@@ -553,7 +543,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
                     _refreshSelection();
                   },
                 ),
-              _actions(denied: denied),
+              _actions(hasFolders: hasFolders),
             ],
           ),
           LibraryPageIndicator(
@@ -565,13 +555,16 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
         ],
         Expanded(
           child: LibraryPanel(
-            child: denied
+            child: !hasFolders
                 ? Align(
                     alignment: AlignmentDirectional.topStart,
-                    child: _accessBanner(
-                      widget.video
-                          ? 'Allow access to browse videos on this device.'
-                          : 'Allow access to browse music on this device.',
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: FilledButton.tonalIcon(
+                        onPressed: _chooseFirstFolder,
+                        icon: const Icon(Icons.create_new_folder_outlined),
+                        label: const Text('Choose folder'),
+                      ),
                     ),
                   )
                 : Column(
@@ -612,15 +605,12 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
                             ),
                           ],
                         ),
-                      if (_access == LocalMediaAccess.limited)
-                        _accessBanner(
-                          'Showing the videos you allowed.',
-                          limited: true,
-                        ),
                       if (_failed)
                         _message('Could not refresh the local library.'),
                       if (_unavailable != 0)
-                        _message('Some folders could not be read.'),
+                        _message(
+                          'Some folders could not be read. Add them again in Manage folders.',
+                        ),
                       const SizedBox(height: 8),
                       if (_scanning || _indexing)
                         const LinearProgressIndicator(minHeight: 2),
@@ -633,25 +623,6 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
     );
   }
 
-  Widget _accessBanner(String text, {bool limited = false}) => Padding(
-    padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
-    child: Wrap(
-      spacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(text),
-        TextButton(
-          onPressed: _changeAccess,
-          child: Text(limited ? 'Manage access' : 'Allow access'),
-        ),
-        TextButton(
-          onPressed: _accessSettings,
-          child: const Text('Open settings'),
-        ),
-      ],
-    ),
-  );
-
   Widget _message(String text) => Padding(
     padding: const EdgeInsets.all(12),
     child: Text(text, style: Theme.of(context).textTheme.bodySmall),
@@ -663,19 +634,6 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
     final count = grouped ? groups.length : rows.length;
     if (count == 0) {
       if (_scanning || _projecting || _indexing) return const SizedBox.shrink();
-      if (_platform.windows && widget.settings.localMediaFolders.isEmpty) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: FilledButton.tonalIcon(
-              onPressed: _manageFolders,
-              icon: const Icon(Icons.create_new_folder_outlined),
-              label: const Text('Add media folders'),
-            ),
-          ),
-        );
-      }
       return _message(
         _search.text.trim().isNotEmpty
             ? 'No matching media.'
