@@ -260,6 +260,7 @@ class PlayerController extends ChangeNotifier {
     var playbackCheckpoint = false;
     if (wasPlaying &&
         track != null &&
+        track.localUri == null &&
         gap > Duration.zero &&
         gap <= const Duration(seconds: 5) &&
         advancement > Duration.zero) {
@@ -669,6 +670,10 @@ class PlayerController extends ChangeNotifier {
       }
     }
     if (index < 0) return;
+    if (from != null && track.localUri != null) {
+      shuffleEnabled = false;
+      _shuffleOrder = [];
+    }
     if (from != null && shuffleEnabled) _shuffleUpcoming();
     await _open(track);
   }
@@ -683,7 +688,13 @@ class PlayerController extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final uri = (await proxy.uri(track)).toString();
+      final Uri uri;
+      if (track.localUri case final local?) {
+        await proxy.stop();
+        uri = local;
+      } else {
+        uri = await proxy.uri(track);
+      }
       if (generation != _generation || _closed) return;
       final previous = _openingAudio;
       final opening = Completer<void>();
@@ -692,7 +703,7 @@ class PlayerController extends ChangeNotifier {
         if (previous != null) await previous;
         if (generation != _generation || _closed) return;
         await audio.open(
-          uri,
+          uri.toString(),
           play: !_pauseAfterOpen && !_focusInterrupted && !_videoInterrupted,
         );
       } finally {
@@ -708,14 +719,18 @@ class PlayerController extends ChangeNotifier {
       await saving;
       if (generation != _generation || _closed) return;
       opened = true;
-      settings.recentIds = [
-        track.id,
-        ...settings.recentIds.where((id) => id != track.id),
-      ].take(100).toList();
-      await _persist();
+      if (track.localUri == null) {
+        settings.recentIds = [
+          track.id,
+          ...settings.recentIds.where((id) => id != track.id),
+        ].take(100).toList();
+        await _persist();
+      }
     } catch (_) {
       if (generation == _generation) {
-        error = 'Could not open this track. Check the Telegram connection and native libraries.';
+        error = track.localUri == null
+            ? 'Could not open this track. Check the Telegram connection and native libraries.'
+            : 'Could not open this audio file. Check that it is still available.';
       }
     } finally {
       if (generation == _generation) {
