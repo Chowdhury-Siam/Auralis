@@ -1,10 +1,7 @@
 package com.auralis.siam
 
-import android.Manifest
 import android.app.Activity
-import android.content.ContentUris
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -13,14 +10,16 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.DocumentsContract
+import android.provider.DocumentsContract.Document
 import android.provider.MediaStore
 import android.provider.OpenableColumns
-import android.provider.Settings
 import android.util.Size
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
+import java.util.Locale
 import java.util.concurrent.Executors
 
 internal class LocalMediaLibrary(
@@ -36,7 +35,7 @@ internal class LocalMediaLibrary(
     // work small on Flutter's UI isolate.
     private val snapshots = mutableMapOf<Int, List<Map<String, Any>>>()
     private var sequence = 0
-    private var accessRequest: Pair<Boolean, MethodChannel.Result>? = null
+    private var folderPicker: MethodChannel.Result? = null
     private var songPicker: MethodChannel.Result? = null
     private var sink: EventChannel.EventSink? = null
     private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -48,25 +47,19 @@ internal class LocalMediaLibrary(
     init {
         events.setStreamHandler(this)
         channel.setMethodCallHandler { call, result ->
-            val video = call.arguments == true
             try {
                 when (call.method) {
-                    "access" -> result.success(access(video))
-                    "requestAccess" -> requestAccess(video, result)
-                    "settings" -> {
-                        val intent = Intent(
-                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.fromParts("package", activity.packageName, null),
-                        )
-                        activity.startActivity(intent)
-                        result.success(null)
-                    }
-                    "scan" -> scanner.execute {
+                    "chooseFolder" -> chooseFolder(result)
+                    "scanFolders" -> scanner.execute {
                         work(result) {
-                            val rows = scan(video)
+                            val (rows, unavailable) = scanFolders(
+                                call.argument<Boolean>("video") == true,
+                                call.argument<List<String>>("folders").orEmpty(),
+                                call.argument<List<String>>("extensions").orEmpty().toSet(),
+                            )
                             val token = ++sequence
                             snapshots[token] = rows
-                            mapOf("token" to token, "count" to rows.size)
+                            mapOf("token" to token, "count" to rows.size, "unavailable" to unavailable)
                         }
                     }
                     "scanPage" -> scanner.execute {
@@ -87,8 +80,14 @@ internal class LocalMediaLibrary(
                     "artwork" -> images.execute {
                         work(result) {
                             val uri = Uri.parse(call.argument<String>("uri") ?: "")
-                            if (uri.scheme != "content" || uri.authority != MediaStore.AUTHORITY) null
+                            if (uri.scheme != "content") null
                             else artwork(uri, call.argument<Boolean>("video") == true)
+                        }
+                    }
+                    "metadata" -> images.execute {
+                        work(result) {
+                            val uri = Uri.parse(call.arguments as? String ?: "")
+                            if (uri.scheme == "content") songMetadata(uri) else emptyMap<String, Any>()
                         }
                     }
                     "openSongs" -> openSongs(result)
@@ -111,58 +110,6 @@ internal class LocalMediaLibrary(
         }
     }
 
-    private fun granted(permission: String) =
-        activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
-
-    @Suppress("DEPRECATION")
-    private fun permission(video: Boolean) = when {
-        Build.VERSION.SDK_INT < 33 -> Manifest.permission.READ_EXTERNAL_STORAGE
-        video -> Manifest.permission.READ_MEDIA_VIDEO
-        else -> Manifest.permission.READ_MEDIA_AUDIO
-    }
-
-    private fun access(video: Boolean): String = when {
-        granted(permission(video)) -> "full"
-        video && Build.VERSION.SDK_INT >= 34 &&
-            granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) -> "limited"
-        else -> "denied"
-    }
-
-    private fun requestAccess(video: Boolean, result: MethodChannel.Result) {
-        if (access(video) == "full") {
-            result.success("full")
-            return
-        }
-        if (accessRequest != null) {
-            result.error("busy", "A media permission request is already open.", null)
-            return
-        }
-        val permissions = if (video && Build.VERSION.SDK_INT >= 34) {
-            arrayOf(permission(true), Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-        } else {
-            arrayOf(permission(video))
-        }
-        accessRequest = video to result
-        try {
-            activity.requestPermissions(permissions, ACCESS_REQUEST)
-        } catch (error: Exception) {
-            accessRequest = null
-            throw error
-        }
-    }
-
-    fun onPermissionsResult(requestCode: Int): Boolean {
-        if (requestCode != ACCESS_REQUEST) return false
-        val pending = accessRequest
-        accessRequest = null
-        if (pending != null) pending.second.success(access(pending.first))
-        return true
-    }
-
-    private fun collection(video: Boolean, volume: String = "external"): Uri =
-        if (video) MediaStore.Video.Media.getContentUri(volume)
-        else MediaStore.Audio.Media.getContentUri(volume)
-
     override fun onListen(arguments: Any?, eventSink: EventChannel.EventSink) {
         sink = eventSink
         try {
@@ -182,79 +129,104 @@ internal class LocalMediaLibrary(
         sink = null
     }
 
-    @Suppress("DEPRECATION")
-    private fun scan(video: Boolean): List<Map<String, Any>> {
-        if (access(video) == "denied") return emptyList()
+    private fun scanFolders(
+        video: Boolean,
+        folders: List<String>,
+        extensions: Set<String>,
+    ): Pair<List<Map<String, Any>>, Int> {
         val rows = mutableListOf<Map<String, Any>>()
-        val store = collection(video)
-        val columns = mutableListOf("_id", "_display_name", "_size", "date_modified", "title", "duration")
-        if (Build.VERSION.SDK_INT >= 29) columns.addAll(listOf("relative_path", "volume_name"))
-        else columns.add("_data")
-        if (!video) {
-            columns.addAll(listOf("artist", "album", "album_id"))
-            if (Build.VERSION.SDK_INT >= 30) columns.addAll(listOf("album_artist", "genre"))
-        }
-        val legacyGenres = if (!video && Build.VERSION.SDK_INT < 30) genres() else emptyMap()
-        resolver.query(store, columns.toTypedArray(), null, null, null)?.use { cursor ->
-            val indices = cursor.columnNames.withIndex().associate { it.value to it.index }
-            fun text(name: String): String? = indices[name]?.let { cursor.getString(it) }
-            fun number(name: String): Long = indices[name]?.let { cursor.getLong(it) } ?: 0
-            while (cursor.moveToNext()) {
-                val id = number("_id")
-                val volume = text("volume_name")
-                val relative = text("relative_path")?.trimEnd('/') ?: ""
-                val folder = when {
-                    Build.VERSION.SDK_INT < 29 -> text("_data")?.substringBeforeLast('/') ?: ""
-                    volume == null || volume == "external_primary" -> relative
-                    relative.isEmpty() -> volume
-                    else -> "$volume/$relative"
-                }
-                val row = mutableMapOf<String, Any>(
-                    "uri" to ContentUris.withAppendedId(
-                        if (volume == null) store else collection(video, volume),
-                        id,
-                    ).toString(),
-                    "folder" to folder,
-                    "date" to (number("date_modified") * 1000),
-                    "size" to number("_size"),
-                    "duration" to number("duration"),
-                )
-                text("_display_name")?.let { row["name"] = it }
-                // Video filenames often contain the episode number missing from tags.
-                if (!video) {
-                    for ((column, field) in listOf(
-                        "title" to "title", "artist" to "artist", "album" to "album",
-                        "album_artist" to "albumArtist", "genre" to "genre",
-                    )) text(column)?.let { row[field] = it }
-                    val albumId = number("album_id")
-                    if (albumId > 0 && text("album") !in setOf(null, "", "<unknown>")) {
-                        row["albumKey"] = "${volume ?: "external"}/$albumId"
+        val visited = mutableSetOf<Pair<String, String>>()
+        val files = mutableSetOf<Pair<String, String>>()
+        val grants = resolver.persistedUriPermissions
+            .filter { it.isReadPermission }.map { it.uri }.toSet()
+        val columns = arrayOf(
+            Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE,
+            Document.COLUMN_LAST_MODIFIED, Document.COLUMN_SIZE, Document.COLUMN_FLAGS,
+        )
+        val prefix = if (video) "video/" else "audio/"
+        var unavailable = 0
+        for (folder in folders) {
+            val tree = Uri.parse(folder)
+            val authority = tree.authority
+            if (tree.scheme != "content" || authority == null || tree !in grants ||
+                !DocumentsContract.isTreeUri(tree)) {
+                unavailable++
+                continue
+            }
+            val rootId = DocumentsContract.getTreeDocumentId(tree)
+            val rootName = folderName(tree) ?: rootId.substringAfterLast('/').substringAfter(':')
+            val pending = ArrayDeque<Pair<String, String>>()
+            pending.add(rootId to rootName)
+            while (pending.isNotEmpty()) {
+                val (id, path) = pending.removeLast()
+                val key = authority to id
+                if (key in visited) continue
+                val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, id)
+                val folderKey = DocumentsContract.buildDocumentUri(authority, id).toString()
+                try {
+                    val cursor = resolver.query(children, columns, null, null, null)
+                    if (cursor == null) {
+                        unavailable++
+                        continue
                     }
-                    legacyGenres[id]?.let { row["genre"] = it }
+                    visited.add(key)
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            val childId = it.getString(0) ?: continue
+                            val name = it.getString(1) ?: continue
+                            val mime = it.getString(2).orEmpty()
+                            if (mime == Document.MIME_TYPE_DIR) {
+                                pending.add(childId to "$path/$name")
+                            } else if ((it.getInt(5) and Document.FLAG_VIRTUAL_DOCUMENT) == 0 &&
+                                (mime.startsWith(prefix) || name.substringAfterLast('.', "")
+                                    .lowercase(Locale.ROOT) in extensions) &&
+                                files.add(authority to childId)) {
+                                rows.add(mapOf(
+                                    "uri" to DocumentsContract.buildDocumentUriUsingTree(tree, childId).toString(),
+                                    "name" to name,
+                                    "folder" to path,
+                                    "folderKey" to folderKey,
+                                    "date" to it.getLong(3),
+                                    "size" to it.getLong(4),
+                                ))
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                    unavailable++
                 }
-                rows.add(row)
             }
         }
-        return rows
+        return rows to unavailable
     }
 
-    @Suppress("DEPRECATION")
-    private fun genres(): Map<Long, String> = runCatching {
-        val genres = mutableMapOf<Long, String>()
-        resolver.query(
-            MediaStore.Audio.Genres.EXTERNAL_CONTENT_URI,
-            arrayOf("_id", "name"), null, null, "name",
-        )?.use { names ->
-            while (names.moveToNext()) {
-                val genre = names.getString(1) ?: continue
-                val members = MediaStore.Audio.Genres.Members.getContentUri("external", names.getLong(0))
-                resolver.query(members, arrayOf("audio_id"), null, null, null)?.use {
-                    while (it.moveToNext()) genres.putIfAbsent(it.getLong(0), genre)
-                }
-            }
+    private fun folderName(tree: Uri): String? = runCatching {
+        val root = DocumentsContract.buildDocumentUriUsingTree(
+            tree, DocumentsContract.getTreeDocumentId(tree),
+        )
+        resolver.query(root, arrayOf(Document.COLUMN_DISPLAY_NAME), null, null, null)
+            ?.use { if (it.moveToFirst()) it.getString(0) else null }
+    }.getOrNull()
+
+    private fun songMetadata(uri: Uri): Map<String, Any> {
+        val reader = MediaMetadataRetriever()
+        try {
+            reader.setDataSource(activity, uri)
+            val tags = mutableMapOf<String, Any>()
+            for ((field, tag) in listOf(
+                "title" to MediaMetadataRetriever.METADATA_KEY_TITLE,
+                "artist" to MediaMetadataRetriever.METADATA_KEY_ARTIST,
+                "album" to MediaMetadataRetriever.METADATA_KEY_ALBUM,
+                "albumArtist" to MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST,
+                "genre" to MediaMetadataRetriever.METADATA_KEY_GENRE,
+            )) reader.extractMetadata(tag)?.let { tags[field] = it }
+            reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()?.let { tags["duration"] = it }
+            return tags
+        } finally {
+            reader.release()
         }
-        genres
-    }.getOrDefault(emptyMap())
+    }
 
     private fun artwork(uri: Uri, video: Boolean): ByteArray? {
         val bitmap = if (Build.VERSION.SDK_INT >= 29) {
@@ -302,8 +274,26 @@ internal class LocalMediaLibrary(
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     }
 
+    private fun chooseFolder(result: MethodChannel.Result) {
+        if (folderPicker != null || songPicker != null) {
+            result.error("busy", "A picker is already open.", null)
+            return
+        }
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
+        )
+        folderPicker = result
+        try {
+            @Suppress("DEPRECATION")
+            activity.startActivityForResult(intent, FOLDER_PICKER)
+        } catch (error: Exception) {
+            folderPicker = null
+            throw error
+        }
+    }
+
     private fun openSongs(result: MethodChannel.Result) {
-        if (songPicker != null) {
+        if (songPicker != null || folderPicker != null) {
             result.error("busy", "A file picker is already open.", null)
             return
         }
@@ -323,6 +313,24 @@ internal class LocalMediaLibrary(
     }
 
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode == FOLDER_PICKER) {
+            val result = folderPicker ?: return true
+            folderPicker = null
+            val tree = data?.data
+            if (resultCode != Activity.RESULT_OK || tree == null) {
+                result.success(null)
+                return true
+            }
+            scanner.execute {
+                work(result) {
+                    require(tree.scheme == "content" && DocumentsContract.isTreeUri(tree))
+                    resolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    val name = folderName(tree) ?: "Folder"
+                    mapOf("uri" to tree.toString(), "name" to name)
+                }
+            }
+            return true
+        }
         if (requestCode != SONG_PICKER) return false
         val result = songPicker ?: return true
         songPicker = null
@@ -349,8 +357,8 @@ internal class LocalMediaLibrary(
         onCancel(null)
         events.setStreamHandler(null)
         channel.setMethodCallHandler(null)
-        accessRequest?.second?.success("denied")
-        accessRequest = null
+        folderPicker?.success(null)
+        folderPicker = null
         songPicker?.success(emptyList<Map<String, String>>())
         songPicker = null
         scanner.shutdown()
@@ -358,7 +366,7 @@ internal class LocalMediaLibrary(
     }
 
     private companion object {
-        const val ACCESS_REQUEST = 4112
+        const val FOLDER_PICKER = 4112
         const val SONG_PICKER = 4113
     }
 }
