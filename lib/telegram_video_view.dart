@@ -7,6 +7,7 @@ import 'app_popups.dart';
 
 import 'models.dart';
 import 'library_widgets.dart';
+import 'local_media_view.dart';
 import 'discovery_widgets.dart';
 import 'app_navigation.dart';
 import 'app_theme.dart';
@@ -17,6 +18,8 @@ import 'video_playback.dart';
 import 'video_playback_data.dart';
 import 'video_files.dart';
 import 'video_library.dart';
+
+part 'video_home.dart';
 
 class TelegramVideoView extends StatefulWidget {
   const TelegramVideoView({
@@ -78,16 +81,35 @@ class _VideoResults {
 
   final MusicChat channel;
   final videos = <String, Track>{};
+  Track? latest;
   final cursors = <bool, int>{false: 0, true: 0};
   List<Track>? sorted;
   LibrarySort? sortOrder;
 
-  List<Track> sortedVideos(LibrarySort order) {
+  List<Track> sortedVideos(VideoPlaybackData data) {
+    final order = data.librarySort;
     if (sortOrder != order) {
       sorted = null;
       sortOrder = order;
     }
-    return sorted ??= sortVideoLibrary(videos.values, order);
+    if (order != LibrarySort.duration) {
+      return sorted ??= sortVideoLibrary(videos.values, order);
+    }
+    if (sorted case final cached?) return cached;
+    final durations = {
+      for (final track in videos.values)
+        track: data.durationOf(VideoSource.telegram(track)),
+    };
+    return sorted = videos.values.toList()
+      ..sort((a, b) {
+        final left = durations[a]!, right = durations[b]!;
+        final byDuration = left == Duration.zero || right == Duration.zero
+            ? (left == Duration.zero ? 1 : 0).compareTo(
+                right == Duration.zero ? 1 : 0,
+              )
+            : left.compareTo(right);
+        return byDuration == 0 ? LibrarySort.title.compare(a, b) : byDuration;
+      });
   }
 
   bool recentPending = true;
@@ -104,6 +126,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   final _playlistSearch = TextEditingController();
   final _videoSources = <int>{};
   final _videoCounts = <int, int>{};
+  final _durationLookups = <(String, int?, int), Future<Duration?>>{};
+  final _durationWorkers = List.generate(2, (_) => Future<void>.value());
+  int _nextDurationWorker = 0, _durationSession = 0;
+  Timer? _saveDurations;
   late final TelegramStreamProxy _proxy;
   late final bool Function(int) _previousStreaming, _isStreaming;
   late final bool Function() _previousActive, _hasActiveStream;
@@ -113,6 +139,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   bool _showSearchChannel = false, _browseChannelsAsList = false;
   int _tab = 0;
   int _libraryCollection = 0;
+  final _localLibraryKey = GlobalKey<LocalMediaViewPaneState>();
   final _playlistPageController = VideoLibraryPageController();
   static const _collections = [
     ('All videos', Icons.video_library_rounded),
@@ -193,6 +220,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         _playlistSearch.clear();
         _videoSources.clear();
         _videoCounts.clear();
+        ++_durationSession;
+        _durationLookups.clear();
       });
       if (_ready) unawaited(_refreshChannels());
     }
@@ -297,6 +326,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     for (final video in videos) {
       if (results.videos.containsKey(video.id)) continue;
       results.videos[video.id] = video;
+      if (results.latest == null || video.date > results.latest!.date) {
+        results.latest = video;
+      }
       results.sorted = null;
       _videoSources.add(results.channel.id);
     }
@@ -320,9 +352,70 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     }
   }
 
+  Future<Duration?>? _lookupVideoDuration(VideoSource source) {
+    final settings = widget.music.settings;
+    final data = settings.videoPlayback;
+    if (data.durationOf(source) > Duration.zero || !source.canPlay) return null;
+    final reference = source.telegram;
+    if (reference != null && !_ready) return null;
+    final key = (source.id, reference?.fileId, reference?.size ?? 0);
+    if (_durationLookups[key] case final pending?) return pending;
+    final generation = _durationSession;
+    final slot = _nextDurationWorker++ % _durationWorkers.length;
+    bool current() =>
+        mounted &&
+        identical(settings.videoPlayback, data) &&
+        (reference == null || _ready && generation == _durationSession);
+    final work = _durationWorkers[slot].then<Duration?>((_) async {
+      if (!current()) return null;
+      try {
+        final Duration? runtime;
+        var resolved = source;
+        if (reference == null) {
+          runtime = await readLocalVideoDuration(source);
+        } else {
+          final video = reference.fileId != null
+              ? reference
+              : await _telegram.videoArtworkTrack(reference);
+          if (video == null || !current()) return null;
+          resolved = VideoSource.telegram(video);
+          runtime = await _telegram.readVideoRuntime(video);
+        }
+        if (runtime == null || !current()) return null;
+        if (data.rememberDuration(resolved, runtime)) {
+          if (_library?.sortOrder == LibrarySort.duration &&
+              _library?.videos.containsKey(resolved.telegram?.id) == true) {
+            setState(() => _library?.sorted = null);
+          }
+          _saveDurations?.cancel();
+          _saveDurations = Timer(
+            const Duration(milliseconds: 450),
+            _flushDurations,
+          );
+        }
+        return runtime;
+      } catch (_) {
+        return null;
+      }
+    });
+    _durationWorkers[slot] = work.then<void>((_) {});
+    if (_durationLookups.length >= 256) {
+      _durationLookups.remove(_durationLookups.keys.first);
+    }
+    return _durationLookups[key] = work;
+  }
+
+  void _flushDurations() {
+    if (_saveDurations == null) return;
+    _saveDurations!.cancel();
+    _saveDurations = null;
+    unawaited(widget.music.settings.save().catchError((Object _) {}));
+  }
+
   void _recordVideo(VideoSource source) {
     final settings = widget.music.settings;
     settings.videoPlayback.recordVideo(source);
+    if (_library?.sortOrder == LibrarySort.duration) _library?.sorted = null;
     unawaited(settings.save().catchError((Object _) {}));
     if (mounted) setState(() {});
   }
@@ -366,6 +459,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
         source: source,
         data: data,
         artwork: _videoArtwork(video),
+        lookupDuration: _lookupVideoDuration,
       );
       if (!mounted || action == null) return;
       switch (action) {
@@ -385,7 +479,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     if (!_ready) return;
     final library = _library;
     final videos = library != null && library.videos.containsKey(video.id)
-        ? library.sortedVideos(widget.music.settings.videoPlayback.librarySort)
+        ? library.sortedVideos(widget.music.settings.videoPlayback)
         : [video];
     await _launchPlayer(
       videos.map(VideoSource.telegram).toList(),
@@ -478,6 +572,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _flushDurations();
     unawaited(_postSubscription.cancel());
     _telegram.removeListener(_authorizationChanged);
     if (identical(_telegram.isStreaming, _isStreaming)) {
@@ -526,7 +621,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
           ),
       ],
     );
-    if (!mounted || sort == null || sort == settings.videoPlayback.librarySort) {
+    if (!mounted ||
+        sort == null ||
+        sort == settings.videoPlayback.librarySort) {
       return;
     }
     setState(() => settings.videoPlayback.librarySort = sort);
@@ -577,7 +674,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       canPop: _tab == 0,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop || _showingPlayer) return;
-        if (_tab == 2) {
+        if (_tab == 2 && settings.videoLibraryOnDevice) {
+          if (_localLibraryKey.currentState?.backToGroups() == true) return;
+        } else if (_tab == 2) {
           if (_libraryCollection == 1 &&
               _playlistPageController.backToOverview()) {
             return;
@@ -723,7 +822,49 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     icon: const Icon(Icons.sort_rounded, size: 20),
   );
 
+  void _setVideoLibrarySource(bool local) {
+    final settings = widget.music.settings;
+    if (settings.videoLibraryOnDevice == local) return;
+    setState(() => settings.videoLibraryOnDevice = local);
+    unawaited(
+      settings.save().catchError((Object _) {
+        if (mounted) _notice('Could not save the library source.');
+      }),
+    );
+  }
+
   Widget _videoLibrary(BuildContext context) {
+    final settings = widget.music.settings;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (MediaQuery.viewInsetsOf(context).bottom == 0)
+          LibrarySourceSwitch(
+            local: settings.videoLibraryOnDevice,
+            onChanged: _setVideoLibrarySource,
+          ),
+        Expanded(
+          child: settings.videoLibraryOnDevice
+              ? LocalMediaViewPane(
+                  key: _localLibraryKey,
+                  settings: settings,
+                  video: true,
+                  bottomPadding: _bottomPadding(context),
+                  onPlay: (rows, index) => unawaited(
+                    _launchPlayer([for (final row in rows) row.video], index),
+                  ),
+                  onOpenFiles: _openHomeFiles,
+                  onSettings: MediaQuery.sizeOf(context).width < 900
+                      ? widget.onSettings
+                      : null,
+                )
+              : _telegramVideoLibrary(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _telegramVideoLibrary(BuildContext context) {
     final settings = widget.music.settings;
     final colors = Theme.of(context).colorScheme;
     final showHeader = MediaQuery.viewInsetsOf(this.context).bottom == 0;
@@ -779,6 +920,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                       pickFiles: pickVideoFiles,
                       playlists: playlists,
                       historyArtwork: _historyArtwork,
+                      lookupDuration: _lookupVideoDuration,
                       embedded: true,
                       changes: widget.music,
                       controller: playlists ? _playlistPageController : null,
@@ -873,165 +1015,20 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     ],
   );
 
-  Widget _home(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final channels = _channels
-        .where((channel) => _videoSources.contains(channel.id))
-        .toList();
-    final videos = _library?.videos.values.take(4).toList() ?? const <Track>[];
-    final history = widget.music.settings.videoPlayback.history;
-    final recent = _ready
-        ? (history.values
-              .where((entry) => entry.source.telegram != null)
-              .toList()
-            ..sort((a, b) => b.playedAt.compareTo(a.playedAt)))
-        : const <VideoHistoryEntry>[];
-
-    return ListView(
-      key: const PageStorageKey('video-home-scroll'),
-      padding: EdgeInsets.only(bottom: _bottomPadding(context)),
-      children: [
-        Text(
-          'Auralis Video',
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: colors.primary,
-            letterSpacing: 2,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 12),
-        DiscoveryHero(
-          title: 'Your Cinema',
-          emptyIcon: Icons.movie_rounded,
-          tracks: videos,
-          artwork: _videoArtwork,
-          description: _ready
-              ? 'A world of video from your Telegram library.'
-              : 'Connect Telegram to bring your videos into Auralis.',
-          action: videos.isNotEmpty
-              ? IconButton.filled(
-                  tooltip: 'Browse videos',
-                  onPressed: () => _selectTab(2),
-                  style: IconButton.styleFrom(minimumSize: const Size(60, 60)),
-                  icon: const Icon(Icons.play_arrow_rounded, size: 26),
-                )
-              : FilledButton.tonalIcon(
-                  onPressed: !_ready
-                      ? widget.onConnect
-                      : _library == null
-                      ? _showChannelSearch
-                      : () => _selectTab(2),
-                  icon: Icon(
-                    _ready ? Icons.video_library_rounded : Icons.send_rounded,
-                  ),
-                  label: Text(_ready ? 'Browse videos' : 'Connect Telegram'),
-                ),
-        ),
-        const SizedBox(height: 16),
-        DiscoveryCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                color: colors.secondaryContainer,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                child: _heading(
-                  'Video channels',
-                  action: IconButton.filledTonal(
-                    tooltip: 'Browse channels',
-                    onPressed: _ready ? _showChannelSearch : null,
-                    icon: const Icon(Icons.arrow_forward_rounded, size: 20),
-                  ),
-                ),
-              ),
-              if (channels.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    _ready
-                        ? 'Find a Telegram channel in Browse.'
-                        : 'Your video channels will appear here.',
-                  ),
-                ),
-              for (final channel in channels.take(6))
-                ListTile(
-                  leading: const Icon(Icons.campaign_rounded),
-                  title: Text(
-                    channel.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () {
-                    _showSearchChannel = false;
-                    if (_library?.channel.id != channel.id) {
-                      _browseChannel(channel);
-                    }
-                    _selectTab(2);
-                  },
-                ),
-              if (channels.length > 6)
-                TextButton(
-                  onPressed: _showChannelSearch,
-                  child: const Text('Show all channels'),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        _heading('Recently opened'),
-        const SizedBox(height: 8),
-        if (recent.isEmpty)
-          Text(
-            'Your recent videos will appear here.',
-            style: TextStyle(color: colors.onSurfaceVariant),
-          ),
-        for (final entry in recent.take(12))
-          if (entry.source.telegram case final Track video)
-            _recentVideoRow(video, colors),
-      ],
-    );
+  Future<void> _openHomeFiles() async {
+    try {
+      final videos = await pickVideoFiles();
+      if (mounted && videos.isNotEmpty) await _launchPlayer(videos, 0);
+    } catch (_) {
+      if (mounted) _notice('Could not open the selected video files.');
+    }
   }
 
-  Widget _recentVideoRow(Track video, ColorScheme colors) {
-    final watched = _isWatched(video);
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: SizedBox(
-          width: 64,
-          height: 44,
-          child: _videoArtwork(
-            _library?.videos[video.id] ?? video,
-            watched: watched,
-          ),
-        ),
-      ),
-      title: Text(
-        video.title,
-        style: watched ? TextStyle(color: colors.onSurfaceVariant) : null,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        [
-          _episodeStatus(video, watched),
-          video.source,
-        ].where((text) => text.isNotEmpty).join(' · '),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [_watchButton(video, watched), _videoActions(video)],
-      ),
-      onTap: () => unawaited(_play(video)),
-    );
+  void _openHomeChannel(MusicChat channel) {
+    _setVideoLibrarySource(false);
+    _showSearchChannel = false;
+    if (_library?.channel.id != channel.id) _browseChannel(channel);
+    _selectTab(2);
   }
 
   Widget _emptyState(
@@ -1184,7 +1181,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       builder: (subtitle) => _browseChannelsAsList
           ? _VideoListRow(
               title: channel.title,
-              subtitle: subtitle,
+              subtitle: subtitle == null ? null : Text(subtitle),
               selected: selected,
               artwork: _VideoArtwork(
                 telegram: _telegram,
@@ -1244,9 +1241,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     final searching = _tab == 1;
     final results = _library;
     final allVideos =
-        results?.sortedVideos(
-          widget.music.settings.videoPlayback.librarySort,
-        ) ??
+        results?.sortedVideos(widget.music.settings.videoPlayback) ??
         const <Track>[];
     final query = searching ? '' : _librarySearch.text.trim().toLowerCase();
     final videos = query.isEmpty
@@ -1289,14 +1284,18 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             final video = videos[index];
             final watched = _isWatched(video);
             final status = _episodeStatus(video, watched);
+            final source = VideoSource.telegram(video);
             return _VideoListRow(
               key: ValueKey(video.id),
               title: video.title,
               watched: watched,
-              subtitle: [
-                if (video.duration > Duration.zero) clockText(video.duration),
-                if (status.isNotEmpty) status,
-              ].join(' · '),
+              subtitle: VideoRuntimeLabel(
+                duration: widget.music.settings.videoPlayback.durationOf(
+                  source,
+                ),
+                lookup: _lookupVideoDuration(source),
+                status: status,
+              ),
               artwork: _videoArtwork(video, watched: watched),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1368,7 +1367,7 @@ class _VideoListRow extends StatelessWidget {
   });
 
   final String title;
-  final String? subtitle;
+  final Widget? subtitle;
   final bool selected, watched;
   final Widget artwork;
   final Widget? trailing;
@@ -1419,13 +1418,16 @@ class _VideoListRow extends StatelessWidget {
                             ),
                           ),
                           if (subtitle != null)
-                            Text(
-                              subtitle!,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: selected
-                                    ? colors.onPrimaryContainer
-                                    : colors.onSurfaceVariant,
-                              ),
+                            DefaultTextStyle(
+                              style:
+                                  (theme.textTheme.labelSmall ??
+                                          const TextStyle())
+                                      .copyWith(
+                                        color: selected
+                                            ? colors.onPrimaryContainer
+                                            : colors.onSurfaceVariant,
+                                      ),
+                              child: subtitle!,
                             ),
                         ],
                       ),
