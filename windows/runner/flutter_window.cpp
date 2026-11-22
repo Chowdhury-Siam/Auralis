@@ -27,6 +27,8 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   music_visualizer_ = std::make_unique<MusicVisualizer>(
       flutter_controller_->engine()->messenger());
+  local_media_ = std::make_unique<LocalMedia>(
+      GetHandle(), flutter_controller_->engine()->messenger());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -42,6 +44,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  local_media_.reset();
   music_visualizer_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
@@ -54,6 +57,10 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == LocalMedia::kReady && local_media_) {
+    local_media_->Deliver();
+    return 0;
+  }
   // Losing focus to another app is not minimization. Keep visible visualizers
   // alive, but release capture when this window is actually minimized/hidden,
   // even if a plugin consumes the message.
