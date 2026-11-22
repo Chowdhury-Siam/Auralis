@@ -85,7 +85,8 @@ void main() {
         });
         await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
         await tester.pumpAndSettle();
-        expect(find.byType(DiscoveryHero), findsOneWidget);
+        expect(find.byKey(const ValueKey('video-home-hero')), findsOneWidget);
+        expect(find.byTooltip('Open video files'), findsOneWidget);
         expect(find.byTooltip('Settings'), findsNothing);
         final musicShortcut = find.widgetWithIcon(
           IconButton,
