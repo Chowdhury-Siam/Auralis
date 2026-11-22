@@ -216,7 +216,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
   Duration get _position => _player?.state.position ?? Duration.zero;
   Duration get _duration {
     final duration = _player?.state.duration ?? Duration.zero;
-    return duration > Duration.zero ? duration : _source.duration;
+    return duration > Duration.zero ? duration : _data.durationOf(_source);
   }
 
   List<VideoBookmark> get _bookmarks => _data.bookmarks[_source.id] ?? const [];
@@ -561,7 +561,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
               unawaited(_applyOrientation());
             }),
           player.stream.duration.listen((duration) {
-            if (duration > Duration.zero && _canPlay) {
+            if (duration > Duration.zero && _canPlay && _acceptVideoParams) {
+              if (_data.rememberDuration(_source, duration)) _saveSettings();
               unawaited(_readChapters());
             }
           }),
