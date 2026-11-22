@@ -13,6 +13,8 @@ import '../media_cache.dart';
 import 'package:path/path.dart' as p;
 
 import '../models.dart';
+import '../release_notes.dart' show currentReleaseVersion;
+import '../video_duration.dart';
 import '../account_backup.dart';
 import '../lyrics.dart';
 import '../storage.dart';
@@ -567,8 +569,13 @@ class TelegramService extends ChangeNotifier {
     }
   }
 
-  CoverRange _metadataSource(int id, int generation) {
-    bool active() => ready && generation == _imageGeneration;
+  CoverRange _metadataSource(
+    int id,
+    int generation, {
+    bool Function()? isCurrent,
+  }) {
+    bool active() =>
+        ready && (isCurrent?.call() ?? generation == _imageGeneration);
     final deadline = DateTime.now().add(const Duration(seconds: 20));
     Future<Json> metadataRequest(Json request) {
       final remaining = deadline.difference(DateTime.now());
@@ -625,6 +632,27 @@ class TelegramService extends ChangeNotifier {
       }
       return active() ? bytes.takeBytes() : null;
     };
+  }
+
+  Future<Duration?> readVideoRuntime(Track video) async {
+    final id = video.fileId, generation = _imageGeneration;
+    if (video.duration > Duration.zero) return video.duration;
+    if (!ready || id == null || video.size <= 0) return null;
+    final client = transport;
+    bool current() => ready && identical(client, transport);
+    try {
+      return await _withTemporaryFile(
+        id,
+        generation,
+        () => readVideoDuration(
+          _metadataSource(id, generation, isCurrent: current),
+          video.size,
+        ),
+        isCurrent: current,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Lyrics?> embeddedLyrics(Track track) async {
@@ -1102,7 +1130,7 @@ class TelegramService extends ChangeNotifier {
               ? 'Auralis Android'
               : 'Auralis Windows x64',
           'system_version': Platform.operatingSystem,
-          'application_version': '0.1.229',
+          'application_version': currentReleaseVersion,
         }));
       } on TdException catch (e) {
         throw FormatException(
