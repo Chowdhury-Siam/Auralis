@@ -19,6 +19,8 @@ import 'media_item_sheet.dart';
 import 'music_playlist_widgets.dart';
 import 'playlist_photos.dart';
 import 'library_widgets.dart';
+import 'local_media.dart';
+import 'local_media_view.dart';
 import 'lyrics.dart';
 import 'lyrics_view.dart';
 import 'player.dart';
@@ -117,9 +119,12 @@ class _AuralisAppState extends State<AuralisApp> {
 
   void _artworkChanged() {
     final track = widget.player.current;
-    final cover = track != null && track.fileId != null && widget.telegram.ready
-        ? widget.telegram.cover(track)
-        : null;
+    final cover = switch (track) {
+      final song? when song.localUri != null => localSongArtwork(song),
+      final song? when song.fileId != null && widget.telegram.ready =>
+        widget.telegram.cover(song),
+      _ => null,
+    };
     final identity = (
       track?.id,
       track?.coverFileId,
@@ -129,7 +134,9 @@ class _AuralisAppState extends State<AuralisApp> {
     if (identity == _artworkIdentity) return;
     _artworkIdentity = identity;
     final generation = ++_generation;
-    final cached = track == null ? null : widget.telegram.cachedCover(track);
+    final cached = track == null || track.localUri != null
+        ? null
+        : widget.telegram.cachedCover(track);
     unawaited(_loadPalette(cached ?? track?.coverPreview, cover, generation));
   }
 
@@ -279,6 +286,7 @@ class _PlayerShellState extends State<PlayerShell>
   void _toggleMixExpanded() => setState(() => _mixExpanded = !_mixExpanded);
   void _toggleBrowseLayout() => setState(() => _browseAsList = !_browseAsList);
   void _openRecent() {
+    _setMusicLibrarySource(false);
     _navigate(_Page.library);
     _selectLibraryCollection('Recently played');
   }
@@ -306,6 +314,7 @@ class _PlayerShellState extends State<PlayerShell>
     List<({Track track, String details})> issues,
   })?
   _cacheReport;
+  final _localLibraryKey = GlobalKey<LocalMediaViewPaneState>();
   final search = TextEditingController();
   final _discoveryFocus = FocusNode();
   SettingsSection? _settingsSection;
@@ -476,6 +485,7 @@ class _PlayerShellState extends State<PlayerShell>
           identical(player.current, track) &&
           scope == telegram.mediaCache.directory?.path;
       if (track != null &&
+          track.localUri == null &&
           _metadataPlaybackStarted &&
           settings.automaticLyrics &&
           active()) {
@@ -500,6 +510,7 @@ class _PlayerShellState extends State<PlayerShell>
     for (var index = 0; index < tracks.length; index++) {
       if (!active()) return;
       final track = tracks[index];
+      if (track.localUri != null) continue;
       final bytes =
           telegram.cachedCover(track) ??
           await telegram.savedCover(track, active: active);
@@ -637,7 +648,13 @@ class _PlayerShellState extends State<PlayerShell>
       } else {
         unawaited(_closeNowPlaying());
       }
-    } else if (destination == _Page.library && _selectedArtist != null) {
+    } else if (destination == _Page.library &&
+        player.settings.musicLibraryOnDevice &&
+        _localLibraryKey.currentState?.backToGroups() == true) {
+      return;
+    } else if (destination == _Page.library &&
+        !player.settings.musicLibraryOnDevice &&
+        _selectedArtist != null) {
       _selectArtist(null);
     } else if (destination == _Page.settings || destination == _Page.telegram) {
       _navigate(_primaryPage);
@@ -1432,7 +1449,9 @@ class _PlayerShellState extends State<PlayerShell>
         return PopScope<Object?>(
           canPop:
               destination == _rootPage &&
-              !(destination == _Page.library && _selectedArtist != null),
+              !(destination == _Page.library &&
+                  (_selectedArtist != null ||
+                      player.settings.musicLibraryOnDevice)),
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop) _back();
           },
@@ -1979,7 +1998,9 @@ class _PlayerShellState extends State<PlayerShell>
       foregroundColor: _colors.onSurface,
     ),
     onPressed: () async {
-      final playlist = destination == _Page.library && collection == 'Playlists'
+      final local = track.localUri != null;
+      final playlist =
+          !local && destination == _Page.library && collection == 'Playlists'
           ? selectedPlaylist
           : null;
       final favorite = player.settings.favoriteIds.contains(track.id);
@@ -2004,12 +2025,13 @@ class _PlayerShellState extends State<PlayerShell>
             Icons.play_arrow_rounded,
             primary: true,
           ),
-          MediaItemAction(
-            'favorite',
-            favorite ? 'Remove from favorites' : 'Add to favorites',
-            favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            selected: favorite,
-          ),
+          if (!local)
+            MediaItemAction(
+              'favorite',
+              favorite ? 'Remove from favorites' : 'Add to favorites',
+              favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              selected: favorite,
+            ),
           const MediaItemAction(
             'queue',
             'Add to queue',
@@ -2020,11 +2042,12 @@ class _PlayerShellState extends State<PlayerShell>
             'Play next',
             Icons.playlist_play_rounded,
           ),
-          const MediaItemAction(
-            'playlist',
-            'Add to playlist',
-            Icons.playlist_add_rounded,
-          ),
+          if (!local)
+            const MediaItemAction(
+              'playlist',
+              'Add to playlist',
+              Icons.playlist_add_rounded,
+            ),
           if (playlist != null)
             const MediaItemAction(
               'remove',
@@ -2354,7 +2377,58 @@ class _PlayerShellState extends State<PlayerShell>
     ),
   );
 
+  void _setMusicLibrarySource(bool local) {
+    if (player.settings.musicLibraryOnDevice == local) return;
+    setState(() => player.settings.musicLibraryOnDevice = local);
+    unawaited(
+      player.settings.save().catchError((Object _) {
+        if (mounted) _notice('Could not save the library source.');
+      }),
+    );
+  }
+
+  void _playLocalSongs(List<LocalMedia> media, int index) {
+    final tracks = [for (final item in media) item.track];
+    unawaited(player.play(tracks[index], from: tracks));
+  }
+
+  Future<void> _openLocalSongs() async {
+    try {
+      final media = await const LocalMediaPlatform().openSongs();
+      if (mounted && media.isNotEmpty) _playLocalSongs(media, 0);
+    } on Exception {
+      if (mounted) _notice('Could not open the selected audio files.');
+    }
+  }
+
   Widget _library() {
+    if (widget.setupMode) return _telegramMusicLibrary();
+    final local = player.settings.musicLibraryOnDevice;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!_keyboardOpen)
+          LibrarySourceSwitch(local: local, onChanged: _setMusicLibrarySource),
+        Expanded(
+          child: local
+              ? LocalMediaViewPane(
+                  key: _localLibraryKey,
+                  settings: player.settings,
+                  video: false,
+                  bottomPadding: _dockPadding,
+                  onPlay: _playLocalSongs,
+                  onOpenFiles: _openLocalSongs,
+                  onSettings: _mobileNavigation
+                      ? () => _navigate(_Page.settings)
+                      : null,
+                )
+              : _telegramMusicLibrary(),
+        ),
+      ],
+    );
+  }
+
+  Widget _telegramMusicLibrary() {
     final playlistOverview =
         collection == 'Playlists' && selectedPlaylist == null;
     final artist = _selectedArtist;
@@ -3138,7 +3212,7 @@ class _PlayerShellState extends State<PlayerShell>
                   icon: favorite
                       ? Icons.favorite_rounded
                       : Icons.favorite_border_rounded,
-                  onPressed: track == null
+                  onPressed: track == null || track.localUri != null
                       ? null
                       : () async {
                           try {
@@ -3173,7 +3247,7 @@ class _PlayerShellState extends State<PlayerShell>
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      onPressed: track == null
+                      onPressed: track == null || track.localUri != null
                           ? null
                           : () => setState(() {
                               showLyrics = true;
@@ -3187,7 +3261,7 @@ class _PlayerShellState extends State<PlayerShell>
                   ),
                   IconButton(
                     tooltip: 'Add to playlist',
-                    onPressed: track == null
+                    onPressed: track == null || track.localUri != null
                         ? null
                         : () => _choosePlaylist(track),
                     icon: const Icon(Icons.playlist_add_rounded),
@@ -3764,10 +3838,13 @@ class _PlayerShellState extends State<PlayerShell>
       ? (_videoMode ? 'Video cache' : 'Music cache')
       : _settingsSection?.title ?? 'Settings';
 
-  Future<({List<CacheEntry> entries, String? message})> _loadCache(bool video) async {
+  Future<({List<CacheEntry> entries, String? message})> _loadCache(
+    bool video,
+  ) async {
     final client = telegram.transport;
     final disk = telegram.mediaCache;
-    bool sameAccount() => identical(telegram.transport, client) &&
+    bool sameAccount() =>
+        identical(telegram.transport, client) &&
         telegram.mediaCache.directory?.path == disk.directory?.path;
     final entries = video
         ? [
@@ -3781,34 +3858,42 @@ class _PlayerShellState extends State<PlayerShell>
                 remove: () async {
                   if (!sameAccount()) throw StateError('Cache account changed.');
                   telegram.discardVideoThumbnail(preview.id);
-                  await ResizeImage(MemoryImage(preview.bytes), width: 480).evict();
+                  await ResizeImage(
+                    MemoryImage(preview.bytes),
+                    width: 480,
+                  ).evict();
                 },
               ),
           ]
-        : await musicCacheEntries(
-            disk, [...library.tracks, ...player.queue], sameAccount,
-          );
+        : await musicCacheEntries(disk, [
+            ...library.tracks,
+            ...player.queue,
+          ], sameAccount);
     String? message;
     try {
       final bytes = await telegram.playbackCacheBytes(video: video);
       if (!sameAccount()) throw StateError('Cache account changed.');
       if (bytes > 0) {
         final inUse = telegram.mediaCacheInUse;
-        entries.add(CacheEntry(
-          id: 'telegram-playback',
-          category: CacheCategory.playback,
-          title: video ? 'Cached Telegram video' : 'Cached Telegram audio',
-          detail: inUse ? 'Stop playback before clearing' : 'Temporary files',
-          bytes: bytes,
-          inUse: inUse,
-          remove: () {
-            if (!sameAccount()) throw StateError('Cache account changed.');
-            return telegram.clearPlaybackCache(video: video);
-          },
-        ));
+        entries.add(
+          CacheEntry(
+            id: 'telegram-playback',
+            category: CacheCategory.playback,
+            title: video ? 'Cached Telegram video' : 'Cached Telegram audio',
+            detail: inUse ? 'Stop playback before clearing' : 'Temporary files',
+            bytes: bytes,
+            inUse: inUse,
+            remove: () {
+              if (!sameAccount()) throw StateError('Cache account changed.');
+              return telegram.clearPlaybackCache(video: video);
+            },
+          ),
+        );
       }
     } catch (_) {
-      message = telegram.ready ? 'Telegram storage usage is unavailable.' : null;
+      message = telegram.ready
+          ? 'Telegram storage usage is unavailable.'
+          : null;
     }
     return (entries: entries, message: message);
   }
@@ -4394,7 +4479,16 @@ class Artwork extends StatelessWidget {
         ? placeholder
         : image(MemoryImage(mini), placeholder);
     Widget child = fallback;
-    if (telegram != null && track != null) {
+    if (track?.localUri != null) {
+      child = FutureBuilder<Uint8List?>(
+        key: ValueKey(track!.id),
+        future: localSongArtwork(track!),
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          return bytes == null ? fallback : image(MemoryImage(bytes), fallback);
+        },
+      );
+    } else if (telegram != null && track != null) {
       child = FutureBuilder<Uint8List?>(
         key: ValueKey((track!.id, track!.fileId, track!.coverFileId)),
         future: telegram!.cover(track!),
