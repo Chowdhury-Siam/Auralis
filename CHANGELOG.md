@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.236
+
+- Fix the Windows CI smoke check by keeping saved media folder data independent of the Flutter folder picker.
+
+## 0.1.235
+
+- Open the same Video Playlists, History, and Snapshots from either Telegram or On this device. The local Library also offers Folders.
+
 ## 0.1.234
 
 - Choose which folders appear in On this device on Android and Windows. Music and Video browse the selected folders and their subfolders.
