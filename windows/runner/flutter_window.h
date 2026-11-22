@@ -8,6 +8,7 @@
 
 #include "win32_window.h"
 #include "music_visualizer.h"
+#include "local_media.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -30,6 +31,7 @@ class FlutterWindow : public Win32Window {
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
   std::unique_ptr<MusicVisualizer> music_visualizer_;
+  std::unique_ptr<LocalMedia> local_media_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_
