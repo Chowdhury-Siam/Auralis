@@ -983,11 +983,13 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
           title: title,
           subtitle: subtitle,
           enabled: enabled,
+          compact: true,
           trailing: alternate
               ? IconButton(
                   tooltip: 'Search by song name or artist',
                   onPressed: openAlternate,
-                  icon: const Icon(Icons.tune_rounded, size: 20),
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.tune_rounded, size: 18),
                 )
               : null,
         );
@@ -1049,7 +1051,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
 
   Widget _options() => AuralisPopupMenu<String>(
     tooltip: 'Lyrics options',
-    constraints: const BoxConstraints(minWidth: 280, maxWidth: 300),
+    constraints: const BoxConstraints(minWidth: 280, maxWidth: 344),
     icon: const Icon(Icons.more_horiz_rounded),
     onSelected: (value) {
       if (value == 'import') {
@@ -1072,6 +1074,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
     },
     itemBuilder: (_) => [
       ..._translationActions(),
+      _menuDivider,
       _menuAction(
         value: 'import',
         enabled: _track != null && !_importing,
@@ -1095,12 +1098,20 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
         title: 'Find lyrics online',
         subtitle: _lyrics?.provider == null
             ? 'Hold for search options.'
-            : 'Current: ${_lyrics!.provider}\nHold for search options.',
+            : 'Current: ${_lyrics!.provider} · Hold for search options.',
+      ),
+      _menuAction(
+        value: 'paste',
+        enabled: _track != null,
+        icon: Icons.content_paste_rounded,
+        title: 'Paste lyrics',
+        subtitle: 'Enter plain text or timestamped LRC.',
       ),
       if (widget.saveSongWithLyrics != null &&
           _track?.fileId != null &&
           _lyrics != null &&
           !_lyrics!.instrumental) ...[
+        _menuDivider,
         _menuAction(
           value: 'save-tagged',
           enabled: !_savingSong && !_loading,
@@ -1116,14 +1127,14 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
           subtitle: 'Embed lyrics for future downloads of this post.',
         ),
       ],
-      _menuAction(
-        value: 'paste',
-        enabled: _track != null,
-        icon: Icons.content_paste_rounded,
-        title: 'Paste lyrics',
-        subtitle: 'Enter plain text or timestamped LRC.',
-      ),
     ],
+  );
+
+  static const _menuDivider = PopupMenuDivider(
+    height: 8,
+    thickness: 1,
+    indent: 8,
+    endIndent: 8,
   );
 
   Widget _body({required bool wide}) {
