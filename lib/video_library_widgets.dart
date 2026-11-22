@@ -318,6 +318,8 @@ class _VideoEntryCard extends StatelessWidget {
   const _VideoEntryCard({
     super.key,
     required this.source,
+    required this.runtime,
+    this.lookupDuration,
     required this.status,
     required this.actions,
     required this.onTap,
@@ -327,6 +329,8 @@ class _VideoEntryCard extends StatelessWidget {
     this.compact = false,
   });
   final VideoSource source;
+  final Duration runtime;
+  final Future<Duration?>? lookupDuration;
   final String status;
   final String? date;
   final double? progress;
@@ -406,6 +410,11 @@ class _VideoEntryCard extends StatelessWidget {
                                         ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                               SizedBox(height: compact ? 2 : 4),
+                              VideoRuntimeLabel(
+                                duration: runtime,
+                                lookup: lookupDuration,
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
                               Text(
                                 [
                                   source.telegram?.source ?? 'On your device',
