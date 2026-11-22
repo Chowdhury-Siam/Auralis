@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.233
+
+- Switch between Telegram and On this device with one compact button in the Music and Video Library headers.
+- Match local music and video to the Telegram Library layout, with shared search and media rows.
+
 ## 0.1.232
 
 - Browse MediaStore audio and video on Android or add recursive media folders on Windows. The Music and Video libraries remember their Telegram and On this device selections independently.
