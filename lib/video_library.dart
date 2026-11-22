@@ -18,6 +18,57 @@ import 'video_playback_data.dart';
 part 'video_library_widgets.dart';
 
 typedef VideoSelection = (List<VideoSource>, int);
+typedef VideoDurationLookup = Future<Duration?>? Function(VideoSource);
+
+class VideoRuntimeLabel extends StatelessWidget {
+  const VideoRuntimeLabel({
+    super.key,
+    required this.duration,
+    this.lookup,
+    this.status = '',
+    this.style,
+    this.detail = false,
+  });
+
+  final Duration duration;
+  final Future<Duration?>? lookup;
+  final String status;
+  final TextStyle? style;
+  final bool detail;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget label(Duration value, {bool loading = false}) {
+      if (detail) {
+        return SelectableText(
+          loading ? 'Reading duration…' : videoDurationText(value),
+        );
+      }
+      final time = value > Duration.zero ? videoDurationText(value) : '—:—';
+      final description = value > Duration.zero
+          ? 'Duration $time'
+          : loading
+          ? 'Reading duration'
+          : 'Duration unavailable';
+      return Text(
+        status.isEmpty ? time : '$time · $status',
+        semanticsLabel: status.isEmpty ? description : '$description, $status',
+        style: style,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    if (duration > Duration.zero || lookup == null) return label(duration);
+    return FutureBuilder<Duration?>(
+      future: lookup,
+      builder: (context, snapshot) => label(
+        snapshot.data ?? Duration.zero,
+        loading: snapshot.connectionState == ConnectionState.waiting,
+      ),
+    );
+  }
+}
 
 Future<String?> _playlistName(BuildContext context, String initial) =>
     showAuralisDialog<String>(
@@ -106,9 +157,11 @@ Future<String?> showVideoItemSheet({
   Widget? artwork,
   String? removeLabel,
   bool playNext = false,
+  VideoDurationLookup? lookupDuration,
 }) {
   final watched = data.isWatched(source);
   final position = data.positions[source.id];
+  final duration = data.durationOf(source);
   return showMediaItemSheet(
     context: context,
     title: source.title,
@@ -116,14 +169,23 @@ Future<String?> showVideoItemSheet({
     artwork: artwork ?? _VideoSourcePreview(source),
     details: [
       if (source.telegram case final Track track)
-        ...mediaItemDetails(track, video: true)
+        ...mediaItemDetails(track, video: true, videoDuration: duration)
       else ...[
         ('Mode', 'Video'),
         ('Source', 'On your device'),
+        ('Duration', videoDurationText(duration)),
       ],
       ('Status', watched ? 'Watched' : 'Not watched'),
       if (position != null) ('Resume at', clockText(position)),
     ],
+    detailValues: {
+      if (duration <= Duration.zero && lookupDuration != null)
+        'Duration': VideoRuntimeLabel(
+          duration: duration,
+          lookup: lookupDuration(source),
+          detail: true,
+        ),
+    },
     actions: [
       const MediaItemAction(
         'play',
@@ -193,6 +255,7 @@ class VideoLibraryPage extends StatefulWidget {
     required this.pickFiles,
     required this.playlists,
     this.historyArtwork,
+    this.lookupDuration,
     this.changes,
     this.embedded = false,
     this.onPlay,
@@ -207,6 +270,7 @@ class VideoLibraryPage extends StatefulWidget {
   final Future<List<VideoSource>> Function() pickFiles;
   final bool playlists;
   final Widget? Function(VideoSource)? historyArtwork;
+  final VideoDurationLookup? lookupDuration;
   final Listenable? changes;
   final bool embedded;
   final ValueChanged<VideoSelection>? onPlay;
@@ -359,6 +423,7 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
         source: source,
         data: _data,
         removeLabel: removeLabel,
+        lookupDuration: widget.lookupDuration,
       );
       if (!mounted || action == null) return;
       switch (action) {
@@ -428,9 +493,10 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
 
     double? progress(VideoSource source) {
       final position = _data.positions[source.id];
-      return position == null || source.duration <= Duration.zero
+      final duration = _data.durationOf(source);
+      return position == null || duration <= Duration.zero
           ? null
-          : (position.inMilliseconds / source.duration.inMilliseconds)
+          : (position.inMicroseconds / duration.inMicroseconds)
                 .clamp(0, 1)
                 .toDouble();
     }
@@ -441,6 +507,8 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
       return _VideoEntryCard(
         key: ValueKey(item.id),
         source: item,
+        runtime: _data.durationOf(item),
+        lookupDuration: widget.lookupDuration?.call(item),
         status: status(item),
         progress: progress(item),
         onTap: () => _play(list, index),
@@ -638,6 +706,8 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
                 key: ValueKey(source.id),
                 compact: true,
                 source: source,
+                runtime: _data.durationOf(source),
+                lookupDuration: widget.lookupDuration?.call(source),
                 date: date,
                 artwork: widget.historyArtwork?.call(source),
                 status: status(source),
