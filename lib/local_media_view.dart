@@ -5,44 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import 'app_popups.dart';
-import 'app_theme.dart';
 import 'library_widgets.dart';
 import 'local_media.dart';
 import 'models.dart';
 import 'storage.dart';
 import 'video_library.dart';
-
-class LibrarySourceSwitch extends StatelessWidget {
-  const LibrarySourceSwitch({
-    super.key,
-    required this.local,
-    required this.onChanged,
-  });
-
-  final bool local;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: AlignmentDirectional.centerStart,
-    child: Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: SegmentedButton<bool>(
-        showSelectedIcon: false,
-        style: const ButtonStyle(visualDensity: VisualDensity.compact),
-        segments: const [
-          ButtonSegment(value: false, label: Text('Telegram')),
-          ButtonSegment(value: true, label: Text('On this device')),
-        ],
-        selected: {local},
-        onSelectionChanged: (value) {
-          FocusManager.instance.primaryFocus?.unfocus();
-          if (value.single != local) onChanged(value.single);
-        },
-      ),
-    ),
-  );
-}
+import 'video_playback_data.dart';
 
 typedef LocalMediaPlay = void Function(List<LocalMedia> rows, int index);
 
@@ -54,6 +22,9 @@ class LocalMediaViewPane extends StatefulWidget {
     required this.bottomPadding,
     required this.onPlay,
     required this.onOpenFiles,
+    this.sourceButton,
+    this.playingTrackId,
+    this.musicActions,
     this.onSettings,
     this.platform = const LocalMediaPlatform(),
   });
@@ -63,6 +34,9 @@ class LocalMediaViewPane extends StatefulWidget {
   final double bottomPadding;
   final LocalMediaPlay onPlay;
   final VoidCallback onOpenFiles;
+  final Widget? sourceButton;
+  final String? playingTrackId;
+  final Widget Function(Track, VoidCallback, Widget)? musicActions;
   final VoidCallback? onSettings;
   final LocalMediaPlatform platform;
 
@@ -224,11 +198,13 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
   }
 
   void _changeView(LocalMediaView view, {LocalMediaGroup? group}) {
+    if (_view == view && _group == group?.key) return;
     if (_scroll.hasClients) _scroll.jumpTo(0);
     setState(() {
       _view = view;
       _group = group?.key;
       _groupLabel = group?.label;
+      _selection = const LocalMediaSelection([], []);
     });
     _refreshSelection();
   }
@@ -441,10 +417,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
       case 'play':
         _play(rows, index);
       case 'watched':
-        setState(
-          () => data.setWatched(item.video, !data.isWatched(item.video)),
-        );
-        await _saveVideo();
+        await _toggleWatched(item.video);
       case 'playlist':
         await saveVideoPlaylist(context, data, widget.settings.save, [
           item.video,
@@ -452,7 +425,9 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
     }
   }
 
-  Future<void> _saveVideo() async {
+  Future<void> _toggleWatched(VideoSource source) async {
+    final data = widget.settings.videoPlayback;
+    setState(() => data.setWatched(source, !data.isWatched(source)));
     try {
       await widget.settings.save();
     } on Exception {
@@ -460,168 +435,198 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
     }
   }
 
+  IconData _viewIcon(LocalMediaView view) => switch (view) {
+    LocalMediaView.songs => Icons.library_music_outlined,
+    LocalMediaView.albums => Icons.album_outlined,
+    LocalMediaView.artists => Icons.person_outline_rounded,
+    LocalMediaView.genres => Icons.category_outlined,
+    LocalMediaView.videos => Icons.video_library_outlined,
+    LocalMediaView.folders => Icons.folder_outlined,
+  };
+
+  Widget _actions({required bool denied}) => AuralisPopupMenu<String>(
+    tooltip: 'Local library actions',
+    icon: const Icon(Icons.more_vert_rounded, size: 20),
+    onSelected: (value) {
+      switch (value) {
+        case 'files':
+          widget.onOpenFiles();
+        case 'refresh':
+          unawaited(_refresh());
+        case 'folders':
+          unawaited(_manageFolders());
+        case 'access':
+          unawaited(_accessSettings());
+        case 'settings':
+          widget.onSettings?.call();
+      }
+    },
+    itemBuilder: (_) => [
+      const PopupMenuItem(
+        value: 'files',
+        padding: EdgeInsets.zero,
+        child: AuralisMenuRow(
+          title: 'Open files',
+          icon: Icons.folder_open_rounded,
+        ),
+      ),
+      if (!denied)
+        PopupMenuItem(
+          value: 'refresh',
+          enabled: !_scanning,
+          padding: EdgeInsets.zero,
+          child: AuralisMenuRow(
+            title: 'Refresh local library',
+            icon: Icons.refresh_rounded,
+            enabled: !_scanning,
+          ),
+        ),
+      if (_platform.windows)
+        const PopupMenuItem(
+          value: 'folders',
+          padding: EdgeInsets.zero,
+          child: AuralisMenuRow(
+            title: 'Manage folders',
+            icon: Icons.create_new_folder_outlined,
+          ),
+        ),
+      if (_platform.android)
+        const PopupMenuItem(
+          value: 'access',
+          padding: EdgeInsets.zero,
+          child: AuralisMenuRow(
+            title: 'Access settings',
+            icon: Icons.lock_outline_rounded,
+          ),
+        ),
+      if (widget.onSettings != null)
+        const PopupMenuItem(
+          value: 'settings',
+          padding: EdgeInsets.zero,
+          child: AuralisMenuRow(
+            title: 'Settings',
+            icon: Icons.settings_outlined,
+          ),
+        ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     final denied = _access == LocalMediaAccess.denied;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (!keyboard)
-          Row(
-            children: [
-              Expanded(
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: LibraryCollectionMenu<LocalMediaView>(
-                    tooltip: 'Local library view',
-                    title: _view.label,
-                    icon: _view == LocalMediaView.folders
-                        ? Icons.folder_outlined
-                        : widget.video
-                        ? Icons.video_library_outlined
-                        : Icons.library_music_outlined,
-                    itemBuilder: (_) => [
-                      for (final view in _views)
-                        PopupMenuItem(value: view, child: Text(view.label)),
-                    ],
-                    onSelected: _changeView,
+        if (!keyboard) ...[
+          LibraryToolbar(
+            collection: LibraryCollectionMenu<LocalMediaView>(
+              tooltip: 'Local library view',
+              title: _view.label,
+              icon: _viewIcon(_view),
+              itemBuilder: (_) => [
+                for (final view in _views)
+                  PopupMenuItem(
+                    value: view,
+                    padding: EdgeInsets.zero,
+                    child: AuralisMenuRow(
+                      title: view.label,
+                      icon: _viewIcon(view),
+                      selected: _view == view,
+                    ),
                   ),
-                ),
-              ),
+              ],
+              onSelected: _changeView,
+            ),
+            actions: [
+              ?widget.sourceButton,
               if (!denied)
-                IconButton(
-                  tooltip: 'Refresh local library',
-                  onPressed: _scanning ? null : _refresh,
-                  icon: const Icon(Icons.refresh_rounded, size: 20),
-                ),
-              if (widget.onSettings != null)
-                IconButton(
-                  tooltip: 'Settings',
-                  onPressed: widget.onSettings,
-                  icon: const Icon(Icons.settings_outlined, size: 20),
-                ),
-              AuralisPopupMenu<String>(
-                tooltip: 'Local library actions',
-                onSelected: (value) {
-                  switch (value) {
-                    case 'files':
-                      widget.onOpenFiles();
-                    case 'folders':
-                      unawaited(_manageFolders());
-                    case 'settings':
-                      unawaited(_accessSettings());
-                  }
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'files',
-                    child: Text('Open files'),
+                LibrarySortMenu(
+                  selected: _sort,
+                  options: LibrarySort.values.where(
+                    (sort) =>
+                        sort != LibrarySort.mostPlayed &&
+                        (!widget.video || sort != LibrarySort.artist),
                   ),
-                  if (_platform.windows)
-                    const PopupMenuItem(
-                      value: 'folders',
-                      child: Text('Manage folders'),
-                    ),
-                  if (_platform.android)
-                    const PopupMenuItem(
-                      value: 'settings',
-                      child: Text('Access settings'),
-                    ),
-                ],
-                child: const Icon(Icons.more_vert_rounded, size: 20),
-              ),
-            ],
-          ),
-        if (!denied) ...[
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  key: ValueKey(('local-search', widget.video)),
-                  controller: _search,
-                  autocorrect: false,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: widget.video
-                        ? 'Search local videos'
-                        : 'Search local music',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                    suffixIcon: _search.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear search',
-                            onPressed: () {
-                              _search.clear();
-                              _refreshSelection();
-                            },
-                            icon: const Icon(Icons.close_rounded, size: 18),
-                          ),
-                  ),
-                  onChanged: (_) {
-                    setState(() {});
-                    _searchTimer?.cancel();
-                    _searchTimer = Timer(
-                      const Duration(milliseconds: 160),
-                      _refreshSelection,
-                    );
+                  onSelected: (sort) {
+                    setState(() => _sort = sort);
+                    _refreshSelection();
                   },
                 ),
-              ),
-              const SizedBox(width: 4),
-              AuralisPopupMenu<LibrarySort>(
-                tooltip: 'Sort local library',
-                onSelected: (sort) {
-                  setState(() => _sort = sort);
-                  _refreshSelection();
-                },
-                itemBuilder: (_) => [
-                  for (final sort in LibrarySort.values)
-                    if (sort != LibrarySort.mostPlayed &&
-                        (!widget.video || sort != LibrarySort.artist))
-                      PopupMenuItem(value: sort, child: Text(sort.label)),
-                ],
-                child: const Icon(Icons.sort_rounded, size: 20),
-              ),
+              _actions(denied: denied),
             ],
           ),
-          if (_groupLabel case final label?)
-            Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back to ${_view.label}',
-                  onPressed: backToGroups,
-                  icon: const Icon(Icons.arrow_back_rounded, size: 20),
-                ),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
+          LibraryPageIndicator(
+            labels: _views.map((view) => view.label).toList(),
+            index: _views.indexOf(_view),
+            onSelected: (index) => _changeView(_views[index]),
+            reducedMotion: widget.settings.reducedMotion,
+          ),
         ],
-        if (_access == LocalMediaAccess.limited)
-          _accessBanner('Showing the videos you allowed.', limited: true),
-        if (_failed && !denied)
-          _message('Could not refresh the local library.'),
-        if (_unavailable != 0) _message('Some folders could not be read.'),
-        if (_scanning || _indexing) const LinearProgressIndicator(minHeight: 2),
-        const SizedBox(height: 6),
         Expanded(
-          child: Material(
-            color: colors.surfaceContainerLowest,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          child: LibraryPanel(
             child: denied
-                ? _accessBanner(
-                    widget.video
-                        ? 'Allow access to browse videos on this device.'
-                        : 'Allow access to browse music on this device.',
+                ? Align(
+                    alignment: AlignmentDirectional.topStart,
+                    child: _accessBanner(
+                      widget.video
+                          ? 'Allow access to browse videos on this device.'
+                          : 'Allow access to browse music on this device.',
+                    ),
                   )
-                : _buildRows(),
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LibrarySearchField(
+                        fieldKey: ValueKey(('local-search', widget.video)),
+                        controller: _search,
+                        autocorrect: false,
+                        hint: widget.video
+                            ? 'Search local videos'
+                            : 'Search local music',
+                        onCleared: _refreshSelection,
+                        onChanged: (_) {
+                          setState(() {});
+                          _searchTimer?.cancel();
+                          _searchTimer = Timer(
+                            const Duration(milliseconds: 160),
+                            _refreshSelection,
+                          );
+                        },
+                      ),
+                      if (_groupLabel case final label?)
+                        Row(
+                          children: [
+                            IconButton(
+                              tooltip: 'Back to ${_view.label}',
+                              onPressed: backToGroups,
+                              icon: const Icon(Icons.arrow_back_rounded),
+                            ),
+                            Expanded(
+                              child: Text(
+                                label,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (_access == LocalMediaAccess.limited)
+                        _accessBanner(
+                          'Showing the videos you allowed.',
+                          limited: true,
+                        ),
+                      if (_failed)
+                        _message('Could not refresh the local library.'),
+                      if (_unavailable != 0)
+                        _message('Some folders could not be read.'),
+                      const SizedBox(height: 8),
+                      if (_scanning || _indexing)
+                        const LinearProgressIndicator(minHeight: 2),
+                      Expanded(child: _buildRows()),
+                    ],
+                  ),
           ),
         ),
       ],
@@ -679,59 +684,98 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
             : 'No local music found.',
       );
     }
-    return ListView.builder(
+    return ListView.separated(
       controller: _scroll,
-      padding: EdgeInsets.fromLTRB(6, 6, 6, widget.bottomPadding),
+      padding: EdgeInsets.only(bottom: widget.bottomPadding),
       itemCount: count,
+      separatorBuilder: (_, _) => SizedBox(height: widget.video ? 8 : 4),
       itemBuilder: (context, index) {
         if (grouped) {
           final group = groups[index];
-          return _LocalRow(
-            title: group.label,
-            subtitle: [
-              if (group.detail.isNotEmpty) group.detail,
-              '${group.count} ${widget.video ? 'videos' : 'songs'}',
-            ].join(' · '),
-            icon: switch (_view) {
-              LocalMediaView.albums => Icons.album_outlined,
-              LocalMediaView.artists => Icons.person_outline_rounded,
-              LocalMediaView.genres => Icons.category_outlined,
-              _ => Icons.folder_outlined,
-            },
-            onTap: () => _changeView(_view, group: group),
-          );
+          final subtitle = [
+            if (group.detail.isNotEmpty) group.detail,
+            '${group.count} ${widget.video ? 'videos' : 'songs'}',
+          ].join(' · ');
+          final artwork = _LocalArtworkPlaceholder(icon: _viewIcon(_view));
+          void open() => _changeView(_view, group: group);
+          return widget.video
+              ? VideoLibraryRow(
+                  title: group.label,
+                  subtitle: Text(subtitle),
+                  artwork: artwork,
+                  onTap: open,
+                )
+              : MusicLibraryRow(
+                  title: group.label,
+                  subtitle: subtitle,
+                  artwork: artwork,
+                  onTap: open,
+                );
         }
         final item = rows[index];
-        final data = widget.settings.videoPlayback;
         return FutureBuilder<LocalMedia>(
           key: ValueKey(item.revision),
           future: _readMetadata(item, visible: true),
           initialData: item,
           builder: (context, snapshot) {
             final media = snapshot.data ?? item;
+            final artwork = _LocalArtwork(item: media, cache: _artwork);
+            void play() => _play(rows, index);
+            if (!widget.video) {
+              final track = media.track;
+              final duration = media.duration > Duration.zero
+                  ? videoDurationText(media.duration)
+                  : '—:—';
+              return MusicLibraryRow(
+                title: track.title,
+                subtitle: '${track.artist} · $duration',
+                artwork: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: artwork,
+                ),
+                active: widget.playingTrackId == track.id,
+                trailing: widget.musicActions?.call(track, play, artwork),
+                onTap: play,
+              );
+            }
+            final data = widget.settings.videoPlayback;
             final source = media.video;
-            final duration = widget.video
-                ? data.durationOf(source)
-                : media.duration;
-            final resume = widget.video ? data.positions[source.id] : null;
-            final watched = widget.video && data.isWatched(source);
-            return _LocalRow(
+            final resume = data.positions[source.id];
+            final watched = data.isWatched(source);
+            return VideoLibraryRow(
               title: media.title,
-              subtitle: [
-                if (!widget.video) media.artist,
-                duration > Duration.zero ? videoDurationText(duration) : '—:—',
-                if (watched) 'Watched',
-                if (resume != null) 'Resume at ${videoDurationText(resume)}',
-              ].join(' · '),
-              artwork: _LocalArtwork(item: media, cache: _artwork),
-              trailing: widget.video
-                  ? IconButton(
-                      tooltip: 'Info for ${media.title}',
-                      icon: const Icon(Icons.more_vert_rounded, size: 20),
-                      onPressed: () => _videoInfo(media, rows, index),
+              watched: watched,
+              subtitle: VideoRuntimeLabel(
+                duration: data.durationOf(source),
+                status: [
+                  if (watched) 'Watched',
+                  if (resume != null) 'Resume at ${videoDurationText(resume)}',
+                ].join(' · '),
+              ),
+              artwork: watched
+                  ? ColorFiltered(
+                      colorFilter: const ColorFilter.mode(
+                        Colors.grey,
+                        BlendMode.saturation,
+                      ),
+                      child: artwork,
                     )
-                  : null,
-              onTap: () => _play(rows, index),
+                  : artwork,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  VideoWatchButton(
+                    watched: watched,
+                    onPressed: () => unawaited(_toggleWatched(source)),
+                  ),
+                  IconButton.filledTonal(
+                    tooltip: 'Info for ${media.title}',
+                    icon: const Icon(Icons.more_vert_rounded, size: 20),
+                    onPressed: () => _videoInfo(media, rows, index),
+                  ),
+                ],
+              ),
+              onTap: play,
             );
           },
         );
@@ -761,79 +805,17 @@ LocalMediaSelection _select(
   );
 }
 
-class _LocalRow extends StatelessWidget {
-  const _LocalRow({
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.artwork,
-    this.icon,
-    this.trailing,
-  });
+class _LocalArtworkPlaceholder extends StatelessWidget {
+  const _LocalArtworkPlaceholder({required this.icon});
 
-  final String title, subtitle;
-  final VoidCallback onTap;
-  final Widget? artwork, trailing;
-  final IconData? icon;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Material(
-        color: colors.surfaceContainerLow,
-        shape: auralisSurfaceShape(colors, radius: 15, borderOpacity: .3),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(9),
-                  child: SizedBox(
-                    width: 46,
-                    height: 46,
-                    child:
-                        artwork ??
-                        ColoredBox(
-                          color: colors.surfaceContainerHighest,
-                          child: Icon(icon, size: 21),
-                        ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.textTheme.titleSmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                ?trailing,
-                const SizedBox(width: 4),
-              ],
-            ),
-          ),
-        ),
-      ),
+    final colors = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: colors.secondaryContainer,
+      child: Center(child: Icon(icon, color: colors.onSecondaryContainer)),
     );
   }
 }
@@ -846,16 +828,8 @@ class _LocalArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final fallback = ColoredBox(
-      color: colors.surfaceContainerHighest,
-      child: Center(
-        child: Icon(
-          item.isVideo ? Icons.movie_outlined : Icons.music_note_rounded,
-          color: colors.onSurfaceVariant,
-          size: 21,
-        ),
-      ),
+    final fallback = _LocalArtworkPlaceholder(
+      icon: item.isVideo ? Icons.movie_outlined : Icons.music_note_rounded,
     );
     return FutureBuilder<Uint8List?>(
       future: cache.load(item),
