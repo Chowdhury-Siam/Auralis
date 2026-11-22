@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
 
+typedef LocalMediaFolder = ({String location, String name});
+
 Uint8List? decodePreview(dynamic value) {
   if (value is! String || value.length > 64 * 1024) return null;
   try {
