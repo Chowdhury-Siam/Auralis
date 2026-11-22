@@ -14,18 +14,22 @@ import 'telegram/embedded_cover.dart';
 import 'video_files.dart';
 import 'video_playback_data.dart';
 
-typedef LocalMediaFolder = ({String location, String name});
-
 enum LocalMediaView {
   songs('Songs'),
   albums('Albums'),
   artists('Artists'),
   genres('Genres'),
   videos('All videos'),
+  playlists('Playlists'),
+  history('History'),
+  snapshots('Snapshots'),
   folders('Folders');
 
   const LocalMediaView(this.label);
   final String label;
+
+  bool get isSavedVideoCollection =>
+      this == playlists || this == history || this == snapshots;
 }
 
 String? _tag(Object? value) {
