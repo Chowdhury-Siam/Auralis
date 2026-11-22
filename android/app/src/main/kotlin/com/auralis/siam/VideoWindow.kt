@@ -11,6 +11,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.drawable.Icon
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -70,6 +72,7 @@ internal class VideoWindow(
             try {
                 when (call.method) {
                     "openFiles" -> openFiles(result)
+                    "videoDuration" -> videoDuration(call.arguments as? String, result)
                     "immersiveMode" -> {
                         immersive = call.arguments == true
                         updateSystemBars()
@@ -211,6 +214,26 @@ internal class VideoWindow(
             controller.show(systemBars)
             previousSystemBarsBehavior?.let { controller.systemBarsBehavior = it }
             previousSystemBarsBehavior = null
+        }
+    }
+
+    private fun videoDuration(value: String?, result: MethodChannel.Result) {
+        val uri = value?.let(Uri::parse)
+        if (uri?.scheme != "content") {
+            result.success(null)
+            return
+        }
+        io.execute {
+            val millis = runCatching {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(activity, uri)
+                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                } finally {
+                    retriever.release()
+                }
+            }.getOrNull()
+            activity.runOnUiThread { result.success(millis) }
         }
     }
 
