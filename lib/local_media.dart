@@ -14,7 +14,7 @@ import 'telegram/embedded_cover.dart';
 import 'video_files.dart';
 import 'video_playback_data.dart';
 
-enum LocalMediaAccess { full, limited, denied }
+typedef LocalMediaFolder = ({String location, String name});
 
 enum LocalMediaView {
   songs('Songs'),
@@ -118,7 +118,7 @@ LocalMediaSelection selectLocalMedia(
       LocalMediaView.artists => (item.artist.toLowerCase(), item.artist, ''),
       LocalMediaView.genres => (item.genre.toLowerCase(), item.genre, ''),
       LocalMediaView.folders => (
-        item.folder,
+        _tag(item.tags['folderKey']) ?? item.folder,
         item.folder.isEmpty ? 'Storage' : p.basename(item.folder),
         item.folder,
       ),
@@ -235,23 +235,33 @@ class LocalMediaPlatform {
   bool get windows => Platform.isWindows;
   Stream<void> get changes => _changes.receiveBroadcastStream().map((_) {});
 
-  Future<LocalMediaAccess> access(bool video, {bool request = false}) async {
-    if (!android) return LocalMediaAccess.full;
-    final value = await _android.invokeMethod<String>(
-      request ? 'requestAccess' : 'access',
-      video,
-    );
-    return LocalMediaAccess.values.byName(value ?? 'denied');
+  Future<LocalMediaFolder?> chooseFolder() async {
+    if (android) {
+      final folder = await _android.invokeMapMethod<String, String>(
+        'chooseFolder',
+      );
+      if (folder case {'uri': final String uri, 'name': final String name}) {
+        return (location: uri, name: name);
+      }
+      return null;
+    }
+    final folder = await getDirectoryPath();
+    if (folder == null) return null;
+    final location = p.normalize(folder);
+    final name = p.basename(location);
+    return (location: location, name: name.isEmpty ? location : name);
   }
 
-  Future<void> settings() => _android.invokeMethod<void>('settings');
-  Future<String?> chooseFolder() => getDirectoryPath();
-
   Future<LocalMediaScan> scan(bool video, List<String> folders) async {
+    if (folders.isEmpty) return (entries: const <LocalMedia>[], unavailable: 0);
     if (android) {
       final snapshot = await _android.invokeMapMethod<String, int>(
-        'scan',
-        video,
+        'scanFolders',
+        {
+          'video': video,
+          'folders': folders,
+          'extensions': video ? videoExtensions : audioExtensions,
+        },
       );
       final rows = <Map<Object?, Object?>>[];
       if (snapshot case {'token': final int token, 'count': final int count}) {
@@ -275,11 +285,10 @@ class LocalMediaPlatform {
               if (seen.add(row['uri'] as String))
                 LocalMedia(row, isVideo: video),
           ],
-          unavailable: 0,
+          unavailable: snapshot?['unavailable'] ?? 0,
         );
       });
     }
-    if (folders.isEmpty) return (entries: const <LocalMedia>[], unavailable: 0);
     return Isolate.run(() => scanLocalFolders(folders, video: video));
   }
 
@@ -307,14 +316,14 @@ class LocalMediaPlatform {
     ];
   }
 
-  /// MediaStore already indexes basic tags. The Windows property handler reads
-  /// tags and length only when a row or a tag-dependent view needs them.
+  /// Reads tags on demand for the visible rows and tag-dependent collections.
   Future<LocalMedia> metadata(LocalMedia source) async {
-    if (windows) {
+    if (windows || (android && !source.isVideo)) {
       try {
-        final tags = await _windows.invokeMapMethod<Object?, Object?>(
+        final channel = windows ? _windows : _android;
+        final tags = await channel.invokeMapMethod<Object?, Object?>(
           'metadata',
-          source.uri.toFilePath(),
+          windows ? source.uri.toFilePath() : source.uri.toString(),
         );
         if (tags != null) {
           if (source.isVideo) tags.remove('title');
