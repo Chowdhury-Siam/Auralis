@@ -1,6 +1,13 @@
 {
-  "current": "0.1.232",
+  "current": "0.1.233",
   "releases": [
+    {
+      "version": "0.1.233",
+      "changes": [
+        "Switch between Telegram and On this device with one compact button in the Music and Video Library headers.",
+        "Match local music and video to the Telegram Library layout, with shared search and media rows."
+      ]
+    },
     {
       "version": "0.1.232",
       "changes": [
