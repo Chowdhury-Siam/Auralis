@@ -5,8 +5,10 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
+import 'package:path/path.dart' as p;
 
 import 'video_playback_data.dart';
+import 'local_media.dart';
 import 'models.dart';
 import 'listening.dart';
 import 'playlist_photo_data.dart';
@@ -126,7 +128,7 @@ class AppSettings {
   AppInterface defaultInterface = AppInterface.music;
   int? videoChannelId;
   bool musicLibraryOnDevice = false, videoLibraryOnDevice = false;
-  List<String> localMediaFolders = [];
+  List<LocalMediaFolder> localMediaFolders = [];
   VideoPlaybackData videoPlayback = VideoPlaybackData();
   MusicVisualizerSettings musicVisualizer = MusicVisualizerSettings();
   void Function(Map<String, dynamic>)? captureSync;
@@ -164,13 +166,27 @@ class AppSettings {
             .toList()
       : [];
 
-  static List<String> _idsWithPathLength(Object? value) => value is List
-      ? value
-            .whereType<String>()
-            .where((path) => path.isNotEmpty && path.length <= 32768)
-            .toSet()
-            .toList()
-      : [];
+  static List<LocalMediaFolder> _mediaFolders(Object? value) {
+    if (value is! List) return [];
+    final folders = <String, LocalMediaFolder>{};
+    for (final entry in value) {
+      final location = switch (entry) {
+        final String path => path,
+        {'location': final String path} => path,
+        _ => '',
+      };
+      if (location.isEmpty || location.length > 32768) continue;
+      final name = switch (entry) {
+        {'name': final String name} when name.isNotEmpty => name,
+        _ => p.basename(location),
+      };
+      folders[location] = (
+        location: location,
+        name: name.isEmpty ? location : name,
+      );
+    }
+    return folders.values.toList();
+  }
 
   Future<void> _saving = Future.value();
 
@@ -192,7 +208,7 @@ class AppSettings {
     playlistPhotos.load(json['_playlistPhotos']);
     musicLibraryOnDevice = json['_musicLibraryOnDevice'] == true;
     videoLibraryOnDevice = json['_videoLibraryOnDevice'] == true;
-    localMediaFolders = _idsWithPathLength(json['_localMediaFolders']);
+    localMediaFolders = _mediaFolders(json['_localMediaFolders']);
     applyJson(json);
     syncState = json['_sync'] is Map<String, dynamic>
         ? json['_sync'] as Map<String, dynamic>
@@ -208,7 +224,10 @@ class AppSettings {
     '_videoPlayback': videoPlayback.toJson(),
     '_musicLibraryOnDevice': musicLibraryOnDevice,
     '_videoLibraryOnDevice': videoLibraryOnDevice,
-    '_localMediaFolders': localMediaFolders,
+    '_localMediaFolders': [
+      for (final folder in localMediaFolders)
+        {'location': folder.location, 'name': folder.name},
+    ],
     '_musicVisualizer': musicVisualizer.toJson(),
     '_playlistPhotos': playlistPhotos.toJson(),
     '_lastSeenRelease': lastSeenRelease,
