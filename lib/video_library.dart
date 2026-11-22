@@ -219,6 +219,100 @@ Future<String?> showVideoItemSheet({
   );
 }
 
+class VideoLibraryRow extends StatelessWidget {
+  const VideoLibraryRow({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.selected = false,
+    this.watched = false,
+    required this.artwork,
+    this.trailing,
+    required this.onTap,
+  });
+
+  final String title;
+  final Widget? subtitle;
+  final bool selected, watched;
+  final Widget artwork;
+  final Widget? trailing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Material(
+          color: selected
+              ? colors.primaryContainer
+              : colors.surfaceContainerLow,
+          shape: auralisSurfaceShape(colors, radius: 18, borderOpacity: .35),
+          clipBehavior: Clip.antiAlias,
+          child: Semantics(
+            selected: selected,
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox.square(dimension: 64, child: artwork),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: selected
+                                  ? colors.onPrimaryContainer
+                                  : watched
+                                  ? colors.onSurfaceVariant
+                                  : null,
+                            ),
+                          ),
+                          if (subtitle != null)
+                            DefaultTextStyle(
+                              style:
+                                  (theme.textTheme.labelSmall ??
+                                          const TextStyle())
+                                      .copyWith(
+                                        color: selected
+                                            ? colors.onPrimaryContainer
+                                            : colors.onSurfaceVariant,
+                                      ),
+                              child: subtitle!,
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (trailing case final action?) ...[
+                      const SizedBox(width: 8),
+                      action,
+                    ],
+                    const SizedBox(width: 4),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class VideoWatchButton extends StatelessWidget {
   const VideoWatchButton({
     super.key,
