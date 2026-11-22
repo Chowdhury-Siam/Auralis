@@ -48,6 +48,7 @@ class Track {
     required this.artist,
     required this.source,
     this.fileId,
+    this.localUri,
     this.coverFileId,
     this.coverPreview,
     this.date = 0,
@@ -59,6 +60,7 @@ class Track {
   });
   final String id, title, artist, source, mime;
   final int? fileId, coverFileId;
+  final Uri? localUri;
   final Uint8List? coverPreview;
   final int size, date;
   final int? videoWidth, videoHeight;
@@ -296,4 +298,12 @@ class MusicChat {
 String clockText(Duration value) {
   final seconds = value.inSeconds.clamp(0, 359999);
   return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
+}
+
+String videoDurationText(Duration duration) {
+  if (duration <= Duration.zero) return 'Unavailable';
+  if (duration.inHours == 0) return clockText(duration);
+  final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
+  final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+  return '${duration.inHours}:$minutes:$seconds';
 }
