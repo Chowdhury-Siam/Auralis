@@ -18,11 +18,18 @@ class MediaItemAction {
   final bool primary, selected, destructive;
 }
 
-List<(String, String)> mediaItemDetails(Track track, {required bool video}) => [
+List<(String, String)> mediaItemDetails(
+  Track track, {
+  required bool video,
+  Duration? videoDuration,
+}) => [
   ('Mode', video ? 'Video' : 'Music'),
   if (!video && track.artist.isNotEmpty) ('Artist', track.artist),
   if (track.source.isNotEmpty) ('Channel', track.source),
-  if (track.duration > Duration.zero) ('Duration', clockText(track.duration)),
+  if (video)
+    ('Duration', videoDurationText(videoDuration ?? track.duration))
+  else if (track.duration > Duration.zero)
+    ('Duration', clockText(track.duration)),
   if (track.mime.isNotEmpty && track.mime != 'application/octet-stream')
     ('Format', track.mime),
   if (track.size > 0)
@@ -47,6 +54,7 @@ Future<String?> showMediaItemSheet({
   required Widget artwork,
   required List<MediaItemAction> actions,
   required List<(String, String)> details,
+  Map<String, Widget> detailValues = const {},
 }) {
   FocusManager.instance.primaryFocus?.unfocus();
   Widget content(BuildContext context) => _MediaItemSheet(
@@ -55,6 +63,7 @@ Future<String?> showMediaItemSheet({
     artwork: artwork,
     actions: actions,
     details: details,
+    detailValues: detailValues,
   );
   if (MediaQuery.sizeOf(context).width >= 700) {
     return showAuralisDialog<String>(
@@ -95,11 +104,13 @@ class _MediaItemSheet extends StatefulWidget {
     required this.artwork,
     required this.actions,
     required this.details,
+    required this.detailValues,
   });
   final String title, subtitle;
   final Widget artwork;
   final List<MediaItemAction> actions;
   final List<(String, String)> details;
+  final Map<String, Widget> detailValues;
 
   @override
   State<_MediaItemSheet> createState() => _MediaItemSheetState();
@@ -210,7 +221,7 @@ class _MediaItemSheetState extends State<_MediaItemSheet> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      SelectableText(value),
+                      widget.detailValues[label] ?? SelectableText(value),
                     ],
                   ),
                 )
