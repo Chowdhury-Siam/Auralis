@@ -12,15 +12,18 @@ class VideoSource {
   const VideoSource.telegram(Track track)
     : telegram = track,
       uri = null,
-      name = null;
-  const VideoSource.file(this.uri, this.name) : telegram = null;
+      name = null,
+      runtime = Duration.zero;
+  const VideoSource.file(this.uri, this.name, {this.runtime = Duration.zero})
+    : telegram = null;
 
   final Track? telegram;
   final Uri? uri;
   final String? name;
+  final Duration runtime;
 
   String get title => telegram?.title ?? name ?? 'Video';
-  Duration get duration => telegram?.duration ?? Duration.zero;
+  Duration get duration => telegram?.duration ?? runtime;
   bool get canPlay =>
       telegram != null || (uri != null && _isLocalVideoUri(uri!, title));
   String get id => telegram != null
@@ -431,6 +434,7 @@ class VideoPlaybackData {
   bool snapshotSubtitles = true;
   String ambientMode = 'off';
   final positions = <String, Duration>{};
+  final _runtimes = <String, (int, Duration)>{};
   final bookmarks = <String, List<VideoBookmark>>{};
   final skipSegments = <String, List<VideoSkipSegment>>{};
   final orientations = <String, String>{};
@@ -639,6 +643,28 @@ class VideoPlaybackData {
     playlists[name] = entries.values.toList();
   }
 
+  Duration durationOf(VideoSource source) {
+    final saved = _runtimes[source.id];
+    final size = source.telegram?.size ?? 0;
+    if (saved != null && (size == 0 || saved.$1 == 0 || size == saved.$1)) {
+      return saved.$2;
+    }
+    return source.duration;
+  }
+
+  bool rememberDuration(VideoSource source, Duration duration) {
+    if (duration <= Duration.zero || duration > const Duration(days: 365)) {
+      return false;
+    }
+    final id = source.id;
+    final entry = (source.telegram?.size ?? 0, duration);
+    if (_runtimes[id] == entry) return false;
+    _runtimes.remove(id);
+    _runtimes[id] = entry;
+    if (_runtimes.length > 4096) _runtimes.remove(_runtimes.keys.first);
+    return true;
+  }
+
   void remember(String id, Duration position, Duration duration) {
     positions.remove(id);
     if (position > Duration.zero) {
@@ -692,6 +718,7 @@ class VideoPlaybackData {
       _watched.clear();
       history.removeWhere((_, entry) => entry.source.telegram != null);
       positions.removeWhere((id, _) => id.startsWith('telegram:'));
+      _runtimes.removeWhere((id, _) => id.startsWith('telegram:'));
     }
     for (final list in playlists.values) {
       list.removeWhere((source) => source.telegram != null);
@@ -848,6 +875,26 @@ class VideoPlaybackData {
         }
       }
     }
+    if (json['videoDurations'] case final Map runtimes) {
+      for (final entry in runtimes.entries.take(4096)) {
+        final id = entry.key;
+        final value = entry.value;
+        if (id is! String ||
+            !(_localVideoId.hasMatch(id) ||
+                id.startsWith('telegram:') &&
+                    TelegramVideoActivity.isMessage(id.substring(9))) ||
+            value is! List ||
+            value.length != 2 ||
+            value[0] is! int ||
+            (value[0] as int) < 0) {
+          continue;
+        }
+        if (_duration(value[1]) case final duration?
+            when duration > Duration.zero) {
+          data._runtimes[id] = (value[0] as int, duration);
+        }
+      }
+    }
     if (json['positions'] case final Map positions) {
       for (final entry in positions.entries.take(_limit * 2)) {
         if (entry.key is! String) continue;
@@ -955,6 +1002,10 @@ class VideoPlaybackData {
     'controlLayouts': {
       for (final entry in _controlLayouts.entries)
         entry.key: entry.value.map((control) => control.name).toList(),
+    },
+    'videoDurations': {
+      for (final entry in _runtimes.entries)
+        entry.key: [entry.value.$1, entry.value.$2.inMilliseconds],
     },
     'positions': {
       for (final entry in positions.entries)
