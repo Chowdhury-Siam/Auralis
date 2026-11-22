@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:auralis/app.dart';
+import 'package:auralis/library_widgets.dart';
 import 'package:auralis/local_media.dart';
 import 'package:auralis/local_media_view.dart';
 import 'package:auralis/models.dart';
@@ -10,6 +11,7 @@ import 'package:auralis/player.dart';
 import 'package:auralis/storage.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
+import 'package:auralis/video_library.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -274,6 +276,7 @@ void main() {
       await tester.tap(find.text('Allow access'));
       await settleScan(tester);
       expect(find.text('Manage access'), findsOneWidget);
+      expect(find.byType(VideoLibraryRow), findsNWidgets(3));
       expect(find.text('2:00 · Watched · Resume at 1:48'), findsOneWidget);
       await tester.tap(find.text('S01E02.mp4'));
       expect(selected!.$2, 1);
@@ -303,11 +306,47 @@ void main() {
     },
   );
 
+  testWidgets('local Music uses shared song rows and opens folders', (
+    tester,
+  ) async {
+    final platform = _AndroidMedia()
+      ..permission = LocalMediaAccess.full
+      ..entries = [media('Alpha.mp3'), media('Beta.mp3')];
+    addTearDown(platform.events.close);
+    (List<LocalMedia>, int)? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LocalMediaViewPane(
+            settings: MemorySettings(),
+            video: false,
+            bottomPadding: 8,
+            onPlay: (rows, index) => selected = (rows, index),
+            onOpenFiles: () {},
+            platform: platform,
+          ),
+        ),
+      ),
+    );
+    await settleScan(tester);
+    expect(find.byType(MusicLibraryRow), findsNWidgets(2));
+    expect(find.text('Test artist · 2:00'), findsNWidgets(2));
+    await tester.tap(find.byTooltip('Show Folders'));
+    await settleScan(tester);
+    expect(find.text('Alpha.mp3'), findsNothing);
+    await tester.tap(find.text('Local'));
+    await settleScan(tester);
+    await tester.tap(find.text('Beta.mp3'));
+    expect(selected!.$2, 1);
+    expect(selected!.$1.map((item) => item.name), ['Alpha.mp3', 'Beta.mp3']);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   for (final mode in AppInterface.values) {
-    testWidgets('source switch is available without login in ${mode.label}', (
+    testWidgets('one header button switches both ways in ${mode.label}', (
       tester,
     ) async {
-      tester.view.physicalSize = const Size(390, 844);
+      tester.view.physicalSize = const Size(320, 680);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -332,15 +371,33 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('On this device'));
+      final sourceButton = find.byType(LibrarySourceButton);
+      final toDevice = find.byTooltip('Telegram · Switch to On this device');
+      final toTelegram = find.byTooltip('On this device · Switch to Telegram');
+      final toolbar = find.byType(LibraryToolbar);
+      expect(sourceButton, findsOneWidget);
+      expect(find.descendant(of: toolbar, matching: toDevice), findsOneWidget);
+      expect(find.byType(LibraryPanel), findsOneWidget);
+      final headerHeight = tester.getSize(toolbar).height;
+      await tester.tap(toDevice);
       await settleScan(tester);
       expect(find.byType(LocalMediaViewPane), findsOneWidget);
+      expect(sourceButton, findsOneWidget);
+      expect(
+        find.descendant(of: toolbar, matching: toTelegram),
+        findsOneWidget,
+      );
+      expect(find.byType(LibraryPanel), findsOneWidget);
+      expect(tester.getSize(toolbar).height, headerHeight);
       expect(settings.musicLibraryOnDevice, mode == AppInterface.music);
       expect(settings.videoLibraryOnDevice, mode == AppInterface.video);
       expect(transport.requests, isEmpty);
-      await tester.tap(find.text('Telegram'));
+      await tester.tap(toTelegram);
       await tester.pumpAndSettle();
       expect(find.byType(LocalMediaViewPane), findsNothing);
+      expect(toDevice, findsOneWidget);
+      expect(settings.musicLibraryOnDevice, isFalse);
+      expect(settings.videoLibraryOnDevice, isFalse);
     });
   }
 }
