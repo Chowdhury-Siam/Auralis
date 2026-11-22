@@ -59,7 +59,9 @@ def verify_source(root):
     assert re.search(r"(?m)^distributionSha256Sum=[a-f0-9]{64}$", wrapper), "Gradle distribution checksum is required."
     manifest = ET.parse(android / "app/src/main/AndroidManifest.xml").getroot()
     ns = "{http://schemas.android.com/apk/res/android}"
-    permissions = {node.get(ns + "name") for node in manifest.findall("uses-permission")}
+    permissions = {
+        node.get(ns + "name"): node for node in manifest.findall("uses-permission")
+    }
     assert "android.permission.REQUEST_INSTALL_PACKAGES" in permissions
     build = (android / "app/build.gradle.kts").read_text()
     assert 'applicationId = "com.auralis.siam"' in build
@@ -71,7 +73,14 @@ def verify_source(root):
     assert [(node.tag, node.get("path")) for node in paths] == [("cache-path", "auralis-updates/")]
     assert "android.permission.INTERNET" in permissions
     assert "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" in permissions
-    assert not any(p in permissions for p in ("android.permission.MANAGE_EXTERNAL_STORAGE", "android.permission.READ_EXTERNAL_STORAGE"))
+    assert "android.permission.MANAGE_EXTERNAL_STORAGE" not in permissions
+    assert "android.permission.WRITE_EXTERNAL_STORAGE" not in permissions
+    assert permissions["android.permission.READ_EXTERNAL_STORAGE"].get(ns + "maxSdkVersion") == "32"
+    assert {
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+    } <= permissions.keys()
     assert manifest.find("application").get(ns + "allowBackup") == "false"
     assert (android / "gradle/wrapper/gradle-wrapper.jar").stat().st_size > 1000
     for name in ("gradlew", "gradlew.bat", "app/src/main/kotlin/com/auralis/siam/MainActivity.kt",
