@@ -7,6 +7,7 @@ import 'app_popups.dart';
 
 import 'models.dart';
 import 'library_widgets.dart';
+import 'local_media.dart';
 import 'local_media_view.dart';
 import 'discovery_widgets.dart';
 import 'app_navigation.dart';
@@ -142,10 +143,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   final _localLibraryKey = GlobalKey<LocalMediaViewPaneState>();
   final _playlistPageController = VideoLibraryPageController();
   static const _collections = [
-    ('All videos', Icons.video_library_rounded),
-    ('Playlists', Icons.playlist_play_rounded),
-    ('History', Icons.history_rounded),
-    ('Snapshots', Icons.photo_library_outlined),
+    LocalMediaView.videos,
+    LocalMediaView.playlists,
+    LocalMediaView.history,
+    LocalMediaView.snapshots,
   ];
   bool _openingPlayer = false, _videoMinimized = false;
   List<VideoSource>? _playbackSources;
@@ -797,19 +798,19 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
 
   Widget _libraryMenu(BuildContext context) => LibraryCollectionMenu<int>(
     key: const ValueKey('video-library-collection-menu'),
-    title: _collections[_libraryCollection].$1,
+    title: _collections[_libraryCollection].label,
     titleKey: const ValueKey('video-library-title'),
-    icon: _collections[_libraryCollection].$2,
-    tooltip: 'Library collection: ${_collections[_libraryCollection].$1}',
+    icon: _collections[_libraryCollection].icon,
+    tooltip: 'Library collection: ${_collections[_libraryCollection].label}',
     onSelected: _selectVideoCollection,
     itemBuilder: (_) => [
-      for (final (index, (title, icon)) in _collections.indexed)
+      for (final (index, view) in _collections.indexed)
         PopupMenuItem<int>(
           value: index,
           padding: EdgeInsets.zero,
           child: AuralisMenuRow(
-            title: title,
-            icon: icon,
+            title: view.label,
+            icon: view.icon,
             selected: index == _libraryCollection,
           ),
         ),
@@ -847,6 +848,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       video: true,
       bottomPadding: _bottomPadding(context),
       sourceButton: sourceButton,
+      savedVideoCollection: (view) => _savedVideoCollection(context, view),
+      videoPlaylistsController: _playlistPageController,
       onPlay: (rows, index) =>
           unawaited(_launchPlayer([for (final row in rows) row.video], index)),
       onOpenFiles: _openHomeFiles,
@@ -884,7 +887,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
           ),
           LibraryPageIndicator(
             key: const ValueKey('video-library-indicator'),
-            labels: _collections.map((entry) => entry.$1).toList(),
+            labels: _collections.map((entry) => entry.label).toList(),
             index: _libraryCollection,
             onSelected: _selectVideoCollection,
             reducedMotion: settings.reducedMotion,
@@ -899,43 +902,56 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             onChanged: _selectVideoCollection,
             itemBuilder: (context, index) {
               if (index == 0) return _browser(context);
-              final playlists = index == 1;
-              final page = index < 3
-                  ? VideoLibraryPage(
-                      key: ValueKey(('video-collection', index)),
-                      data: settings.videoPlayback,
-                      save: settings.save,
-                      pickFiles: pickVideoFiles,
-                      playlists: playlists,
-                      historyArtwork: _historyArtwork,
-                      lookupDuration: _lookupVideoDuration,
-                      embedded: true,
-                      changes: widget.music,
-                      controller: playlists ? _playlistPageController : null,
-                      bottomPadding: _bottomPadding(context),
-                      query: playlists ? _playlistSearch.text : '',
-                      playlistPhotos: settings.playlistPhotos,
-                      onPlay: (selected) =>
-                          unawaited(_playLibrarySelection(selected)),
-                    )
-                  : VideoSnapshotsPage(
-                      embedded: true,
-                      active: _libraryCollection == 3,
-                      bottomPadding: _bottomPadding(context),
-                    );
-              return _libraryBrowser(
+              return _savedVideoCollection(
                 context,
-                list: page,
-                showSearch: playlists,
-                searchController: _playlistSearch,
-                searchHint: 'Search playlists and their videos',
-                searchKey: ValueKey(('video-collection-search', index)),
-                panelKey: ValueKey(('video-library-panel', index)),
+                _collections[index],
+                active: index == _libraryCollection,
               );
             },
           ),
         ),
       ],
+    );
+  }
+
+  Widget _savedVideoCollection(
+    BuildContext context,
+    LocalMediaView view, {
+    bool active = true,
+  }) {
+    final settings = widget.music.settings;
+    final index = _collections.indexOf(view);
+    final playlists = view == LocalMediaView.playlists;
+    final page = view == LocalMediaView.snapshots
+        ? VideoSnapshotsPage(
+            embedded: true,
+            active: active,
+            bottomPadding: _bottomPadding(context),
+          )
+        : VideoLibraryPage(
+            key: ValueKey(('video-collection', index)),
+            data: settings.videoPlayback,
+            save: settings.save,
+            pickFiles: pickVideoFiles,
+            playlists: playlists,
+            historyArtwork: _historyArtwork,
+            lookupDuration: _lookupVideoDuration,
+            embedded: true,
+            changes: widget.music,
+            controller: playlists ? _playlistPageController : null,
+            bottomPadding: _bottomPadding(context),
+            query: playlists ? _playlistSearch.text : '',
+            playlistPhotos: settings.playlistPhotos,
+            onPlay: (selected) => unawaited(_playLibrarySelection(selected)),
+          );
+    return _libraryBrowser(
+      context,
+      list: page,
+      showSearch: playlists,
+      searchController: _playlistSearch,
+      searchHint: 'Search playlists and their videos',
+      searchKey: ValueKey(('video-collection-search', index)),
+      panelKey: ValueKey(('video-library-panel', index)),
     );
   }
 
