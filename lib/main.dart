@@ -18,6 +18,7 @@ import 'app_theme.dart';
 import 'android_audio.dart';
 import 'android_updater.dart';
 import 'data_files.dart';
+import 'local_media.dart';
 import 'player.dart';
 import 'storage.dart';
 import 'android_storage.dart';
@@ -58,19 +59,27 @@ Future<void> main() async {
     await audio.volume(settings.volume);
     final player = PlayerController(
       audio,
-      TelegramStreamProxy(telegram.request, releaseAudio: telegram.releaseAudio),
+      TelegramStreamProxy(
+        telegram.request,
+        releaseAudio: telegram.releaseAudio,
+      ),
       settings,
     );
     final artworkDirectory = Platform.isAndroid
         ? Directory(
-            p.join((await getTemporaryDirectory()).path, 'auralis-media-artwork'),
+            p.join(
+              (await getTemporaryDirectory()).path,
+              'auralis-media-artwork',
+            ),
           )
         : null;
     final handler = Platform.isAndroid
         ? await AudioService.init(
             builder: () => AndroidAudioHandler(
               player,
-              loadArtwork: (track) => telegram.ready && track.fileId != null
+              loadArtwork: (track) => track.localUri != null
+                  ? localSongArtwork(track)
+                  : telegram.ready && track.fileId != null
                   ? telegram.cover(track)
                   : null,
               artworkDirectory: artworkDirectory,
@@ -96,12 +105,16 @@ Future<void> main() async {
     final syncVault = Platform.isAndroid
         ? AndroidSecretVault(File(p.join(root.path, 'sync-credentials.aesgcm')))
         : SecretVault(File(p.join(root.path, 'sync-credentials.dpapi')));
-    final sync = SyncController(settings, syncVault,
+    final sync = SyncController(
+      settings,
+      syncVault,
       telegram: telegram,
       onApplied: player.refreshSettings,
       paused: () => player.restoringData,
       deploymentVault: Platform.isAndroid
-          ? AndroidSecretVault(File(p.join(root.path, 'sync-deployment.aesgcm')))
+          ? AndroidSecretVault(
+              File(p.join(root.path, 'sync-deployment.aesgcm')),
+            )
           : SecretVault(File(p.join(root.path, 'sync-deployment.dpapi'))),
     );
     telegram.isStreaming = player.proxy.isStreaming;
@@ -150,7 +163,10 @@ Future<void> main() async {
       );
     }
     AppLifecycleListener(
-      onResume: () { updater?.checkOnResume(); sync.resume(); },
+      onResume: () {
+        updater?.checkOnResume();
+        sync.resume();
+      },
       onPause: () => unawaited(() async {
         await player.flushListeningStats();
         await sync.flush();
