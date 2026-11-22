@@ -23,9 +23,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   bool get _playing => player.state.playing;
   bool get _buffering =>
       session._error == null &&
-      (session._loading ||
-          player.state.buffering ||
-          session._waitingForVideo);
+      (session._loading || player.state.buffering || session._waitingForVideo);
   bool get _gestures =>
       session._data.gestures &&
       !session._locked &&
@@ -47,7 +45,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   ].any(_gesture);
   final _subscriptions = <StreamSubscription<dynamic>>[];
   final _timelineChanges = ValueNotifier(0);
-  Timer? _hide, _feedbackTimer, _spaceHold;
+  Timer? _hide, _feedbackTimer, _spaceHold, _introPromptTimer;
   bool _spaceDown = false, _spaceBoosted = false;
   bool _visible = true, _exitArmed = false, _remaining = true;
   _BoostInput? _boostInput;
@@ -67,6 +65,14 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   DateTime? _lastZoomUpdate;
   VideoSkipSegment? _lastSegment;
   bool _skippingSegment = false;
+
+  VideoSkipSegment? get _activeSkipPrompt =>
+      session._canPlay && !session._opening && session._error == null
+      ? session._skipButtonSegment
+      : null;
+
+  VideoSkipSegment? get _visibleSkipPrompt =>
+      _introPromptTimer?.isActive == false ? null : _lastSegment;
   int _lastHideSeconds = 4;
 
   @override
@@ -81,10 +87,8 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
         _armHide();
       }),
       player.stream.position.listen((_) {
-        final segment = session._skipButtonSegment;
         if (_visible) _timelineChanges.value++;
-        if (!identical(segment, _lastSegment)) _refresh();
-        _lastSegment = segment;
+        if (!identical(_activeSkipPrompt, _lastSegment)) _refresh();
       }),
       player.stream.duration.listen((_) => _refresh()),
       player.stream.buffering.listen((_) => _refresh()),
@@ -94,10 +98,42 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       player.stream.rate.listen((_) => _refresh()),
       player.stream.volume.listen((_) => _refresh()),
     ]);
+    _updateSkipPrompt();
     _armHide();
   }
 
+  @override
+  void didUpdateWidget(covariant _VideoHud oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _updateSkipPrompt();
+  }
+
+  void _updateSkipPrompt() {
+    final segment = _activeSkipPrompt;
+    final previous = _lastSegment;
+    // Chapter rereads may replace a segment with an equivalent object.
+    if (segment?.start != previous?.start ||
+        segment?.end != previous?.end ||
+        segment?.label != previous?.label) {
+      _introPromptTimer?.cancel();
+      _introPromptTimer = null;
+    }
+    _lastSegment = segment;
+    if (segment == null ||
+        _introPromptTimer != null ||
+        session._pip ||
+        session.widget.minimized) {
+      return;
+    }
+    final label = videoSkipChapterLabel(segment.label);
+    if (label != 'Intro' && label != 'Opening') return;
+    _introPromptTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted) setState(() {});
+    });
+  }
+
   void _refresh() {
+    _updateSkipPrompt();
     if (_lastHideSeconds != _gestureOptions.hideSeconds) {
       if (_gestureOptions.hideSeconds == 0) _visible = true;
       _armHide();
@@ -136,6 +172,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     session._changes.removeListener(_refresh);
     _hide?.cancel();
     _feedbackTimer?.cancel();
+    _introPromptTimer?.cancel();
     for (final subscription in _subscriptions) {
       unawaited(subscription.cancel());
     }
@@ -172,15 +209,11 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   }
 
   Future<void> _skipSegment() async {
-    if (_skippingSegment ||
-        !session._canPlay ||
-        session._opening ||
-        session._pip ||
-        session._error != null) {
+    if (_skippingSegment || session._pip || _visibleSkipPrompt == null) {
       return;
     }
     // Resolve at activation time, not from an older frame's button callback.
-    final segment = session._skipButtonSegment;
+    final segment = _activeSkipPrompt;
     if (segment == null) return;
     setState(() => _skippingSegment = true);
     try {
@@ -1148,7 +1181,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     if (session._pip) return const SizedBox.expand();
-    final segment = session._skipButtonSegment;
+    final segment = _visibleSkipPrompt;
     return PopScope(
       canPop:
           session.widget.minimized ||
@@ -1255,10 +1288,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                 ),
                 // This is intentionally outside the hidden/locked controls
                 // overlay: lock still blocks ordinary gestures and transport.
-                if (session._canPlay &&
-                    !session._opening &&
-                    session._error == null &&
-                    segment != null)
+                if (segment != null)
                   SafeArea(
                     minimum: const EdgeInsets.symmetric(
                       horizontal: 16,
