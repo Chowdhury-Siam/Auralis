@@ -288,6 +288,7 @@ extension _VideoHome on _TelegramVideoViewState {
         lookup: _lookupVideoDuration(source),
         status: watch ? 'Watched' : video?.source ?? 'On your device',
       ),
+      offline: video == null ? null : (media: _telegram.offline, id: video.id),
       trailing: video == null ? null : _videoActions(video),
       onTap: () => unawaited(_playHomeSource(source)),
     );
