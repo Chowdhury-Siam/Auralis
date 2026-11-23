@@ -23,6 +23,7 @@ enum LocalMediaView {
   playlists('Playlists'),
   history('History'),
   snapshots('Snapshots'),
+  offline('Offline'),
   folders('Folders');
 
   const LocalMediaView(this.label);
