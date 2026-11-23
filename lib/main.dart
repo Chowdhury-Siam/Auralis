@@ -53,6 +53,7 @@ Future<void> main() async {
       Directory(p.join(root.path, 'telegram')),
       vault,
     );
+    await telegram.offline.load();
     final session = Platform.isAndroid ? await AudioSession.instance : null;
     await session?.configure(const AudioSessionConfiguration.music());
     final audio = MpvBackend(session: session);
@@ -64,6 +65,8 @@ Future<void> main() async {
         releaseAudio: telegram.releaseAudio,
       ),
       settings,
+      offlineUri: (track) =>
+          telegram.offline.availableUri(track.id, video: false),
     );
     final artworkDirectory = Platform.isAndroid
         ? Directory(
