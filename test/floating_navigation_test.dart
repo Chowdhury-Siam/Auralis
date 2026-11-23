@@ -112,6 +112,7 @@ void main() {
       player.index = 0;
       player.refreshSettings();
       await tester.pumpAndSettle();
+      expect(tester.state<ScrollableState>(scrollable).position, same(position));
       position.jumpTo(position.maxScrollExtent);
       await tester.pumpAndSettle();
       final dock = find.byKey(const ValueKey('open-current-track'));
