@@ -7,13 +7,19 @@ import 'package:path/path.dart' as p;
 
 import 'models.dart';
 
+typedef OfflineDownload = Future<void> Function(
+  Future<void> Function(File) copy,
+  ValueChanged<double?> reportProgress,
+);
+
 /// Explicitly saved media lives outside the disposable Telegram cache.
 class OfflineMedia extends ChangeNotifier {
   OfflineMedia(this.directory);
 
   final Directory directory;
   final _entries = <(bool, String), Track>{};
-  final _saving = <(bool, String), Future<void>>{};
+  final _saving =
+      <(bool, String), ({Future<void> job, ValueNotifier<double?> progress})>{};
   final _removing = <(bool, String), Future<void>>{};
   Future<void>? _loading;
   bool _disposed = false;
@@ -30,6 +36,9 @@ class OfflineMedia extends ChangeNotifier {
 
   bool saving(String id, {required bool video}) =>
       _saving.containsKey((video, id));
+
+  ValueListenable<double?>? downloadProgress(String id, {required bool video}) =>
+      _saving[(video, id)]?.progress;
 
   List<Track> tracks({required bool video}) => [
     for (final entry in _entries.entries)
@@ -95,15 +104,22 @@ class OfflineMedia extends ChangeNotifier {
   Future<void> save(
     Track track, {
     required bool video,
-    required Future<void> Function(Future<void> Function(File) copy) download,
+    required OfflineDownload download,
   }) {
     final key = (video, track.id);
-    if (_saving[key] case final pending?) return pending;
-    final job = _save(track, video, _removing[key], download).whenComplete(() {
+    if (_saving[key] case final pending?) return pending.job;
+    final progress = ValueNotifier<double?>(null);
+    final job = _save(
+      track,
+      video,
+      _removing[key],
+      (copy) => download(copy, (value) => progress.value = value),
+    ).whenComplete(() {
       _saving.remove(key);
+      progress.dispose();
       _changed();
     });
-    _saving[key] = job;
+    _saving[key] = (job: job, progress: progress);
     _changed();
     return job;
   }
@@ -153,7 +169,11 @@ class OfflineMedia extends ChangeNotifier {
 
   Future<void> remove(String id, {required bool video}) {
     final key = (video, id);
-    return _removing[key] ??= _remove(id, video, _saving[key]).whenComplete(() {
+    return _removing[key] ??= _remove(
+      id,
+      video,
+      _saving[key]?.job,
+    ).whenComplete(() {
       _removing.remove(key);
     });
   }
@@ -181,8 +201,11 @@ class OfflineMedia extends ChangeNotifier {
   }
 
   Future<void> drain() => Future.wait<void>([
-    for (final pending in [..._saving.values, ..._removing.values])
-      pending.then<void>((_) {}, onError: (Object _) {}),
+    for (final job in [
+      for (final save in _saving.values) save.job,
+      ..._removing.values,
+    ])
+      job.then<void>((_) {}, onError: (Object _) {}),
   ]);
 
   void _changed() {
