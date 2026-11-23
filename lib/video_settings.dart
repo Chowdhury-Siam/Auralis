@@ -213,8 +213,9 @@ class VideoSettingsOptions extends StatelessWidget {
               children: [
                 VideoSettingsGroup(
                   title: 'Seeking & gestures',
-                  description:
-                      'Control how taps and swipes move through a video.',
+                  description: Platform.isAndroid
+                      ? 'Swipe vertically on the left for brightness and on the right for volume.'
+                      : 'Control how taps and swipes move through a video.',
                   children: [
                     Text('Seek interval · ${_data.seekSeconds} seconds'),
                     Slider(
@@ -248,12 +249,6 @@ class VideoSettingsOptions extends StatelessWidget {
                       _data.strictDoubleTap,
                       (value) => _data.strictDoubleTap = value,
                     ),
-                    if (Platform.isAndroid)
-                      toggle(
-                        'Swap brightness and volume sides',
-                        _data.swapSides,
-                        (value) => _data.swapSides = value,
-                      ),
                   ],
                 ),
                 VideoSettingsGroup(
@@ -454,7 +449,7 @@ class VideoSettingsOptions extends StatelessWidget {
                       context,
                       title: 'Reset video gestures?',
                       message:
-                          'Restore gesture switches, sensitivity, timing, seek interval and sides. '
+                          'Restore gesture switches, sensitivity, timing and seek interval. '
                           'Other Video and Music settings are unchanged.',
                       confirmLabel: 'Reset gestures',
                     );
@@ -463,7 +458,6 @@ class VideoSettingsOptions extends StatelessWidget {
                         _data.gestureOptions = VideoGestureOptions();
                         _data.gestures = true;
                         _data.strictDoubleTap = false;
-                        _data.swapSides = false;
                         _data.seekSeconds = 10;
                       });
                     }
