@@ -464,7 +464,7 @@ class VideoPlaybackData {
   }
 
   int seekSeconds = 10;
-  bool gestures = true, strictDoubleTap = false, swapSides = false;
+  bool gestures = true, strictDoubleTap = false;
   VideoGestureOptions gestureOptions = VideoGestureOptions();
   bool autoAdvance = true, background = false, autoPip = false;
   bool volumeBoost = false, autoplay = true;
@@ -838,7 +838,6 @@ class VideoPlaybackData {
     data
       ..gestures = json['gestures'] != false
       ..strictDoubleTap = json['strictDoubleTap'] == true
-      ..swapSides = json['swapSides'] == true
       ..autoAdvance = json['autoAdvance'] != false
       ..background = json['background'] == true
       ..autoPip = json['autoPip'] == true
@@ -985,7 +984,6 @@ class VideoPlaybackData {
     'gestures': gestures,
     'gestureOptions': gestureOptions.toJson(),
     'strictDoubleTap': strictDoubleTap,
-    'swapSides': swapSides,
     'autoAdvance': autoAdvance,
     'background': background,
     'autoPip': autoPip,
