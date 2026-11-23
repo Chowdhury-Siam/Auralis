@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.243
+
+- Keep Telegram and On this device libraries loaded when switching sources. Pull down to refresh the active library.
+- Enable embedded and online lyrics, Favorites, and Listening Stats for local music.
+- Fix a test timeout in the offline video download progress check.
+
 ## 0.1.242
 
 - Show download progress along the bottom of video rows. An Offline badge marks videos saved for offline playback.
