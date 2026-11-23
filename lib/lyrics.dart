@@ -183,11 +183,15 @@ class LyricsRepository extends ChangeNotifier {
   LyricsRepository({
     HttpClient Function()? createClient,
     this.cache,
+    this.localCache,
     this.preferences,
   }) : _createClient = createClient ?? HttpClient.new;
   final HttpClient Function() _createClient;
   final MediaCache Function()? cache;
+  final MediaCache? localCache;
   final AppSettings? preferences;
+  MediaCache? _cacheFor(Track track) =>
+      track.localUri == null ? cache?.call() : localCache ?? cache?.call();
   final _translations = <Object, Lyrics>{};
   final _translationJobs = <Object, Future<Lyrics>>{};
   final _translationReaders = <Object, Set<bool Function()>>{};
@@ -232,6 +236,7 @@ class LyricsRepository extends ChangeNotifier {
   late final _translator = LyricsTranslator(
     createClient: _createClient,
     cache: cache,
+    localCache: localCache,
   );
   // Legacy API name retained; the default direction now auto-detects any language.
   Future<Lyrics> translateJapanese(
@@ -343,13 +348,13 @@ class LyricsRepository extends ChangeNotifier {
       await _readSavedLyrics(track) != null;
 
   Future<Lyrics?> _readSavedLyrics(Track track) async {
-    final disk = cache?.call();
+    final disk = _cacheFor(track);
     final generation = _cacheGeneration;
     final bytes = await disk?.read(track, 'lyrics', 2 * 1024 * 1024);
     if (bytes == null ||
         _closed ||
         generation != _cacheGeneration ||
-        cache?.call().directory?.path != disk?.directory?.path) {
+        _cacheFor(track)?.directory?.path != disk?.directory?.path) {
       return null;
     }
     try {
@@ -398,7 +403,7 @@ class LyricsRepository extends ChangeNotifier {
   }
 
   Future<void> persist(Track track, Lyrics value) async {
-    await cache?.call().write(
+    await _cacheFor(track)?.write(
       track,
       'lyrics',
       utf8.encode(
@@ -428,7 +433,7 @@ class LyricsRepository extends ChangeNotifier {
   final _clients = <HttpClient>{};
   bool _closed = false;
   String _key(Track track) => jsonEncode([
-    cache?.call().directory?.path,
+    _cacheFor(track)?.directory?.path,
     track.id,
     track.title,
     track.artist,
@@ -517,7 +522,7 @@ class LyricsRepository extends ChangeNotifier {
 
   Future<Lyrics?> _find(Track track, {bool refresh = false}) async {
     if (_closed) throw StateError('Lyrics lookup is closed.');
-    final saved = refresh || cache == null ? null : await loadCached(track);
+    final saved = refresh ? null : await loadCached(track);
     if (saved != null) return saved;
     final title = track.title.trim(), artist = track.artist.trim();
     if (title.isEmpty ||
@@ -528,14 +533,14 @@ class LyricsRepository extends ChangeNotifier {
         'A song title and artist are needed for lookup.',
       );
     }
-    final scope = cache?.call().directory?.path;
+    final scope = _cacheFor(track)?.directory?.path;
     final key = _key(track), requestId = Object();
     _pending[key] = requestId;
     bool current() =>
         !_closed &&
         identical(_pending[key], requestId) &&
-        cache?.call().directory?.path == scope;
-    Lyrics? superseded() => !_closed && cache?.call().directory?.path == scope
+        _cacheFor(track)?.directory?.path == scope;
+    Lyrics? superseded() => !_closed && _cacheFor(track)?.directory?.path == scope
         ? cached(track)
         : null;
     final signature = {'track_name': title, 'artist_name': artist};
@@ -604,7 +609,7 @@ class LyricsRepository extends ChangeNotifier {
         if (!current()) return superseded();
         if (result != null) {
           await save(track, result);
-          return !_closed && cache?.call().directory?.path == scope
+          return !_closed && _cacheFor(track)?.directory?.path == scope
               ? cached(track) ?? result
               : null;
         }
