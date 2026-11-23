@@ -1,6 +1,13 @@
 {
-  "current": "0.1.243",
+  "current": "0.1.244",
   "releases": [
+    {
+      "version": "0.1.244",
+      "changes": [
+        "Preserve library scroll position when the playback dock appears or a pull-to-refresh updates the view.",
+        "Keep imported lyrics safe from pending lookups and stop provider fallback when the lyrics repository closes."
+      ]
+    },
     {
       "version": "0.1.243",
       "changes": [
