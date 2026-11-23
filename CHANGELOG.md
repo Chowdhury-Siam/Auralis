@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.241
+
+- Swipe vertically on the left to adjust Android brightness and on the right to adjust volume. Brightness feedback appears on the left and volume feedback appears on the right.
+- Show brightness and volume with compact vertical meters and live percentages.
+
 ## 0.1.240
 
 - Add a haptic pulse when pressing and holding the video to boost playback speed.
