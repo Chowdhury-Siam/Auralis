@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import 'fakes.dart';
+import 'embedded_lyrics_test.dart' show tag;
 import 'video_duration_test.dart' show matroskaHeader;
 
 LocalMedia media(String name, {bool video = false, String? album}) =>
@@ -281,8 +282,14 @@ void main() {
       throw StateError('No Telegram connection');
     });
     final settings = MemorySettings();
-    final player = PlayerController(audio, proxy, settings)
-      ..shuffleEnabled = true;
+    var elapsed = Duration.zero;
+    final player = PlayerController(
+      audio,
+      proxy,
+      settings,
+      elapsed: () => elapsed,
+      now: () => DateTime(2026, 11, 23, 12).add(elapsed),
+    )..shuffleEnabled = true;
     addTearDown(player.shutdown);
     final songs = [
       for (final name in ['A.mp3', 'B.mp3', 'C.mp3']) media(name).track,
@@ -297,25 +304,71 @@ void main() {
     expect(requests, isEmpty);
     expect(settings.recentIds, isEmpty);
     expect(settings.listening.tracks, isEmpty);
+    await player.toggleFavorite(songs[2]);
+    expect(settings.favoriteIds, {songs[2].id});
+    await player.toggleFavorite(songs[2]);
+    expect(settings.favoriteIds, isEmpty);
+    for (var second = 1; second <= 31; second++) {
+      elapsed = Duration(seconds: second);
+      await audio.seek(elapsed);
+    }
+    expect(settings.listening.tracks[songs[2].id]?.milliseconds, 31000);
+    expect(settings.listening.tracks[songs[2].id]?.plays, 1);
+    expect(settings.listening.days.values.single.plays, 1);
   });
 
-  testWidgets('Android Video scans the chosen folder and refreshes changes', (
+  test('local audio reads embedded synced lyrics without Telegram', () async {
+    final root = await Directory.systemTemp.createTemp('auralis-local-lyrics-');
+    addTearDown(() => root.delete(recursive: true));
+    final audio = await File(p.join(root.path, 'Song.mp3')).writeAsBytes(
+      tag('USLT', [
+        3,
+        ...'eng'.codeUnits,
+        0,
+        ...utf8.encode('[00:01.50]First line'),
+      ]),
+    );
+    final track = LocalMedia({
+      'uri': audio.uri.toString(),
+      'name': 'Song.mp3',
+    }, isVideo: false).track;
+    final result = await const LocalMediaPlatform().embeddedLyrics(track);
+    expect(result?.embedded, isTrue);
+    expect(result?.lines.single.text, 'First line');
+    expect(result?.lines.single.time, const Duration(milliseconds: 1500));
+  });
+
+  testWidgets('Android Video keeps the scanned folder until pull-to-refresh', (
     tester,
   ) async {
     final platform = _DeviceMedia();
     addTearDown(platform.events.close);
     final settings = MemorySettings();
     (List<LocalMedia>, int)? selected;
+    var local = true;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: LocalMediaViewPane(
-            settings: settings,
-            video: true,
-            bottomPadding: 8,
-            onPlay: (rows, index) => selected = (rows, index),
-            onOpenFiles: () {},
-            platform: platform,
+          body: StatefulBuilder(
+            builder: (context, update) => LibrarySourcePanes(
+              local: local,
+              telegramPane: (_) => TextButton(
+                onPressed: () => update(() => local = true),
+                child: const Text('Show device'),
+              ),
+              devicePane: (_) => LocalMediaViewPane(
+                settings: settings,
+                video: true,
+                bottomPadding: 8,
+                sourceButton: TextButton(
+                  onPressed: () => update(() => local = false),
+                  child: const Text('Show Telegram'),
+                ),
+                onPlay: (rows, index) => selected = (rows, index),
+                onOpenFiles: () {},
+                platform: platform,
+              ),
+            ),
           ),
         ),
       ),
@@ -365,8 +418,15 @@ void main() {
 
     platform.entries = [media('Added S01E4.mp4', video: true)];
     platform.events.add(null);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Show Telegram'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show device'));
+    await tester.pumpAndSettle();
+    expect(platform.scans, hasLength(1));
+    expect(find.text('S01E02.mp4'), findsOneWidget);
+    expect(find.text('Added S01E4.mp4'), findsNothing);
+    await tester.drag(find.byType(ListView), const Offset(0, 330));
+    await tester.pump(const Duration(milliseconds: 250));
     await settleScan(tester);
     expect(find.text('S01E02.mp4'), findsNothing);
     expect(find.text('Added S01E4.mp4'), findsOneWidget);
@@ -415,6 +475,11 @@ void main() {
     await tester.tap(find.text('Beta.mp3'));
     expect(selected!.$2, 1);
     expect(selected!.$1.map((item) => item.name), ['Alpha.mp3', 'Beta.mp3']);
+    settings.favoriteIds.add(platform.entries.last.track.id);
+    await tester.tap(find.byTooltip('Show Favorites'));
+    await settleScan(tester);
+    expect(find.text('Beta.mp3'), findsOneWidget);
+    expect(find.text('Alpha.mp3'), findsNothing);
     final actions = find.byTooltip('Local library actions');
     await tester.tap(actions);
     await tester.pumpAndSettle();
