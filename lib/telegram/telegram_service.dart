@@ -13,6 +13,7 @@ import '../media_cache.dart';
 import 'package:path/path.dart' as p;
 
 import '../models.dart';
+import '../offline_media.dart';
 import '../release_notes.dart' show currentReleaseVersion;
 import '../video_duration.dart';
 import '../account_backup.dart';
@@ -36,6 +37,9 @@ class TelegramService extends ChangeNotifier {
        _transport = transport ?? (createTransport ?? TdTransport.new)();
   final Directory directory;
   final SecretVault vault;
+  late final offline = OfflineMedia(
+    Directory(p.join(directory.path, 'offline')),
+  )..addListener(notifyListeners);
   String? _mediaCacheKey;
   MediaCache _mediaCache = MediaCache(null);
 
@@ -70,11 +74,17 @@ class TelegramService extends ChangeNotifier {
   TdTransport get transport => _transport;
   // Resolve the current client even when the playback proxy keeps this tear-off.
   Future<Json> request(Json json) async {
-    if (json['@type'] == 'downloadFile' && json['priority'] == 32) {
+    final preloading = json['@type'] == 'downloadFile' && json['priority'] == 2;
+    if (preloading ||
+        json['@type'] == 'downloadFile' && json['priority'] == 32) {
       // Metadata cleanup or startup migration may still own this disk file.
       await _mediaSweep;
       await _storageCleanup;
       await _audioDeletes[json['file_id']];
+      if (preloading &&
+          (!ready || _offlineFiles.containsKey(json['file_id']))) {
+        return const {};
+      }
     }
     return _transport.request(json);
   }
@@ -121,9 +131,11 @@ class TelegramService extends ChangeNotifier {
   int _coverJobs = 0;
   Completer<void>? _coverSlot;
   bool Function(int) isStreaming = (_) => false;
+  bool Function(int) isPreloading = (_) => false;
   bool Function() hasActiveStream = () => false;
   Future<void>? _mediaSweep, _storageCleanup;
   final Map<int, int> _metadataUsers = {};
+  final Map<int, int> _offlineFiles = {};
   final Map<int, Future<void>> _audioDeletes = {};
 
   Future<Json> _optimizeMedia(List<Json> types) => transport.request({
@@ -189,7 +201,11 @@ class TelegramService extends ChangeNotifier {
 
   /// Releases a temporary Telegram file after its last playback or metadata read.
   Future<void> releaseAudio(int fileId) async {
-    if (!ready || isStreaming(fileId) || _metadataUsers.containsKey(fileId)) {
+    bool inUse() =>
+        isStreaming(fileId) ||
+        isPreloading(fileId) ||
+        _metadataUsers.containsKey(fileId);
+    if (!ready || inUse()) {
       return;
     }
     if (_audioDeletes[fileId] case final pending?) return pending;
@@ -204,7 +220,7 @@ class TelegramService extends ChangeNotifier {
       } catch (_) {
         /* The download may already have ended. Still try to delete its copy. */
       }
-      if (isStreaming(fileId) || _metadataUsers.containsKey(fileId)) return;
+      if (inUse()) return;
       try {
         await client.request({'@type': 'deleteFile', 'file_id': fileId});
       } catch (_) {
@@ -600,7 +616,11 @@ class TelegramService extends ChangeNotifier {
       if (!active()) return null;
       if ((prefix['size'] as num? ?? 0) < count) {
         // TDLib has one download offset per file; never move a playing stream.
-        if (isStreaming(id)) return null;
+        if (isStreaming(id) ||
+            isPreloading(id) ||
+            _offlineFiles.containsKey(id)) {
+          return null;
+        }
         await metadataRequest({
           '@type': 'downloadFile',
           'file_id': id,
@@ -676,10 +696,10 @@ class TelegramService extends ChangeNotifier {
     final id = track.fileId;
     if (!ready || id == null) return false;
     final file = await transport.request({'@type': 'getFile', 'file_id': id});
-    return _completeSong(file, track.size) != null;
+    return _completeMedia(file, track.size) != null;
   }
 
-  File? _completeSong(Json file, int size) {
+  File? _completeMedia(Json file, int size) {
     final local = file['local'] as Json?;
     final path = local?['path'];
     if (local?['is_downloading_completed'] != true ||
@@ -691,6 +711,90 @@ class TelegramService extends ChangeNotifier {
     return song.existsSync() && (size <= 0 || song.lengthSync() == size)
         ? song
         : null;
+  }
+
+  Future<void> saveOffline(Track track, {required bool video}) async {
+    final client = transport;
+    bool current() => ready && identical(client, transport);
+    if (!current()) throw StateError('Connect Telegram to save this media.');
+    final resolved = video && track.fileId == null
+        ? await restoreVideo(track)
+        : track;
+    final id = resolved?.fileId;
+    if (resolved == null || id == null || !current()) {
+      throw StateError('Telegram could not find this media.');
+    }
+    await offline.save(
+      resolved,
+      video: video,
+      download: (copy) async {
+        final saved = await _withTemporaryFile(id, _imageGeneration, () async {
+          _offlineFiles.update(id, (count) => count + 1, ifAbsent: () => 1);
+          try {
+            final file = await _downloadOfflineFile(
+              client,
+              id,
+              resolved.size,
+              current,
+            );
+            if (!current()) return false;
+            await copy(file);
+            return true;
+          } finally {
+            if (_offlineFiles[id] == 1) {
+              _offlineFiles.remove(id);
+            } else {
+              _offlineFiles[id] = _offlineFiles[id]! - 1;
+            }
+          }
+        }, isCurrent: current);
+        if (saved != true) {
+          throw StateError('Connect Telegram to finish saving this media.');
+        }
+      },
+    );
+  }
+
+  Future<File> _downloadOfflineFile(
+    TdTransport client,
+    int id,
+    int size,
+    bool Function() current,
+  ) async {
+    var streaming = false;
+    var requested = false;
+    var downloaded = -1;
+    var deadline = DateTime.now().add(const Duration(minutes: 2));
+    while (current()) {
+      final file = await client.request({'@type': 'getFile', 'file_id': id});
+      if (!current()) break;
+      if (_completeMedia(file, size) case final complete?) return complete;
+      final local = file['local'] as Json?;
+      final bytes = local?['downloaded_size'] as int? ?? 0;
+      if (isStreaming(id)) {
+        // TDLib has one download offset per file. Let playback own it first.
+        streaming = true;
+      } else if (!requested || streaming) {
+        requested = true;
+        streaming = false;
+        await client.request({
+          '@type': 'downloadFile',
+          'file_id': id,
+          'priority': 8,
+          'offset': 0,
+          'limit': 0,
+          'synchronous': false,
+        });
+      } else if (DateTime.now().isAfter(deadline)) {
+        throw StateError('The download stalled. Check Telegram and try again.');
+      }
+      if (streaming || bytes != downloaded) {
+        downloaded = bytes;
+        deadline = DateTime.now().add(const Duration(minutes: 2));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 750));
+    }
+    throw StateError('Connect Telegram to finish saving this media.');
   }
 
   Future<File> songWithLyrics(
@@ -707,7 +811,7 @@ class TelegramService extends ChangeNotifier {
     }
     final client = transport;
     final result = await _withTemporaryFile(id, generation, () async {
-      var source = _completeSong(
+      var source = _completeMedia(
         await client.request({'@type': 'getFile', 'file_id': id}),
         track.size,
       );
@@ -723,7 +827,7 @@ class TelegramService extends ChangeNotifier {
           'limit': 0,
           'synchronous': true,
         }, timeout: const Duration(minutes: 5));
-        source = _completeSong(downloaded, track.size);
+        source = _completeMedia(downloaded, track.size);
       }
       if (source == null || !ready || generation != _imageGeneration) {
         return null;
@@ -1636,6 +1740,7 @@ class TelegramService extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_videoPosts.close());
+    offline.dispose();
     super.dispose();
   }
 
@@ -1648,6 +1753,7 @@ class TelegramService extends ChangeNotifier {
     try {
       await transport.close();
     } finally {
+      await offline.drain();
       await MediaCache.drain(directory);
       _clientClosed = true;
       _mediaSweep = null;
