@@ -323,6 +323,9 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     }
     _boostInput = input;
     _startRate = player.state.rate;
+    if (input == _BoostInput.pointer) {
+      unawaited(Feedback.forLongPress(context));
+    }
     _boostAt(input, _gestureOptions.boostRate);
   }
 
@@ -821,7 +824,10 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     VideoControl.speed => _button(
       control.label,
       Icons.speed_rounded,
-      () => session._speedPanel(context),
+      () => player.setRate(player.state.rate == 2.0 ? 1.0 : 2.0),
+      selected: player.state.rate == 2.0,
+      onLongPress: () =>
+          unawaited(_perform(() => session._speedPanel(context))),
     ),
     VideoControl.chapters => _button(
       control.label,
