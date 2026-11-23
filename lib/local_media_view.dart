@@ -23,6 +23,7 @@ extension LocalMediaViewIcon on LocalMediaView {
     LocalMediaView.playlists => Icons.playlist_play_rounded,
     LocalMediaView.history => Icons.history_rounded,
     LocalMediaView.snapshots => Icons.photo_library_outlined,
+    LocalMediaView.offline => Icons.download_done_rounded,
     LocalMediaView.folders => Icons.folder_outlined,
   };
 }
@@ -37,6 +38,7 @@ class LocalMediaViewPane extends StatefulWidget {
     required this.onOpenFiles,
     this.sourceButton,
     this.savedVideoCollection,
+    this.offlineCollection,
     this.videoPlaylistsController,
     this.playingTrackId,
     this.musicActions,
@@ -51,6 +53,7 @@ class LocalMediaViewPane extends StatefulWidget {
   final VoidCallback onOpenFiles;
   final Widget? sourceButton;
   final Widget Function(LocalMediaView)? savedVideoCollection;
+  final Widget Function()? offlineCollection;
   final VideoLibraryPageController? videoPlaylistsController;
   final String? playingTrackId;
   final Widget Function(Track, VoidCallback, Widget)? musicActions;
@@ -80,9 +83,15 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
             LocalMediaView.snapshots,
           ],
           LocalMediaView.folders,
+          if (widget.offlineCollection != null) LocalMediaView.offline,
         ]
-      : _music;
+      : [
+          ..._music,
+          if (widget.offlineCollection != null) LocalMediaView.offline,
+        ];
   late LocalMediaView _view = _views.first;
+  bool get _isMediaView =>
+      !_view.isSavedVideoCollection && _view != LocalMediaView.offline;
   late LibrarySort _sort = !widget.video && _platform.windows
       ? LibrarySort.newest
       : LibrarySort.title;
@@ -192,8 +201,9 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
         widget.videoPlaylistsController?.backToOverview() == true) {
       return true;
     }
-    if (widget.video && _view != LocalMediaView.videos) {
-      _changeView(LocalMediaView.videos);
+    if ((widget.video || _view == LocalMediaView.offline) &&
+        _view != _views.first) {
+      _changeView(_views.first);
       return true;
     }
     return false;
@@ -219,7 +229,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
 
   Future<void> _project() async {
     final generation = ++_projection;
-    if (_view.isSavedVideoCollection) {
+    if (!_isMediaView) {
       _projecting = false;
       return;
     }
@@ -290,7 +300,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
   }
 
   bool get _requiresIndex =>
-      !_view.isSavedVideoCollection &&
+      _isMediaView &&
       (_sort == LibrarySort.duration ||
           !widget.video &&
               (_search.text.trim().isNotEmpty ||
@@ -562,7 +572,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
             ),
             actions: [
               ?widget.sourceButton,
-              if (hasFolders && !_view.isSavedVideoCollection)
+              if (hasFolders && _isMediaView)
                 LibrarySortMenu(
                   selected: _sort,
                   options: LibrarySort.values.where(
@@ -586,7 +596,9 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
           ),
         ],
         Expanded(
-          child: _view.isSavedVideoCollection
+          child: _view == LocalMediaView.offline
+              ? widget.offlineCollection!()
+              : _view.isSavedVideoCollection
               ? widget.savedVideoCollection!(_view)
               : LibraryPanel(
                   child: !hasFolders
