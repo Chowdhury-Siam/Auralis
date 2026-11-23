@@ -972,6 +972,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                     status: _episodeStatus(track, watched),
                   ),
                   artwork: _videoArtwork(track, watched: watched),
+                  offline: (media: _telegram.offline, id: track.id),
                   trailing: _videoActions(track, onPlay: play),
                   onTap: play,
                 );
@@ -1350,6 +1351,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
                 status: status,
               ),
               artwork: _videoArtwork(video, watched: watched),
+              offline: (media: _telegram.offline, id: video.id),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [_watchButton(video, watched), _videoActions(video)],
