@@ -1,6 +1,14 @@
 {
-  "current": "0.1.242",
+  "current": "0.1.243",
   "releases": [
+    {
+      "version": "0.1.243",
+      "changes": [
+        "Keep Telegram and On this device libraries loaded when switching sources. Pull down to refresh the active library.",
+        "Enable embedded and online lyrics, Favorites, and Listening Stats for local music.",
+        "Fix a test timeout in the offline video download progress check."
+      ]
+    },
     {
       "version": "0.1.242",
       "changes": [
