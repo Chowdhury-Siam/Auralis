@@ -225,6 +225,14 @@ class _NativeVideo implements mpv.NativePlayer {
 class _RecordingVideoProxy extends TelegramStreamProxy {
   _RecordingVideoProxy() : super((_) async => {});
 
+  final preloads = <(int?, Duration?)>[];
+
+  @override
+  Future<void> preload(Track? track, {Duration? duration}) {
+    if (track != null) preloads.add((track.fileId, duration));
+    return super.preload(track, duration: duration);
+  }
+
   @override
   Future<Uri> uri(Track track) async =>
       Uri.parse('http://127.0.0.1/video/${track.fileId}');
@@ -275,6 +283,13 @@ class _VideoController implements VideoController {
 }
 
 class _SkipVideoFixture {
+  _SkipVideoFixture({Directory? telegramDirectory})
+    : telegram = TelegramService(
+        telegramDirectory ?? Directory('unused'),
+        MemoryVault(),
+        transport: FakeTd(),
+      );
+
   final native = _NativeVideo();
   late final controller = _VideoController(native);
   final direction = ValueNotifier(TextDirection.ltr);
@@ -289,13 +304,13 @@ class _SkipVideoFixture {
     TelegramStreamProxy((_) async => {}),
     settings,
   );
-  final telegram = TelegramService(
-    Directory('unused'),
-    MemoryVault(),
-    transport: FakeTd(),
-  );
+  final TelegramService telegram;
 
-  Future<void> mount(WidgetTester tester, {VideoSource? videoSource}) async {
+  Future<void> mount(
+    WidgetTester tester, {
+    VideoSource? videoSource,
+    List<VideoSource> next = const [],
+  }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1280, 800);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -309,7 +324,7 @@ class _SkipVideoFixture {
               Directionality(textDirection: value, child: child!),
         ),
         home: VideoPlayback(
-          sources: [videoSource ?? source],
+          sources: [videoSource ?? source, ...next],
           initialIndex: 0,
           telegram: telegram,
           music: music,
@@ -339,6 +354,135 @@ class _SkipVideoFixture {
 }
 
 void main() {
+  testWidgets('tap speed toggles 2× and 1× while holding opens the picker', (
+    tester,
+  ) async {
+    final fixture = _SkipVideoFixture();
+    try {
+      await fixture.mount(tester);
+      final speedButton = find.byTooltip('Playback speed');
+      final twoTimes = find.widgetWithText(ChoiceChip, '2×');
+
+      await tester.tap(speedButton);
+      await tester.pumpAndSettle();
+      expect(fixture.native.state.rate, 2);
+      expect(twoTimes, findsNothing);
+
+      await tester.tap(speedButton);
+      await tester.pumpAndSettle();
+      expect(fixture.native.state.rate, 1);
+      expect(twoTimes, findsNothing);
+
+      await tester.longPress(speedButton);
+      await tester.pumpAndSettle();
+      expect(fixture.native.state.rate, 1);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '1×'))
+            .selected,
+        isTrue,
+      );
+      await tester.tap(find.widgetWithText(ChoiceChip, '1.5×'));
+      await tester.pumpAndSettle();
+      expect(fixture.native.state.rate, 1.5);
+
+      await tester.tap(speedButton);
+      await tester.pumpAndSettle();
+      expect(fixture.native.state.rate, 2);
+    } finally {
+      await fixture.close(tester);
+    }
+  });
+
+  testWidgets(
+    'stable video playback preloads only the immediate next episode',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      fixture.telegram.state = 'authorizationStateReady';
+      VideoSource episode(int n) => VideoSource.telegram(
+        Track(
+          id: '-100:$n',
+          title: 'Episode $n',
+          artist: '',
+          source: 'Test channel',
+          fileId: n + 30,
+          size: 16000000,
+          duration: const Duration(minutes: 2),
+        ),
+      );
+      try {
+        await fixture.mount(
+          tester,
+          videoSource: episode(1),
+          next: [episode(2), episode(3)],
+        );
+        expect(fixture.proxy.preloads, isEmpty);
+        await fixture.native.seek(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+        await fixture.native.seek(const Duration(seconds: 6));
+        await tester.pumpAndSettle();
+        expect(fixture.proxy.preloads, [(32, const Duration(minutes: 2))]);
+        await tester.tap(find.byTooltip('Next video'));
+        await tester.pumpAndSettle();
+        expect(fixture.native.opened.last.uri, 'http://127.0.0.1/video/32');
+        await fixture.native.seek(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+        expect(fixture.proxy.preloads.last, (33, const Duration(minutes: 2)));
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
+
+  testWidgets(
+    'saved videos reopen offline with their original resume position',
+    (tester) async {
+      final root = (await tester.runAsync(
+        () => Directory.systemTemp.createTemp('auralis-offline-video-'),
+      ))!;
+      final fixture = _SkipVideoFixture(telegramDirectory: root);
+      const source = VideoSource.telegram(
+        Track(
+          id: '-100:22',
+          title: 'Offline episode',
+          artist: '',
+          source: 'Test channel',
+          size: 4,
+          duration: Duration(minutes: 2),
+        ),
+      );
+      final uri = (await tester.runAsync(() async {
+        final file = await File('${root.path}/source.mp4')
+            .writeAsBytes([1, 2, 3, 4]);
+        await fixture.telegram.offline.save(
+          source.telegram!,
+          video: true,
+          download: (copy) => copy(file),
+        );
+        return fixture.telegram.offline.availableUri(
+          source.telegram!.id,
+          video: true,
+        );
+      }))!;
+      const position = Duration(seconds: 30);
+      fixture.settings.videoPlayback.remember(
+        source.id,
+        position,
+        source.duration,
+      );
+      try {
+        await fixture.mount(tester, videoSource: source);
+        expect(fixture.telegram.ready, isFalse);
+        expect(fixture.native.opened.single.uri, uri.toString());
+        expect(fixture.native.opened.single.start, position);
+        expect(fixture.native.state.playing, isTrue);
+      } finally {
+        await fixture.close(tester);
+        await tester.runAsync(() => root.delete(recursive: true));
+      }
+    },
+  );
+
   testWidgets(
     'foreground recovery reopens a stalled Telegram video at its last position',
     (tester) async {
@@ -633,15 +777,38 @@ void main() {
               await tester.pumpAndSettle();
               expect(fixture.native.state.volume, lessThan(original));
             case VideoGesture.holdSpeed:
+              final haptics = <MethodCall>[];
+              final messenger = tester.binding.defaultBinaryMessenger;
+              messenger.setMockMethodCallHandler(SystemChannels.platform, (
+                call,
+              ) async {
+                if (call.method == 'HapticFeedback.vibrate') haptics.add(call);
+                return null;
+              });
+              addTearDown(
+                () => messenger.setMockMethodCallHandler(
+                  SystemChannels.platform,
+                  null,
+                ),
+              );
               await tester.longPressAt(const Offset(640, 300));
               await tester.pumpAndSettle();
               expect(fixture.native.state.rate, 1);
+              expect(haptics, hasLength(1));
               final gesture = await tester.startGesture(const Offset(640, 300));
-              await tester.pump(const Duration(milliseconds: 600));
+              await tester.pump(const Duration(milliseconds: 300));
+              expect(haptics, hasLength(1));
+              await tester.pump(const Duration(milliseconds: 300));
               expect(fixture.native.state.rate, 1.5);
+              expect(haptics, hasLength(2));
+              await gesture.moveBy(const Offset(40, 0));
+              await tester.pump();
+              expect(fixture.native.state.rate, 1.75);
+              expect(haptics, hasLength(2));
               await gesture.up();
               await tester.pumpAndSettle();
               expect(fixture.native.state.rate, 1);
+              expect(haptics, hasLength(2));
             default:
               fail('Unexpected gesture');
           }
