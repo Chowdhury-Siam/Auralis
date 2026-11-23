@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:auralis/lyrics.dart';
 import 'package:auralis/media_cache.dart';
@@ -23,7 +24,52 @@ class WaitingClient extends Client {
   }
 }
 
+class _DelayedLyricsCache extends MediaCache {
+  _DelayedLyricsCache() : super(Directory('unused'));
+
+  final saved = Completer<Uint8List?>();
+  int reads = 0;
+
+  @override
+  Future<Uint8List?> read(Track track, String kind, int limit) {
+    reads++;
+    return saved.future;
+  }
+
+  @override
+  Future<void> write(Track track, String kind, List<int> bytes) async {}
+}
+
 void main() {
+  test('a local lyric import supersedes a pending disk read', () async {
+    final track = Track(
+      id: 'local:1',
+      title: 'Local song',
+      artist: 'Local artist',
+      source: 'On this device',
+      localUri: Uri.file('/music/song.mp3'),
+    );
+    final disk = _DelayedLyricsCache();
+    var requests = 0;
+    final repository = LyricsRepository(
+      localCache: disk,
+      createClient: () {
+        requests++;
+        return Client([]);
+      },
+    );
+    addTearDown(repository.close);
+
+    final lookup = repository.find(track);
+    expect(disk.reads, 1);
+    final imported = Lyrics.parse('Imported words', imported: true);
+    await repository.save(track, imported);
+    disk.saved.complete(null);
+    expect(await lookup, same(imported));
+    expect(repository.cached(track), same(imported));
+    expect(requests, 0);
+  });
+
   test(
     'automatic preparation finds and translates while preserving originals',
     () async {
