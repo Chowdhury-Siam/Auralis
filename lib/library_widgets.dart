@@ -55,7 +55,7 @@ class _LibrarySourcePanesState extends State<LibrarySourcePanes> {
   }
 }
 
-class LibraryRefresh extends StatelessWidget {
+class LibraryRefresh extends StatefulWidget {
   const LibraryRefresh({
     super.key,
     required this.onRefresh,
@@ -66,21 +66,34 @@ class LibraryRefresh extends StatelessWidget {
   final Widget child;
 
   @override
+  State<LibraryRefresh> createState() => _LibraryRefreshState();
+}
+
+class _LibraryRefreshState extends State<LibraryRefresh> {
+  ScrollPhysics? _basePhysics;
+  late ScrollPhysics _refreshPhysics;
+
+  @override
   Widget build(BuildContext context) {
     final behavior = ScrollConfiguration.of(context);
+    final physics = behavior.getScrollPhysics(context);
+    // A different physics instance makes Scrollable replace its position.
+    // Keep it stable when rows, dock padding or refresh state change.
+    if (!identical(_basePhysics, physics)) {
+      _basePhysics = physics;
+      _refreshPhysics = const AlwaysScrollableScrollPhysics().applyTo(physics);
+    }
     return ScrollConfiguration(
       behavior: behavior.copyWith(
-        physics: const AlwaysScrollableScrollPhysics().applyTo(
-          behavior.getScrollPhysics(context),
-        ),
+        physics: _refreshPhysics,
         dragDevices: {...behavior.dragDevices, PointerDeviceKind.mouse},
       ),
       child: RefreshIndicator(
         notificationPredicate: (notification) =>
             notification.depth == 0 &&
             notification.metrics.axis == Axis.vertical,
-        onRefresh: onRefresh,
-        child: child,
+        onRefresh: widget.onRefresh,
+        child: widget.child,
       ),
     );
   }
