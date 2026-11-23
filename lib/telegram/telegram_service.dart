@@ -727,7 +727,7 @@ class TelegramService extends ChangeNotifier {
     await offline.save(
       resolved,
       video: video,
-      download: (copy) async {
+      download: (copy, reportProgress) async {
         final saved = await _withTemporaryFile(id, _imageGeneration, () async {
           _offlineFiles.update(id, (count) => count + 1, ifAbsent: () => 1);
           try {
@@ -736,6 +736,7 @@ class TelegramService extends ChangeNotifier {
               id,
               resolved.size,
               current,
+              reportProgress,
             );
             if (!current()) return false;
             await copy(file);
@@ -760,6 +761,7 @@ class TelegramService extends ChangeNotifier {
     int id,
     int size,
     bool Function() current,
+    ValueChanged<double?> reportProgress,
   ) async {
     var streaming = false;
     var requested = false;
@@ -768,9 +770,17 @@ class TelegramService extends ChangeNotifier {
     while (current()) {
       final file = await client.request({'@type': 'getFile', 'file_id': id});
       if (!current()) break;
-      if (_completeMedia(file, size) case final complete?) return complete;
+      if (_completeMedia(file, size) case final complete?) {
+        reportProgress(.99);
+        return complete;
+      }
       final local = file['local'] as Json?;
       final bytes = local?['downloaded_size'] as int? ?? 0;
+      final total = size > 0 ? size : file['size'] as int? ?? 0;
+      final expected = total > 0 ? total : file['expected_size'] as int? ?? 0;
+      reportProgress(
+        bytes > 0 && expected > 0 ? (bytes / expected).clamp(0.0, .99) : null,
+      );
       if (isStreaming(id)) {
         // TDLib has one download offset per file. Let playback own it first.
         streaming = true;
