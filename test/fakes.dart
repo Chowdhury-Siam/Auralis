@@ -4,7 +4,24 @@ import 'dart:io';
 import 'package:auralis/player.dart';
 import 'package:auralis/storage.dart';
 import 'package:auralis/telegram/td_transport.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+
+/// Advance frames while also letting file and isolate work finish.
+Future<void> pumpUntil(
+  WidgetTester tester,
+  bool Function() ready, {
+  required String reason,
+}) async {
+  for (var attempt = 0; attempt < 500; attempt++) {
+    await tester.pump(const Duration(milliseconds: 20));
+    if (ready()) return;
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+  }
+  fail(reason);
+}
 
 // Use a native absolute path outside the fixture settings folder. Dart's
 // File.absolute treats a leading forward slash differently on Windows.
