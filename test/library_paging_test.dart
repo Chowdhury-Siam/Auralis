@@ -190,13 +190,14 @@ void main() {
           ValueKey(video ? 'video-library-title' : 'page-title'),
         );
         final labels = video
-            ? ['All videos', 'Playlists', 'History', 'Snapshots']
+            ? ['All videos', 'Playlists', 'History', 'Snapshots', 'Offline']
             : [
                 'All songs',
                 'Artists',
                 'Favorites',
                 'Playlists',
                 'Recently played',
+                'Offline',
               ];
         for (final label in labels.skip(1)) {
           await tester.drag(pager, const Offset(-320, 0));
