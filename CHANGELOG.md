@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.242
+
+- Show download progress along the bottom of video rows. An Offline badge marks videos saved for offline playback.
+
 ## 0.1.241
 
 - Swipe vertically on the left to adjust Android brightness and on the right to adjust volume. Brightness feedback appears on the left and volume feedback appears on the right.
