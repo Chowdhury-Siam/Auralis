@@ -14,6 +14,7 @@ import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.system.Os
 import android.util.Size
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
@@ -90,12 +91,44 @@ internal class LocalMediaLibrary(
                             if (uri.scheme == "content") songMetadata(uri) else emptyMap<String, Any>()
                         }
                     }
+                    "audioSize" -> images.execute {
+                        work(result) {
+                            val uri = Uri.parse(call.arguments as? String ?: "")
+                            require(uri.scheme == "content")
+                            resolver.openAssetFileDescriptor(uri, "r")?.use { it.length }
+                        }
+                    }
+                    "audioRange" -> images.execute {
+                        work(result) {
+                            val uri = Uri.parse(call.argument<String>("uri").orEmpty())
+                            val offset = call.argument<Number>("offset")?.toLong() ?: -1L
+                            val count = call.argument<Int>("count") ?: 0
+                            readAudioRange(uri, offset, count)
+                        }
+                    }
                     "openSongs" -> openSongs(result)
                     else -> result.notImplemented()
                 }
             } catch (_: Exception) {
                 result.error("local_media", "Could not access local media.", null)
             }
+        }
+    }
+
+    private fun readAudioRange(uri: Uri, offset: Long, count: Int): ByteArray? {
+        require(uri.scheme == "content" && offset >= 0 && count in 1..(4 * 1024 * 1024))
+        return resolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
+            val size = asset.length
+            if (size < count || offset > size - count) return@use null
+            val bytes = ByteArray(count)
+            var read = 0
+            while (read < count) {
+                val position = asset.startOffset + offset + read
+                val length = Os.pread(asset.fileDescriptor, bytes, read, count - read, position)
+                if (length <= 0) return@use null
+                read += length
+            }
+            bytes
         }
     }
 
