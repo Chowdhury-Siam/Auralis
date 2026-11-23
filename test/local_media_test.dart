@@ -426,8 +426,12 @@ void main() {
     expect(find.text('S01E02.mp4'), findsOneWidget);
     expect(find.text('Added S01E4.mp4'), findsNothing);
     await tester.drag(find.byType(ListView), const Offset(0, 330));
-    await tester.pump(const Duration(milliseconds: 250));
-    await settleScan(tester);
+    await pumpUntil(
+      tester,
+      () => find.text('Added S01E4.mp4').evaluate().isNotEmpty,
+      reason: 'Pull-to-refresh did not display the updated local video list.',
+    );
+    await tester.pumpAndSettle();
     expect(find.text('S01E02.mp4'), findsNothing);
     expect(find.text('Added S01E4.mp4'), findsOneWidget);
     expect(platform.scans.map((scan) => scan.$1), [true, true]);
