@@ -13,6 +13,8 @@ import 'music_playlist_widgets.dart';
 import 'playlist_photos.dart';
 import 'models.dart';
 import 'media_item_sheet.dart';
+import 'offline_media_actions.dart';
+import 'telegram/telegram_service.dart';
 import 'video_playback_data.dart';
 
 part 'video_library_widgets.dart';
@@ -158,11 +160,16 @@ Future<String?> showVideoItemSheet({
   String? removeLabel,
   bool playNext = false,
   VideoDurationLookup? lookupDuration,
-}) {
+  TelegramService? telegram,
+}) async {
   final watched = data.isWatched(source);
   final position = data.positions[source.id];
   final duration = data.durationOf(source);
-  return showMediaItemSheet(
+  final track = source.telegram;
+  final offline = track == null || telegram == null
+      ? null
+      : offlineMediaAction(telegram, track, video: true);
+  final selected = await showMediaItemSheet(
     context: context,
     title: source.title,
     subtitle: source.telegram?.source ?? 'On your device',
@@ -208,6 +215,7 @@ Future<String?> showVideoItemSheet({
             : Icons.radio_button_unchecked_rounded,
         selected: watched,
       ),
+      ?offline,
       if (removeLabel != null)
         MediaItemAction(
           'remove',
@@ -217,6 +225,14 @@ Future<String?> showVideoItemSheet({
         ),
     ],
   );
+  if (selected == 'offline' &&
+      context.mounted &&
+      telegram != null &&
+      track != null) {
+    await changeOfflineMedia(context, telegram, track, video: true);
+    return null;
+  }
+  return selected;
 }
 
 class VideoLibraryRow extends StatelessWidget {
@@ -349,6 +365,7 @@ class VideoLibraryPage extends StatefulWidget {
     required this.pickFiles,
     required this.playlists,
     this.historyArtwork,
+    this.telegram,
     this.lookupDuration,
     this.changes,
     this.embedded = false,
@@ -364,6 +381,7 @@ class VideoLibraryPage extends StatefulWidget {
   final Future<List<VideoSource>> Function() pickFiles;
   final bool playlists;
   final Widget? Function(VideoSource)? historyArtwork;
+  final TelegramService? telegram;
   final VideoDurationLookup? lookupDuration;
   final Listenable? changes;
   final bool embedded;
@@ -518,6 +536,7 @@ class _VideoLibraryPageState extends State<VideoLibraryPage> {
         data: _data,
         removeLabel: removeLabel,
         lookupDuration: widget.lookupDuration,
+        telegram: widget.telegram,
       );
       if (!mounted || action == null) return;
       switch (action) {
