@@ -309,6 +309,9 @@ class _PlayerShellState extends State<PlayerShell>
   String collection = 'All songs';
   String? selectedPlaylist, _selectedArtist;
   late final LyricsRepository lyrics;
+  late final _localLyricsCache = MediaCache(
+    Directory(p.join(player.settings.file.parent.path, 'local-lyrics')),
+  );
   int _cacheGeneration = 0, _cachedTracks = 0, _cacheTotal = 0;
   bool _cachingLibrary = false;
   ({
@@ -362,6 +365,7 @@ class _PlayerShellState extends State<PlayerShell>
     );
     lyrics = LyricsRepository(
       cache: () => telegram.mediaCache,
+      localCache: _localLyricsCache,
       preferences: player.settings,
     );
     library = ChannelLibrary(telegram, player.settings);
@@ -484,11 +488,10 @@ class _PlayerShellState extends State<PlayerShell>
       bool active() =>
           mounted &&
           generation == _lyricGeneration &&
-          telegram.ready &&
           identical(player.current, track) &&
-          scope == telegram.mediaCache.directory?.path;
+          (track?.localUri != null ||
+              telegram.ready && scope == telegram.mediaCache.directory?.path);
       if (track != null &&
-          track.localUri == null &&
           _metadataPlaybackStarted &&
           settings.automaticLyrics &&
           active()) {
@@ -497,13 +500,17 @@ class _PlayerShellState extends State<PlayerShell>
               .prepare(
                 track,
                 active: active,
-                loadEmbedded: telegram.embeddedLyrics,
+                loadEmbedded: _embeddedLyrics,
               )
               .catchError((Object _) => null),
         );
       }
     }
   }
+
+  Future<Lyrics?> _embeddedLyrics(Track track) => track.localUri == null
+      ? telegram.embeddedLyrics(track)
+      : const LocalMediaPlatform().embeddedLyrics(track);
 
   Future<void> _warmArtwork(
     List<Track> tracks,
@@ -737,7 +744,7 @@ class _PlayerShellState extends State<PlayerShell>
                     player: player,
                     repository: lyrics,
                     files: widget.dataFiles,
-                    loadEmbedded: telegram.embeddedLyrics,
+                    loadEmbedded: _embeddedLyrics,
                     saveSongWithLyrics: _saveSongWithLyrics,
                     artwork: Artwork(
                       seed: player.current?.title ?? 'Auralis',
@@ -2031,13 +2038,12 @@ class _PlayerShellState extends State<PlayerShell>
             Icons.play_arrow_rounded,
             primary: true,
           ),
-          if (!local)
-            MediaItemAction(
-              'favorite',
-              favorite ? 'Remove from favorites' : 'Add to favorites',
-              favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-              selected: favorite,
-            ),
+          MediaItemAction(
+            'favorite',
+            favorite ? 'Remove from favorites' : 'Add to favorites',
+            favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            selected: favorite,
+          ),
           const MediaItemAction(
             'queue',
             'Add to queue',
@@ -2388,24 +2394,31 @@ class _PlayerShellState extends State<PlayerShell>
   Widget _library() {
     if (widget.setupMode) return _telegramMusicLibrary();
     final local = player.settings.musicLibraryOnDevice;
-    final sourceButton = LibrarySourceButton(
+    return LibrarySourcePanes(
       local: local,
-      onPressed: () => _setMusicLibrarySource(!local),
-    );
-    if (!local) return _telegramMusicLibrary(sourceButton: sourceButton);
-    return LocalMediaViewPane(
-      key: _localLibraryKey,
-      settings: player.settings,
-      video: false,
-      bottomPadding: _dockPadding,
-      sourceButton: sourceButton,
-      offlineCollection: () => _offlineSongs(),
-      onPlay: _playLocalSongs,
-      playingTrackId: player.current?.id,
-      musicActions: (track, play, artwork) =>
-          _trackActions(track, onPlay: play, artwork: artwork),
-      onOpenFiles: _openLocalSongs,
-      onSettings: _mobileNavigation ? () => _navigate(_Page.settings) : null,
+      telegramPane: (_) => _telegramMusicLibrary(
+        sourceButton: LibrarySourceButton(
+          local: false,
+          onPressed: () => _setMusicLibrarySource(true),
+        ),
+      ),
+      devicePane: (_) => LocalMediaViewPane(
+        key: _localLibraryKey,
+        settings: player.settings,
+        video: false,
+        bottomPadding: _dockPadding,
+        sourceButton: LibrarySourceButton(
+          local: true,
+          onPressed: () => _setMusicLibrarySource(false),
+        ),
+        offlineCollection: _offlineSongs,
+        onPlay: _playLocalSongs,
+        playingTrackId: player.current?.id,
+        musicActions: (track, play, artwork) =>
+            _trackActions(track, onPlay: play, artwork: artwork),
+        onOpenFiles: _openLocalSongs,
+        onSettings: _mobileNavigation ? () => _navigate(_Page.settings) : null,
+      ),
     );
   }
 
@@ -2547,8 +2560,12 @@ class _PlayerShellState extends State<PlayerShell>
                     reducedMotion: player.settings.reducedMotion,
                     onChanged: (index) =>
                         _selectLibraryCollection(_libraryCollections[index].$1),
-                    itemBuilder: (_, index) =>
-                        _libraryCollectionBody(_libraryCollections[index].$1),
+                    itemBuilder: (_, index) => LibraryRefresh(
+                      onRefresh: library.refresh,
+                      child: _libraryCollectionBody(
+                        _libraryCollections[index].$1,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -2598,7 +2615,7 @@ class _PlayerShellState extends State<PlayerShell>
         library.loading ? 'Finding your music' : 'No music loaded',
         library.loading
             ? 'Tracks appear here as your channels load.'
-            : 'Refresh in Browse or choose different channels.',
+            : 'Pull down to refresh or choose different channels.',
       );
     }
     if (scope == 'Artists' && (!active || _selectedArtist == null)) {
@@ -3176,7 +3193,7 @@ class _PlayerShellState extends State<PlayerShell>
                   icon: favorite
                       ? Icons.favorite_rounded
                       : Icons.favorite_border_rounded,
-                  onPressed: track == null || track.localUri != null
+                  onPressed: track == null
                       ? null
                       : () async {
                           try {
@@ -3211,7 +3228,7 @@ class _PlayerShellState extends State<PlayerShell>
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      onPressed: track == null || track.localUri != null
+                      onPressed: track == null
                           ? null
                           : () => setState(() {
                               showLyrics = true;
@@ -3829,10 +3846,17 @@ class _PlayerShellState extends State<PlayerShell>
                 },
               ),
           ]
-        : await musicCacheEntries(disk, [
-            ...library.tracks,
-            ...player.queue,
-          ], sameAccount);
+        : [
+            ...await musicCacheEntries(disk, [
+              ...library.tracks,
+              ...player.queue.where((track) => track.localUri == null),
+            ], sameAccount),
+            ...await musicCacheEntries(
+              _localLyricsCache,
+              player.queue.where((track) => track.localUri != null),
+              () => true,
+            ),
+          ];
     String? message;
     try {
       final bytes = await telegram.playbackCacheBytes(video: video);
@@ -3884,6 +3908,9 @@ class _PlayerShellState extends State<PlayerShell>
     }
     if (telegram.mediaCache.directory case final root?) {
       await MediaCache.drain(root);
+    }
+    if (originalLyrics || translations) {
+      await MediaCache.drain(_localLyricsCache.directory!);
     }
   }
 
