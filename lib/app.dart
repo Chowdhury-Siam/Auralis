@@ -16,6 +16,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'models.dart';
 import 'media_item_sheet.dart';
+import 'offline_media_actions.dart';
 import 'music_playlist_widgets.dart';
 import 'playlist_photos.dart';
 import 'library_widgets.dart';
@@ -98,6 +99,7 @@ class _AuralisAppState extends State<AuralisApp> {
   void initState() {
     super.initState();
     _settingUp = widget.showSetup;
+    unawaited(widget.telegram.offline.load());
     widget.player.viewChanges.addListener(_artworkChanged);
     widget.telegram.addListener(_artworkChanged);
     _artworkChanged();
@@ -112,6 +114,7 @@ class _AuralisAppState extends State<AuralisApp> {
       oldWidget.telegram.removeListener(_artworkChanged);
       widget.player.viewChanges.addListener(_artworkChanged);
       widget.telegram.addListener(_artworkChanged);
+      unawaited(widget.telegram.offline.load());
       _artworkIdentity = null;
       _artworkChanged();
     }
@@ -2051,6 +2054,7 @@ class _PlayerShellState extends State<PlayerShell>
               'Add to playlist',
               Icons.playlist_add_rounded,
             ),
+          if (!local) ?offlineMediaAction(telegram, track, video: false),
           if (playlist != null)
             const MediaItemAction(
               'remove',
@@ -2079,6 +2083,8 @@ class _PlayerShellState extends State<PlayerShell>
             _notice('Playing next');
           case 'playlist':
             await _choosePlaylist(track);
+          case 'offline':
+            await changeOfflineMedia(context, telegram, track, video: false);
           case 'remove':
             if (playlist != null) {
               await player.removeFromPlaylist(playlist, track);
@@ -2303,6 +2309,7 @@ class _PlayerShellState extends State<PlayerShell>
     ('Favorites', Icons.favorite_rounded),
     ('Playlists', Icons.playlist_play_rounded),
     ('Recently played', Icons.history_rounded),
+    ('Offline', Icons.download_done_rounded),
   ];
 
   void _selectLibraryCollection(String value) => setState(() {
@@ -2392,6 +2399,7 @@ class _PlayerShellState extends State<PlayerShell>
       video: false,
       bottomPadding: _dockPadding,
       sourceButton: sourceButton,
+      offlineCollection: () => _offlineSongs(),
       onPlay: _playLocalSongs,
       playingTrackId: player.current?.id,
       musicActions: (track, play, artwork) =>
@@ -2552,6 +2560,7 @@ class _PlayerShellState extends State<PlayerShell>
   }
 
   Widget _libraryCollectionBody(String scope) {
+    if (scope == 'Offline') return _offlineSongs();
     final tracks = _collectionTracks(scope);
     final active = scope == collection;
     if (scope == 'Playlists' && (!active || selectedPlaylist == null)) {
@@ -2611,12 +2620,32 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  List<Track> _visibleTracks(List<Track> tracks, {bool preserveOrder = false}) {
-    final query = search.text.trim().toLowerCase();
+  Widget _offlineSongs() {
+    final tracks = telegram.offline.tracks(video: false);
+    if (tracks.isEmpty) {
+      return _empty(
+        Icons.download_rounded,
+        'No offline songs',
+        'Choose Save for offline from a song’s actions.',
+        bottomPadding: _dockPadding,
+      );
+    }
+    return _trackList(
+      _visibleTracks(tracks, query: collection == 'Offline' ? null : ''),
+      key: const PageStorageKey('offline-songs'),
+    );
+  }
+
+  List<Track> _visibleTracks(
+    List<Track> tracks, {
+    bool preserveOrder = false,
+    String? query,
+  }) {
+    final filter = (query ?? search.text).trim().toLowerCase();
     final visible = tracks
         .where(
           (t) => '${t.title} ${t.artist} ${t.source}'.toLowerCase().contains(
-            query,
+            filter,
           ),
         )
         .toList();
