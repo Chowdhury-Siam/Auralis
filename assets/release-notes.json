@@ -1,6 +1,12 @@
 {
-  "current": "0.1.241",
+  "current": "0.1.242",
   "releases": [
+    {
+      "version": "0.1.242",
+      "changes": [
+        "Show download progress along the bottom of video rows. An Offline badge marks videos saved for offline playback."
+      ]
+    },
     {
       "version": "0.1.241",
       "changes": [
