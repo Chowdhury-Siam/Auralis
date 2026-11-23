@@ -1,6 +1,13 @@
 {
-  "current": "0.1.240",
+  "current": "0.1.241",
   "releases": [
+    {
+      "version": "0.1.241",
+      "changes": [
+        "Swipe vertically on the left to adjust Android brightness and on the right to adjust volume. Brightness feedback appears on the left and volume feedback appears on the right.",
+        "Show brightness and volume with compact vertical meters and live percentages."
+      ]
+    },
     {
       "version": "0.1.240",
       "changes": [
