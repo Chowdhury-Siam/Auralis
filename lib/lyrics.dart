@@ -334,11 +334,17 @@ class LyricsRepository extends ChangeNotifier {
   Future<Lyrics?> loadCached(Track track) async {
     if (cached(track) case final value?) return value;
     final generation = _cacheGeneration;
+    final key = _key(track);
+    final pending = _pending[key];
     final saved = await _readSavedLyrics(track);
-    if (saved == null || generation != _cacheGeneration) return null;
-    if (cached(track) == null) {
-      _cache.remove(_key(track));
-      _cache[_key(track)] = saved;
+    if (_closed || generation != _cacheGeneration || _key(track) != key) {
+      return null;
+    }
+    if (saved != null &&
+        cached(track) == null &&
+        identical(_pending[key], pending)) {
+      _cache.remove(key);
+      _cache[key] = saved;
       if (_cache.length > 32) _cache.remove(_cache.keys.first);
     }
     return cached(track);
@@ -522,17 +528,9 @@ class LyricsRepository extends ChangeNotifier {
 
   Future<Lyrics?> _find(Track track, {bool refresh = false}) async {
     if (_closed) throw StateError('Lyrics lookup is closed.');
-    final saved = refresh ? null : await loadCached(track);
-    if (saved != null) return saved;
+    final inMemory = refresh ? null : cached(track);
+    if (inMemory != null) return inMemory;
     final title = track.title.trim(), artist = track.artist.trim();
-    if (title.isEmpty ||
-        artist.isEmpty ||
-        title.length > 1000 ||
-        artist.length > 1000) {
-      throw const FormatException(
-        'A song title and artist are needed for lookup.',
-      );
-    }
     final scope = _cacheFor(track)?.directory?.path;
     final key = _key(track), requestId = Object();
     _pending[key] = requestId;
@@ -585,6 +583,19 @@ class LyricsRepository extends ChangeNotifier {
     ];
     var failed = false;
     try {
+      if (!refresh && scope != null) {
+        final saved = await loadCached(track);
+        if (!current()) return superseded();
+        if (saved != null) return saved;
+      }
+      if (title.isEmpty ||
+          artist.isEmpty ||
+          title.length > 1000 ||
+          artist.length > 1000) {
+        throw const FormatException(
+          'A song title and artist are needed for lookup.',
+        );
+      }
       final order = preferences == null
           ? [LyricsSource.lrclib, LyricsSource.lyricsOvh]
           : [
