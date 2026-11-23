@@ -262,7 +262,6 @@ class PlayerController extends ChangeNotifier {
     var playbackCheckpoint = false;
     if (wasPlaying &&
         track != null &&
-        track.localUri == null &&
         gap > Duration.zero &&
         gap <= const Duration(seconds: 5) &&
         advancement > Duration.zero) {
