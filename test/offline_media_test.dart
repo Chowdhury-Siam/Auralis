@@ -121,8 +121,7 @@ void main() {
     final media = OfflineMedia(Directory(p.join(root.path, 'offline')));
     final source = File(p.join(root.path, 'source'))
       ..writeAsBytesSync([1, 2, 3, 4]);
-    final started = Completer<void>();
-    final finish = Completer<void>();
+    Completer<void>? finish;
     late Future<void> saving;
     final meter = find.byType(LinearProgressIndicator);
     final badge = find.byIcon(Icons.download_done_rounded);
@@ -140,13 +139,15 @@ void main() {
       expect(meter, findsNothing);
       expect(badge, findsNothing);
       await tester.runAsync(() async {
+        final started = Completer<void>();
+        final readyToSave = finish = Completer<void>();
         saving = media.save(
           song,
           video: true,
           download: (copy, reportProgress) async {
             reportProgress(.5);
             started.complete();
-            await finish.future;
+            await readyToSave.future;
             await copy(source);
           },
         );
@@ -156,8 +157,10 @@ void main() {
       expect(tester.widget<LinearProgressIndicator>(meter).value, .5);
       expect(badge, findsNothing);
 
-      finish.complete();
-      await tester.runAsync(() => saving);
+      await tester.runAsync(() {
+        finish!.complete();
+        return saving;
+      });
       await tester.pump();
       expect(meter, findsNothing);
       expect(badge, findsOneWidget);
@@ -167,9 +170,13 @@ void main() {
       await tester.pump();
       expect(badge, findsNothing);
     } finally {
-      if (!finish.isCompleted) finish.complete();
       await tester.pumpWidget(const SizedBox.shrink());
-      await tester.runAsync(media.drain);
+      await tester.runAsync(() {
+        if (finish case final pending? when !pending.isCompleted) {
+          pending.complete();
+        }
+        return media.drain();
+      });
       media.dispose();
       root.deleteSync(recursive: true);
     }
