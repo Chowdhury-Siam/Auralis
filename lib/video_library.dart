@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -13,6 +14,7 @@ import 'music_playlist_widgets.dart';
 import 'playlist_photos.dart';
 import 'models.dart';
 import 'media_item_sheet.dart';
+import 'offline_media.dart';
 import 'offline_media_actions.dart';
 import 'telegram/telegram_service.dart';
 import 'video_playback_data.dart';
@@ -244,6 +246,7 @@ class VideoLibraryRow extends StatelessWidget {
     this.watched = false,
     required this.artwork,
     this.trailing,
+    this.offline,
     required this.onTap,
   });
 
@@ -252,12 +255,32 @@ class VideoLibraryRow extends StatelessWidget {
   final bool selected, watched;
   final Widget artwork;
   final Widget? trailing;
+  final ({OfflineMedia media, String id})? offline;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    if (offline case (media: final media, id: final id)) {
+      return ListenableBuilder(
+        listenable: media,
+        builder: (context, _) => _row(
+          context,
+          saved: media.contains(id, video: true),
+          download: media.downloadProgress(id, video: true),
+        ),
+      );
+    }
+    return _row(context);
+  }
+
+  Widget _row(
+    BuildContext context, {
+    bool saved = false,
+    ValueListenable<double?>? download,
+  }) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final progress = saved ? null : download;
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
@@ -272,54 +295,79 @@ class VideoLibraryRow extends StatelessWidget {
             selected: selected,
             child: InkWell(
               onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: SizedBox.square(dimension: 64, child: artwork),
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      8,
+                      8,
+                      8,
+                      progress == null ? 8 : 12,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: selected
-                                  ? colors.onPrimaryContainer
-                                  : watched
-                                  ? colors.onSurfaceVariant
-                                  : null,
-                            ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: SizedBox.square(
+                            dimension: 64,
+                            child: artwork,
                           ),
-                          if (subtitle != null)
-                            DefaultTextStyle(
-                              style:
-                                  (theme.textTheme.labelSmall ??
-                                          const TextStyle())
-                                      .copyWith(
-                                        color: selected
-                                            ? colors.onPrimaryContainer
-                                            : colors.onSurfaceVariant,
-                                      ),
-                              child: subtitle!,
-                            ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: selected
+                                      ? colors.onPrimaryContainer
+                                      : watched
+                                      ? colors.onSurfaceVariant
+                                      : null,
+                                ),
+                              ),
+                              if (subtitle != null)
+                                DefaultTextStyle(
+                                  style:
+                                      (theme.textTheme.labelSmall ??
+                                              const TextStyle())
+                                          .copyWith(
+                                            color: selected
+                                                ? colors.onPrimaryContainer
+                                                : colors.onSurfaceVariant,
+                                          ),
+                                  child: subtitle!,
+                                ),
+                              if (saved)
+                                _VideoOfflineBadge(
+                                  color: selected
+                                      ? colors.onPrimaryContainer
+                                      : colors.primary,
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (trailing case final action?) ...[
+                          const SizedBox(width: 8),
+                          action,
                         ],
-                      ),
+                        const SizedBox(width: 4),
+                      ],
                     ),
-                    if (trailing case final action?) ...[
-                      const SizedBox(width: 8),
-                      action,
-                    ],
-                    const SizedBox(width: 4),
-                  ],
-                ),
+                  ),
+                  if (progress != null)
+                    PositionedDirectional(
+                      start: 76,
+                      end: 10,
+                      bottom: 5,
+                      child: _VideoDownloadProgress(progress: progress),
+                    ),
+                ],
               ),
             ),
           ),
@@ -327,6 +375,72 @@ class VideoLibraryRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _VideoDownloadProgress extends StatelessWidget {
+  const _VideoDownloadProgress({required this.progress});
+
+  final ValueListenable<double?> progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<double?>(
+      valueListenable: progress,
+      builder: (context, fraction, _) => LinearProgressIndicator(
+        value: fraction,
+        minHeight: 4,
+        borderRadius: BorderRadius.circular(4),
+        color: colors.primary,
+        backgroundColor: colors.primary.withValues(alpha: .18),
+        trackGap: 0,
+        stopIndicatorRadius: 0,
+        semanticsLabel: 'Video download progress',
+        semanticsValue: fraction == null
+            ? 'Downloading'
+            : '${(fraction * 100).floor()}%',
+      ),
+    );
+  }
+}
+
+class _VideoOfflineBadge extends StatelessWidget {
+  const _VideoOfflineBadge({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 4),
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.download_done_rounded, size: 13, color: color),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(
+                'Offline',
+                semanticsLabel: 'Saved for offline playback',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class VideoWatchButton extends StatelessWidget {
