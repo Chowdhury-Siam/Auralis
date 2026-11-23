@@ -72,6 +72,54 @@ class RefreshTelegram extends TelegramService {
 }
 
 void main() {
+  testWidgets('Telegram Music refreshes only on request after switching source', (
+    tester,
+  ) async {
+    final tracks = [
+      const Track(id: '1', title: 'First song', artist: 'Band', source: 'Music'),
+    ];
+    final telegram = RefreshTelegram(MediaCache(null), tracks, Uint8List(0));
+    final settings = MemorySettings()
+      ..automaticLyrics = false
+      ..selectedChannels = [const MusicChat(1, 'Music')];
+    final player = PlayerController(
+      FakeAudio(),
+      TelegramStreamProxy((_) async => {}),
+      settings,
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      await player.shutdown();
+      await telegram.shutdown();
+    });
+
+    await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Library'));
+    await tester.pumpAndSettle();
+    final initialScans = telegram.scans;
+    expect(initialScans, 2);
+    expect(find.text('First song'), findsOneWidget);
+    tracks.add(
+      const Track(id: '2', title: 'Second song', artist: 'Band', source: 'Music'),
+    );
+    await tester.tap(find.byTooltip('Telegram · Switch to On this device'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('On this device · Switch to Telegram'));
+    await tester.pumpAndSettle();
+    expect(find.text('First song'), findsOneWidget);
+    expect(find.text('Second song'), findsNothing);
+    expect(telegram.scans, initialScans);
+
+    final list = find.byKey(
+      const PageStorageKey(('music-collection', 'All songs')),
+    );
+    await tester.drag(list, const Offset(0, 450));
+    await tester.pumpAndSettle();
+    expect(find.text('Second song'), findsOneWidget);
+    expect(telegram.scans, initialScans + 2);
+  });
+
   testWidgets(
     'refresh queues only missing media and preserves saved files across repeats and restart',
     (tester) async {
