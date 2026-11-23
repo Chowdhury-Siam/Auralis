@@ -54,12 +54,16 @@ class TelegramStreamProxy {
   );
   final Map<String, Track> _tracks = {};
   final Map<int, Completer<void>> _ranges = {};
+  int? _preloadId;
+  Future<void>? _preloadWork;
   final _errors = StreamController<String>.broadcast();
   Stream<String> get errors => _errors.stream;
   int _sequence = 0;
   int _sourceGeneration = 0;
   bool _closing = false;
   bool get hasActiveSource => _tracks.isNotEmpty;
+  bool get hasPreload => _preloadId != null;
+  bool isPreloading(int fileId) => _preloadId == fileId;
   bool isStreaming(int fileId) =>
       _tracks.values.any((track) => track.fileId == fileId);
 
@@ -75,6 +79,11 @@ class TelegramStreamProxy {
       throw StateError('Playback request superseded');
     }
     await (_starting ??= _start());
+    if (isPreloading(track.fileId!)) {
+      await _preloadWork;
+    } else {
+      unawaited(preload(null));
+    }
     await _stopDownloads();
     if (_closing || generation != _sourceGeneration) {
       throw StateError('Playback request superseded');
@@ -83,7 +92,55 @@ class TelegramStreamProxy {
     // Old URLs expire when another item is opened; this bounds metadata retention.
     _tracks.clear();
     _tracks[key] = track;
+    if (_preloadId == track.fileId) _preloadId = null;
     return Uri.parse('http://127.0.0.1:${_server!.port}/$_token/$key');
+  }
+
+  /// TDLib accepts byte ranges. Use the average bitrate to budget ten
+  /// seconds at the start, and cap the budget for unusually large videos.
+  Future<void> preload(Track? track, {Duration? duration}) {
+    final runtime = duration ?? track?.duration ?? Duration.zero;
+    final limit = min(
+      16 * 1024 * 1024,
+      track != null && runtime > const Duration(seconds: 10)
+          ? track.size * 10000000 ~/ runtime.inMicroseconds
+          : track?.size ?? 0,
+    );
+    final fileId =
+        track == null || runtime <= Duration.zero || limit <= 0 || _closing
+        ? null
+        : track.fileId;
+    if (fileId == _preloadId) return _preloadWork ?? Future<void>.value();
+    final previous = _preloadId;
+    final pending = _preloadWork;
+    _preloadId = fileId;
+    late final Future<void> work;
+    work =
+        () async {
+          await pending;
+          if (previous != null &&
+              !isStreaming(previous) &&
+              !isPreloading(previous)) {
+            await _releaseFile(previous);
+          }
+          if (fileId != null && isPreloading(fileId) && !isStreaming(fileId)) {
+            try {
+              await request({
+                '@type': 'downloadFile',
+                'file_id': fileId,
+                'priority': 2,
+                'offset': 0,
+                'limit': limit,
+                'synchronous': false,
+              });
+            } catch (_) {
+              // The normal playback request can still open the next video.
+            }
+          }
+        }().whenComplete(() {
+          if (identical(_preloadWork, work)) _preloadWork = null;
+        });
+    return _preloadWork = work;
   }
 
   Future<void> _start() async {
@@ -276,8 +333,8 @@ class TelegramStreamProxy {
 
   /// Unblocks the player without deleting the Telegram buffer. The next
   /// source starts a new listener after the player has released this one.
-  Future<void> interrupt() => _interruption ??=
-      _interrupt().whenComplete(() => _interruption = null);
+  Future<void> interrupt() =>
+      _interruption ??= _interrupt().whenComplete(() => _interruption = null);
 
   Future<void> _interrupt() async {
     ++_sourceGeneration;
@@ -294,7 +351,9 @@ class TelegramStreamProxy {
 
   Future<void> stop() async {
     ++_sourceGeneration;
+    final preloadCleanup = preload(null);
     await _stopDownloads();
+    await preloadCleanup;
   }
 
   Future<void> _stopDownloads() {
@@ -307,28 +366,7 @@ class TelegramStreamProxy {
     cleanup = (_cleanup ?? Future<void>.value())
         .then((_) async {
           for (final id in files) {
-            if (releaseAudio case final release?) {
-              try {
-                await release(id);
-              } catch (_) {
-                /* Disconnect or logout may already have closed the file cache. */
-              }
-              continue;
-            }
-            for (final operation in [
-              {
-                '@type': 'cancelDownloadFile',
-                'file_id': id,
-                'only_if_pending': false,
-              },
-              {'@type': 'deleteFile', 'file_id': id},
-            ]) {
-              try {
-                await request(operation);
-              } catch (_) {
-                /* Startup cleanup retries files left behind after disconnection. */
-              }
-            }
+            if (!isPreloading(id)) await _releaseFile(id);
           }
         })
         .whenComplete(() {
@@ -337,6 +375,27 @@ class TelegramStreamProxy {
           if (identical(_cleanup, cleanup)) _cleanup = null;
         });
     return _cleanup = cleanup;
+  }
+
+  Future<void> _releaseFile(int id) async {
+    if (releaseAudio case final release?) {
+      try {
+        await release(id);
+      } catch (_) {
+        // The Telegram session may have closed.
+      }
+      return;
+    }
+    for (final operation in [
+      {'@type': 'cancelDownloadFile', 'file_id': id, 'only_if_pending': false},
+      {'@type': 'deleteFile', 'file_id': id},
+    ]) {
+      try {
+        await request(operation);
+      } catch (_) {
+        // Startup cleanup retries files left after disconnection.
+      }
+    }
   }
 
   void _cancelRanges() {
