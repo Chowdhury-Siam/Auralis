@@ -6,6 +6,8 @@ import 'package:auralis/offline_media.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
+import 'package:auralis/video_library.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -29,18 +31,20 @@ void main() {
       addTearDown(() => root.delete(recursive: true));
       final cached = await File(p.join(root.path, 'td-download'))
           .writeAsBytes([1, 2, 3, 4]);
+      final downloadStarted = Completer<void>();
       var requested = false;
       final transport = FakeTd()
         ..onRequest = (call) async {
           switch (call['@type']) {
             case 'downloadFile':
               requested = true;
+              downloadStarted.complete();
             case 'getFile':
               return {
                 'local': {
                   'path': cached.path,
                   'is_downloading_completed': requested,
-                  'downloaded_size': requested ? 4 : 0,
+                  'downloaded_size': requested ? 4 : 2,
                 },
               };
             case 'deleteFile':
@@ -55,10 +59,18 @@ void main() {
       )..state = 'authorizationStateReady';
       addTearDown(telegram.shutdown);
 
-      await Future.wait([
+      final saved = Future.wait([
         telegram.saveOffline(song, video: false),
         telegram.saveOffline(song, video: false),
       ]);
+      await Future.any([downloadStarted.future, saved]);
+      expect(
+        telegram.offline.downloadProgress(song.id, video: false)?.value,
+        .5,
+      );
+      expect(telegram.offline.contains(song.id, video: false), isFalse);
+      await saved;
+      expect(telegram.offline.downloadProgress(song.id, video: false), isNull);
       expect(
         transport.requests.where((call) => call['@type'] == 'downloadFile'),
         [
@@ -102,6 +114,67 @@ void main() {
     },
   );
 
+  testWidgets('video row shows progress and marks completed copies offline', (
+    tester,
+  ) async {
+    final root = Directory.systemTemp.createTempSync('auralis-offline-row-');
+    final media = OfflineMedia(Directory(p.join(root.path, 'offline')));
+    final source = File(p.join(root.path, 'source'))
+      ..writeAsBytesSync([1, 2, 3, 4]);
+    final started = Completer<void>();
+    final finish = Completer<void>();
+    late Future<void> saving;
+    final meter = find.byType(LinearProgressIndicator);
+    final badge = find.byIcon(Icons.download_done_rounded);
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: VideoLibraryRow(
+            title: song.title,
+            artwork: const Icon(Icons.movie_outlined),
+            offline: (media: media, id: song.id),
+            onTap: () {},
+          ),
+        ),
+      );
+      expect(meter, findsNothing);
+      expect(badge, findsNothing);
+      await tester.runAsync(() async {
+        saving = media.save(
+          song,
+          video: true,
+          download: (copy, reportProgress) async {
+            reportProgress(.5);
+            started.complete();
+            await finish.future;
+            await copy(source);
+          },
+        );
+        await Future.any([started.future, saving]);
+      });
+      await tester.pump();
+      expect(tester.widget<LinearProgressIndicator>(meter).value, .5);
+      expect(badge, findsNothing);
+
+      finish.complete();
+      await tester.runAsync(() => saving);
+      await tester.pump();
+      expect(meter, findsNothing);
+      expect(badge, findsOneWidget);
+      expect(find.text('Offline'), findsOneWidget);
+
+      await tester.runAsync(() => media.remove(song.id, video: true));
+      await tester.pump();
+      expect(badge, findsNothing);
+    } finally {
+      if (!finish.isCompleted) finish.complete();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(media.drain);
+      media.dispose();
+      root.deleteSync(recursive: true);
+    }
+  });
+
   test(
     'partial copies stay hidden and a retry can save the same file',
     () async {
@@ -111,17 +184,18 @@ void main() {
       addTearDown(media.dispose);
       final source = await File(p.join(root.path, 'source')).writeAsBytes([1]);
       await expectLater(
-        media.save(song, video: true, download: (copy) => copy(source)),
+        media.save(song, video: true, download: (copy, _) => copy(source)),
         throwsStateError,
       );
       expect(media.tracks(video: true), isEmpty);
+      expect(media.downloadProgress(song.id, video: true), isNull);
       expect(await media.directory.list().toList(), isEmpty);
       await source.writeAsBytes([1, 2, 3, 4]);
       final downloading = Completer<void>();
       final job = media.save(
         song,
         video: true,
-        download: (copy) async {
+        download: (copy, _) async {
           await downloading.future;
           await copy(source);
         },
