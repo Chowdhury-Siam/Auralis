@@ -459,6 +459,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
     onPressed: () async {
       final action = await showVideoItemSheet(context: dialog, source: entry, data: _data,
         playNext: entry.id != _source.id,
+        telegram: widget.telegram,
         removeLabel: entry.id == _source.id ? null : 'Remove from queue');
       if (!_canPlay || !dialog.mounted || action == null) return;
       final index = _queue.indexWhere((source) => source.id == entry.id);
@@ -477,7 +478,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
           final selected = _queue.removeAt(index);
           _index = _queue.indexOf(current);
           if (action == 'next') _queue.insert(_index + 1, selected);
-          _changed();
+          _queueChanged();
       }
     },
   );
@@ -504,7 +505,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
               final current = _source;
               _queue.insert(newIndex, _queue.removeAt(oldIndex));
               _index = _queue.indexOf(current);
-              _changed();
+              _queueChanged();
             },
             itemBuilder: (context, index) {
               final theme = Theme.of(context);
@@ -590,7 +591,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
                               final currentEntry = _source;
                               _queue.remove(entry);
                               _index = _queue.indexOf(currentEntry);
-                              _changed();
+                              _queueChanged();
                             },
                             icon: Icon(
                               Icons.remove_circle_outline_rounded,
@@ -633,7 +634,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
               showCheckmark: false,
               onSelected: (selected) {
                 _shuffle = selected;
-                _changed();
+                _queueChanged();
               },
               avatar: Icon(
                 _shuffle ? Icons.shuffle_on_rounded : Icons.shuffle_rounded,
