@@ -18,10 +18,15 @@ class TranslationFailure implements Exception {
 
 /// Cached bilingual lyrics. Source text and timestamps are always retained.
 class LyricsTranslator {
-  LyricsTranslator({HttpClient Function()? createClient, this.cache})
+  LyricsTranslator({
+    HttpClient Function()? createClient,
+    this.cache,
+    this.localCache,
+  })
     : _createClient = createClient ?? HttpClient.new;
   final HttpClient Function() _createClient;
   final MediaCache Function()? cache;
+  final MediaCache? localCache;
   final _clients = <HttpClient>{};
   bool _closed = false;
   static final _japanese = RegExp(r'[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]');
@@ -51,10 +56,12 @@ class LyricsTranslator {
     TranslationDirection direction = TranslationDirection.japaneseEnglish,
   }) async {
     final elapsed = Stopwatch()..start();
-    final disk = cache?.call();
+    MediaCache? cacheForTrack() =>
+        track.localUri == null ? cache?.call() : localCache ?? cache?.call();
+    final disk = cacheForTrack();
     final scope = disk?.directory?.path;
     void check() {
-      if (_closed || !active() || cache?.call().directory?.path != scope) {
+      if (_closed || !active() || cacheForTrack()?.directory?.path != scope) {
         throw const TranslationFailure('Translation cancelled.');
       }
       if (elapsed.elapsed > const Duration(seconds: 90)) {
