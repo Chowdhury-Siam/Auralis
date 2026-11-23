@@ -133,6 +133,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   Timer? _saveDurations;
   late final TelegramStreamProxy _proxy;
   late final bool Function(int) _previousStreaming, _isStreaming;
+  late final bool Function(int) _previousPreloading, _isPreloading;
   late final bool Function() _previousActive, _hasActiveStream;
   late bool _ready;
   late final StreamSubscription<({int chatId, Track video})> _postSubscription;
@@ -147,6 +148,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     LocalMediaView.playlists,
     LocalMediaView.history,
     LocalMediaView.snapshots,
+    LocalMediaView.offline,
   ];
   bool _openingPlayer = false, _videoMinimized = false;
   List<VideoSource>? _playbackSources;
@@ -170,9 +172,13 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       releaseAudio: _telegram.releaseAudio,
     );
     _previousStreaming = _telegram.isStreaming;
+    _previousPreloading = _telegram.isPreloading;
+    _isPreloading = (id) => _proxy.isPreloading(id) || _previousPreloading(id);
+    _telegram.isPreloading = _isPreloading;
     _previousActive = _telegram.hasActiveStream;
     _isStreaming = (id) => _proxy.isStreaming(id) || _previousStreaming(id);
-    _hasActiveStream = () => _proxy.hasActiveSource || _previousActive();
+    _hasActiveStream = () =>
+        _proxy.hasActiveSource || _proxy.hasPreload || _previousActive();
     _telegram.isStreaming = _isStreaming;
     _telegram.hasActiveStream = _hasActiveStream;
     _ready = _telegram.ready;
@@ -449,32 +455,46 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     onPressed: () => _toggleWatched(episode),
   );
 
-  Widget _videoActions(Track video) => IconButton.filledTonal(
-    tooltip: 'Video actions for ${video.title}',
-    icon: const Icon(Icons.more_vert_rounded, size: 20),
-    onPressed: () async {
-      final source = VideoSource.telegram(video);
-      final data = widget.music.settings.videoPlayback;
-      final action = await showVideoItemSheet(
-        context: context,
-        source: source,
-        data: data,
-        artwork: _videoArtwork(video),
-        lookupDuration: _lookupVideoDuration,
+  Widget _videoActions(Track video, {VoidCallback? onPlay}) =>
+      IconButton.filledTonal(
+        tooltip: 'Video actions for ${video.title}',
+        icon: const Icon(Icons.more_vert_rounded, size: 20),
+        onPressed: () async {
+          final source = VideoSource.telegram(video);
+          final data = widget.music.settings.videoPlayback;
+          final action = await showVideoItemSheet(
+            context: context,
+            source: source,
+            data: data,
+            artwork: _videoArtwork(video),
+            telegram: _telegram,
+            lookupDuration: _lookupVideoDuration,
+          );
+          if (!mounted || action == null) return;
+          switch (action) {
+            case 'play':
+              if (onPlay != null) {
+                onPlay();
+              } else {
+                await _play(video);
+              }
+            case 'playlist':
+              await saveVideoPlaylist(
+                context,
+                data,
+                widget.music.settings.save,
+                [source],
+              );
+            case 'watched':
+              _toggleWatched(video);
+          }
+        },
       );
-      if (!mounted || action == null) return;
-      switch (action) {
-        case 'play':
-          await _play(video);
-        case 'playlist':
-          await saveVideoPlaylist(context, data, widget.music.settings.save, [
-            source,
-          ]);
-        case 'watched':
-          _toggleWatched(video);
-      }
-    },
-  );
+
+  bool _available(VideoSource source) =>
+      source.telegram == null ||
+      _ready ||
+      _telegram.offline.contains(source.telegram!.id, video: true);
 
   Future<void> _play(Track video) async {
     if (!_ready) return;
@@ -489,7 +509,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   }
 
   Future<void> _launchPlayer(List<VideoSource> videos, int index) async {
-    if (!mounted || _openingPlayer || videos.isEmpty || index < 0) return;
+    if (!mounted || _openingPlayer || index < 0 || index >= videos.length) {
+      return;
+    }
     _openingPlayer = true;
     try {
       if (_playbackSources != null) await _closePlayer();
@@ -498,7 +520,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       await _playbackRelease;
       if (!mounted) return;
       await widget.music.releaseVideo?.call();
-      if (!mounted || (videos[index].telegram != null && !_ready)) return;
+      if (!mounted || !_available(videos[index])) return;
       FocusManager.instance.primaryFocus?.unfocus();
       setState(() {
         _playbackSources = videos;
@@ -530,7 +552,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
   void _minimizePlayer() => setState(() => _videoMinimized = true);
 
   Future<void> _playLibrarySelection(VideoSelection selected) async {
-    if (selected.$1[selected.$2].telegram != null && !_ready) {
+    if (!_available(selected.$1[selected.$2])) {
       _notice('Reconnect Telegram to play this video.');
     } else {
       await _launchPlayer(selected.$1, selected.$2);
@@ -578,6 +600,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
     _telegram.removeListener(_authorizationChanged);
     if (identical(_telegram.isStreaming, _isStreaming)) {
       _telegram.isStreaming = _previousStreaming;
+    }
+    if (identical(_telegram.isPreloading, _isPreloading)) {
+      _telegram.isPreloading = _previousPreloading;
     }
     if (identical(_telegram.hasActiveStream, _hasActiveStream)) {
       _telegram.hasActiveStream = _previousActive;
@@ -848,6 +873,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
       video: true,
       bottomPadding: _bottomPadding(context),
       sourceButton: sourceButton,
+      offlineCollection: () => _offlineVideos(context),
       savedVideoCollection: (view) => _savedVideoCollection(context, view),
       videoPlaylistsController: _playlistPageController,
       onPlay: (rows, index) =>
@@ -902,6 +928,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             onChanged: _selectVideoCollection,
             itemBuilder: (context, index) {
               if (index == 0) return _browser(context);
+              if (_collections[index] == LocalMediaView.offline) {
+                return _offlineVideos(context);
+              }
               return _savedVideoCollection(
                 context,
                 _collections[index],
@@ -911,6 +940,43 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _offlineVideos(BuildContext context) {
+    final tracks = _telegram.offline.tracks(video: true);
+    final queue = tracks.map(VideoSource.telegram).toList();
+    final data = widget.music.settings.videoPlayback;
+    return LibraryPanel(
+      child: tracks.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text(
+                'No offline videos. Choose Save for offline from a video’s actions.',
+              ),
+            )
+          : ListView.separated(
+              padding: EdgeInsets.only(bottom: _bottomPadding(context)),
+              itemCount: tracks.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final track = tracks[index];
+                final source = queue[index];
+                final watched = data.isWatched(source);
+                void play() => unawaited(_launchPlayer(queue, index));
+                return VideoLibraryRow(
+                  title: track.title,
+                  watched: watched,
+                  subtitle: VideoRuntimeLabel(
+                    duration: data.durationOf(source),
+                    status: _episodeStatus(track, watched),
+                  ),
+                  artwork: _videoArtwork(track, watched: watched),
+                  trailing: _videoActions(track, onPlay: play),
+                  onTap: play,
+                );
+              },
+            ),
     );
   }
 
@@ -934,6 +1000,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView>
             save: settings.save,
             pickFiles: pickVideoFiles,
             playlists: playlists,
+            telegram: _telegram,
             historyArtwork: _historyArtwork,
             lookupDuration: _lookupVideoDuration,
             embedded: true,
