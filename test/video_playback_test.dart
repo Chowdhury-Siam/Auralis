@@ -1834,6 +1834,9 @@ void main() {
         Uri.file('/movies/second.mp4'),
         'Second video',
       );
+      music.settings.videoPlayback = VideoPlaybackData.fromJson({
+        'swapSides': true,
+      });
       music.settings.videoPlayback.remember(
         second.id,
         const Duration(seconds: 21),
@@ -2074,19 +2077,32 @@ void main() {
           lessThan(tester.getTopLeft(pauseButton).dy),
         );
         for (final x in [200.0, 1080.0]) {
+          final volumeBefore = native.state.volume;
           final drag = await tester.startGesture(Offset(x, 420));
-          await drag.moveBy(const Offset(0, -25));
-          await drag.moveBy(const Offset(0, -60));
+          await drag.moveBy(const Offset(0, 25));
+          await drag.moveBy(const Offset(0, 60));
           await tester.pump();
-          final onLeft = x < transportCenter.dx;
+          final brightness = x < transportCenter.dx && Platform.isAndroid;
           final feedback = tester.getCenter(
             find.byIcon(
-              onLeft && Platform.isAndroid
+              brightness
                   ? Icons.brightness_6_rounded
                   : Icons.volume_up_rounded,
             ),
           );
-          expect(feedback.dx < transportCenter.dx, onLeft);
+          expect(feedback.dx < transportCenter.dx, brightness);
+          final meter = tester.widget<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
+          );
+          final fraction = meter.value!;
+          expect(fraction, inExclusiveRange(0.0, 1.0));
+          expect(find.text('${(fraction * 100).round()}%'), findsOneWidget);
+          if (brightness) {
+            expect(native.state.volume, volumeBefore);
+          } else {
+            expect(native.state.volume, lessThan(volumeBefore));
+            expect(fraction, closeTo(native.state.volume / 100, .0001));
+          }
           await drag.up();
           await tester.pump();
         }
