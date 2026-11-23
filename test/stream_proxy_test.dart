@@ -8,6 +8,49 @@ import 'package:auralis/models.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 
 void main() {
+  test('preloads one bounded video prefix and hands it to playback', () async {
+    final calls = <Map<String, dynamic>>[];
+    final proxy = TelegramStreamProxy((request) async {
+      calls.add(request);
+      return {};
+    });
+    addTearDown(proxy.close);
+    const current = Track(
+      id: 'current', title: 'Current', artist: '', source: 'Channel',
+      fileId: 1, size: 1000, duration: Duration(seconds: 30),
+    );
+    const next = Track(
+      id: 'next', title: 'Next', artist: '', source: 'Channel',
+      fileId: 2, size: 60000000, duration: Duration(minutes: 2),
+    );
+    const other = Track(
+      id: 'other', title: 'Other', artist: '', source: 'Channel',
+      fileId: 3, size: 80000000, duration: Duration(seconds: 5),
+    );
+    await proxy.uri(current);
+    await proxy.preload(next);
+    await proxy.preload(next);
+    expect(proxy.isStreaming(1), isTrue);
+    expect(proxy.isPreloading(2), isTrue);
+    expect(calls, [{
+      '@type': 'downloadFile', 'file_id': 2, 'priority': 2,
+      'offset': 0, 'limit': 5000000, 'synchronous': false,
+    }]);
+
+    await proxy.uri(next);
+    expect(proxy.isStreaming(2), isTrue);
+    expect(proxy.isPreloading(2), isFalse);
+    expect(calls.where((call) => call['@type'] == 'deleteFile'), [
+      {'@type': 'deleteFile', 'file_id': 1},
+    ]);
+
+    await proxy.preload(other);
+    expect(calls.last['limit'], 16 * 1024 * 1024);
+    await proxy.stop();
+    expect(calls.where((call) => call['@type'] == 'deleteFile')
+        .map((call) => call['file_id']), unorderedEquals([1, 2, 3]));
+  });
+
   test('interrupting a video after many chunks releases its socket before its cache', () async {
     const stallOffset = 128 * 1024 * 24;
     const fileSize = stallOffset + 4;
