@@ -9,6 +9,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import 'lyrics.dart';
 import 'models.dart';
 import 'telegram/embedded_cover.dart';
 import 'video_files.dart';
@@ -24,6 +25,7 @@ enum LocalMediaView {
   history('History'),
   snapshots('Snapshots'),
   offline('Offline'),
+  favorites('Favorites'),
   folders('Folders');
 
   const LocalMediaView(this.label);
@@ -352,6 +354,43 @@ class LocalMediaPlatform {
       // Unsupported tags and files removed during browsing use the indexed data.
     }
     return source;
+  }
+
+  Future<Lyrics?> embeddedLyrics(Track track) async {
+    final uri = track.localUri;
+    if (uri == null) return null;
+    try {
+      final String? text;
+      if (android && uri.scheme == 'content') {
+        final size = await _android.invokeMethod<int>('audioSize', '$uri');
+        if (size == null || size <= 0) return null;
+        text = await readEmbeddedLyrics(
+          (offset, count) => _android.invokeMethod<Uint8List>('audioRange', {
+            'uri': '$uri',
+            'offset': offset,
+            'count': count,
+          }),
+          size,
+        );
+      } else if (uri.scheme == 'file') {
+        final input = await File.fromUri(uri).open();
+        try {
+          text = await readEmbeddedLyrics((offset, count) async {
+            await input.setPosition(offset);
+            return input.read(count);
+          }, await input.length());
+        } finally {
+          await input.close();
+        }
+      } else {
+        return null;
+      }
+      if (text == null) return null;
+      final lyrics = Lyrics.parse(text, embedded: true);
+      return lyrics.plain.isEmpty && lyrics.lines.isEmpty ? null : lyrics;
+    } on Exception {
+      return null;
+    }
   }
 
   Future<Uint8List?> artwork(LocalMedia item) async {
