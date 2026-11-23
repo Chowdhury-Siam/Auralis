@@ -24,6 +24,7 @@ extension LocalMediaViewIcon on LocalMediaView {
     LocalMediaView.history => Icons.history_rounded,
     LocalMediaView.snapshots => Icons.photo_library_outlined,
     LocalMediaView.offline => Icons.download_done_rounded,
+    LocalMediaView.favorites => Icons.favorite_rounded,
     LocalMediaView.folders => Icons.folder_outlined,
   };
 }
@@ -64,8 +65,7 @@ class LocalMediaViewPane extends StatefulWidget {
   State<LocalMediaViewPane> createState() => LocalMediaViewPaneState();
 }
 
-class LocalMediaViewPaneState extends State<LocalMediaViewPane>
-    with WidgetsBindingObserver {
+class LocalMediaViewPaneState extends State<LocalMediaViewPane> {
   static const _music = [
     LocalMediaView.songs,
     LocalMediaView.albums,
@@ -88,6 +88,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
       : [
           ..._music,
           if (widget.offlineCollection != null) LocalMediaView.offline,
+          LocalMediaView.favorites,
         ];
   late LocalMediaView _view = _views.first;
   bool get _isMediaView =>
@@ -106,34 +107,35 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
   List<LocalMedia> _index = const [];
   String? _group, _groupLabel;
   bool _choosingFolder = false;
-  bool _scanning = false, _scanAgain = false, _failed = false;
+  Future<void>? _scan;
+  bool get _scanning => _scan != null;
+  bool _failed = false;
+  Set<String> _favorites = const {};
   bool _projecting = false, _indexing = false;
   int _unavailable = 0, _projection = 0, _metadataGeneration = 0;
   int _metadataWorkers = 0;
   final _metadataQueue = <Future<void> Function()>[];
-  Timer? _changesTimer, _searchTimer, _metadataTimer;
-  StreamSubscription<void>? _observer;
+  Timer? _searchTimer, _metadataTimer;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    if (_platform.android) {
-      _observer = _platform.changes.listen(
-        (_) => _scheduleRefresh(),
-        onError: (Object _) {},
-      );
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_refresh());
     });
   }
 
   @override
+  void didUpdateWidget(covariant LocalMediaViewPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_view == LocalMediaView.favorites &&
+        !setEquals(_favorites, widget.settings.favoriteIds)) {
+      unawaited(_project());
+    }
+  }
+
+  @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    unawaited(_observer?.cancel());
-    _changesTimer?.cancel();
     _searchTimer?.cancel();
     _metadataTimer?.cancel();
     _search.dispose();
@@ -142,48 +144,45 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_platform.android && state == AppLifecycleState.resumed) {
-      _scheduleRefresh();
-    }
-  }
-
-  void _scheduleRefresh() {
-    _changesTimer?.cancel();
-    _changesTimer = Timer(const Duration(milliseconds: 350), _refresh);
-  }
-
-  Future<void> _refresh() async {
-    if (widget.settings.localMediaFolders.isEmpty) return;
-    if (_scanning) {
-      _scanAgain = true;
-      return;
-    }
+  Future<void> _refresh() {
+    if (_scan case final pending?) return pending;
+    if (widget.settings.localMediaFolders.isEmpty) return Future.value();
+    final job = _scanFolders().whenComplete(() {
+      _scan = null;
+      if (mounted) setState(() {});
+    });
     setState(() {
-      _scanning = true;
+      _scan = job;
       _failed = false;
     });
-    try {
-      final scan = await _platform.scan(widget.video, [
-        for (final folder in widget.settings.localMediaFolders) folder.location,
-      ]);
-      if (!mounted || _scanAgain) return;
-      final keys = scan.entries.map((item) => item.revision).toSet();
-      _metadata.removeWhere((key, _) => !keys.contains(key));
-      _index = scan.entries;
-      _unavailable = scan.unavailable;
-      await _project();
-      if (mounted) _indexTagsIfNeeded();
-    } on Exception {
-      if (mounted) setState(() => _failed = true);
-    } finally {
-      if (mounted) {
-        setState(() => _scanning = false);
-        if (_scanAgain) {
-          _scanAgain = false;
-          unawaited(_refresh());
+    return job;
+  }
+
+  Future<void> _scanFolders() async {
+    while (mounted) {
+      final folders = List.of(widget.settings.localMediaFolders);
+      if (folders.isEmpty) return;
+      try {
+        final scan = await _platform.scan(
+          widget.video,
+          [for (final folder in folders) folder.location],
+        );
+        if (!mounted) return;
+        if (!listEquals(folders, widget.settings.localMediaFolders)) continue;
+        final keys = scan.entries.map((item) => item.revision).toSet();
+        _metadata.removeWhere((key, _) => !keys.contains(key));
+        _index = scan.entries;
+        _unavailable = scan.unavailable;
+        await _project();
+        if (mounted && listEquals(folders, widget.settings.localMediaFolders)) {
+          _indexTagsIfNeeded();
+          return;
         }
+      } on Exception {
+        if (!mounted) return;
+        if (!listEquals(folders, widget.settings.localMediaFolders)) continue;
+        setState(() => _failed = true);
+        return;
       }
     }
   }
@@ -239,10 +238,17 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
     final group = _group;
     final query = _search.text.trim().toLowerCase();
     final sort = _sort;
+    final favorites = view == LocalMediaView.favorites
+        ? Set<String>.of(widget.settings.favoriteIds)
+        : null;
+    _favorites = favorites ?? const {};
     _projecting = true;
     final result = entries.isEmpty
         ? const LocalMediaSelection([], [])
-        : await compute(_select, (entries, metadata, view, group, query, sort));
+        : await compute(
+            _select,
+            (entries, metadata, view, group, query, sort, favorites),
+          );
     if (!mounted || generation != _projection) return;
     setState(() {
       _selection = result;
@@ -432,7 +438,6 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
       return;
     }
     if (!mounted) return;
-    if (_scanning) _scanAgain = true;
     setState(() {
       _group = _groupLabel = null;
       _index = const [];
@@ -667,7 +672,12 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
                             const SizedBox(height: 8),
                             if (_scanning || _indexing)
                               const LinearProgressIndicator(minHeight: 2),
-                            Expanded(child: _buildRows()),
+                            Expanded(
+                              child: LibraryRefresh(
+                                onRefresh: _refresh,
+                                child: _buildRows(),
+                              ),
+                            ),
                           ],
                         ),
                 ),
@@ -683,16 +693,26 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane>
 
   Widget _buildRows() {
     final LocalMediaSelection(:rows, :groups) = _selection;
-    final grouped = _group == null && _view != _views.first;
+    final grouped =
+        _group == null &&
+        _view != _views.first &&
+        _view != LocalMediaView.favorites;
     final count = grouped ? groups.length : rows.length;
     if (count == 0) {
-      if (_scanning || _projecting || _indexing) return const SizedBox.shrink();
-      return _message(
-        _search.text.trim().isNotEmpty
-            ? 'No matching media.'
-            : widget.video
-            ? 'No local videos found.'
-            : 'No local music found.',
+      return ListView(
+        controller: _scroll,
+        children: [
+          if (!_scanning && !_projecting && !_indexing)
+            _message(
+              _search.text.trim().isNotEmpty
+                  ? 'No matching media.'
+                  : _view == LocalMediaView.favorites
+                  ? 'No favorite songs on this device.'
+                  : widget.video
+                  ? 'No local videos found.'
+                  : 'No local music found.',
+            ),
+        ],
       );
     }
     return ListView.separated(
@@ -803,13 +823,18 @@ LocalMediaSelection _select(
     String?,
     String,
     LibrarySort,
+    Set<String>?,
   )
   request,
 ) {
-  final (entries, metadata, view, group, query, sort) = request;
+  final (entries, metadata, view, group, query, sort, favorites) = request;
   return selectLocalMedia(
-    [for (final item in entries) metadata[item.revision] ?? item],
-    view,
+    [
+      for (final item in entries)
+        if (favorites == null || favorites.contains(item.track.id))
+          metadata[item.revision] ?? item,
+    ],
+    favorites == null ? view : LocalMediaView.songs,
     group,
     query,
     sort,
