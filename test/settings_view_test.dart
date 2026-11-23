@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:auralis/app.dart';
+import 'package:auralis/cache_management.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/preference_widgets.dart';
@@ -95,7 +96,21 @@ void main() {
     expect(find.byKey(const ValueKey('settings-search')), findsNothing);
     expect(find.byType(TextField), findsNothing);
     await tester.tap(find.byKey(const ValueKey('settings-cache')));
+    final cache = find.byType(CacheManagement);
+    final loading = find.descendant(
+      of: cache,
+      matching: find.byType(LinearProgressIndicator),
+    );
+    await pumpUntil(
+      tester,
+      () => cache.evaluate().isNotEmpty && loading.evaluate().isEmpty,
+      reason: 'Music cache usage did not finish loading.',
+    );
     await tester.pumpAndSettle();
+    expect(
+      find.text('Could not read cache usage. Use Refresh to try again.'),
+      findsNothing,
+    );
     expect(find.text('Music cache'), findsOneWidget);
     expect(find.text('Cover artwork'), findsOneWidget);
     expect(find.text('Video thumbnails'), findsNothing);
