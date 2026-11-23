@@ -1,5 +1,18 @@
 # Auralis changes
 
+## 0.1.240
+
+- Add a haptic pulse when pressing and holding the video to boost playback speed.
+
+## 0.1.239
+
+- Tap the video playback speed button to toggle between 1× and 2×. Press and hold it to open the speed picker.
+
+## 0.1.238
+
+- Save Telegram songs and videos for offline playback. Find downloaded media in the Offline collection in each library.
+- Preload a bounded starting range for the next queued Telegram video once the current video is playing smoothly. The range targets about ten seconds, based on the next video’s average bitrate.
+
 ## 0.1.237
 
 - Make the lyrics options popup more compact with tighter rows and grouped actions while retaining every option and its description.
