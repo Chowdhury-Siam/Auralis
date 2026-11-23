@@ -5,6 +5,87 @@ import 'package:flutter/material.dart';
 import 'app_popups.dart';
 import 'models.dart';
 
+class LibrarySourcePanes extends StatefulWidget {
+  const LibrarySourcePanes({
+    super.key,
+    required this.local,
+    required this.telegramPane,
+    required this.devicePane,
+  });
+
+  final bool local;
+  final WidgetBuilder telegramPane, devicePane;
+
+  @override
+  State<LibrarySourcePanes> createState() => _LibrarySourcePanesState();
+}
+
+class _LibrarySourcePanesState extends State<LibrarySourcePanes> {
+  bool _openedTelegram = false, _openedDevice = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.local) {
+      _openedDevice = true;
+    } else {
+      _openedTelegram = true;
+    }
+    Widget pane(bool active, WidgetBuilder builder) => Offstage(
+      offstage: !active,
+      child: TickerMode(
+        enabled: active,
+        child: ExcludeFocus(excluding: !active, child: Builder(builder: builder)),
+      ),
+    );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_openedTelegram)
+          KeyedSubtree(
+            key: const ValueKey(false),
+            child: pane(!widget.local, widget.telegramPane),
+          ),
+        if (_openedDevice)
+          KeyedSubtree(
+            key: const ValueKey(true),
+            child: pane(widget.local, widget.devicePane),
+          ),
+      ],
+    );
+  }
+}
+
+class LibraryRefresh extends StatelessWidget {
+  const LibraryRefresh({
+    super.key,
+    required this.onRefresh,
+    required this.child,
+  });
+
+  final Future<void> Function() onRefresh;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final behavior = ScrollConfiguration.of(context);
+    return ScrollConfiguration(
+      behavior: behavior.copyWith(
+        physics: const AlwaysScrollableScrollPhysics().applyTo(
+          behavior.getScrollPhysics(context),
+        ),
+        dragDevices: {...behavior.dragDevices, PointerDeviceKind.mouse},
+      ),
+      child: RefreshIndicator(
+        notificationPredicate: (notification) =>
+            notification.depth == 0 &&
+            notification.metrics.axis == Axis.vertical,
+        onRefresh: onRefresh,
+        child: child,
+      ),
+    );
+  }
+}
+
 class LibrarySourceButton extends StatelessWidget {
   const LibrarySourceButton({
     super.key,
