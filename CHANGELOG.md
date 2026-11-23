@@ -1,5 +1,10 @@
 # Auralis changes
 
+## 0.1.244
+
+- Preserve library scroll position when the playback dock appears or a pull-to-refresh updates the view.
+- Keep imported lyrics safe from pending lookups and stop provider fallback when the lyrics repository closes.
+
 ## 0.1.243
 
 - Keep Telegram and On this device libraries loaded when switching sources. Pull down to refresh the active library.
