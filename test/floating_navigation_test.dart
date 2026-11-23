@@ -71,9 +71,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Library'));
       await tester.pumpAndSettle();
-      final list = find.ancestor(
-        of: find.byKey(const ValueKey('track-title-0')),
-        matching: find.byType(ListView),
+      final list = find.byKey(
+        const PageStorageKey(('music-collection', 'All songs')),
       );
       final scrollable = find.descendant(
         of: list,
@@ -108,15 +107,20 @@ void main() {
       final last = find.byKey(const ValueKey('track-title-29'));
       expect(last.hitTestable(), findsOneWidget);
       expect(tester.getRect(last).bottom, lessThan(navBounds.top));
+      final offsetBeforeDock = position.pixels;
       player.queue.add(tracks.first);
       player.index = 0;
       player.refreshSettings();
       await tester.pumpAndSettle();
-      expect(tester.state<ScrollableState>(scrollable).position, same(position));
-      position.jumpTo(position.maxScrollExtent);
+      final positionWithDock = tester
+          .state<ScrollableState>(scrollable)
+          .position;
+      expect(positionWithDock.pixels, closeTo(offsetBeforeDock, 1));
+      positionWithDock.jumpTo(positionWithDock.maxScrollExtent);
       await tester.pumpAndSettle();
       final dock = find.byKey(const ValueKey('open-current-track'));
       expect(dock, findsOneWidget);
+      expect(last.hitTestable(), findsOneWidget);
       expect(tester.getRect(last).bottom, lessThan(tester.getRect(dock).top));
       expect(tester.getRect(navigation), navBounds);
       await tester.tap(find.byTooltip('Settings').first);
