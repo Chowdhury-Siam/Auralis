@@ -175,6 +175,7 @@ class PlayerController extends ChangeNotifier {
     this.settings, {
     DateTime Function()? now,
     Duration Function()? elapsed,
+    this.offlineUri,
   }) : _now = now ?? DateTime.now,
        _elapsedOverride = elapsed {
     _lastViewState = _audioViewState;
@@ -185,6 +186,7 @@ class PlayerController extends ChangeNotifier {
       notifyListeners();
     });
   }
+  final Uri? Function(Track)? offlineUri;
   final DateTime Function() _now;
   final Duration Function()? _elapsedOverride;
   final _watch = Stopwatch()..start();
@@ -689,7 +691,8 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
     try {
       final Uri uri;
-      if (track.localUri case final local?) {
+      final local = track.localUri ?? offlineUri?.call(track);
+      if (local != null) {
         await proxy.stop();
         uri = local;
       } else {
