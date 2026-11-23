@@ -457,7 +457,7 @@ void main() {
         await fixture.telegram.offline.save(
           source.telegram!,
           video: true,
-          download: (copy) => copy(file),
+          download: (copy, _) => copy(file),
         );
         return fixture.telegram.offline.availableUri(
           source.telegram!.id,
