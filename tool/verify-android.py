@@ -75,12 +75,16 @@ def verify_source(root):
     assert "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" in permissions
     assert "android.permission.MANAGE_EXTERNAL_STORAGE" not in permissions
     assert "android.permission.WRITE_EXTERNAL_STORAGE" not in permissions
-    assert permissions["android.permission.READ_EXTERNAL_STORAGE"].get(ns + "maxSdkVersion") == "32"
-    assert {
+    # The device-library source was removed. Explicit document/video pickers
+    # use URI grants and must not reintroduce broad storage/media permissions.
+    retired_media_permissions = {
+        "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_AUDIO",
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
-    } <= permissions.keys()
+    }
+    unexpected = retired_media_permissions & permissions.keys()
+    assert not unexpected, f"Removed device library must not request media permissions: {sorted(unexpected)}"
     assert manifest.find("application").get(ns + "allowBackup") == "false"
     assert (android / "gradle/wrapper/gradle-wrapper.jar").stat().st_size > 1000
     for name in ("gradlew", "gradlew.bat", "app/src/main/kotlin/com/auralis/siam/MainActivity.kt",
