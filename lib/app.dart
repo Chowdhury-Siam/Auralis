@@ -2325,33 +2325,6 @@ class _PlayerShellState extends State<PlayerShell>
     search.clear();
   });
 
-  Widget _libraryCollectionMenu() {
-    final collectionIcon = _libraryCollections
-        .firstWhere((entry) => entry.$1 == collection)
-        .$2;
-    return LibraryCollectionMenu<int>(
-      key: const ValueKey('library-collection-menu'),
-      title: collection,
-      titleKey: const ValueKey('page-title'),
-      icon: collectionIcon,
-      tooltip: 'Library collection: $collection',
-      onSelected: (index) =>
-          _selectLibraryCollection(_libraryCollections[index].$1),
-      itemBuilder: (_) => [
-        for (final (index, (label, icon)) in _libraryCollections.indexed)
-          PopupMenuItem<int>(
-            value: index,
-            padding: EdgeInsets.zero,
-            child: AuralisMenuRow(
-              title: label,
-              icon: icon,
-              selected: collection == label,
-            ),
-          ),
-      ],
-    );
-  }
-
   Widget _librarySortButton() => LibrarySortMenu(
     selected: player.settings.librarySort,
     options: LibrarySort.values,
@@ -2411,7 +2384,7 @@ class _PlayerShellState extends State<PlayerShell>
           local: true,
           onPressed: () => _setMusicLibrarySource(false),
         ),
-        offlineCollection: _offlineSongs,
+        offlineCollection: (query) => _offlineSongs(query: query),
         onPlay: _playLocalSongs,
         playingTrackId: player.current?.id,
         musicActions: (track, play, artwork) =>
@@ -2427,152 +2400,137 @@ class _PlayerShellState extends State<PlayerShell>
         collection == 'Playlists' && selectedPlaylist == null;
     final artist = _selectedArtist;
     final artistOverview = collection == 'Artists' && artist == null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (!_keyboardOpen) ...[
-          LibraryToolbar(
-            collection: _libraryCollectionMenu(),
-            actions: [
-              ?sourceButton,
-              if (artistOverview)
-                discoveryLayoutButton(
-                  list: _artistsAsList,
-                  onPressed: () =>
-                      setState(() => _artistsAsList = !_artistsAsList),
-                )
-              else
-                _librarySortButton(),
-              if (_mobileNavigation) const SizedBox(width: 4),
-              if (_mobileNavigation)
-                IconButton.filledTonal(
-                  tooltip: 'Settings',
-                  style: IconButton.styleFrom(
-                    backgroundColor: _colors.primaryContainer,
-                    foregroundColor: _colors.onPrimaryContainer,
-                  ),
-                  onPressed: () => _navigate(_Page.settings),
-                  icon: const Icon(Icons.settings_outlined, size: 20),
-                ),
-            ],
+    final index = _libraryCollections.indexWhere(
+      (entry) => entry.$1 == collection,
+    );
+    void select(int index) =>
+        _selectLibraryCollection(_libraryCollections[index].$1);
+    final settings = player.settings;
+    return LibraryLayout(
+      collections: _libraryCollections,
+      index: index,
+      onSelected: select,
+      sourceButton: sourceButton,
+      collectionAction: artistOverview
+          ? discoveryLayoutButton(
+              list: _artistsAsList,
+              onPressed: () => setState(() => _artistsAsList = !_artistsAsList),
+            )
+          : _librarySortButton(),
+      moreActions: LibraryActionsMenu(
+        actions: [
+          (
+            label: 'Refresh library',
+            icon: Icons.refresh_rounded,
+            onSelected: telegram.ready && !library.loading
+                ? () => unawaited(library.refresh())
+                : null,
           ),
-          LibraryPageIndicator(
-            key: const ValueKey('music-library-indicator'),
-            labels: _libraryCollections.map((entry) => entry.$1).toList(),
-            index: _libraryCollections.indexWhere(
-              (entry) => entry.$1 == collection,
-            ),
-            onSelected: (index) =>
-                _selectLibraryCollection(_libraryCollections[index].$1),
-            reducedMotion: player.settings.reducedMotion,
+          (
+            label: 'Choose channels',
+            icon: Icons.playlist_add_rounded,
+            onSelected: _openMusicChannels,
           ),
         ],
-        Expanded(
-          child: LibraryPanel(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+      ),
+      onSettings: _mobileNavigation ? () => _navigate(_Page.settings) : null,
+      menuKey: const ValueKey('library-collection-menu'),
+      titleKey: const ValueKey('page-title'),
+      indicatorKey: const ValueKey('music-library-indicator'),
+      reducedMotion: settings.reducedMotion,
+      body: LibraryContentPanel(
+        search: LibrarySearchField(
+          fieldKey: const ValueKey('music-library-search'),
+          controller: search,
+          hint: playlistOverview
+              ? 'Search playlists'
+              : artistOverview
+              ? 'Search your Artists'
+              : 'Search your music',
+        ),
+        details: [
+          if (artist != null)
+            Row(
               children: [
-                LibrarySearchField(
-                  controller: search,
-                  hint: playlistOverview
-                      ? 'Search playlists'
-                      : artistOverview
-                      ? 'Search your Artists'
-                      : 'Search your music',
+                IconButton(
+                  tooltip: 'Back to artists',
+                  onPressed: () => _selectArtist(null),
+                  icon: const Icon(Icons.arrow_back_rounded),
                 ),
-                if (artist != null)
-                  Row(
-                    children: [
-                      IconButton(
-                        tooltip: 'Back to artists',
-                        onPressed: () => _selectArtist(null),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                      ),
-                      Expanded(
-                        child: Text(
-                          artist,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                    ],
-                  ),
-                if (collection == 'Playlists' && selectedPlaylist != null)
-                  Row(
-                    children: [
-                      IconButton(
-                        tooltip: 'Back to playlists',
-                        onPressed: () => setState(() {
-                          selectedPlaylist = null;
-                          search.clear();
-                        }),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                      ),
-                      Expanded(
-                        child: Text(
-                          selectedPlaylist!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Rename playlist',
-                        onPressed: () async {
-                          final name = await _editPlaylist(
-                            previous: selectedPlaylist,
-                          );
-                          if (mounted && name != null) {
-                            setState(() => selectedPlaylist = name);
-                          }
-                        },
-                        icon: const Icon(Icons.edit_outlined),
-                      ),
-                      IconButton(
-                        tooltip: 'Delete playlist',
-                        onPressed: () => _deletePlaylist(selectedPlaylist!),
-                        icon: const Icon(Icons.delete_outline_rounded),
-                      ),
-                    ],
-                  ),
-                if (library.error != null) _banner(library.error!),
-                if (library.loading) ...[
-                  const LinearProgressIndicator(minHeight: 2),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                      'Loading music from your channels…',
-                      style: TextStyle(
-                        color: _colors.onSurfaceVariant,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
                 Expanded(
-                  child: LibraryCollectionPager(
-                    key: const ValueKey('music-library-pager'),
-                    index: _libraryCollections.indexWhere(
-                      (entry) => entry.$1 == collection,
-                    ),
-                    count: _libraryCollections.length,
-                    reducedMotion: player.settings.reducedMotion,
-                    onChanged: (index) =>
-                        _selectLibraryCollection(_libraryCollections[index].$1),
-                    itemBuilder: (_, index) => LibraryRefresh(
-                      onRefresh: library.refresh,
-                      child: _libraryCollectionBody(
-                        _libraryCollections[index].$1,
-                      ),
-                    ),
+                  child: Text(
+                    artist,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
               ],
             ),
+          if (collection == 'Playlists' && selectedPlaylist != null)
+            Row(
+              children: [
+                IconButton(
+                  tooltip: 'Back to playlists',
+                  onPressed: () => setState(() {
+                    selectedPlaylist = null;
+                    search.clear();
+                  }),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
+                Expanded(
+                  child: Text(
+                    selectedPlaylist!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Rename playlist',
+                  onPressed: () async {
+                    final name = await _editPlaylist(
+                      previous: selectedPlaylist,
+                    );
+                    if (mounted && name != null) {
+                      setState(() => selectedPlaylist = name);
+                    }
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Delete playlist',
+                  onPressed: () => _deletePlaylist(selectedPlaylist!),
+                  icon: const Icon(Icons.delete_outline_rounded),
+                ),
+              ],
+            ),
+          if (library.error != null) _banner(library.error!),
+          if (library.loading) ...[
+            const LinearProgressIndicator(minHeight: 2),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Loading music from your channels…',
+                style: TextStyle(
+                  color: _colors.onSurfaceVariant,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ],
+        ],
+        body: LibraryCollectionPager(
+          key: const ValueKey('music-library-pager'),
+          index: index,
+          count: _libraryCollections.length,
+          reducedMotion: settings.reducedMotion,
+          onChanged: select,
+          itemBuilder: (_, index) => LibraryRefresh(
+            onRefresh: library.refresh,
+            child: _libraryCollectionBody(_libraryCollections[index].$1),
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -2637,7 +2595,7 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Widget _offlineSongs() {
+  Widget _offlineSongs({String? query}) {
     final tracks = telegram.offline.tracks(video: false);
     if (tracks.isEmpty) {
       return _empty(
@@ -2648,7 +2606,7 @@ class _PlayerShellState extends State<PlayerShell>
       );
     }
     return _trackList(
-      _visibleTracks(tracks, query: collection == 'Offline' ? null : ''),
+      _visibleTracks(tracks, query: query ?? search.text),
       key: const PageStorageKey('offline-songs'),
     );
   }
