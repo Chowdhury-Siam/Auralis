@@ -473,6 +473,14 @@ for signing, updates, and unreadable Telegram credential recovery.
 
 Telegram audio is temporary: its local copy is removed when switching tracks, stopping playback or exiting normally. The current track can use disk buffering for playback and seeking. On an idle startup connection, Auralis clears audio/document cache left by older versions, while preserving images, the account database and lyric caches. Metadata-only audio fragments are removed after artwork or lyrics have been extracted.
 
+### Android efficiency and Library sources
+
+The “On this device” library source, source switch and folder-management interface have been removed in both modes. Existing installations ignore the retired source preferences; this does not delete media files, favorites, playlists or playback history. Telegram collections, Save for offline, explicit video opening and saved video playlists remain available.
+
+Seek-bar animation now repaints the existing slider instead of rebuilding it on every animation frame. Hidden player/library layers stop unnecessary painting and ticking. Video browsing and visualizer controls use structural playback notifications, while lyrics, seeking, statistics recording, Android media controls and sync retain their original playback event stream. Home statistics refresh on displayed-second changes. Large settings snapshots encode off the UI isolate, identical persisted snapshots skip the disk write, and idle sync responses no longer reapply an unchanged library. Channel artwork uses chunked byte buffers and large metadata replies decode off the UI isolate.
+
+All visualizer presets and frame-rate choices, animations, artwork/blur, processing effects, decoder choices and playback controls remain available. These changes target unnecessary CPU, GPU, memory, storage and network-processing work; real battery usage and frame-time improvements still require comparison on a physical phone. See [verification and profiling limits](docs/PERFORMANCE_0248.md).
+
 ### Video channel title information
 
 The Video Library can identify a selected Telegram channel from its name and show a poster, available banner, expandable synopsis, genres and catalogue information above the existing video rows. Use **Identify title** or **Change title** to search for a different entry. The search dialog offers separate Anime, TV series and Film catalogues, so similarly named adaptations can be selected explicitly. The original Telegram channel name remains visible.
