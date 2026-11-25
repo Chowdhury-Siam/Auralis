@@ -1,6 +1,12 @@
 {
-  "current": "0.1.245",
+  "current": "0.1.246",
   "releases": [
+    {
+      "version": "0.1.246",
+      "changes": [
+        "Remove an unused import that caused Flutter analysis to fail in CI."
+      ]
+    },
     {
       "version": "0.1.245",
       "changes": [
