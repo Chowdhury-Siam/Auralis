@@ -72,11 +72,16 @@ class RefreshTelegram extends TelegramService {
 }
 
 void main() {
-  testWidgets('Telegram Music refreshes only on request after switching source', (
+  testWidgets('Telegram Music refreshes only on request after navigation', (
     tester,
   ) async {
     final tracks = [
-      const Track(id: '1', title: 'First song', artist: 'Band', source: 'Music'),
+      const Track(
+        id: '1',
+        title: 'First song',
+        artist: 'Band',
+        source: 'Music',
+      ),
     ];
     final telegram = RefreshTelegram(MediaCache(null), tracks, Uint8List(0));
     final settings = MemorySettings()
@@ -101,11 +106,16 @@ void main() {
     expect(initialScans, 2);
     expect(find.text('First song'), findsOneWidget);
     tracks.add(
-      const Track(id: '2', title: 'Second song', artist: 'Band', source: 'Music'),
+      const Track(
+        id: '2',
+        title: 'Second song',
+        artist: 'Band',
+        source: 'Music',
+      ),
     );
-    await tester.tap(find.byTooltip('Telegram · Switch to On this device'));
+    await tester.tap(find.byIcon(Icons.home_rounded).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('On this device · Switch to Telegram'));
+    await tester.tap(find.byTooltip('Library').first);
     await tester.pumpAndSettle();
     expect(find.text('First song'), findsOneWidget);
     expect(find.text('Second song'), findsNothing);
@@ -245,7 +255,9 @@ void main() {
         final scans = telegram.scans, checks = telegram.checks;
         await refresh();
         final total = tracks.length;
-        final summary = find.text('Artwork $total/$total · Lyrics $total/$total');
+        final summary = find.text(
+          'Artwork $total/$total · Lyrics $total/$total',
+        );
         await until(
           () =>
               telegram.scans > scans &&
