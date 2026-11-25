@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 /// Decorative playback motion, not an analysis of the track's audio samples.
 class WaveSeekBar extends StatefulWidget {
@@ -22,7 +23,23 @@ class WaveSeekBar extends StatefulWidget {
 }
 
 class _WaveSeekBarState extends State<WaveSeekBar>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  bool _foreground = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final state = WidgetsBinding.instance.lifecycleState;
+    _foreground = state == null || state == AppLifecycleState.resumed;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _syncMotion();
+  }
+
   late final motion = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 2),
@@ -42,6 +59,7 @@ class _WaveSeekBarState extends State<WaveSeekBar>
 
   void _syncMotion() {
     final moving =
+        _foreground &&
         widget.playing &&
         widget.onChanged != null &&
         !widget.reducedMotion &&
@@ -53,19 +71,20 @@ class _WaveSeekBarState extends State<WaveSeekBar>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     motion.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => RepaintBoundary(
-    child: AnimatedBuilder(
+    child: _WaveRepaint(
       animation: motion,
-      builder: (context, _) => SliderTheme(
+      child: SliderTheme(
         data: SliderTheme.of(context).copyWith(
           trackHeight: 3,
           trackShape: WaveTrack(
-            phase: motion.value,
+            motion: motion,
             amplitude:
                 widget.reducedMotion || MediaQuery.disableAnimationsOf(context)
                 ? 0
@@ -88,8 +107,11 @@ class _WaveSeekBarState extends State<WaveSeekBar>
 }
 
 class WaveTrack extends SliderTrackShape with BaseSliderTrackShape {
-  const WaveTrack({required this.phase, required this.amplitude});
-  final double phase, amplitude;
+  const WaveTrack({double phase = 0, required this.amplitude, this.motion})
+    : _initialPhase = phase;
+  final double _initialPhase, amplitude;
+  final Animation<double>? motion;
+  double get phase => motion?.value ?? _initialPhase;
   @override
   bool get isRounded => true;
 
@@ -106,6 +128,7 @@ class WaveTrack extends SliderTrackShape with BaseSliderTrackShape {
     bool isDiscrete = false,
     required TextDirection textDirection,
   }) {
+    final phase = this.phase;
     final rect = getPreferredRect(
       parentBox: parentBox,
       offset: offset,
@@ -151,5 +174,48 @@ class WaveTrack extends SliderTrackShape with BaseSliderTrackShape {
     }
     path.lineTo(end, rect.center.dy);
     canvas.drawPath(path, paint);
+  }
+}
+
+/// Animate the existing slider's paint, without rebuilding its widgets, theme,
+/// semantics or gesture recognizers at the display refresh rate.
+class _WaveRepaint extends SingleChildRenderObjectWidget {
+  const _WaveRepaint({required this.animation, required super.child});
+  final Animation<double> animation;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _WaveRenderRepaint(animation);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _WaveRenderRepaint renderObject,
+  ) {
+    renderObject.animation = animation;
+  }
+}
+
+class _WaveRenderRepaint extends RenderProxyBox {
+  _WaveRenderRepaint(this._animation);
+  Animation<double> _animation;
+  set animation(Animation<double> value) {
+    if (identical(value, _animation)) return;
+    if (attached) _animation.removeListener(markNeedsPaint);
+    _animation = value;
+    if (attached) _animation.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _animation.addListener(markNeedsPaint);
+  }
+
+  @override
+  void detach() {
+    _animation.removeListener(markNeedsPaint);
+    super.detach();
   }
 }
