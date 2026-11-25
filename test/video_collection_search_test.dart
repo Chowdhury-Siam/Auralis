@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:auralis/app.dart';
 import 'package:auralis/app_theme.dart';
-import 'package:auralis/local_media.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
@@ -90,18 +89,12 @@ void main() {
             ? const ValueKey('video-library-search')
             : ValueKey(('video-collection-search', index)),
       );
-      Future<void> select(String name, {bool local = false}) async {
+      Future<void> select(String name) async {
         await tester.tap(
-          local
-              ? find.text('All videos').hitTestable().first
-              : find.byKey(const ValueKey('video-library-collection-menu')),
+          find.byKey(const ValueKey('video-library-collection-menu')),
         );
         await tester.pumpAndSettle();
-        await tester.tap(
-          local
-              ? find.widgetWithText(PopupMenuItem<LocalMediaView>, name)
-              : find.widgetWithText(PopupMenuItem<int>, name),
-        );
+        await tester.tap(find.widgetWithText(PopupMenuItem<int>, name));
         await tester.pump();
         // Snapshots read the real filesystem, independently of frame pumping.
         final waiting = Stopwatch()..start();
@@ -225,7 +218,7 @@ void main() {
         await tester.tap(find.byTooltip('Telegram · Switch to On this device'));
         await tester.pumpAndSettle();
         expect(find.text('Choose folder'), findsOneWidget);
-        await select('Playlists', local: true);
+        await select('Playlists');
         checkPanel(1);
         await showRow('Local playlist');
         await tester.tap(find.text('Local playlist'));
@@ -237,17 +230,17 @@ void main() {
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         expect(find.text('Choose folder'), findsOneWidget);
-        await select('History', local: true);
+        await select('History');
         checkPanel(2, hasSearch: false);
         await showRow('Local episode');
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
-        await select('Snapshots', local: true);
+        await select('Snapshots');
         checkPanel(3, hasSearch: false);
         expect(find.byType(VideoSnapshotsPage), findsOneWidget);
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
-        await select('Folders', local: true);
+        await select('Folders');
         expect(find.text('Folders'), findsOneWidget);
         expect(find.text('Choose folder'), findsOneWidget);
       }
