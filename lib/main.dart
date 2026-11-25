@@ -14,6 +14,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
+import 'channel_metadata.dart';
 import 'app_theme.dart';
 import 'android_audio.dart';
 import 'android_updater.dart';
@@ -122,6 +123,9 @@ Future<void> main() async {
     );
     telegram.isStreaming = player.proxy.isStreaming;
     telegram.hasActiveStream = () => player.proxy.hasActiveSource;
+    final channelMetadata = ChannelMetadataRepository(
+      Directory(p.join(root.path, 'channel-metadata')),
+    );
     AppUpdater? updater;
     Future<void>? shutdownFuture;
     Future<void> shutdown() => shutdownFuture ??= () async {
@@ -137,6 +141,7 @@ Future<void> main() async {
           await lock?.close();
         }
       }
+      channelMetadata.close();
       updater?.dispose();
     }();
     if (Platform.isAndroid) {
@@ -183,6 +188,7 @@ Future<void> main() async {
       AuralisApp(
         player: player,
         telegram: telegram,
+        channelMetadata: channelMetadata,
         startupWarning: warning,
         updater: updater,
         dataFiles: Platform.isAndroid
