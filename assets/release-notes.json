@@ -1,6 +1,16 @@
 {
-  "current": "0.1.247",
+  "current": "0.1.248",
   "releases": [
+    {
+      "version": "0.1.248",
+      "changes": [
+        "Remove the On this device libraries, source switches and folder management from Music and Video. Retire old source preferences without deleting media files.",
+        "Keep seek-bar animation in the paint layer and suspend hidden player animations, without reducing visual quality or the selected frame rates.",
+        "Use structural playback updates in Video and the visualizer, and refresh Home statistics on whole-second changes while retaining every original playback event.",
+        "Encode large settings histories away from the UI isolate, skip identical disk writes, and avoid reapplying unchanged sync responses.",
+        "Reduce temporary memory used by downloaded channel artwork and large metadata responses."
+      ]
+    },
     {
       "version": "0.1.247",
       "changes": [
