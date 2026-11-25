@@ -215,9 +215,10 @@ void main() {
         );
         data.putPlaylist('Local playlist', [local]);
         data.recordVideo(local);
-        await tester.tap(find.byTooltip('Telegram · Switch to On this device'));
-        await tester.pumpAndSettle();
-        expect(find.text('Choose folder'), findsOneWidget);
+        expect(
+          find.byTooltip('Telegram · Switch to On this device'),
+          findsNothing,
+        );
         await select('Playlists');
         checkPanel(1);
         await showRow('Local playlist');
@@ -229,7 +230,10 @@ void main() {
         expect(find.text('Local playlist'), findsOneWidget);
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
-        expect(find.text('Choose folder'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('video-library-search')),
+          findsOneWidget,
+        );
         await select('History');
         checkPanel(2, hasSearch: false);
         await showRow('Local episode');
@@ -240,9 +244,7 @@ void main() {
         expect(find.byType(VideoSnapshotsPage), findsOneWidget);
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
-        await select('Folders');
-        expect(find.text('Folders'), findsOneWidget);
-        expect(find.text('Choose folder'), findsOneWidget);
+        expect(find.text('Choose folder'), findsNothing);
       }
       expect(tester.takeException(), isNull);
     });
