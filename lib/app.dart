@@ -22,7 +22,6 @@ import 'music_playlist_widgets.dart';
 import 'playlist_photos.dart';
 import 'library_widgets.dart';
 import 'local_media.dart';
-import 'local_media_view.dart';
 import 'lyrics.dart';
 import 'lyrics_view.dart';
 import 'player.dart';
@@ -295,7 +294,6 @@ class _PlayerShellState extends State<PlayerShell>
   void _toggleMixExpanded() => setState(() => _mixExpanded = !_mixExpanded);
   void _toggleBrowseLayout() => setState(() => _browseAsList = !_browseAsList);
   void _openRecent() {
-    _setMusicLibrarySource(false);
     _navigate(_Page.library);
     _selectLibraryCollection('Recently played');
   }
@@ -326,7 +324,6 @@ class _PlayerShellState extends State<PlayerShell>
     List<({Track track, String details})> issues,
   })?
   _cacheReport;
-  final _localLibraryKey = GlobalKey<LocalMediaViewPaneState>();
   final search = TextEditingController();
   final _discoveryFocus = FocusNode();
   SettingsSection? _settingsSection;
@@ -660,13 +657,7 @@ class _PlayerShellState extends State<PlayerShell>
       } else {
         unawaited(_closeNowPlaying());
       }
-    } else if (destination == _Page.library &&
-        player.settings.musicLibraryOnDevice &&
-        _localLibraryKey.currentState?.backToGroups() == true) {
-      return;
-    } else if (destination == _Page.library &&
-        !player.settings.musicLibraryOnDevice &&
-        _selectedArtist != null) {
+    } else if (destination == _Page.library && _selectedArtist != null) {
       _selectArtist(null);
     } else if (destination == _Page.settings || destination == _Page.telegram) {
       _navigate(_primaryPage);
@@ -837,9 +828,12 @@ class _PlayerShellState extends State<PlayerShell>
               left: 0,
               right: 0,
               bottom: compact ? 80 + MediaQuery.paddingOf(context).bottom : 8,
-              child: Opacity(
-                opacity: destination == _Page.nowPlaying ? 0 : 1,
-                child: _transport(),
+              child: TickerMode(
+                enabled: destination != _Page.nowPlaying,
+                child: Opacity(
+                  opacity: destination == _Page.nowPlaying ? 0 : 1,
+                  child: _transport(),
+                ),
               ),
             ),
         ],
@@ -1462,9 +1456,7 @@ class _PlayerShellState extends State<PlayerShell>
         return PopScope<Object?>(
           canPop:
               destination == _rootPage &&
-              !(destination == _Page.library &&
-                  (_selectedArtist != null ||
-                      player.settings.musicLibraryOnDevice)),
+              !(destination == _Page.library && _selectedArtist != null),
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop) _back();
           },
@@ -2343,63 +2335,9 @@ class _PlayerShellState extends State<PlayerShell>
     },
   );
 
-  void _setMusicLibrarySource(bool local) {
-    if (player.settings.musicLibraryOnDevice == local) return;
-    setState(() => player.settings.musicLibraryOnDevice = local);
-    unawaited(
-      player.settings.save().catchError((Object _) {
-        if (mounted) _notice('Could not save the library source.');
-      }),
-    );
-  }
+  Widget _library() => _telegramMusicLibrary();
 
-  void _playLocalSongs(List<LocalMedia> media, int index) {
-    final tracks = [for (final item in media) item.track];
-    unawaited(player.play(tracks[index], from: tracks));
-  }
-
-  Future<void> _openLocalSongs() async {
-    try {
-      final media = await const LocalMediaPlatform().openSongs();
-      if (mounted && media.isNotEmpty) _playLocalSongs(media, 0);
-    } on Exception {
-      if (mounted) _notice('Could not open the selected audio files.');
-    }
-  }
-
-  Widget _library() {
-    if (widget.setupMode) return _telegramMusicLibrary();
-    final local = player.settings.musicLibraryOnDevice;
-    return LibrarySourcePanes(
-      local: local,
-      telegramPane: (_) => _telegramMusicLibrary(
-        sourceButton: LibrarySourceButton(
-          local: false,
-          onPressed: () => _setMusicLibrarySource(true),
-        ),
-      ),
-      devicePane: (_) => LocalMediaViewPane(
-        key: _localLibraryKey,
-        keyboardOpen: _keyboardOpen,
-        settings: player.settings,
-        video: false,
-        bottomPadding: _dockPadding,
-        sourceButton: LibrarySourceButton(
-          local: true,
-          onPressed: () => _setMusicLibrarySource(false),
-        ),
-        offlineCollection: (query) => _offlineSongs(query: query),
-        onPlay: _playLocalSongs,
-        playingTrackId: player.current?.id,
-        musicActions: (track, play, artwork) =>
-            _trackActions(track, onPlay: play, artwork: artwork),
-        onOpenFiles: _openLocalSongs,
-        onSettings: _mobileNavigation ? () => _navigate(_Page.settings) : null,
-      ),
-    );
-  }
-
-  Widget _telegramMusicLibrary({Widget? sourceButton}) {
+  Widget _telegramMusicLibrary() {
     final playlistOverview =
         collection == 'Playlists' && selectedPlaylist == null;
     final artist = _selectedArtist;
@@ -2415,7 +2353,6 @@ class _PlayerShellState extends State<PlayerShell>
       collections: _libraryCollections,
       index: index,
       onSelected: select,
-      sourceButton: sourceButton,
       collectionAction: artistOverview
           ? discoveryLayoutButton(
               list: _artistsAsList,
@@ -3797,7 +3734,9 @@ class _PlayerShellState extends State<PlayerShell>
                 bytes: preview.bytes.length,
                 detail: 'In memory',
                 remove: () async {
-                  if (!sameAccount()) throw StateError('Cache account changed.');
+                  if (!sameAccount()) {
+                    throw StateError('Cache account changed.');
+                  }
                   telegram.discardVideoThumbnail(preview.id);
                   await ResizeImage(
                     MemoryImage(preview.bytes),
