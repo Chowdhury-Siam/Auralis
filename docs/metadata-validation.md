@@ -19,3 +19,7 @@ flutter test --no-pub --reporter expanded
 ```
 
 Metadata parsing uses mocked catalogue responses in the service tests. Live API/image availability and final on-device rendering still require network/device verification. Failed metadata requests leave video browsing and playback available.
+
+## Subsequent validation
+
+Version 0.1.248 now runs the complete Flutter regression suite in CI mode, avoiding automatic cloud-environment detection. This includes the metadata widget tests and the six Library regressions originally reported with 0.1.246. Final results and physical-device limits are recorded in [PERFORMANCE_0248.md](PERFORMANCE_0248.md).
