@@ -8,7 +8,6 @@ import 'channel_metadata.dart';
 import 'channel_metadata_view.dart';
 import 'library_widgets.dart';
 import 'local_media.dart';
-import 'local_media_view.dart';
 import 'discovery_widgets.dart';
 import 'app_navigation.dart';
 import 'app_theme.dart';
@@ -93,7 +92,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   final _search = TextEditingController();
   final _librarySearch = TextEditingController();
   final _playlistSearch = TextEditingController();
-  final _localPlaylistSearch = TextEditingController();
   final _videoSources = <int>{};
   final _videoCounts = <int, int>{};
   final _durationLookups = <(String, int?, int), Future<Duration?>>{};
@@ -110,9 +108,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   bool _showSearchChannel = false, _browseChannelsAsList = false;
   int _tab = 0;
   int _libraryCollection = 0;
-  final _localLibraryKey = GlobalKey<LocalMediaViewPaneState>();
   final _playlistPageController = VideoLibraryPageController();
-  final _localPlaylistController = VideoLibraryPageController();
   static const _collections = [
     LocalMediaView.videos,
     LocalMediaView.playlists,
@@ -569,7 +565,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     _search.dispose();
     _librarySearch.dispose();
     _playlistSearch.dispose();
-    _localPlaylistSearch.dispose();
     super.dispose();
   }
 
@@ -626,7 +621,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1150),
             child: ListenableBuilder(
-              listenable: Listenable.merge([_telegram, widget.music]),
+              listenable: Listenable.merge([
+                _telegram,
+                widget.music.viewChanges,
+              ]),
               builder: (context, _) => switch (_tab) {
                 0 => _home(context),
                 1 when !_showSearchChannel || _library == null =>
@@ -643,9 +641,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
       canPop: _tab == 0,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop || _showingPlayer) return;
-        if (_tab == 2 && settings.videoLibraryOnDevice) {
-          if (_localLibraryKey.currentState?.backToGroups() == true) return;
-        } else if (_tab == 2) {
+        if (_tab == 2) {
           if (_libraryCollection == 1 &&
               _playlistPageController.backToOverview()) {
             return;
@@ -707,12 +703,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        ExcludeFocus(
-          excluding: _showingPlayer,
-          child: ExcludeSemantics(
-            excluding: _showingPlayer,
-            child: IgnorePointer(ignoring: _showingPlayer, child: browser),
-          ),
+        Offstage(
+          offstage: _showingPlayer,
+          child: TickerMode(enabled: !_showingPlayer, child: browser),
         ),
         if (sources != null)
           VideoPlayback(
@@ -770,55 +763,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     onSelected: _setVideoSort,
   );
 
-  void _setVideoLibrarySource(bool local) {
-    final settings = widget.music.settings;
-    if (settings.videoLibraryOnDevice == local) return;
-    setState(() => settings.videoLibraryOnDevice = local);
-    unawaited(
-      settings.save().catchError((Object _) {
-        if (mounted) _notice('Could not save the library source.');
-      }),
-    );
-  }
+  Widget _videoLibrary(BuildContext context) => _telegramVideoLibrary(context);
 
-  Widget _videoLibrary(BuildContext context) {
-    final settings = widget.music.settings;
-    final local = settings.videoLibraryOnDevice;
-    return LibrarySourcePanes(
-      local: local,
-      telegramPane: (context) => _telegramVideoLibrary(
-        context,
-        LibrarySourceButton(
-          local: false,
-          onPressed: () => _setVideoLibrarySource(true),
-        ),
-      ),
-      devicePane: (context) => LocalMediaViewPane(
-        key: _localLibraryKey,
-        keyboardOpen: MediaQuery.viewInsetsOf(this.context).bottom > 0,
-        settings: settings,
-        video: true,
-        bottomPadding: _bottomPadding(context),
-        sourceButton: LibrarySourceButton(
-          local: true,
-          onPressed: () => _setVideoLibrarySource(false),
-        ),
-        offlineCollection: (_) => _offlineVideos(context),
-        savedVideoCollection: (view) =>
-            _savedVideoCollection(context, view, local: true, active: local),
-        videoPlaylistsController: _localPlaylistController,
-        onPlay: (rows, index) => unawaited(
-          _launchPlayer([for (final row in rows) row.video], index),
-        ),
-        onOpenFiles: _openHomeFiles,
-        onSettings: MediaQuery.sizeOf(context).width < 900
-            ? widget.onSettings
-            : null,
-      ),
-    );
-  }
-
-  Widget _telegramVideoLibrary(BuildContext context, Widget sourceButton) {
+  Widget _telegramVideoLibrary(BuildContext context) {
     final settings = widget.music.settings;
     return LibraryLayout(
       // Scaffold consumes body insets; read them above the Scaffold.
@@ -826,7 +773,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
       collections: [for (final view in _collections) (view.label, view.icon)],
       index: _libraryCollection,
       onSelected: _selectVideoCollection,
-      sourceButton: sourceButton,
       collectionAction: _libraryCollection == 0 ? _sortButton() : null,
       moreActions: LibraryActionsMenu(
         actions: [
@@ -865,8 +811,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
           return _savedVideoCollection(
             context,
             _collections[index],
-            active: index == _libraryCollection &&
-                !settings.videoLibraryOnDevice,
+            active: index == _libraryCollection,
           );
         },
       ),
@@ -915,13 +860,12 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     BuildContext context,
     LocalMediaView view, {
     bool active = true,
-    bool local = false,
   }) {
     final settings = widget.music.settings;
     final index = _collections.indexOf(view);
     final playlists = view == LocalMediaView.playlists;
-    final search = local ? _localPlaylistSearch : _playlistSearch;
-    final controller = local ? _localPlaylistController : _playlistPageController;
+    final search = _playlistSearch;
+    final controller = _playlistPageController;
     final page = view == LocalMediaView.snapshots
         ? VideoSnapshotsPage(
             embedded: true,
@@ -938,7 +882,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
             historyArtwork: _historyArtwork,
             lookupDuration: _lookupVideoDuration,
             embedded: true,
-            changes: widget.music,
+            changes: widget.music.viewChanges,
             controller: playlists ? controller : null,
             bottomPadding: _bottomPadding(context),
             query: playlists ? search.text : '',
@@ -1006,7 +950,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   }
 
   void _openHomeChannel(MusicChat channel) {
-    _setVideoLibrarySource(false);
     _showSearchChannel = false;
     if (_library?.channel.id != channel.id) unawaited(_browseChannel(channel));
     _selectTab(2);
