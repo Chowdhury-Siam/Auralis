@@ -47,7 +47,7 @@ class _LibrarySourcePanesState extends State<LibrarySourcePanes> {
           ),
         if (_openedDevice)
           KeyedSubtree(
-            key: const ValueKey(true),
+            key: const PageStorageKey('device-library-source'),
             child: pane(widget.local, widget.devicePane),
           ),
       ],
@@ -122,6 +122,93 @@ class LibrarySourceButton extends StatelessWidget {
   );
 }
 
+class LibraryLayout extends StatelessWidget {
+  const LibraryLayout({
+    super.key,
+    required this.collections,
+    required this.index,
+    required this.onSelected,
+    required this.body,
+    this.sourceButton,
+    this.collectionAction,
+    this.moreActions,
+    this.onSettings,
+    this.menuKey,
+    this.titleKey,
+    this.indicatorKey,
+    this.reducedMotion = false,
+  });
+
+  final List<(String, IconData)> collections;
+  final int index;
+  final ValueChanged<int> onSelected;
+  final Widget body;
+  final Widget? sourceButton, collectionAction, moreActions;
+  final VoidCallback? onSettings;
+  final Key? menuKey, titleKey, indicatorKey;
+  final bool reducedMotion;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, icon) = collections[index];
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (MediaQuery.viewInsetsOf(context).bottom == 0) ...[
+          LibraryToolbar(
+            collection: LibraryCollectionMenu<int>(
+              key: menuKey,
+              titleKey: titleKey,
+              title: label,
+              icon: icon,
+              tooltip: 'Library collection: $label',
+              onSelected: onSelected,
+              itemBuilder: (_) => [
+                for (final (i, (name, symbol)) in collections.indexed)
+                  PopupMenuItem<int>(
+                    value: i,
+                    padding: EdgeInsets.zero,
+                    child: AuralisMenuRow(
+                      title: name,
+                      icon: symbol,
+                      selected: i == index,
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              ?sourceButton,
+              ?collectionAction,
+              if (onSettings != null) ...[
+                const SizedBox(width: 4),
+                IconButton.filledTonal(
+                  tooltip: 'Settings',
+                  style: IconButton.styleFrom(
+                    backgroundColor: colors.primaryContainer,
+                    foregroundColor: colors.onPrimaryContainer,
+                  ),
+                  onPressed: onSettings,
+                  icon: const Icon(Icons.settings_outlined, size: 20),
+                ),
+              ],
+              ?moreActions,
+            ],
+          ),
+          LibraryPageIndicator(
+            key: indicatorKey,
+            labels: [for (final (name, _) in collections) name],
+            index: index,
+            onSelected: onSelected,
+            reducedMotion: reducedMotion,
+          ),
+        ],
+        Expanded(child: body),
+      ],
+    );
+  }
+}
+
 class LibraryToolbar extends StatelessWidget {
   const LibraryToolbar({
     super.key,
@@ -146,6 +233,38 @@ class LibraryToolbar extends StatelessWidget {
   );
 }
 
+typedef LibraryAction = ({
+  String label,
+  IconData icon,
+  VoidCallback? onSelected,
+});
+
+class LibraryActionsMenu extends StatelessWidget {
+  const LibraryActionsMenu({super.key, required this.actions});
+
+  final List<LibraryAction> actions;
+
+  @override
+  Widget build(BuildContext context) => AuralisPopupMenu<int>(
+    tooltip: 'Library actions',
+    icon: const Icon(Icons.more_vert_rounded, size: 20),
+    onSelected: (index) => actions[index].onSelected?.call(),
+    itemBuilder: (_) => [
+      for (final (index, action) in actions.indexed)
+        PopupMenuItem<int>(
+          value: index,
+          enabled: action.onSelected != null,
+          padding: EdgeInsets.zero,
+          child: AuralisMenuRow(
+            title: action.label,
+            icon: action.icon,
+            enabled: action.onSelected != null,
+          ),
+        ),
+    ],
+  );
+}
+
 class LibraryPanel extends StatelessWidget {
   const LibraryPanel({super.key, this.panelKey, required this.child});
 
@@ -160,6 +279,38 @@ class LibraryPanel extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
       child: child,
+    ),
+  );
+}
+
+class LibraryContentPanel extends StatelessWidget {
+  const LibraryContentPanel({
+    super.key,
+    this.panelKey,
+    this.search,
+    this.details = const [],
+    this.loading = false,
+    required this.body,
+  });
+
+  final Key? panelKey;
+  final Widget? search;
+  final List<Widget> details;
+  final bool loading;
+  final Widget body;
+
+  @override
+  Widget build(BuildContext context) => LibraryPanel(
+    panelKey: panelKey,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ?search,
+        ...details,
+        if (search != null || details.isNotEmpty) const SizedBox(height: 8),
+        if (loading) const LinearProgressIndicator(minHeight: 2),
+        Expanded(child: body),
+      ],
     ),
   );
 }
@@ -255,6 +406,55 @@ class LibrarySortMenu extends StatelessWidget {
       ),
     );
   }
+}
+
+class LibrarySortButton extends StatelessWidget {
+  const LibrarySortButton({
+    super.key,
+    required this.selected,
+    required this.options,
+    required this.onSelected,
+  });
+
+  final LibrarySort selected;
+  final Iterable<LibrarySort> options;
+  final ValueChanged<LibrarySort> onSelected;
+
+  Future<void> choose(BuildContext context) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final sort = await showAuralisDialog<LibrarySort>(
+      context: context,
+      builder: (context) => AuralisDialog(
+        title: const Text('Library sort order'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final option in options)
+              AuralisChoiceTile(
+                selected: option == selected,
+                title: Text(option.label),
+                onTap: () => Navigator.pop(context, option),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (context.mounted && sort != null && sort != selected) onSelected(sort);
+  }
+
+  @override
+  Widget build(BuildContext context) => IconButton.filledTonal(
+    tooltip: 'Sort Library',
+    onPressed: () => choose(context),
+    icon: const Icon(Icons.sort_rounded, size: 20),
+  );
 }
 
 class MusicLibraryRow extends StatelessWidget {
