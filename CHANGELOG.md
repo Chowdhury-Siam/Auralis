@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.246
+
+- Remove an unused import that caused Flutter analysis to fail in CI.
+
 ## 0.1.245
 
 - Share the Library layout, search, collection menu, and sorting controls between Telegram and On this device in Music and Video. Each source retains its own content and search state.
