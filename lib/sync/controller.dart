@@ -350,6 +350,15 @@ class SyncController extends ChangeNotifier {
           sentKeys.removeAll(sent.keys);
           continue;
         }
+        // A healthy idle poll has nothing to merge or publish. Keep the live
+        // socket and polling cadence, without reapplying the complete library,
+        // rewriting settings, or notifying the UI of a fictitious remote edit.
+        if (sent.isEmpty &&
+            (result['records'] as Map).isEmpty &&
+            result['cursor'] == doc.state['cursor'] &&
+            result['more'] != true) {
+          break;
+        }
         // Capture edits made while HTTP was pending before merging remote fields.
         _capture(settings.toJson());
         final merged = SyncDocument(detached(settings.syncState));
