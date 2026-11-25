@@ -39,6 +39,7 @@ class LocalMediaViewPane extends StatefulWidget {
     required this.onPlay,
     required this.onOpenFiles,
     this.sourceButton,
+    this.keyboardOpen = false,
     this.savedVideoCollection,
     this.offlineCollection,
     this.videoPlaylistsController,
@@ -49,7 +50,7 @@ class LocalMediaViewPane extends StatefulWidget {
   });
 
   final AppSettings settings;
-  final bool video;
+  final bool video, keyboardOpen;
   final double bottomPadding;
   final LocalMediaPlay onPlay;
   final VoidCallback onOpenFiles;
@@ -163,10 +164,9 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane> {
       final folders = List.of(widget.settings.localMediaFolders);
       if (folders.isEmpty) return;
       try {
-        final scan = await _platform.scan(
-          widget.video,
-          [for (final folder in folders) folder.location],
-        );
+        final scan = await _platform.scan(widget.video, [
+          for (final folder in folders) folder.location,
+        ]);
         if (!mounted) return;
         if (!listEquals(folders, widget.settings.localMediaFolders)) continue;
         final keys = scan.entries.map((item) => item.revision).toSet();
@@ -245,10 +245,15 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane> {
     _projecting = true;
     final result = entries.isEmpty
         ? const LocalMediaSelection([], [])
-        : await compute(
-            _select,
-            (entries, metadata, view, group, query, sort, favorites),
-          );
+        : await compute(_select, (
+            entries,
+            metadata,
+            view,
+            group,
+            query,
+            sort,
+            favorites,
+          ));
     if (!mounted || generation != _projection) return;
     setState(() {
       _selection = result;
@@ -526,6 +531,7 @@ class LocalMediaViewPaneState extends State<LocalMediaViewPane> {
     final views = _views;
     final hasFolders = widget.settings.localMediaFolders.isNotEmpty;
     return LibraryLayout(
+      keyboardOpen: widget.keyboardOpen,
       collections: [for (final view in views) (view.label, view.icon)],
       index: views.indexOf(_view),
       onSelected: (index) => _changeView(views[index]),
