@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.245
+
+- Share the Library layout, search, collection menu, and sorting controls between Telegram and On this device in Music and Video. Each source retains its own content and search state.
+
 ## 0.1.244
 
 - Preserve library scroll position when the playback dock appears or a pull-to-refresh updates the view.
