@@ -34,7 +34,10 @@ class _LibrarySourcePanesState extends State<LibrarySourcePanes> {
       offstage: !active,
       child: TickerMode(
         enabled: active,
-        child: ExcludeFocus(excluding: !active, child: Builder(builder: builder)),
+        child: ExcludeFocus(
+          excluding: !active,
+          child: Builder(builder: builder),
+        ),
       ),
     );
     return Stack(
@@ -137,6 +140,7 @@ class LibraryLayout extends StatelessWidget {
     this.titleKey,
     this.indicatorKey,
     this.reducedMotion = false,
+    this.keyboardOpen = false,
   });
 
   final List<(String, IconData)> collections;
@@ -146,7 +150,7 @@ class LibraryLayout extends StatelessWidget {
   final Widget? sourceButton, collectionAction, moreActions;
   final VoidCallback? onSettings;
   final Key? menuKey, titleKey, indicatorKey;
-  final bool reducedMotion;
+  final bool reducedMotion, keyboardOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +159,7 @@ class LibraryLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (MediaQuery.viewInsetsOf(context).bottom == 0) ...[
+        if (!keyboardOpen && MediaQuery.viewInsetsOf(context).bottom == 0) ...[
           LibraryToolbar(
             collection: LibraryCollectionMenu<int>(
               key: menuKey,
