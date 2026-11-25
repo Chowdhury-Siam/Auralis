@@ -104,7 +104,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
     super.initState();
     _lifecycle = WidgetsBinding.instance.lifecycleState;
     WidgetsBinding.instance.addObserver(this);
-    widget.player.addListener(_playback);
+    widget.player.viewChanges.addListener(_playback);
     _watchReady();
   }
 
@@ -130,8 +130,8 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   void didUpdateWidget(MusicVisualizerPane oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.player != widget.player) {
-      oldWidget.player.removeListener(_playback);
-      widget.player.addListener(_playback);
+      oldWidget.player.viewChanges.removeListener(_playback);
+      widget.player.viewChanges.addListener(_playback);
     }
     if (oldWidget.rendererBuilder != widget.rendererBuilder) _renderer = null;
     if (oldWidget.mode != widget.mode) _sync(force: true);
@@ -572,7 +572,7 @@ class _MusicVisualizerPaneState extends State<MusicVisualizerPane>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    widget.player.removeListener(_playback);
+    widget.player.viewChanges.removeListener(_playback);
     _readyTimeout?.cancel();
     unawaited(_capture.dispose());
     super.dispose();
