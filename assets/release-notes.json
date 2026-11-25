@@ -1,6 +1,12 @@
 {
-  "current": "0.1.244",
+  "current": "0.1.245",
   "releases": [
+    {
+      "version": "0.1.245",
+      "changes": [
+        "Share the Library layout, search, collection menu, and sorting controls between Telegram and On this device in Music and Video. Each source retains its own content and search state."
+      ]
+    },
     {
       "version": "0.1.244",
       "changes": [
