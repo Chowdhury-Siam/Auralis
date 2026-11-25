@@ -1,18 +1,11 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:auralis/app.dart';
-import 'package:auralis/library_widgets.dart';
 import 'package:auralis/local_media.dart';
-import 'package:auralis/local_media_view.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/storage.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
-import 'package:auralis/telegram/telegram_service.dart';
-import 'package:auralis/video_library.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -36,56 +29,10 @@ const _androidFolder = (
   location: 'content://folder.test/tree/primary%3AMedia',
   name: 'Media',
 );
-const _windowsFolder = (location: r'D:\Media', name: 'Media');
-
-class _DeviceMedia extends LocalMediaPlatform {
-  _DeviceMedia({this.android = true});
-
-  final events = StreamController<void>.broadcast();
-  final scans = <(bool, List<String>)>[];
-  int picks = 0;
-  LocalMediaFolder? selectedFolder;
-  List<LocalMedia> entries = [];
-
-  @override
-  final bool android;
-
-  @override
-  bool get windows => !android;
-
-  @override
-  Stream<void> get changes => events.stream;
-
-  @override
-  Future<LocalMediaFolder?> chooseFolder() async {
-    picks++;
-    return selectedFolder;
-  }
-
-  @override
-  Future<LocalMediaScan> scan(bool video, List<String> folders) async {
-    scans.add((video, folders));
-    return (entries: entries, unavailable: 0);
-  }
-
-  @override
-  Future<LocalMedia> metadata(LocalMedia source) async => source;
-
-  @override
-  Future<Uint8List?> artwork(LocalMedia item) async => null;
-}
 
 class _AndroidFolderChannel extends LocalMediaPlatform {
   @override
   bool get android => true;
-}
-
-Future<void> settleScan(WidgetTester tester) async {
-  await tester.pump();
-  await tester.runAsync(
-    () => Future<void>.delayed(const Duration(milliseconds: 200)),
-  );
-  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -235,42 +182,34 @@ void main() {
   });
 
   test(
-    'source selections and folders persist locally without entering sync data',
+    'retired device-library preferences are ignored without deleting media',
     () async {
       final folder = await Directory.systemTemp.createTemp(
-        'auralis-local-settings-',
+        'auralis-retired-device-',
       );
       addTearDown(() => folder.delete(recursive: true));
+      final media = await File(p.join(folder.path, 'keep.mp4'))
+          .writeAsString('media');
       final settings = AppSettings(File(p.join(folder.path, 'settings.json')));
-      final legacyPath = p.join(folder.path, 'media');
       await settings.file.writeAsString(
         jsonEncode({
           '_musicLibraryOnDevice': true,
-          '_localMediaFolders': [legacyPath],
+          '_videoLibraryOnDevice': true,
+          '_localMediaFolders': [folder.path],
+          'favoriteIds': ['kept-song'],
+          'volume': 35,
         }),
       );
       await settings.load();
-      expect(settings.localMediaFolders, [
-        (location: legacyPath, name: 'media'),
-      ]);
-      settings.localMediaFolders.add(_androidFolder);
-      Map<String, dynamic>? synced;
-      settings.captureSync = (snapshot) => synced = snapshot;
+      expect(settings.favoriteIds, {'kept-song'});
+      expect(settings.volume, 35);
       await settings.save();
-      final loaded = AppSettings(settings.file);
-      await loaded.load();
-      expect(loaded.musicLibraryOnDevice, isTrue);
-      expect(loaded.videoLibraryOnDevice, isFalse);
-      expect(loaded.localMediaFolders, settings.localMediaFolders);
-      expect(synced.toString(), isNot(contains(legacyPath)));
-      expect(synced.toString(), isNot(contains(_androidFolder.location)));
-      expect(synced!.keys, isNot(contains('_musicLibraryOnDevice')));
-      loaded.videoLibraryOnDevice = true;
-      loaded.musicLibraryOnDevice = false;
-      await loaded.save();
-      await settings.load();
-      expect(settings.videoLibraryOnDevice, isTrue);
-      expect(settings.musicLibraryOnDevice, isFalse);
+      final saved = jsonDecode(await settings.file.readAsString()) as Map;
+      expect(saved.containsKey('_musicLibraryOnDevice'), isFalse);
+      expect(saved.containsKey('_videoLibraryOnDevice'), isFalse);
+      expect(saved.containsKey('_localMediaFolders'), isFalse);
+      expect(saved['favoriteIds'], ['kept-song']);
+      expect(await media.readAsString(), 'media');
     },
   );
 
@@ -337,253 +276,4 @@ void main() {
     expect(result?.lines.single.text, 'First line');
     expect(result?.lines.single.time, const Duration(milliseconds: 1500));
   });
-
-  testWidgets('Android Video keeps the scanned folder until pull-to-refresh', (
-    tester,
-  ) async {
-    final platform = _DeviceMedia();
-    addTearDown(platform.events.close);
-    final settings = MemorySettings();
-    (List<LocalMedia>, int)? selected;
-    var local = true;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: StatefulBuilder(
-            builder: (context, update) => LibrarySourcePanes(
-              local: local,
-              telegramPane: (_) => TextButton(
-                onPressed: () => update(() => local = true),
-                child: const Text('Show device'),
-              ),
-              devicePane: (_) => LocalMediaViewPane(
-                settings: settings,
-                video: true,
-                bottomPadding: 8,
-                sourceButton: TextButton(
-                  onPressed: () => update(() => local = false),
-                  child: const Text('Show Telegram'),
-                ),
-                onPlay: (rows, index) => selected = (rows, index),
-                onOpenFiles: () {},
-                platform: platform,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(platform.scans, isEmpty);
-    expect(platform.picks, 0);
-    await tester.tap(find.text('Choose folder'));
-    await tester.pumpAndSettle();
-    expect(platform.scans, isEmpty);
-    expect(settings.localMediaFolders, isEmpty);
-
-    platform.selectedFolder = _androidFolder;
-    platform.entries = [
-      media('S01E10.mp4', video: true),
-      media('S01E02.mp4', video: true),
-      media('S01E1.mp4', video: true),
-    ];
-    settings.videoPlayback
-      ..setWatched(platform.entries[1].video, true)
-      ..remember(
-        platform.entries[1].video.id,
-        const Duration(seconds: 108),
-        const Duration(seconds: 120),
-      );
-    await tester.tap(find.text('Choose folder'));
-    await settleScan(tester);
-    expect(settings.localMediaFolders, [_androidFolder]);
-    expect(platform.picks, 2);
-    expect(find.byType(VideoLibraryRow), findsNWidgets(3));
-    expect(find.text('2:00 · Watched · Resume at 1:48'), findsOneWidget);
-    await tester.tap(find.text('S01E02.mp4'));
-    expect(selected!.$2, 1);
-    expect(selected!.$1.map((item) => item.name), [
-      'S01E1.mp4',
-      'S01E02.mp4',
-      'S01E10.mp4',
-    ]);
-    await tester.tap(find.byTooltip('Info for S01E02.mp4'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Info'));
-    await tester.pumpAndSettle();
-    expect(find.text('Duration'), findsOneWidget);
-    expect(find.widgetWithText(SelectableText, '2:00'), findsOneWidget);
-    Navigator.of(tester.element(find.text('Duration'))).pop();
-    await tester.pumpAndSettle();
-
-    platform.entries = [media('Added S01E4.mp4', video: true)];
-    platform.events.add(null);
-    await tester.tap(find.text('Show Telegram'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Show device'));
-    await tester.pumpAndSettle();
-    expect(platform.scans, hasLength(1));
-    expect(find.text('S01E02.mp4'), findsOneWidget);
-    expect(find.text('Added S01E4.mp4'), findsNothing);
-    await tester.drag(find.byType(ListView), const Offset(0, 330));
-    await pumpUntil(
-      tester,
-      () => find.text('Added S01E4.mp4').evaluate().isNotEmpty,
-      reason: 'Pull-to-refresh did not display the updated local video list.',
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('S01E02.mp4'), findsNothing);
-    expect(find.text('Added S01E4.mp4'), findsOneWidget);
-    expect(platform.scans.map((scan) => scan.$1), [true, true]);
-    expect(platform.scans.map((scan) => scan.$2), [
-      [_androidFolder.location],
-      [_androidFolder.location],
-    ]);
-    await tester.pumpWidget(const SizedBox());
-  });
-
-  testWidgets('local Music uses shared song rows and opens folders', (
-    tester,
-  ) async {
-    final platform = _DeviceMedia(android: false)
-      ..selectedFolder = _windowsFolder
-      ..entries = [media('Alpha.mp3'), media('Beta.mp3')];
-    final settings = MemorySettings();
-    addTearDown(platform.events.close);
-    (List<LocalMedia>, int)? selected;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: LocalMediaViewPane(
-            settings: settings,
-            video: false,
-            bottomPadding: 8,
-            onPlay: (rows, index) => selected = (rows, index),
-            onOpenFiles: () {},
-            platform: platform,
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('Choose folder'));
-    await settleScan(tester);
-    expect(settings.localMediaFolders, [_windowsFolder]);
-    expect(platform.scans.single.$2, [_windowsFolder.location]);
-    expect(find.byType(MusicLibraryRow), findsNWidgets(2));
-    expect(find.text('Test artist · 2:00'), findsNWidgets(2));
-    await tester.tap(find.byTooltip('Show Folders'));
-    await settleScan(tester);
-    expect(find.text('Alpha.mp3'), findsNothing);
-    await tester.tap(find.text('Local'));
-    await settleScan(tester);
-    await tester.tap(find.text('Beta.mp3'));
-    expect(selected!.$2, 1);
-    expect(selected!.$1.map((item) => item.name), ['Alpha.mp3', 'Beta.mp3']);
-    settings.favoriteIds.add(platform.entries.last.track.id);
-    await tester.tap(find.byTooltip('Show Favorites'));
-    await settleScan(tester);
-    expect(find.text('Beta.mp3'), findsOneWidget);
-    expect(find.text('Alpha.mp3'), findsNothing);
-    final actions = find.byTooltip('Library actions');
-    await tester.tap(actions);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Manage folders'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Remove Media from library'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
-    expect(find.text('Choose folder'), findsOneWidget);
-    expect(settings.localMediaFolders, isEmpty);
-    expect(platform.scans, hasLength(1));
-    await tester.pumpWidget(const SizedBox());
-  });
-
-  for (final mode in AppInterface.values) {
-    testWidgets('both sources share the Library layout in ${mode.label}', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(320, 680);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final settings = MemorySettings()..defaultInterface = mode;
-      final transport = FakeTd();
-      final telegram = TelegramService(
-        Directory('unused'),
-        MemoryVault(),
-        transport: transport,
-      );
-      final player = PlayerController(
-        FakeAudio(),
-        TelegramStreamProxy(telegram.request),
-        settings,
-      );
-      addTearDown(() async {
-        await tester.pumpWidget(const SizedBox());
-        await player.shutdown();
-        await telegram.shutdown();
-      });
-      await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Library'));
-      await tester.pumpAndSettle();
-      final sourceButton = find.byType(LibrarySourceButton);
-      final toDevice = find.byTooltip('Telegram · Switch to On this device');
-      final toTelegram = find.byTooltip('On this device · Switch to Telegram');
-      final toolbar = find.byType(LibraryToolbar);
-      final librarySearch = find.byKey(
-        ValueKey(
-          mode == AppInterface.video
-              ? 'video-library-search'
-              : 'music-library-search',
-        ),
-      );
-      expect(sourceButton, findsOneWidget);
-      expect(find.descendant(of: toolbar, matching: toDevice), findsOneWidget);
-      expect(find.byType(LibraryPanel), findsOneWidget);
-      final headerHeight = tester.getSize(toolbar).height;
-      final searchBounds = tester.getRect(librarySearch);
-      final sourceBounds = tester.getRect(sourceButton);
-      final sort = find.byTooltip('Sort Library');
-      final sortBounds = tester.getRect(sort);
-      final actions = find.byTooltip('Library actions');
-      final actionsBounds = tester.getRect(actions);
-      await tester.enterText(librarySearch, 'Telegram filter');
-      await tester.tap(toDevice);
-      await settleScan(tester);
-      expect(find.byType(LocalMediaViewPane), findsOneWidget);
-      expect(find.text('Choose folder'), findsOneWidget);
-      expect(sourceButton, findsOneWidget);
-      expect(
-        find.descendant(of: toolbar, matching: toTelegram),
-        findsOneWidget,
-      );
-      expect(find.byType(LibraryPanel), findsOneWidget);
-      expect(tester.getSize(toolbar).height, headerHeight);
-      expect(tester.getRect(librarySearch), searchBounds);
-      expect(tester.getRect(sourceButton), sourceBounds);
-      expect(tester.getRect(sort), sortBounds);
-      expect(tester.getRect(actions), actionsBounds);
-      expect(tester.widget<TextField>(librarySearch).controller!.text, isEmpty);
-      await tester.tap(actions);
-      await tester.pumpAndSettle();
-      expect(find.text('Manage folders'), findsOneWidget);
-      Navigator.of(tester.element(find.text('Manage folders'))).pop();
-      await tester.pumpAndSettle();
-      expect(settings.musicLibraryOnDevice, mode == AppInterface.music);
-      expect(settings.videoLibraryOnDevice, mode == AppInterface.video);
-      expect(transport.requests, isEmpty);
-      await tester.tap(toTelegram);
-      await tester.pumpAndSettle();
-      expect(find.byType(LocalMediaViewPane), findsNothing);
-      expect(toDevice, findsOneWidget);
-      expect(
-        tester.widget<TextField>(librarySearch).controller!.text,
-        'Telegram filter',
-      );
-      expect(settings.musicLibraryOnDevice, isFalse);
-      expect(settings.videoLibraryOnDevice, isFalse);
-    });
-  }
 }
