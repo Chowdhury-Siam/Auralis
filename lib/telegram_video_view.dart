@@ -44,39 +44,6 @@ class TelegramVideoView extends StatefulWidget {
   State<TelegramVideoView> createState() => _TelegramVideoViewState();
 }
 
-Future<T?> _showVideoChoices<T>(
-  BuildContext context, {
-  required String title,
-  required List<({T value, String label, bool selected})> choices,
-}) {
-  FocusManager.instance.primaryFocus?.unfocus();
-  return showAuralisDialog<T>(
-    context: context,
-    builder: (context) => AuralisDialog(
-      title: Text(title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (choices.isEmpty) const Text('No options available.'),
-          for (final choice in choices)
-            AuralisChoiceTile(
-              selected: choice.selected,
-              title: Text(choice.label),
-              onTap: () => Navigator.pop(context, choice.value),
-            ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-      ],
-    ),
-  );
-}
-
 class _VideoResults {
   _VideoResults(this.channel);
 
@@ -619,25 +586,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     if (_library?.channel.id != channel.id) unawaited(_browseChannel(channel));
   }
 
-  Future<void> _chooseSort() async {
+  Future<void> _setVideoSort(LibrarySort sort) async {
     final settings = widget.music.settings;
-    final sort = await _showVideoChoices<LibrarySort>(
-      context,
-      title: 'Library sort order',
-      choices: [
-        for (final option in LibrarySort.videoValues)
-          (
-            value: option,
-            label: option.label,
-            selected: settings.videoPlayback.librarySort == option,
-          ),
-      ],
-    );
-    if (!mounted ||
-        sort == null ||
-        sort == settings.videoPlayback.librarySort) {
-      return;
-    }
+    if (!mounted || sort == settings.videoPlayback.librarySort) return;
     setState(() => settings.videoPlayback.librarySort = sort);
     widget.music.refreshSettings();
     try {
@@ -807,31 +758,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     });
   }
 
-  Widget _libraryMenu(BuildContext context) => LibraryCollectionMenu<int>(
-    key: const ValueKey('video-library-collection-menu'),
-    title: _collections[_libraryCollection].label,
-    titleKey: const ValueKey('video-library-title'),
-    icon: _collections[_libraryCollection].icon,
-    tooltip: 'Library collection: ${_collections[_libraryCollection].label}',
-    onSelected: _selectVideoCollection,
-    itemBuilder: (_) => [
-      for (final (index, view) in _collections.indexed)
-        PopupMenuItem<int>(
-          value: index,
-          padding: EdgeInsets.zero,
-          child: AuralisMenuRow(
-            title: view.label,
-            icon: view.icon,
-            selected: index == _libraryCollection,
-          ),
-        ),
-    ],
-  );
-
-  Widget _sortButton() => IconButton.filledTonal(
-    tooltip: 'Sort Library',
-    onPressed: _chooseSort,
-    icon: const Icon(Icons.sort_rounded, size: 20),
+  Widget _sortButton() => LibrarySortButton(
+    selected: widget.music.settings.videoPlayback.librarySort,
+    options: LibrarySort.videoValues,
+    onSelected: _setVideoSort,
   );
 
   void _setVideoLibrarySource(bool local) {
@@ -866,7 +796,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
           local: true,
           onPressed: () => _setVideoLibrarySource(false),
         ),
-        offlineCollection: () => _offlineVideos(context),
+        offlineCollection: (_) => _offlineVideos(context),
         savedVideoCollection: (view) =>
             _savedVideoCollection(context, view, local: true, active: local),
         videoPlaylistsController: _localPlaylistController,
@@ -882,60 +812,54 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
 
   Widget _telegramVideoLibrary(BuildContext context, Widget sourceButton) {
     final settings = widget.music.settings;
-    final colors = Theme.of(context).colorScheme;
-    final showHeader = MediaQuery.viewInsetsOf(this.context).bottom == 0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (showHeader) ...[
-          LibraryToolbar(
-            collection: _libraryMenu(context),
-            actions: [
-              sourceButton,
-              if (_libraryCollection == 0) _sortButton(),
-              if (widget.onSettings != null &&
-                  MediaQuery.sizeOf(context).width < 900)
-                IconButton.filledTonal(
-                  tooltip: 'Settings',
-                  style: IconButton.styleFrom(
-                    backgroundColor: colors.primaryContainer,
-                    foregroundColor: colors.onPrimaryContainer,
-                  ),
-                  onPressed: widget.onSettings,
-                  icon: const Icon(Icons.settings_outlined, size: 20),
-                ),
-            ],
+    return LibraryLayout(
+      collections: [for (final view in _collections) (view.label, view.icon)],
+      index: _libraryCollection,
+      onSelected: _selectVideoCollection,
+      sourceButton: sourceButton,
+      collectionAction: _libraryCollection == 0 ? _sortButton() : null,
+      moreActions: LibraryActionsMenu(
+        actions: [
+          (
+            label: 'Refresh library',
+            icon: Icons.refresh_rounded,
+            onSelected: _ready && _library?.loading != true
+                ? () => unawaited(_refresh())
+                : null,
           ),
-          LibraryPageIndicator(
-            key: const ValueKey('video-library-indicator'),
-            labels: _collections.map((entry) => entry.label).toList(),
-            index: _libraryCollection,
-            onSelected: _selectVideoCollection,
-            reducedMotion: settings.reducedMotion,
+          (
+            label: 'Browse channels',
+            icon: Icons.explore_outlined,
+            onSelected: _showChannelSearch,
           ),
         ],
-        Expanded(
-          child: LibraryCollectionPager(
-            key: const ValueKey('video-library-pager'),
-            index: _libraryCollection,
-            count: _collections.length,
-            reducedMotion: settings.reducedMotion,
-            onChanged: _selectVideoCollection,
-            itemBuilder: (context, index) {
-              if (index == 0) return _browser(context);
-              if (_collections[index] == LocalMediaView.offline) {
-                return _offlineVideos(context);
-              }
-              return _savedVideoCollection(
-                context,
-                _collections[index],
-                active: index == _libraryCollection &&
-                    !settings.videoLibraryOnDevice,
-              );
-            },
-          ),
-        ),
-      ],
+      ),
+      onSettings: MediaQuery.sizeOf(context).width < 900
+          ? widget.onSettings
+          : null,
+      menuKey: const ValueKey('video-library-collection-menu'),
+      titleKey: const ValueKey('video-library-title'),
+      indicatorKey: const ValueKey('video-library-indicator'),
+      reducedMotion: settings.reducedMotion,
+      body: LibraryCollectionPager(
+        key: const ValueKey('video-library-pager'),
+        index: _libraryCollection,
+        count: _collections.length,
+        reducedMotion: settings.reducedMotion,
+        onChanged: _selectVideoCollection,
+        itemBuilder: (context, index) {
+          if (index == 0) return _browser(context);
+          if (_collections[index] == LocalMediaView.offline) {
+            return _offlineVideos(context);
+          }
+          return _savedVideoCollection(
+            context,
+            _collections[index],
+            active: index == _libraryCollection &&
+                !settings.videoLibraryOnDevice,
+          );
+        },
+      ),
     );
   }
 
@@ -1033,25 +957,19 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     Key panelKey = const ValueKey(('video-library-panel', 0)),
   }) {
     final search = searchController ?? _librarySearch;
-    return LibraryPanel(
+    return LibraryContentPanel(
       panelKey: panelKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (showSearch) ...[
-            LibrarySearchField(
+      search: showSearch
+          ? LibrarySearchField(
               fieldKey: searchKey,
               controller: search,
               hint: searchHint,
               onChanged: (_) => setState(() {}),
               onCleared: () => setState(() {}),
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (loading) const LinearProgressIndicator(minHeight: 2),
-          Expanded(child: list),
-        ],
-      ),
+            )
+          : null,
+      loading: loading,
+      body: list,
     );
   }
 
