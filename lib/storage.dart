@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
-import 'package:path/path.dart' as p;
+import 'package:crypto/crypto.dart';
 
 import 'video_playback_data.dart';
 import 'models.dart';
@@ -126,8 +127,6 @@ class AppSettings {
   bool setupComplete = false;
   AppInterface defaultInterface = AppInterface.music;
   int? videoChannelId;
-  bool musicLibraryOnDevice = false, videoLibraryOnDevice = false;
-  List<LocalMediaFolder> localMediaFolders = [];
   VideoPlaybackData videoPlayback = VideoPlaybackData();
   MusicVisualizerSettings musicVisualizer = MusicVisualizerSettings();
   void Function(Map<String, dynamic>)? captureSync;
@@ -165,31 +164,11 @@ class AppSettings {
             .toList()
       : [];
 
-  static List<LocalMediaFolder> _mediaFolders(Object? value) {
-    if (value is! List) return [];
-    final folders = <String, LocalMediaFolder>{};
-    for (final entry in value) {
-      final location = switch (entry) {
-        final String path => path,
-        {'location': final String path} => path,
-        _ => '',
-      };
-      if (location.isEmpty || location.length > 32768) continue;
-      final name = switch (entry) {
-        {'name': final String name} when name.isNotEmpty => name,
-        _ => p.basename(location),
-      };
-      folders[location] = (
-        location: location,
-        name: name.isEmpty ? location : name,
-      );
-    }
-    return folders.values.toList();
-  }
-
   Future<void> _saving = Future.value();
+  String? _writtenDigest;
 
   Future<void> load() async {
+    _writtenDigest = null;
     if (!await file.exists()) return;
     final json =
         await decodeJsonBytes(await file.readAsBytes()) as Map<String, dynamic>;
@@ -205,9 +184,6 @@ class AppSettings {
       ),
     );
     playlistPhotos.load(json['_playlistPhotos']);
-    musicLibraryOnDevice = json['_musicLibraryOnDevice'] == true;
-    videoLibraryOnDevice = json['_videoLibraryOnDevice'] == true;
-    localMediaFolders = _mediaFolders(json['_localMediaFolders']);
     applyJson(json);
     syncState = json['_sync'] is Map<String, dynamic>
         ? json['_sync'] as Map<String, dynamic>
@@ -221,12 +197,6 @@ class AppSettings {
     ...snapshot,
     '_sync': syncState,
     '_videoPlayback': videoPlayback.toJson(),
-    '_musicLibraryOnDevice': musicLibraryOnDevice,
-    '_videoLibraryOnDevice': videoLibraryOnDevice,
-    '_localMediaFolders': [
-      for (final folder in localMediaFolders)
-        {'location': folder.location, 'name': folder.name},
-    ],
     '_musicVisualizer': musicVisualizer.toJson(),
     '_playlistPhotos': playlistPhotos.toJson(),
     '_lastSeenRelease': lastSeenRelease,
@@ -371,6 +341,7 @@ class AppSettings {
       try {
         captureSync?.call(snapshot);
         await atomicWrite(file, utf8.encode(jsonEncode(_diskJson(snapshot))));
+        _writtenDigest = null;
         applyJson(snapshot);
       } catch (_) {
         syncState = oldSync;
@@ -385,13 +356,52 @@ class AppSettings {
   Future<void> save() {
     final snapshot = toJson();
     captureSync?.call(snapshot);
-    final data = utf8.encode(jsonEncode(_diskJson(snapshot)));
-    // Serialize writes so a quick series of slider changes cannot race renames.
+    final payload = _diskJson(snapshot);
+    // Sending an isolate message copies the snapshot before returning to the
+    // caller. Large histories encode and hash away from Flutter's UI isolate.
+    final large =
+        listening.tracks.length +
+            listening.days.length +
+            playlists.values.fold<int>(0, (n, ids) => n + ids.length) +
+            (syncState['records'] is Map
+                ? (syncState['records'] as Map).length
+                : 0) +
+            videoPlayback.history.length +
+            videoPlayback.positions.length >=
+        200;
+    final encoding = large
+        ? _encodeLargeSettings(payload)
+        : Future.value(_encodeSettings(payload));
+    // Observe failures immediately even when an earlier write is still pending.
+    final encoded = encoding.then<_EncodingResult>(
+      (value) => (value, null),
+      onError: (Object error, StackTrace stack) => (null, (error, stack)),
+    );
+    // Preserve every distinct snapshot and the existing save/flush ordering.
     final next = _saving.then((_) async {
-      await atomicWrite(file, data);
+      final (value, failure) = await encoded;
+      if (failure != null) Error.throwWithStackTrace(failure.$1, failure.$2);
+      final (data, digest) = value!;
+      if (digest != _writtenDigest || !await file.exists()) {
+        await atomicWrite(file, data);
+        _writtenDigest = digest;
+      }
       onSaved?.call();
     });
     _saving = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return next;
   }
 }
+
+typedef _EncodedSettings = (Uint8List, String);
+typedef _EncodingResult = (_EncodedSettings?, (Object, StackTrace)?);
+
+_EncodedSettings _encodeSettings(Map<String, dynamic> payload) {
+  final bytes = Uint8List.fromList(utf8.encode(jsonEncode(payload)));
+  return (bytes, sha256.convert(bytes).toString());
+}
+
+// Keep the spawn closure outside AppSettings so it cannot capture the instance,
+// queued futures, hooks or native credential buffers through a shared context.
+Future<_EncodedSettings> _encodeLargeSettings(Map<String, dynamic> payload) =>
+    Isolate.run(() => _encodeSettings(payload));
