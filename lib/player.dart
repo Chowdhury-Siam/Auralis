@@ -43,10 +43,12 @@ class MpvBackend extends AudioBackend {
     );
     _subscriptions.addAll([
       _player.stream.playing.listen((v) {
+        if (playing == v) return;
         playing = v;
         notifyListeners();
       }),
       _player.stream.buffering.listen((v) {
+        if (buffering == v) return;
         buffering = v;
         notifyListeners();
       }),
@@ -56,10 +58,12 @@ class MpvBackend extends AudioBackend {
         notifyListeners();
       }),
       _player.stream.duration.listen((v) {
+        if (duration == v) return;
         duration = v;
         notifyListeners();
       }),
       _player.stream.buffer.listen((v) {
+        if (buffered == v) return;
         buffered = v;
         notifyListeners();
       }),
@@ -200,12 +204,18 @@ class PlayerController extends ChangeNotifier {
   bool restoringData = false;
   Future<void> Function()? releaseVideo;
   final _viewChanges = ChangeNotifier();
+  final _statsChanges = ChangeNotifier();
+  int? _lastStatsSecond;
   late Object _lastViewState;
 
   /// Structural UI updates, without high-frequency position/buffer ticks.
   /// Existing listeners still receive every event for lyrics, seeking, stats,
   /// sync and integrations; the playback backend and event timing are unchanged.
   Listenable get viewChanges => _viewChanges;
+
+  /// Statistics labels display whole seconds; they do not need native buffer
+  /// events or every subsecond position sample to recompute the whole history.
+  Listenable get statsChanges => _statsChanges;
   Object get _audioViewState => (
     audio.playing,
     audio.buffering,
@@ -223,6 +233,7 @@ class PlayerController extends ChangeNotifier {
     _lastViewState = _audioViewState;
     super.notifyListeners();
     _viewChanges.notifyListeners();
+    _statsChanges.notifyListeners();
   }
 
   void _audioChanged() {
@@ -233,11 +244,17 @@ class PlayerController extends ChangeNotifier {
     _lastViewState = state;
     super.notifyListeners();
     if (changed) _viewChanges.notifyListeners();
+    final second = audio.position.inSeconds;
+    if (changed || second != _lastStatsSecond) {
+      _lastStatsSecond = second;
+      _statsChanges.notifyListeners();
+    }
   }
 
   @override
   void dispose() {
     _viewChanges.dispose();
+    _statsChanges.dispose();
     super.dispose();
   }
 
