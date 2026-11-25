@@ -7,6 +7,7 @@ import 'dart:isolate';
 import 'package:crypto/crypto.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:path/path.dart' as p;
 
 import 'lyrics.dart';
@@ -478,3 +479,19 @@ Future<Uint8List?> localSongArtwork(Track track) => localLibraryArtwork.load(
     'size': track.size,
   }, isVideo: false),
 );
+
+extension LocalMediaViewIcon on LocalMediaView {
+  IconData get icon => switch (this) {
+    LocalMediaView.songs => Icons.library_music_rounded,
+    LocalMediaView.albums => Icons.album_outlined,
+    LocalMediaView.artists => Icons.person_rounded,
+    LocalMediaView.genres => Icons.category_outlined,
+    LocalMediaView.videos => Icons.video_library_rounded,
+    LocalMediaView.playlists => Icons.playlist_play_rounded,
+    LocalMediaView.history => Icons.history_rounded,
+    LocalMediaView.snapshots => Icons.photo_library_outlined,
+    LocalMediaView.offline => Icons.download_done_rounded,
+    LocalMediaView.favorites => Icons.favorite_rounded,
+    LocalMediaView.folders => Icons.folder_outlined,
+  };
+}
