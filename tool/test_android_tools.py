@@ -7,6 +7,7 @@ import struct
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 import zipfile
 
 
@@ -47,6 +48,29 @@ class AndroidToolsTest(unittest.TestCase):
             wrapper.write_text(wrapper.read_text().replace('gradle-8.14.3-bin.zip', 'gradle-8.13-bin.zip'))
             with self.assertRaisesRegex(AssertionError, 'requires Gradle 8.14'):
                 verify.verify_source(fixture)
+
+    def test_source_rejects_retired_device_library_permissions(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp:
+            fixture = Path(temp)
+            shutil.copytree(root / 'android', fixture / 'android',
+                            ignore=shutil.ignore_patterns('.gradle', 'build', 'local.properties', 'jniLibs'))
+            manifest = fixture / 'android/app/src/main/AndroidManifest.xml'
+            original = manifest.read_bytes()
+            for permission in (
+                'android.permission.READ_EXTERNAL_STORAGE',
+                'android.permission.READ_MEDIA_AUDIO',
+                'android.permission.READ_MEDIA_VIDEO',
+                'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+            ):
+                with self.subTest(permission=permission):
+                    tree = ET.ElementTree(ET.fromstring(original))
+                    ET.SubElement(tree.getroot(), 'uses-permission', {
+                        '{http://schemas.android.com/apk/res/android}name': permission,
+                    })
+                    tree.write(manifest, encoding='utf-8')
+                    with self.assertRaisesRegex(AssertionError, 'Removed device library'):
+                        verify.verify_source(fixture)
 
     def test_native_validation_rejects_wrong_architecture_and_alignment(self):
         verify.verify_elf(elf(), 'arm64-v8a')
