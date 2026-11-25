@@ -5,59 +5,6 @@ import 'package:flutter/material.dart';
 import 'app_popups.dart';
 import 'models.dart';
 
-class LibrarySourcePanes extends StatefulWidget {
-  const LibrarySourcePanes({
-    super.key,
-    required this.local,
-    required this.telegramPane,
-    required this.devicePane,
-  });
-
-  final bool local;
-  final WidgetBuilder telegramPane, devicePane;
-
-  @override
-  State<LibrarySourcePanes> createState() => _LibrarySourcePanesState();
-}
-
-class _LibrarySourcePanesState extends State<LibrarySourcePanes> {
-  bool _openedTelegram = false, _openedDevice = false;
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.local) {
-      _openedDevice = true;
-    } else {
-      _openedTelegram = true;
-    }
-    Widget pane(bool active, WidgetBuilder builder) => Offstage(
-      offstage: !active,
-      child: TickerMode(
-        enabled: active,
-        child: ExcludeFocus(
-          excluding: !active,
-          child: Builder(builder: builder),
-        ),
-      ),
-    );
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (_openedTelegram)
-          KeyedSubtree(
-            key: const ValueKey(false),
-            child: pane(!widget.local, widget.telegramPane),
-          ),
-        if (_openedDevice)
-          KeyedSubtree(
-            key: const PageStorageKey('device-library-source'),
-            child: pane(widget.local, widget.devicePane),
-          ),
-      ],
-    );
-  }
-}
-
 class LibraryRefresh extends StatefulWidget {
   const LibraryRefresh({
     super.key,
@@ -100,29 +47,6 @@ class _LibraryRefreshState extends State<LibraryRefresh> {
       ),
     );
   }
-}
-
-class LibrarySourceButton extends StatelessWidget {
-  const LibrarySourceButton({
-    super.key,
-    required this.local,
-    required this.onPressed,
-  });
-
-  final bool local;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => IconButton.filledTonal(
-    tooltip: local
-        ? 'On this device · Switch to Telegram'
-        : 'Telegram · Switch to On this device',
-    onPressed: () {
-      FocusManager.instance.primaryFocus?.unfocus();
-      onPressed();
-    },
-    icon: Icon(local ? Icons.devices_rounded : Icons.send_rounded, size: 20),
-  );
 }
 
 class LibraryLayout extends StatelessWidget {
