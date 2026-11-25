@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.247
+
+- Fix Library controls remaining visible above the keyboard in Music and Video for both Telegram and On this device.
+- Add channel title identification with AniList, TVmaze and Wikipedia, conservative matching, manual title selection and persistent metadata and artwork caches.
+- Show channel posters, banners, expandable synopses, genres and available title details above the existing video list without changing Telegram playback, watched status or resume progress.
+
 ## 0.1.246
 
 - Remove an unused import that caused Flutter analysis to fail in CI.
