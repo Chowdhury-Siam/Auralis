@@ -484,7 +484,7 @@ void main() {
     await settleScan(tester);
     expect(find.text('Beta.mp3'), findsOneWidget);
     expect(find.text('Alpha.mp3'), findsNothing);
-    final actions = find.byTooltip('Local library actions');
+    final actions = find.byTooltip('Library actions');
     await tester.tap(actions);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Manage folders'));
@@ -500,7 +500,7 @@ void main() {
   });
 
   for (final mode in AppInterface.values) {
-    testWidgets('one header button switches both ways in ${mode.label}', (
+    testWidgets('both sources share the Library layout in ${mode.label}', (
       tester,
     ) async {
       tester.view.physicalSize = const Size(320, 680);
@@ -532,10 +532,24 @@ void main() {
       final toDevice = find.byTooltip('Telegram · Switch to On this device');
       final toTelegram = find.byTooltip('On this device · Switch to Telegram');
       final toolbar = find.byType(LibraryToolbar);
+      final librarySearch = find.byKey(
+        ValueKey(
+          mode == AppInterface.video
+              ? 'video-library-search'
+              : 'music-library-search',
+        ),
+      );
       expect(sourceButton, findsOneWidget);
       expect(find.descendant(of: toolbar, matching: toDevice), findsOneWidget);
       expect(find.byType(LibraryPanel), findsOneWidget);
       final headerHeight = tester.getSize(toolbar).height;
+      final searchBounds = tester.getRect(librarySearch);
+      final sourceBounds = tester.getRect(sourceButton);
+      final sort = find.byTooltip('Sort Library');
+      final sortBounds = tester.getRect(sort);
+      final actions = find.byTooltip('Library actions');
+      final actionsBounds = tester.getRect(actions);
+      await tester.enterText(librarySearch, 'Telegram filter');
       await tester.tap(toDevice);
       await settleScan(tester);
       expect(find.byType(LocalMediaViewPane), findsOneWidget);
@@ -547,6 +561,16 @@ void main() {
       );
       expect(find.byType(LibraryPanel), findsOneWidget);
       expect(tester.getSize(toolbar).height, headerHeight);
+      expect(tester.getRect(librarySearch), searchBounds);
+      expect(tester.getRect(sourceButton), sourceBounds);
+      expect(tester.getRect(sort), sortBounds);
+      expect(tester.getRect(actions), actionsBounds);
+      expect(tester.widget<TextField>(librarySearch).controller!.text, isEmpty);
+      await tester.tap(actions);
+      await tester.pumpAndSettle();
+      expect(find.text('Manage folders'), findsOneWidget);
+      Navigator.of(tester.element(find.text('Manage folders'))).pop();
+      await tester.pumpAndSettle();
       expect(settings.musicLibraryOnDevice, mode == AppInterface.music);
       expect(settings.videoLibraryOnDevice, mode == AppInterface.video);
       expect(transport.requests, isEmpty);
@@ -554,6 +578,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(LocalMediaViewPane), findsNothing);
       expect(toDevice, findsOneWidget);
+      expect(
+        tester.widget<TextField>(librarySearch).controller!.text,
+        'Telegram filter',
+      );
       expect(settings.musicLibraryOnDevice, isFalse);
       expect(settings.videoLibraryOnDevice, isFalse);
     });
