@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import 'models.dart';
+import 'channel_metadata.dart';
+import 'channel_metadata_view.dart';
 import 'library_widgets.dart';
 import 'local_media.dart';
 import 'local_media_view.dart';
@@ -26,6 +28,7 @@ class TelegramVideoView extends StatefulWidget {
     required this.telegram,
     required this.music,
     this.onMusic,
+    this.channelMetadata,
     this.onSettings,
     this.onConnect,
     this.incoming,
@@ -33,6 +36,7 @@ class TelegramVideoView extends StatefulWidget {
   });
 
   final TelegramService telegram;
+  final ChannelMetadataRepository? channelMetadata;
   final PlayerController music;
   final VoidCallback? onMusic, onSettings, onConnect;
   final List<VideoSource>? incoming;
@@ -219,8 +223,12 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     });
   }
 
-  Future<void> _browseChannel(MusicChat channel, {bool preserveSearch = false}) {
+  Future<void> _browseChannel(
+    MusicChat channel, {
+    bool preserveSearch = false,
+  }) {
     final results = _VideoResults(channel);
+    unawaited(widget.channelMetadata?.identify(channel.id, channel.title));
     setState(() {
       _library = results;
       if (!preserveSearch) _librarySearch.clear();
@@ -787,6 +795,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
       ),
       devicePane: (context) => LocalMediaViewPane(
         key: _localLibraryKey,
+        keyboardOpen: MediaQuery.viewInsetsOf(this.context).bottom > 0,
         settings: settings,
         video: true,
         bottomPadding: _bottomPadding(context),
@@ -798,8 +807,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
         savedVideoCollection: (view) =>
             _savedVideoCollection(context, view, local: true, active: local),
         videoPlaylistsController: _localPlaylistController,
-        onPlay: (rows, index) =>
-            unawaited(_launchPlayer([for (final row in rows) row.video], index)),
+        onPlay: (rows, index) => unawaited(
+          _launchPlayer([for (final row in rows) row.video], index),
+        ),
         onOpenFiles: _openHomeFiles,
         onSettings: MediaQuery.sizeOf(context).width < 900
             ? widget.onSettings
@@ -811,6 +821,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   Widget _telegramVideoLibrary(BuildContext context, Widget sourceButton) {
     final settings = widget.music.settings;
     return LibraryLayout(
+      // Scaffold consumes body insets; read them above the Scaffold.
+      keyboardOpen: MediaQuery.viewInsetsOf(this.context).bottom > 0,
       collections: [for (final view in _collections) (view.label, view.icon)],
       index: _libraryCollection,
       onSelected: _selectVideoCollection,
@@ -1225,6 +1237,19 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
       child: CustomScrollView(
         key: ValueKey((searching, results)),
         slivers: [
+          if (!searching && results != null && widget.channelMetadata != null)
+            SliverToBoxAdapter(
+              child: ChannelMetadataHeader(
+                key: ValueKey(('channel-metadata', results.channel.id)),
+                channelId: results.channel.id,
+                channelName: results.channel.title,
+                repository: widget.channelMetadata!,
+                videoCount: allVideos.length,
+                onPlay: videos.isEmpty
+                    ? null
+                    : () => unawaited(_play(videos.first)),
+              ),
+            ),
           if (videos.isEmpty && !loading)
             SliverToBoxAdapter(
               child: !_ready
@@ -1273,7 +1298,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
                 offline: (media: _telegram.offline, id: video.id),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: [_watchButton(video, watched), _videoActions(video)],
+                  children: [
+                    _watchButton(video, watched),
+                    _videoActions(video),
+                  ],
                 ),
                 onTap: () => unawaited(_play(video)),
               );
