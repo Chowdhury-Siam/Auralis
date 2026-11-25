@@ -472,3 +472,13 @@ for signing, updates, and unreadable Telegram credential recovery.
 ### Playback storage
 
 Telegram audio is temporary: its local copy is removed when switching tracks, stopping playback or exiting normally. The current track can use disk buffering for playback and seeking. On an idle startup connection, Auralis clears audio/document cache left by older versions, while preserving images, the account database and lyric caches. Metadata-only audio fragments are removed after artwork or lyrics have been extracted.
+
+### Video channel title information
+
+The Video Library can identify a selected Telegram channel from its name and show a poster, available banner, expandable synopsis, genres and catalogue information above the existing video rows. Use **Identify title** or **Change title** to search for a different entry. The search dialog offers separate Anime, TV series and Film catalogues, so similarly named adaptations can be selected explicitly. The original Telegram channel name remains visible.
+
+AniList is searched first for anime; TVmaze supplies series information and Wikipedia supplies film introductions and available lead images. No API keys are required. Automatic selection requires a strong match with a clear lead over other candidates. Alternate names, common anime abbreviations, release tags and season numbers are normalized; ambiguous names and conflicting season/year numbers require manual selection. Catalogue episode totals are labelled separately from the number of videos in the channel. Unavailable metadata fields are omitted.
+
+Title matches are cached for seven days, unresolved matches for six hours, and explicit user selections remain pinned across restarts and channel renames. Nonempty search results are also cached for seven days; empty results expire after six hours. Poster and banner files are cached on disk, with artwork capped at 100 MiB / 120 images. Failed requests never prevent browsing or playing videos; existing cached details remain usable offline. Metadata uses a separate HTTP client with bounded responses, request spacing and rate-limit backoff. Only the cleaned search title is sent to the public metadata services; Telegram credentials, session data, messages, playback state and channel IDs are not sent.
+
+Source attribution is available below each synopsis. TVmaze metadata is provided under CC BY-SA 4.0; Wikipedia text is by Wikipedia contributors under its applicable CC BY-SA terms, with image rights described by the source article. AniList information and artwork are attributed to AniList. This feature does not add tracking accounts or change Telegram synchronization, channel membership, sorting, video titles, watched status or resume positions.
