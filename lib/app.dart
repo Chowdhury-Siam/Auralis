@@ -15,6 +15,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'models.dart';
+import 'channel_metadata.dart';
 import 'media_item_sheet.dart';
 import 'offline_media_actions.dart';
 import 'music_playlist_widgets.dart';
@@ -64,6 +65,7 @@ class AuralisApp extends StatefulWidget {
     required this.player,
     required this.telegram,
     this.startupWarning,
+    this.channelMetadata,
     this.sync,
     this.installedVersion,
     this.updater,
@@ -73,6 +75,7 @@ class AuralisApp extends StatefulWidget {
   final PlayerController player;
   final TelegramService telegram;
   final String? startupWarning;
+  final ChannelMetadataRepository? channelMetadata;
   final SyncController? sync;
   final String? installedVersion;
   final AppUpdater? updater;
@@ -237,6 +240,7 @@ class _AuralisAppState extends State<AuralisApp> {
           )
         : PlayerShell(
             startOnHome: true,
+            channelMetadata: widget.channelMetadata,
             player: widget.player,
             telegram: widget.telegram,
             startupWarning: widget.startupWarning,
@@ -258,6 +262,7 @@ class PlayerShell extends StatefulWidget {
     required this.player,
     required this.telegram,
     this.startupWarning,
+    this.channelMetadata,
     this.sync,
     this.installedVersion,
     this.updater,
@@ -268,6 +273,7 @@ class PlayerShell extends StatefulWidget {
   final PlayerController player;
   final TelegramService telegram;
   final String? startupWarning;
+  final ChannelMetadataRepository? channelMetadata;
   final SyncController? sync;
   final String? installedVersion;
   final AppUpdater? updater;
@@ -497,11 +503,7 @@ class _PlayerShellState extends State<PlayerShell>
           active()) {
         unawaited(
           lyrics
-              .prepare(
-                track,
-                active: active,
-                loadEmbedded: _embeddedLyrics,
-              )
+              .prepare(track, active: active, loadEmbedded: _embeddedLyrics)
               .catchError((Object _) => null),
         );
       }
@@ -1429,6 +1431,7 @@ class _PlayerShellState extends State<PlayerShell>
             destination != _Page.settings &&
             destination != _Page.telegram) {
           return TelegramVideoView(
+            channelMetadata: widget.channelMetadata,
             telegram: telegram,
             music: player,
             onMusic: _openVideos,
@@ -2377,6 +2380,7 @@ class _PlayerShellState extends State<PlayerShell>
       ),
       devicePane: (_) => LocalMediaViewPane(
         key: _localLibraryKey,
+        keyboardOpen: _keyboardOpen,
         settings: player.settings,
         video: false,
         bottomPadding: _dockPadding,
@@ -2407,6 +2411,7 @@ class _PlayerShellState extends State<PlayerShell>
         _selectLibraryCollection(_libraryCollections[index].$1);
     final settings = player.settings;
     return LibraryLayout(
+      keyboardOpen: _keyboardOpen,
       collections: _libraryCollections,
       index: index,
       onSelected: select,
@@ -2511,10 +2516,7 @@ class _PlayerShellState extends State<PlayerShell>
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 'Loading music from your channels…',
-                style: TextStyle(
-                  color: _colors.onSurfaceVariant,
-                  fontSize: 11,
-                ),
+                style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 11),
               ),
             ),
           ],
