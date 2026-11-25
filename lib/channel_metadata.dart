@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data' show BytesBuilder;
+
+import 'json_processing.dart';
 
 import 'package:crypto/crypto.dart';
 
@@ -338,16 +341,16 @@ class ChannelMetadataRepository {
           await response.drain<void>();
           throw HttpException('Catalogue unavailable (${response.statusCode})');
         }
-        final bytes = <int>[];
+        final bytes = BytesBuilder(copy: false);
         await for (final chunk in response.timeout(
           const Duration(seconds: 10),
         )) {
-          bytes.addAll(chunk);
+          bytes.add(chunk);
           if (bytes.length > 4 * 1024 * 1024) {
             throw const FormatException('Catalogue response too large');
           }
         }
-        completer.complete(jsonDecode(utf8.decode(bytes)));
+        completer.complete(await decodeJsonBytes(bytes.takeBytes()));
       } catch (error, stack) {
         completer.completeError(error, stack);
       }
@@ -706,15 +709,15 @@ class ChannelMetadataRepository {
         await response.drain<void>();
         return null;
       }
-      final bytes = <int>[];
+      final bytes = BytesBuilder(copy: false);
       await for (final chunk in response.timeout(const Duration(seconds: 10))) {
-        bytes.addAll(chunk);
+        bytes.add(chunk);
         if (bytes.length > 12 * 1024 * 1024) return null;
       }
       if (bytes.isEmpty || _closed) return null;
       await file.parent.create(recursive: true);
       final temp = File('${file.path}.tmp');
-      await temp.writeAsBytes(bytes);
+      await temp.writeAsBytes(bytes.takeBytes());
       await temp.rename(file.path);
       unawaited(_trimImages(file));
       return file;
