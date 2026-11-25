@@ -158,7 +158,7 @@ extension _DiscoveryPages on _PlayerShellState {
         const SizedBox(height: 18),
         ListenableBuilder(
           key: const ValueKey('home-live-listening-stats'),
-          listenable: player,
+          listenable: player.statsChanges,
           builder: (context, _) => RepaintBoundary(
             child: DiscoveryCard(
               child: Column(
