@@ -16,7 +16,7 @@ import 'video_files.dart';
 import 'video_playback_data.dart';
 
 enum LocalMediaView {
-  songs('Songs'),
+  songs('All songs'),
   albums('Albums'),
   artists('Artists'),
   genres('Genres'),
