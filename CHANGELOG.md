@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.248
+
+- Remove the On this device libraries, source switches and folder management from Music and Video. Retire old source preferences without deleting media files.
+- Keep seek-bar animation in the paint layer and suspend hidden player animations, without reducing visual quality or the selected frame rates.
+- Use structural playback updates in Video and the visualizer, and refresh Home statistics on whole-second changes while retaining every original playback event.
+- Encode large settings histories away from the UI isolate, skip identical disk writes, and avoid reapplying unchanged sync responses.
+- Reduce temporary memory used by downloaded channel artwork and large metadata responses.
+
 ## 0.1.247
 
 - Fix Library controls remaining visible above the keyboard in Music and Video for both Telegram and On this device.
