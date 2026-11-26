@@ -98,6 +98,37 @@ class TelegramService extends ChangeNotifier {
   bool busy = false;
   bool credentialRecoveryRequired = false;
   final Map<int, MusicChat> _channels = {};
+  List<({int id, String name})> _chatFolders = const [];
+  List<({int id, String name})> get chatFolders => _chatFolders;
+  final _channelFolders = <int, Set<int>>{};
+
+  bool isChannelInFolder(int chatId, int folderId) =>
+      _channelFolders[chatId]?.contains(folderId) ?? false;
+
+  int? _folderId(Json chatList) => chatList['@type'] == 'chatListFolder'
+      ? chatList['chat_folder_id'] as int
+      : null;
+
+  void _rememberChannelFolders(Json chat) {
+    final id = chat['id'] as int;
+    final folders = (chat['chat_lists'] as List? ?? const [])
+        .whereType<Json>()
+        .map(_folderId)
+        .nonNulls
+        .toSet();
+    if (folders.isEmpty) {
+      _channelFolders.remove(id);
+    } else {
+      _channelFolders[id] = folders;
+    }
+  }
+
+  void _clearChatFolders() {
+    _chatFolders = const [];
+    _channelFolders.clear();
+    _folderLoads.clear();
+  }
+
   final _videoPosts = StreamController<({int chatId, Track video})>.broadcast(
     sync: true,
   );
@@ -1115,11 +1146,44 @@ class TelegramService extends ChangeNotifier {
         final channel = MusicChat.fromChat(chat);
         if (channel != null) {
           _channels[id] = channel;
+          _rememberChannelFolders(chat);
           _publishVideo(chat['last_message']);
         } else {
           _channels.remove(id);
+          _channelFolders.remove(id);
         }
         notifyListeners();
+      case 'updateChatFolders':
+        final folders = (json['chat_folders'] as List).whereType<Json>().map(
+          (folder) => (
+            id: folder['id'] as int,
+            name: folder['name']['text']['text'] as String,
+          ),
+        );
+        final next = List<({int id, String name})>.unmodifiable(folders);
+        final removed = _chatFolders.map((folder) => folder.id).toSet()
+          ..removeAll(next.map((folder) => folder.id));
+        for (final id in removed) {
+          _folderLoads.remove(id);
+        }
+        if (removed.isNotEmpty) {
+          _channelFolders.removeWhere((_, ids) {
+            ids.removeAll(removed);
+            return ids.isEmpty;
+          });
+        }
+        _chatFolders = next;
+        notifyListeners();
+      case 'updateChatAddedToList':
+      case 'updateChatRemovedFromList':
+        final id = json['chat_id'] as int;
+        final folderId = _folderId(json['chat_list'] as Json);
+        if (folderId == null || !_channels.containsKey(id)) return;
+        final changed = json['@type'] == 'updateChatAddedToList'
+            ? (_channelFolders[id] ??= {}).add(folderId)
+            : _channelFolders[id]?.remove(folderId) ?? false;
+        if (_channelFolders[id]?.isEmpty ?? false) _channelFolders.remove(id);
+        if (changed) notifyListeners();
       case 'updateNewMessage':
       case 'updateMessageSendSucceeded':
         _publishVideo(json['message']);
@@ -1208,6 +1272,7 @@ class TelegramService extends ChangeNotifier {
       _parametersRequest = null;
       connection = 'Offline';
       _channels.clear();
+      _clearChatFolders();
       state = 'disconnected';
     }
     if (!ready) {
@@ -1216,6 +1281,7 @@ class TelegramService extends ChangeNotifier {
       if (state == 'authorizationStateLoggingOut' ||
           state == 'authorizationStateClosed') {
         _channels.clear();
+        _clearChatFolders();
       }
     }
     if (ready && !hasActiveStream()) {
@@ -1321,30 +1387,55 @@ class TelegramService extends ChangeNotifier {
 
   Future<void>? _chatRefresh;
   Future<void> refreshChats() => _chatRefresh ??= Future.wait([
-    for (final type in ['chatListMain', 'chatListArchive']) _loadChatList(type),
+    for (final type in ['chatListMain', 'chatListArchive'])
+      _loadChatList(transport, {'@type': type}),
   ]).then<void>((_) {}).whenComplete(() => _chatRefresh = null);
 
-  Future<void> _loadChatList(String type) async {
+  final _folderLoads = <int, Future<void>>{};
+
+  Future<void> loadChatFolder(int id) async {
+    if (!ready || !_chatFolders.any((folder) => folder.id == id)) return;
+    if (_folderLoads[id] case final pending?) return pending;
+    final client = transport;
+    final list = {'@type': 'chatListFolder', 'chat_folder_id': id};
+    late final Future<void> loading;
+    Future<void> load() async {
+      // TDLib sends membership updates while loading each page.
+      while (await _loadChatList(client, list)) {
+        if (!ready || !identical(_folderLoads[id], loading)) return;
+      }
+    }
+
+    loading = load().whenComplete(() {
+      if (identical(_folderLoads[id], loading)) _folderLoads.remove(id);
+    });
+    return _folderLoads[id] = loading;
+  }
+
+  Future<bool> _loadChatList(TdTransport client, Json list) async {
     try {
-      await transport.request({
+      await client.request({
         '@type': 'loadChats',
-        'chat_list': {'@type': type},
+        'chat_list': list,
         'limit': 100,
       });
+      return true;
     } on TdException catch (e) {
       if (e.code != 404) rethrow;
+      return false;
     }
   }
 
   Future<MusicChat?> channel(int id) async {
     if (_channels[id] case final known?) return known;
     final client = transport;
-    final channel = MusicChat.fromChat(
-      await client.request({'@type': 'getChat', 'chat_id': id}),
-    );
+    final chat = await client.request({'@type': 'getChat', 'chat_id': id});
     if (!identical(client, transport) || !ready) return null;
+    if (_channels[id] case final known?) return known;
+    final channel = MusicChat.fromChat(chat);
     if (channel != null) {
       _channels[id] = channel;
+      _rememberChannelFolders(chat);
       notifyListeners();
     }
     return channel;
@@ -1707,6 +1798,7 @@ class TelegramService extends ChangeNotifier {
     state = _clientClosed ? 'disconnected' : 'authorizationStateLoggingOut';
     connection = _clientClosed ? 'Offline' : 'Signing out';
     _channels.clear();
+    _clearChatFolders();
     _channelMediaCounts.clear();
     clearImageCache();
     _secrets = {..._secrets}
@@ -1758,6 +1850,7 @@ class TelegramService extends ChangeNotifier {
     state = 'disconnected';
     authenticationLink = null;
     authenticationPhoneNumber = null;
+    _clearChatFolders();
     clearImageCache();
     await _subscription?.cancel();
     try {
