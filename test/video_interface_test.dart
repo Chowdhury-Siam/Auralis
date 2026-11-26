@@ -2,7 +2,8 @@ import 'dart:io';
 
 import 'package:auralis/app.dart';
 import 'package:auralis/app_navigation.dart';
-import 'package:auralis/discovery_widgets.dart';
+import 'package:auralis/channel_metadata.dart';
+import 'package:auralis/channel_metadata_view.dart';
 import 'package:auralis/library_widgets.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
@@ -15,6 +16,35 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
 import 'telegram_video_test.dart' show channel, post;
+
+class _BrowseMetadata extends ChannelMetadataRepository {
+  _BrowseMetadata(this.channelId) : super(Directory('unused'));
+
+  static const posterUrl = 'https://example.test/series-poster.png';
+  final int channelId;
+  final lookups = <int>[];
+
+  @override
+  Future<MetadataMatch> identify(int id, String name) async {
+    lookups.add(id);
+    return identifySaved(id);
+  }
+
+  @override
+  Future<MetadataMatch> identifySaved(int id) async => id == channelId
+      ? const MetadataMatch(
+          selected: ChannelTitle(
+            id: '1',
+            provider: 'AniList',
+            title: 'Archive series',
+            cover: posterUrl,
+          ),
+        )
+      : const MetadataMatch();
+
+  @override
+  Future<File?> image(String url) async => File('test/fixtures/cover.png');
+}
 
 void main() {
   setUpAll(() async {
@@ -158,7 +188,8 @@ void main() {
         expect(tester.widget<AppNavigation>(navigation).selected, 1);
         expect(find.text('Full movie'), findsOneWidget);
         expect(find.byTooltip('Back to channels'), findsOneWidget);
-        expect(find.byTooltip('Refresh videos'), findsOneWidget);
+        expect(find.byTooltip('Refresh videos'), findsNothing);
+        expect(find.byType(RefreshIndicator), findsOneWidget);
         expect(settings.videoChannelId, channel.id);
         final videoRow = find.byKey(ValueKey('${channel.id}:30'));
         final searchRowSize = tester.getSize(videoRow);
@@ -237,6 +268,8 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
       const archive = MusicChat(-100456, 'Series archive');
+      final metadata = _BrowseMetadata(archive.id);
+      addTearDown(metadata.close);
       final td = FakeTd();
       td.onRequest = (request) async {
         if (request['@type'] == 'getChatMessageCount') {
@@ -277,7 +310,13 @@ void main() {
         await player.shutdown();
         await telegram.shutdown();
       });
-      await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+      await tester.pumpWidget(
+        AuralisApp(
+          player: player,
+          telegram: telegram,
+          channelMetadata: metadata,
+        ),
+      );
       await tester.pumpAndSettle();
       final navigation = find.byKey(const ValueKey('video-navigation'));
       Future<void> openTab(IconData icon) async {
@@ -371,13 +410,33 @@ void main() {
       Finder countIn(MusicChat chat, String label) =>
           find.descendant(of: channelRow(chat), matching: find.text(label));
       expect(find.text('Browse channels'), findsOneWidget);
-      expect(find.byType(DiscoveryTile), findsNWidgets(2));
+      final grid = find.byType(GridView);
+      expect(grid, findsOneWidget);
+      final poster = tester.getSize(channelRow(archive));
+      expect(poster.width / poster.height, closeTo(2 / 3, .01));
+      final artwork = find.descendant(
+        of: channelRow(archive),
+        matching: find.byType(MetadataArtwork),
+      );
+      expect(
+        tester.widget<MetadataArtwork>(artwork).url,
+        _BrowseMetadata.posterUrl,
+      );
+      expect(metadata.lookups, isNot(contains(archive.id)));
       expect(
         tester.getTopLeft(channelRow(channel)).dy,
         tester.getTopLeft(channelRow(archive)).dy,
       );
       expect(countIn(channel, '2 videos'), findsOneWidget);
       expect(countIn(archive, '≈ 4 videos'), findsOneWidget);
+      settings.videoPlayback.recordVideo(alphaSource);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Recently opened'));
+      await tester.pumpAndSettle();
+      expect(channelRow(channel), findsOneWidget);
+      expect(channelRow(archive), findsNothing);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'All channels'));
+      await tester.pumpAndSettle();
+      expect(channelRow(archive), findsOneWidget);
       final searchesBefore = td.requests.length;
       await tester.enterText(
         find.widgetWithText(TextField, 'Search channels'),
@@ -385,12 +444,19 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Matching channels'), findsOneWidget);
-      expect(find.byType(DiscoveryTile), findsOneWidget);
+      expect(grid, findsOneWidget);
       await tester.tap(find.byTooltip('Show list'));
       await tester.pumpAndSettle();
-      expect(find.byType(DiscoveryTile), findsNothing);
+      expect(grid, findsNothing);
       expect(td.requests, hasLength(searchesBefore));
       expect(find.text(channel.title), findsNothing);
+      int chatRefreshes() => td.requests
+          .where((request) => request['@type'] == 'loadChats')
+          .length;
+      final listRefreshes = chatRefreshes();
+      await tester.drag(find.text(archive.title), const Offset(0, 320));
+      await tester.pumpAndSettle();
+      expect(chatRefreshes(), greaterThan(listRefreshes));
       expect(
         find.descendant(
           of: channelRow(archive),
@@ -419,7 +485,7 @@ void main() {
       expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
       await tester.tap(find.byTooltip('Show grid'));
       await tester.pumpAndSettle();
-      expect(find.byType(DiscoveryTile), findsOneWidget);
+      expect(grid, findsOneWidget);
       expect(countIn(archive, '1 video'), findsOneWidget);
       expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
       await tester.enterText(searchField, 'cine');
@@ -574,10 +640,7 @@ void main() {
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      const libraryOptions = ['History', 'Offline'];
-      for (final option in libraryOptions) {
-        expect(find.text(option), findsNothing);
-      }
+      expect(find.text('History'), findsNothing);
       final optionsMenu = find.byKey(
         const ValueKey('video-library-collection-menu'),
       );
@@ -599,6 +662,12 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Trailer'), findsOneWidget);
       expect(optionsMenu.hitTestable(), findsOneWidget);
+      final collectionTitle = find.byKey(const ValueKey('video-library-title'));
+      expect(
+        tester.getSize(optionsMenu).width -
+            tester.getSize(collectionTitle).width,
+        lessThanOrEqualTo(40),
+      );
       expect(find.byTooltip('Library options'), findsNothing);
       expect(find.byTooltip('Refresh videos'), findsNothing);
       final sort = find.byTooltip('Sort Library');
@@ -614,9 +683,15 @@ void main() {
       expect(find.text('1 video · Cinema'), findsNothing);
       await tester.tap(optionsMenu);
       await tester.pumpAndSettle();
-      for (final option in libraryOptions) {
-        expect(find.text(option).hitTestable(), findsOneWidget);
-      }
+      expect(
+        find.widgetWithText(PopupMenuItem<int>, 'All videos'),
+        findsOneWidget,
+      );
+      expect(
+        find.widgetWithText(PopupMenuItem<int>, 'History'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(PopupMenuItem<int>, 'Offline'), findsNothing);
       expect(find.text('Playlists').hitTestable(), findsNothing);
       expect(find.text('Snapshots').hitTestable(), findsNothing);
       await tester.tap(find.text('History'));
