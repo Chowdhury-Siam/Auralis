@@ -1,6 +1,12 @@
 {
-  "current": "0.1.267",
+  "current": "0.1.268",
   "releases": [
+    {
+      "version": "0.1.268",
+      "changes": [
+        "Show channels with audio in Music Browse and channels with video in Video Browse."
+      ]
+    },
     {
       "version": "0.1.267",
       "changes": [
