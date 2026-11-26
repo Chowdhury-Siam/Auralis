@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -31,8 +30,6 @@ const second = VideoSource.telegram(
 );
 
 VideoPlaybackData fixture() => VideoPlaybackData()
-  ..putPlaylist('Friday night', [first, second])
-  ..putPlaylist('Watch next', [])
   ..recordVideo(first, at: DateTime(2026, 11, 11))
   ..recordVideo(second, at: DateTime(2026, 11, 12))
   ..remember(
@@ -79,34 +76,6 @@ Future<void> visible(WidgetTester tester, Finder target) async {
   await tester.pumpAndSettle();
 }
 
-/// Exercise slow host I/O without changing the gallery's deletion behavior.
-class _SlowSnapshotFile implements File {
-  _SlowSnapshotFile(this.file, this.ioZone);
-  final File file;
-  final Zone ioZone;
-
-  @override
-  String get path => file.path;
-  @override
-  Uri get uri => file.uri;
-  @override
-  bool existsSync() => file.existsSync();
-  @override
-  Future<int> length() => file.length();
-  @override
-  Future<Uint8List> readAsBytes() => file.readAsBytes();
-  @override
-  Future<FileSystemEntity> delete({bool recursive = false}) =>
-      ioZone.run(() async {
-        // This is wall-clock time, not Flutter's fake animation clock.
-        await Future<void>.delayed(const Duration(milliseconds: 250));
-        return file.delete(recursive: recursive);
-      });
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
 void main() {
   setUpAll(() async {
     final font = File(
@@ -130,7 +99,7 @@ void main() {
     const Size(1280, 800),
   ]) {
     testWidgets(
-      'Video collections adapt to $size and large text',
+      'Video history adapts to $size and large text',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = size;
@@ -139,50 +108,15 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         final data = fixture();
-        for (final playlists in [true, false]) {
-          await tester.pumpWidget(
-            app(
-              VideoLibraryPage(
-                key: UniqueKey(),
-                data: data,
-                save: () async {},
-                pickFiles: () async => [],
-                playlists: playlists,
-              ),
-            ),
-          );
-          await tester.pumpAndSettle();
-          expect(
-            find.byKey(const ValueKey('video-collection-header')),
-            findsOneWidget,
-          );
-          await visible(
-            tester,
-            find.text(playlists ? 'Friday night' : second.title),
-          );
-          expect(tester.takeException(), isNull);
-        }
-        final frame = File('test/fixtures/cover.png').absolute;
-        final imageContext = tester.element(find.byType(VideoLibraryPage));
-        await tester.runAsync(
-          () => precacheImage(
-            ResizeImage(FileImage(frame), width: 720),
-            imageContext,
-          ),
-        );
         await tester.pumpWidget(
-          app(VideoSnapshotsPage(loadSnapshots: () async => [frame])),
+          app(VideoLibraryPage(data: data, save: () async {})),
         );
         await tester.pumpAndSettle();
-        await visible(tester, find.byKey(ValueKey(frame.path)));
-        expect(tester.takeException(), isNull);
-        await tester.pumpWidget(
-          app(
-            VideoSnapshotsPage(key: UniqueKey(), loadSnapshots: () async => []),
-          ),
+        expect(
+          find.byKey(const ValueKey('video-collection-header')),
+          findsOneWidget,
         );
-        await tester.pumpAndSettle();
-        await visible(tester, find.text('Keep a favorite frame'));
+        await visible(tester, find.text(second.title));
         expect(tester.takeException(), isNull);
       },
       variant: TargetPlatformVariant({
@@ -192,142 +126,25 @@ void main() {
     );
   }
 
-  testWidgets('Video collection cards stay readable on a phone', (
-    tester,
-  ) async {
+  testWidgets('Video history stays readable on a phone', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
-    final data = fixture();
-    for (final playlists in [true, false]) {
-      final key = GlobalKey();
-      await tester.pumpWidget(
-        app(
-          VideoLibraryPage(
-            key: UniqueKey(),
-            data: data,
-            save: () async {},
-            pickFiles: () async => [],
-            playlists: playlists,
-          ),
-          capture: key,
-        ),
-      );
-      await tester.pumpAndSettle();
-      await capture(
-        tester,
-        key,
-        playlists ? 'video-playlists-phone' : 'video-history-phone',
-      );
-      expect(tester.takeException(), isNull);
-    }
-    final frame = File('test/fixtures/cover.png').absolute;
-    final imageContext = tester.element(find.byType(VideoLibraryPage));
-    await tester.runAsync(
-      () => precacheImage(
-        ResizeImage(FileImage(frame), width: 720),
-        imageContext,
-      ),
-    );
     final key = GlobalKey();
     await tester.pumpWidget(
-      app(VideoSnapshotsPage(loadSnapshots: () async => [frame]), capture: key),
+      app(
+        VideoLibraryPage(data: fixture(), save: () async {}),
+        capture: key,
+      ),
     );
     await tester.pumpAndSettle();
-    await capture(tester, key, 'video-snapshots-phone');
+    await capture(tester, key, 'video-history-phone');
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
-    'Playlist cards keep rename, add, reorder, remove and empty states',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1280, 800);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(tester.view.resetPhysicalSize);
-      final data = fixture();
-      final local = VideoSource.file(
-        Uri.file('/movies/extra.mp4'),
-        'Extra video',
-      );
-      var saves = 0;
-      final key = GlobalKey();
-      await tester.pumpWidget(
-        app(
-          VideoLibraryPage(
-            data: data,
-            playlists: true,
-            save: () async {
-              saves++;
-            },
-            pickFiles: () async => [local],
-          ),
-          capture: key,
-        ),
-      );
-      await tester.pumpAndSettle();
-      await capture(tester, key, 'video-playlists-desktop');
-      expect(find.byType(SliverGrid), findsOneWidget);
-      await tester.tap(find.byTooltip('Playlist options: Friday night'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Rename'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Movie night');
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
-      expect(data.playlists.containsKey('Friday night'), isFalse);
-      expect(data.playlists['Movie night'], [first, second]);
-      await tester.tap(find.text('Movie night'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Add video files'));
-      await tester.pumpAndSettle();
-      expect(data.playlists['Movie night'], [first, second, local]);
-      tester
-          .widget<SliverReorderableList>(find.byType(SliverReorderableList))
-          .onReorderItem!(0, 1);
-      await tester.pumpAndSettle();
-      expect(data.playlists['Movie night'], [second, first, local]);
-      final localCard = find.byKey(ValueKey(local.id));
-      await visible(tester, localCard);
-      await tester.tap(
-        find.descendant(
-          of: localCard,
-          matching: find.byTooltip('Remove video'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(data.playlists['Movie night'], [second, first]);
-      await tester.ensureVisible(find.byType(BackButton));
-      await tester.tap(find.byType(BackButton));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Playlist options: Movie night'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Remove'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-      expect(data.playlists.containsKey('Movie night'), isTrue);
-      await tester.tap(find.byTooltip('Playlist options: Movie night'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Remove'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
-      await tester.pumpAndSettle();
-      expect(data.playlists.containsKey('Movie night'), isFalse);
-      await tester.tap(find.text('Create playlist'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Later');
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
-      expect(data.playlists['Later'], isEmpty);
-      expect(find.text('Your playlist starts here'), findsOneWidget);
-      expect(saves, 6);
-    },
-  );
-
-  testWidgets(
-    'History cards preserve resume points, watched controls and clear confirmation',
+    'History date groups preserve resume points, watched controls and clear confirmation',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1280, 800);
@@ -339,35 +156,31 @@ void main() {
       final key = GlobalKey();
       await tester.pumpWidget(
         app(
-          VideoLibraryPage(
-            data: data,
-            playlists: false,
-            save: () async {},
-            pickFiles: () async => [],
-            changes: changes,
-          ),
+          VideoLibraryPage(data: data, save: () async {}, changes: changes),
           capture: key,
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Resume at 19:21'), findsOneWidget);
-      expect(find.text('Watched'), findsOneWidget);
+      expect(find.textContaining('19:21 / 24:00'), findsOneWidget);
+      expect(find.byTooltip('Mark as unwatched'), findsOneWidget);
+      expect(
+        find.byKey(ValueKey(('video-history-date', DateTime(2026, 11, 12)))),
+        findsOneWidget,
+      );
       expect(
         data.positions[second.id],
         const Duration(minutes: 19, seconds: 21),
       );
       await capture(tester, key, 'video-history-desktop');
       final card = find.byKey(ValueKey(second.id));
-      await tester.tap(
-        find.descendant(
-          of: card,
-          matching: find.byTooltip('Video actions for ${second.title}'),
-        ),
+      await tester.longPress(
+        find.descendant(of: card, matching: find.byType(InkWell)).first,
       );
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('media-item-sheet')), findsOneWidget);
       expect(find.text('Remove from history'), findsOneWidget);
       expect(find.text('Add to favorites'), findsNothing);
+      expect(find.text('Add to playlist'), findsNothing);
       await tester.tap(find.text('Info'));
       await tester.pumpAndSettle();
       expect(find.text('Status'), findsOneWidget);
@@ -378,16 +191,18 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(data.isWatched(second), isTrue);
-      expect(data.positions[second.id], const Duration(minutes: 19, seconds: 21));
-      expect(find.text('Watched · Resume at 19:21'), findsOneWidget);
+      expect(
+        data.positions[second.id],
+        const Duration(minutes: 19, seconds: 21),
+      );
+      expect(find.textContaining('19:21 / 24:00'), findsOneWidget);
+      expect(find.byTooltip('Mark as unwatched'), findsNWidgets(2));
       await tester.tap(
         find.descendant(
           of: card,
-          matching: find.byTooltip('Video actions for ${second.title}'),
+          matching: find.byTooltip('Remove from history'),
         ),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('media-action-remove')));
       await tester.pumpAndSettle();
       expect(data.history.containsKey(second.id), isFalse);
       await tester.tap(find.byTooltip('Clear history'));
@@ -402,160 +217,11 @@ void main() {
       expect(data.history, isEmpty);
       expect(data.positions, isEmpty);
       expect(find.text('A fresh start'), findsOneWidget);
-      expect(data.playlists, hasLength(2));
       data.recordVideo(second);
       changes.value++;
       await tester.pumpAndSettle();
       expect(find.byKey(ValueKey(second.id)), findsOneWidget);
+      expect(find.text('Today'), findsOneWidget);
     },
   );
-
-  testWidgets(
-    'Playlist playback returns the unchanged queue and selected index',
-    (tester) async {
-      final data = fixture();
-      VideoSelection? selection;
-      await tester.pumpWidget(
-        app(
-          Builder(
-            builder: (context) => Scaffold(
-              body: TextButton(
-                child: const Text('Open collection'),
-                onPressed: () async {
-                  selection = await Navigator.of(context).push<VideoSelection>(
-                    MaterialPageRoute(
-                      builder: (_) => VideoLibraryPage(
-                        data: data,
-                        playlists: true,
-                        save: () async {},
-                        pickFiles: () async => [],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('Open collection'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Friday night'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Play playlist'));
-      await tester.pumpAndSettle();
-      expect(selection!.$1, [first, second]);
-      expect(selection!.$2, 0);
-    },
-  );
-
-  for (final slowFilesystem in [false, true]) {
-    testWidgets(
-      'Snapshot gallery previews originals and confirms deletion (slow filesystem: $slowFilesystem)',
-      (tester) async {
-        tester.view.devicePixelRatio = 1;
-        tester.view.physicalSize = const Size(1280, 800);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        addTearDown(tester.view.resetPhysicalSize);
-        final directory = (await tester.runAsync(
-          () => Directory.systemTemp.createTemp('auralis-frame-gallery-'),
-        ))!;
-        final ioZone = (await tester.runAsync(() async => Zone.current))!;
-        addTearDown(() async {
-          await tester.pumpWidget(const SizedBox.shrink());
-          await tester.runAsync(() => directory.delete(recursive: true));
-        });
-        final original = File(
-          '${directory.path}/1794470400000000-Romantic_Killer_-_01-264221ms.png',
-        );
-        final File file = slowFilesystem
-            ? _SlowSnapshotFile(original, ioZone)
-            : original;
-        await tester.runAsync(
-          () => File('test/fixtures/cover.png').copy(file.path),
-        );
-        var loads = 0;
-        Future<List<File>> load() async {
-          loads++;
-          return file.existsSync() ? [file] : [];
-        }
-
-        await tester.pumpWidget(app(const Scaffold(body: SizedBox.shrink())));
-        final imageContext = tester.element(find.byType(Scaffold).first);
-        await tester.runAsync(() async {
-          await precacheImage(FileImage(file), imageContext);
-          await precacheImage(
-            ResizeImage(FileImage(file), width: 720),
-            imageContext,
-          );
-        });
-        final key = GlobalKey();
-        await tester.pumpWidget(
-          app(VideoSnapshotsPage(loadSnapshots: load), capture: key),
-        );
-        await tester.pumpAndSettle();
-        expect(find.text('Frame at 4:24'), findsOneWidget);
-        expect(find.text(first.title), findsOneWidget);
-        await capture(tester, key, 'video-snapshots-desktop');
-        await tester.tap(find.text(first.title));
-        await tester.pumpAndSettle();
-        expect(find.text('Export PNG'), findsOneWidget);
-        expect(find.text('Romantic_Killer_-_01-264221ms.png'), findsOneWidget);
-        await tester.tap(find.text('Close'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Delete snapshot'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Cancel'));
-        await tester.pumpAndSettle();
-        expect(file.existsSync(), isTrue);
-        expect(
-          loads,
-          1,
-          reason: 'Cancel must not delete or reload the gallery.',
-        );
-        await tester.tap(find.byTooltip('Delete snapshot'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
-        final waiting = Stopwatch()..start();
-        // pumpAndSettle only waits for Flutter frames, not host filesystem I/O.
-        // Yield real time and pump its completion back into the widget test zone.
-        while (loads < 2 && waiting.elapsed < const Duration(seconds: 10)) {
-          await tester.runAsync(
-            () => Future<void>.delayed(const Duration(milliseconds: 10)),
-          );
-          await tester.pump(const Duration(milliseconds: 16));
-        }
-        expect(
-          loads,
-          2,
-          reason: 'Timed out waiting for snapshot deletion and gallery reload.',
-        );
-        await tester.pumpAndSettle();
-        expect(file.existsSync(), isFalse);
-        expect(find.text('Keep a favorite frame'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      },
-    );
-  }
-
-  testWidgets('Snapshot failures keep a retry action and do not modify files', (
-    tester,
-  ) async {
-    var attempts = 0;
-    await tester.pumpWidget(
-      app(
-        VideoSnapshotsPage(
-          loadSnapshots: () async {
-            if (attempts++ == 0) throw const FileSystemException('Unavailable');
-            return [];
-          },
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Could not load snapshots'), findsOneWidget);
-    await tester.tap(find.byTooltip('Try again'));
-    await tester.pumpAndSettle();
-    expect(find.text('Keep a favorite frame'), findsOneWidget);
-  });
 }
