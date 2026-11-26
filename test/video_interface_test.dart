@@ -324,6 +324,7 @@ void main() {
       final telegram = TelegramService(directory, MemoryVault(), transport: td);
       final settings = MemorySettings()
         ..defaultInterface = AppInterface.video
+        ..librarySort = LibrarySort.oldest
         ..selectedChannels = [channel, archive]
         ..videoChannelId = channel.id;
       final player = PlayerController(
@@ -384,7 +385,8 @@ void main() {
       await tester.tap(find.text('Mark as unwatched'));
       await tester.pumpAndSettle();
       expect(settings.videoPlayback.isWatched(alphaSource), isFalse);
-      expect(settings.librarySort, LibrarySort.title);
+      expect(settings.librarySort, LibrarySort.oldest);
+      expect(settings.videoPlayback.librarySort, LibrarySort.title);
       expect(
         tester.getTopLeft(alpha).dy,
         lessThan(tester.getTopLeft(zebra).dy),
@@ -397,43 +399,7 @@ void main() {
       final dimensions = tester.getSize(thumbnail);
       expect(dimensions.width, dimensions.height);
 
-      await tester.tap(find.byTooltip('Sort Library'));
-      await tester.pumpAndSettle();
-      final dialog = find.byType(Dialog);
-      final theme = Theme.of(tester.element(dialog));
-      final material = find.descendant(
-        of: dialog,
-        matching: find.byWidgetPredicate(
-          (widget) => widget is Material && widget.type == MaterialType.card,
-        ),
-      );
-      expect(
-        tester.widget<Material>(material.first).color,
-        theme.colorScheme.surfaceContainerHigh,
-      );
-      expect(
-        tester.widget<Material>(material.first).shape,
-        theme.dialogTheme.shape,
-      );
-      expect(
-        tester
-            .widget<ListTile>(find.widgetWithText(ListTile, 'Title (A–Z)'))
-            .selected,
-        isTrue,
-      );
-      await tester.tap(find.widgetWithText(ListTile, 'Newest first'));
-      await tester.pumpAndSettle();
-      expect(settings.videoPlayback.librarySort, LibrarySort.newest);
-      expect(
-        settings.librarySort,
-        LibrarySort.title,
-        reason: 'Video sorting must not change Music sorting',
-      );
-      expect(
-        tester.getTopLeft(zebra).dy,
-        lessThan(tester.getTopLeft(alpha).dy),
-      );
-
+      expect(find.byTooltip('Sort Library'), findsNothing);
       expect(find.byKey(const ValueKey('video-library-search')), findsNothing);
       expect(find.byType(TextField), findsNothing);
       expect(find.byTooltip('Clear search'), findsNothing);
@@ -446,6 +412,8 @@ void main() {
       Finder countIn(MusicChat chat, String label) =>
           find.descendant(of: channelRow(chat), matching: find.text(label));
       expect(find.text('Browse channels'), findsOneWidget);
+      expect(find.byTooltip('Show list'), findsNothing);
+      expect(find.byTooltip('Show grid'), findsNothing);
       final grid = find.byType(GridView);
       expect(grid, findsOneWidget);
       final poster = tester.getSize(channelRow(archive));
@@ -518,18 +486,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Matching channels'), findsOneWidget);
       expect(grid, findsOneWidget);
-      await tester.tap(find.byTooltip('Show list'));
-      await tester.pumpAndSettle();
-      expect(grid, findsNothing);
+      expect(find.byTooltip('Show list'), findsNothing);
       expect(td.requests, hasLength(searchesBefore));
       expect(find.text(channel.title), findsNothing);
       int chatRefreshes() => td.requests
           .where((request) => request['@type'] == 'loadChats')
           .length;
-      final listRefreshes = chatRefreshes();
+      final refreshesBefore = chatRefreshes();
       await tester.drag(find.text(archive.title), const Offset(0, 320));
       await tester.pumpAndSettle();
-      expect(chatRefreshes(), greaterThan(listRefreshes));
+      expect(chatRefreshes(), greaterThan(refreshesBefore));
       expect(
         find.descendant(
           of: channelRow(archive),
@@ -546,6 +512,7 @@ void main() {
 
       await tester.tap(find.byTooltip('Back to channels'));
       await tester.pumpAndSettle();
+      expect(grid, findsOneWidget);
       expect(countIn(archive, '1 video'), findsOneWidget);
       expect(
         find.descendant(
@@ -554,11 +521,6 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
-      await tester.tap(find.byTooltip('Show grid'));
-      await tester.pumpAndSettle();
-      expect(grid, findsOneWidget);
-      expect(countIn(archive, '1 video'), findsOneWidget);
       expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
       td.events.add({
         '@type': 'updateChatFolders',
@@ -573,13 +535,51 @@ void main() {
       await tester.pumpAndSettle();
       expect(settings.videoChannelId, channel.id);
       expect(find.text('Archive episode'), findsNothing);
+      await tester.tap(find.byTooltip('Sort Library'));
+      await tester.pumpAndSettle();
+      final dialog = find.byType(Dialog);
+      final theme = Theme.of(tester.element(dialog));
+      final material = find.descendant(
+        of: dialog,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is Material && widget.type == MaterialType.card,
+        ),
+      );
+      expect(
+        tester.widget<Material>(material.first).color,
+        theme.colorScheme.surfaceContainerHigh,
+      );
+      expect(
+        tester.widget<Material>(material.first).shape,
+        theme.dialogTheme.shape,
+      );
+      expect(
+        tester
+            .widget<ListTile>(find.widgetWithText(ListTile, 'Title (A–Z)'))
+            .selected,
+        isTrue,
+      );
+      await tester.tap(find.widgetWithText(ListTile, 'Newest first'));
+      await tester.pumpAndSettle();
+      expect(settings.videoPlayback.librarySort, LibrarySort.newest);
+      expect(
+        settings.librarySort,
+        LibrarySort.oldest,
+        reason: 'Video sorting must not change Music sorting',
+      );
       expect(
         tester.getTopLeft(zebra).dy,
         lessThan(tester.getTopLeft(alpha).dy),
       );
+
       await openTab(Icons.video_library_rounded);
       expect(find.text('Archive episode'), findsNothing);
       expect(find.text('Alpha'), findsOneWidget);
+      expect(find.byTooltip('Sort Library'), findsNothing);
+      expect(
+        tester.getTopLeft(zebra).dy,
+        lessThan(tester.getTopLeft(alpha).dy),
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -600,7 +600,7 @@ void main() {
     expect(restored.hiddenVideoChannelIds, {channel.id});
   });
 
-  testWidgets('Browse can delete channels from the grid and list', (
+  testWidgets('Browse can delete channels from the poster grid', (
     tester,
   ) async {
     const other = MusicChat(-100456, 'Second channel');
@@ -657,9 +657,7 @@ void main() {
     expect(second, findsOneWidget);
     expect(settings.videoChannelId, isNull);
 
-    await tester.tap(find.byTooltip('Show list'));
-    await tester.pumpAndSettle();
-    expect(find.byType(GridView), findsNothing);
+    expect(find.byType(GridView), findsOneWidget);
     await hold(second);
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
@@ -837,18 +835,13 @@ void main() {
       );
       expect(find.byTooltip('Library options'), findsNothing);
       expect(find.byTooltip('Refresh videos'), findsNothing);
-      final sort = find.byTooltip('Sort Library');
       final panel = find.byKey(const ValueKey(('video-library-panel', 0)));
       final toolbar = tester.getRect(find.byType(LibraryToolbar));
       expect(toolbar.top, 30);
       expect(tester.getTopLeft(panel).dy - toolbar.bottom, 18);
       expect(find.byTooltip('Shuffle collection'), findsNothing);
       expect(find.byKey(const ValueKey('video-library-counts')), findsNothing);
-      expect(sort.hitTestable(), findsOneWidget);
-      expect(
-        tester.getRect(sort).bottom,
-        lessThanOrEqualTo(tester.getRect(panel).top),
-      );
+      expect(find.byTooltip('Sort Library'), findsNothing);
       expect(find.byType(LibraryCollectionMenu<int>), findsOneWidget);
       expect(find.text('1 video · Cinema'), findsNothing);
       await tester.tap(optionsMenu);
