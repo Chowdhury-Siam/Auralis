@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.261
+
+- Keep the poster grid as the only channel layout in Video Browse.
+
+## 0.1.260
+
+- Remove the sort button from the Video Library toolbar and default videos to Title (A–Z) when no video sort preference is saved.
+
 ## 0.1.259
 
 - Remove the Offline collection and the three-dot toolbar menu from Music Library.
