@@ -32,7 +32,6 @@ class MusicPlaylistsView extends StatelessWidget {
     required this.onOpen,
     required this.searching,
     required this.bottomPadding,
-    this.video = false,
     this.coverBuilder,
     this.actionsBuilder,
   });
@@ -43,7 +42,6 @@ class MusicPlaylistsView extends StatelessWidget {
   final ValueChanged<String> onOpen;
   final bool searching;
   final double bottomPadding;
-  final bool video;
   final Widget? Function(MusicPlaylistPreview)? coverBuilder;
   final Widget Function(MusicPlaylistPreview)? actionsBuilder;
 
@@ -51,18 +49,14 @@ class MusicPlaylistsView extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return CustomScrollView(
-      key: video
-          ? const ValueKey('video-collection-scroll')
-          : const PageStorageKey('music-playlists'),
+      key: const PageStorageKey('music-playlists'),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
           sliver: SliverToBoxAdapter(
             child: DiscoveryCard(
-              key: ValueKey(
-                video ? 'video-collection-header' : 'music-playlists-header',
-              ),
+              key: const ValueKey('music-playlists-header'),
               child: LayoutBuilder(
                 builder: (context, box) {
                   final intro = Row(
@@ -87,15 +81,13 @@ class MusicPlaylistsView extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              video ? 'Video playlists' : 'Made for your music',
+                              'Made for your music',
                               style: Theme.of(context).textTheme.titleLarge
                                   ?.copyWith(fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              video
-                                  ? 'Keep your favorite videos together.'
-                                  : 'Keep your favorite songs together.',
+                              'Keep your favorite songs together.',
                               style: TextStyle(color: colors.onSurfaceVariant),
                             ),
                           ],
@@ -130,9 +122,7 @@ class MusicPlaylistsView extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             sliver: SliverToBoxAdapter(
               child: DiscoveryCard(
-                key: ValueKey(
-                  video ? 'video-collection-empty' : 'music-playlists-empty',
-                ),
+                key: const ValueKey('music-playlists-empty'),
                 padding: const EdgeInsets.all(28),
                 child: Column(
                   children: [
@@ -147,8 +137,6 @@ class MusicPlaylistsView extends StatelessWidget {
                     Text(
                       searching
                           ? 'No playlists found'
-                          : video
-                          ? 'Make room for your favorites'
                           : 'Your playlists live here',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleLarge
@@ -156,11 +144,7 @@ class MusicPlaylistsView extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      searching
-                          ? 'Try another name or clear your search.'
-                          : video
-                          ? 'Create your first playlist to collect videos for later.'
-                          : 'Create a playlist, then add music using a track’s actions.',
+                      searching ? 'Try another name or clear your search.' : 'Create a playlist, then add music using a track’s actions.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: colors.onSurfaceVariant),
                     ),
@@ -190,14 +174,10 @@ class MusicPlaylistsView extends StatelessWidget {
                     mainAxisExtent: 260 + extra * 6,
                   ),
                   itemBuilder: (context, index) => MusicPlaylistCard(
-                    key: ValueKey((
-                      video ? 'video-playlist' : 'music-playlist',
-                      playlists[index].name,
-                    )),
+                    key: ValueKey(('music-playlist', playlists[index].name)),
                     playlist: playlists[index],
                     artwork: artwork,
                     onTap: () => onOpen(playlists[index].name),
-                    video: video,
                     cover: coverBuilder?.call(playlists[index]),
                     actions: actionsBuilder?.call(playlists[index]),
                   ),
@@ -217,7 +197,6 @@ class MusicPlaylistCard extends StatelessWidget {
     required this.playlist,
     required this.artwork,
     required this.onTap,
-    this.video = false,
     this.cover,
     this.actions,
   });
@@ -225,7 +204,6 @@ class MusicPlaylistCard extends StatelessWidget {
   final MusicPlaylistPreview playlist;
   final Widget Function(Track) artwork;
   final VoidCallback onTap;
-  final bool video;
   final Widget? cover, actions;
 
   @override
@@ -318,13 +296,11 @@ class MusicPlaylistCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   playlist.songCount == 0
-                      ? video
-                            ? 'No videos yet'
-                            : 'No songs yet'
-                      : '${playlist.songCount} ${video ? (playlist.songCount == 1 ? 'video' : 'videos') : (playlist.songCount == 1 ? 'song' : 'songs')}',
+                      ? 'No songs yet'
+                      : '${playlist.songCount} ${playlist.songCount == 1 ? 'song' : 'songs'}',
                   style: TextStyle(color: colors.onSurfaceVariant),
                 ),
-                if (!video && playlist.tracks.length < playlist.songCount) ...[
+                if (playlist.tracks.length < playlist.songCount) ...[
                   const SizedBox(height: 2),
                   Text(
                     '${playlist.tracks.length} available in Library',
