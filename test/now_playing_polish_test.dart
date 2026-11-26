@@ -1037,7 +1037,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 60));
     await tester.tap(find.byTooltip('Browse'));
     await tester.pumpAndSettle();
-    expect(find.text('Search your Channel'), findsOneWidget);
+    expect(find.byTooltip('Search channels'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1150,7 +1150,7 @@ void main() {
     expect(find.byTooltip('Settings'), findsNothing);
     await tester.tap(find.byIcon(Icons.explore_outlined));
     await tester.pumpAndSettle();
-    expect(find.text('Search your Channel'), findsOneWidget);
+    expect(find.byTooltip('Search channels'), findsOneWidget);
     expect(find.byTooltip('Settings'), findsNothing);
     await tester.tap(find.byTooltip('Library'));
     await tester.pumpAndSettle();
