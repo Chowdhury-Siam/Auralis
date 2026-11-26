@@ -185,9 +185,7 @@ void main() {
         final pager = find.byKey(
           ValueKey(video ? 'video-library-pager' : 'music-library-pager'),
         );
-        final title = find.byKey(
-          ValueKey(video ? 'video-library-title' : 'page-title'),
-        );
+        final title = find.byKey(const ValueKey('page-title'));
         final labels = video
             ? ['All videos', 'History']
             : [
@@ -201,7 +199,11 @@ void main() {
         for (final label in labels.skip(1)) {
           await tester.drag(pager, const Offset(-320, 0));
           await tester.pumpAndSettle();
-          expect(tester.widget<Text>(title).data, label);
+          if (video) {
+            expect(find.text('Video history'), findsOneWidget);
+          } else {
+            expect(tester.widget<Text>(title).data, label);
+          }
           expect(navigation.hitTestable(), findsOneWidget);
           expect(player.queue, isEmpty);
           expect(audio.playing, isFalse);
@@ -209,38 +211,25 @@ void main() {
         }
         await tester.tap(find.byTooltip('Show ${labels.first}'));
         await tester.pumpAndSettle();
-        expect(tester.widget<Text>(title).data, labels.first);
-        await tester.tap(
-          find.byKey(
-            ValueKey(
-              video
-                  ? 'video-library-collection-menu'
-                  : 'library-collection-menu',
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(
-          find.widgetWithText(PopupMenuItem<int>, 'Offline'),
-          findsNothing,
-        );
         if (video) {
-          expect(
-            find.widgetWithText(PopupMenuItem<int>, 'Playlists'),
-            findsNothing,
-          );
-          expect(
-            find.widgetWithText(PopupMenuItem<int>, 'Snapshots'),
-            findsNothing,
-          );
-          await tester.tap(find.widgetWithText(PopupMenuItem<int>, 'History'));
+          expect(find.text('Video history'), findsNothing);
+          expect(find.byType(LibraryCollectionMenu<int>), findsNothing);
+          await tester.tap(find.byTooltip('Show History'));
           await tester.pumpAndSettle();
           expect(find.text('Video history'), findsOneWidget);
-          expect(tester.widget<Text>(title).data, 'History');
           await tester.binding.handlePopRoute();
           await tester.pumpAndSettle();
-          expect(tester.widget<Text>(title).data, 'All videos');
+          expect(find.text('Video history'), findsNothing);
         } else {
+          expect(tester.widget<Text>(title).data, labels.first);
+          await tester.tap(
+            find.byKey(const ValueKey('library-collection-menu')),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.widgetWithText(PopupMenuItem<int>, 'Offline'),
+            findsNothing,
+          );
           await tester.tap(
             find.widgetWithText(PopupMenuItem<int>, 'Playlists'),
           );
