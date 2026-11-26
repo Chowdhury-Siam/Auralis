@@ -189,7 +189,7 @@ void main() {
           ValueKey(video ? 'video-library-title' : 'page-title'),
         );
         final labels = video
-            ? ['All videos', 'History', 'Offline']
+            ? ['All videos', 'History']
             : [
                 'All songs',
                 'Artists',
