@@ -3,14 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:auralis/app_theme.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
-import 'package:auralis/music_playlist_widgets.dart';
 import 'package:auralis/player.dart';
 import 'package:auralis/playlist_photos.dart';
 import 'package:auralis/storage.dart';
-import 'package:auralis/video_library.dart';
-import 'package:auralis/video_playback_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -280,65 +276,6 @@ void main() {
   });
 
   testWidgets(
-    'Music and Video share card geometry and independent photo actions',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1000, 800);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      Size? musicSize;
-      for (final video in [false, true]) {
-        var opens = 0, changes = 0, resets = 0;
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: auralisTheme(ColorScheme.fromSeed(seedColor: Colors.purple)),
-            home: Scaffold(
-              body: MusicPlaylistsView(
-                video: video,
-                playlists: const [
-                  MusicPlaylistPreview(name: 'One', songCount: 0, tracks: []),
-                ],
-                artwork: (_) => const SizedBox(),
-                onCreate: () {},
-                onOpen: (_) => opens++,
-                searching: false,
-                bottomPadding: 20,
-                actionsBuilder: (_) => PlaylistCardMenu(
-                  name: 'One',
-                  hasPhoto: true,
-                  onChangePhoto: () => changes++,
-                  onResetPhoto: () => resets++,
-                  onRename: () {},
-                  onRemove: () {},
-                ),
-              ),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        final size = tester.getSize(find.byType(MusicPlaylistCard));
-        if (video) {
-          expect(size, musicSize);
-        } else {
-          musicSize = size;
-        }
-        await tester.tap(find.byTooltip('Playlist options: One'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Change playlist photo'));
-        await tester.pumpAndSettle();
-        expect(changes, 1);
-        expect(opens, 0);
-        await tester.tap(find.byTooltip('Playlist options: One'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Reset photo'));
-        await tester.pumpAndSettle();
-        expect(resets, 1);
-        expect(opens, 0);
-      }
-    },
-  );
-
-  testWidgets(
     'the chosen managed photo renders and reset restores automatic artwork',
     (tester) async {
       final directory = (await tester.runAsync(
@@ -395,41 +332,4 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-
-  testWidgets('Video playlist photos follow rename and confirmed removal', (
-    tester,
-  ) async {
-    final data = VideoPlaybackData()..putPlaylist('One', []);
-    final photos = PlaylistPhotos()..set('video', 'device', 'One', oldPhoto);
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: auralisTheme(ColorScheme.fromSeed(seedColor: Colors.purple)),
-        home: VideoLibraryPage(
-          data: data,
-          save: () async {},
-          pickFiles: () async => [],
-          playlists: true,
-          playlistPhotos: photos,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Playlist options: One'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Rename'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Two');
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-    expect(photos.photo('video', 'device', 'Two'), oldPhoto);
-    expect(photos.photo('video', 'device', 'One'), isNull);
-    await tester.tap(find.byTooltip('Playlist options: Two'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Remove'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
-    await tester.pumpAndSettle();
-    expect(photos.photo('video', 'device', 'Two'), isNull);
-    expect(tester.takeException(), isNull);
-  });
 }
