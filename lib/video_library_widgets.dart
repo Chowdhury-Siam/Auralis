@@ -1,284 +1,106 @@
 part of 'video_library.dart';
 
-class _VideoCollectionPage extends StatelessWidget {
-  const _VideoCollectionPage({
-    required this.title,
-    required this.summary,
-    this.description,
-    required this.icon,
-    required this.slivers,
-    this.onBack,
-    this.actions = const [],
-    this.trailing,
-    this.compact = false,
-    this.embedded = false,
-    this.bottomPadding = 28,
+class _VideoHistoryLayout extends StatelessWidget {
+  const _VideoHistoryLayout({
+    required this.content,
+    required this.trailing,
+    required this.embedded,
+    required this.bottomPadding,
   });
 
-  final String title;
-  final String? summary, description;
-  final IconData icon;
-  final VoidCallback? onBack;
-  final List<Widget> actions, slivers;
+  final Widget content;
   final Widget? trailing;
-  final bool embedded, compact;
+  final bool embedded;
   final double bottomPadding;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    Widget wrap(Widget child) =>
-        embedded ? child : Scaffold(body: SafeArea(child: child));
-    return wrap(
-      Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1120),
-          child: CustomScrollView(
-            key: const ValueKey('video-collection-scroll'),
-            physics: slivers.any((sliver) => sliver is SliverReorderableList)
-                ? const ClampingScrollPhysics()
-                : null,
-            slivers: [
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  embedded ? 8 : 16,
-                  embedded ? 4 : 12,
-                  embedded ? 8 : 16,
-                  compact ? 8 : 20,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (!embedded || onBack != null) ...[
-                        Row(
-                          children: [
-                            BackButton(onPressed: onBack),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'VIDEO LIBRARY',
-                                style: TextStyle(
-                                  color: colors.primary,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 2,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      Container(
-                        key: const ValueKey('video-collection-header'),
-                        padding: EdgeInsets.all(compact ? 8 : 20),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(
-                            compact ? 16 : 28,
-                          ),
-                          border: Border.all(
-                            color: colors.outlineVariant.withValues(alpha: .35),
-                          ),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              colors.primaryContainer.withValues(alpha: .45),
-                              colors.surfaceContainerLow,
-                            ],
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: compact
-                                  ? CrossAxisAlignment.center
-                                  : CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  padding: EdgeInsets.all(compact ? 8 : 14),
-                                  decoration: BoxDecoration(
-                                    color: colors.primaryContainer,
-                                    borderRadius: BorderRadius.circular(
-                                      compact ? 10 : 20,
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    icon,
-                                    color: colors.onPrimaryContainer,
-                                    size: compact ? 18 : 28,
-                                  ),
-                                ),
-                                SizedBox(width: compact ? 10 : 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        title,
-                                        style: TextStyle(
-                                          fontSize: compact ? 18 : 28,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: -.7,
-                                          height: 1.15,
-                                        ),
-                                      ),
-                                      if (summary case final label?) ...[
-                                        SizedBox(height: compact ? 3 : 8),
-                                        Text(
-                                          label,
-                                          style: TextStyle(
-                                            color: colors.primary,
-                                            fontSize: compact ? 12 : 13,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                ?trailing,
-                              ],
-                            ),
-                            if (description case final detail?) ...[
-                              const SizedBox(height: 16),
-                              Text(
-                                detail,
-                                style: TextStyle(
-                                  color: colors.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                            if (actions.isNotEmpty) ...[
-                              SizedBox(height: compact ? 6 : 18),
-                              Wrap(
-                                spacing: 10,
-                                runSpacing: 10,
-                                children: actions,
-                              ),
-                            ],
-                          ],
+    final horizontal = embedded ? 8.0 : 16.0;
+    final scroll = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1120),
+        child: CustomScrollView(
+          key: const ValueKey('video-collection-scroll'),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                embedded ? 4 : 12,
+                horizontal,
+                8,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  key: const ValueKey('video-collection-header'),
+                  children: [
+                    if (!embedded) const BackButton(),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(
+                          'Video history',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    ?trailing,
+                  ],
                 ),
               ),
-              for (final sliver in slivers)
-                SliverPadding(
-                  padding: EdgeInsets.symmetric(horizontal: embedded ? 8 : 16),
-                  sliver: sliver,
-                ),
-              SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
-            ],
-          ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: horizontal),
+              sliver: content,
+            ),
+            SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
+          ],
         ),
       ),
     );
+    return embedded ? scroll : Scaffold(body: SafeArea(child: scroll));
   }
 }
 
-class _VideoEmptyCollection extends StatelessWidget {
-  const _VideoEmptyCollection(
-    this.title,
-    this.description,
-    this.icon, {
-    this.compact = false,
-  });
-  final String title, description;
-  final IconData icon;
-  final bool compact;
+class _EmptyVideoHistory extends StatelessWidget {
+  const _EmptyVideoHistory();
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final titleStyle =
-        (compact
-                ? Theme.of(context).textTheme.titleMedium
-                : Theme.of(context).textTheme.titleLarge)
-            ?.copyWith(fontWeight: FontWeight.w700);
     return Container(
       key: const ValueKey('video-collection-empty'),
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 12 : 24,
-        vertical: compact ? 12 : 36,
-      ),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(compact ? 16 : 24),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: compact
-          ? Row(
+      child: Row(
+        children: [
+          Icon(Icons.history_rounded, size: 24, color: colors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(icon, size: 24, color: colors.primary),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: titleStyle),
-                      const SizedBox(height: 4),
-                      Text(
-                        description,
-                        style: TextStyle(color: colors.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
+                Text(
+                  'A fresh start',
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
-              ],
-            )
-          : Column(
-              children: [
-                Icon(icon, size: 44, color: colors.primary),
-                const SizedBox(height: 18),
-                Text(title, textAlign: TextAlign.center, style: titleStyle),
-                const SizedBox(height: 8),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: Text(
-                    description,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: colors.onSurfaceVariant),
-                  ),
+                const SizedBox(height: 4),
+                Text(
+                  'Videos you open will appear here, with watched status and saved resume points.',
+                  style: TextStyle(color: colors.onSurfaceVariant),
                 ),
               ],
             ),
+          ),
+        ],
+      ),
     );
   }
 }
-
-Widget _collectionGrid(
-  BuildContext context,
-  int count,
-  Widget Function(BuildContext, int) builder, {
-  bool frames = false,
-}) => SliverLayoutBuilder(
-  builder: (context, box) {
-    final extra = math.max(
-      0.0,
-      MediaQuery.textScalerOf(context).scale(16) - 16,
-    );
-    final columns = ((box.crossAxisExtent + 16) / (276 + extra * 4))
-        .floor()
-        .clamp(1, 3);
-    final width = (box.crossAxisExtent - 16 * (columns - 1)) / columns;
-    return SliverGrid.builder(
-      itemCount: count,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        mainAxisExtent: frames
-            ? width * 9 / 16 + 116 + extra * 4
-            : 250 + extra * 5,
-      ),
-      itemBuilder: builder,
-    );
-  },
-);
 
 class _VideoSourcePreview extends StatelessWidget {
   const _VideoSourcePreview(this.source);
@@ -314,153 +136,35 @@ class _VideoSourcePreview extends StatelessWidget {
   }
 }
 
-class _VideoEntryCard extends StatelessWidget {
-  const _VideoEntryCard({
-    super.key,
-    required this.source,
-    required this.runtime,
-    this.lookupDuration,
-    required this.status,
-    required this.actions,
-    required this.onTap,
-    this.date,
-    this.progress,
-    this.artwork,
-    this.compact = false,
-  });
-  final VideoSource source;
-  final Duration runtime;
-  final Future<Duration?>? lookupDuration;
-  final String status;
-  final String? date;
-  final double? progress;
-  final Widget? artwork;
-  final List<Widget> actions;
-  final VoidCallback onTap;
-  final bool compact;
+class _VideoHistoryDate extends StatelessWidget {
+  const _VideoHistoryDate(this.day);
+  final DateTime day;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final now = DateTime.now();
+    // Compare calendar days so daylight-saving changes do not shift groups.
+    final days = DateTime.utc(
+      now.year,
+      now.month,
+      now.day,
+    ).difference(DateTime.utc(day.year, day.month, day.day)).inDays;
+    final label = switch (days) {
+      0 => 'Today',
+      1 => 'Yesterday',
+      >= 2 && < 7 => '$days days ago',
+      _ => MaterialLocalizations.of(context).formatShortDate(day),
+    };
     return Padding(
-      padding: EdgeInsets.only(bottom: compact ? 6 : 12),
-      child: Material(
-        color: colors.surfaceContainerLow,
-        shape: auralisSurfaceShape(
-          colors,
-          radius: compact ? 14 : 22,
-          borderOpacity: .35,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: LayoutBuilder(
-            builder: (context, box) {
-              final wide =
-                  box.maxWidth >= 620 &&
-                  MediaQuery.textScalerOf(context).scale(14) <= 20;
-              final controls = Wrap(
-                spacing: compact ? 0 : 4,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: actions,
-              );
-              final statusLabel = Text(
-                status,
-                style: TextStyle(
-                  color: colors.primary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              );
-              return Padding(
-                padding: EdgeInsets.all(compact ? 8 : 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(
-                            compact ? 10 : 14,
-                          ),
-                          child: SizedBox(
-                            width: compact ? 44 : (wide ? 112 : 64),
-                            height: compact ? 44 : (wide ? 78 : 56),
-                            child: artwork ?? _VideoSourcePreview(source),
-                          ),
-                        ),
-                        SizedBox(width: compact ? 8 : 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                source.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style:
-                                    (compact
-                                            ? Theme.of(context)
-                                                  .textTheme
-                                                  .titleSmall
-                                            : Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium)
-                                        ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              SizedBox(height: compact ? 2 : 4),
-                              VideoRuntimeLabel(
-                                duration: runtime,
-                                lookup: lookupDuration,
-                                style: Theme.of(context).textTheme.labelSmall,
-                              ),
-                              Text(
-                                [
-                                  source.telegram?.source ?? 'On your device',
-                                  ?date,
-                                ].join(' · '),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: colors.onSurfaceVariant,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              if (!compact || wide) ...[
-                                SizedBox(height: compact ? 3 : 8),
-                                statusLabel,
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (wide) ...[const SizedBox(width: 16), controls],
-                      ],
-                    ),
-                    if (!wide && compact)
-                      Row(
-                        children: [
-                          Expanded(child: statusLabel),
-                          controls,
-                        ],
-                      )
-                    else if (!wide)
-                      Align(
-                        alignment: AlignmentDirectional.centerEnd,
-                        child: controls,
-                      ),
-                    if (progress case final double value) ...[
-                      SizedBox(height: compact ? 3 : 12),
-                      LinearProgressIndicator(
-                        value: value,
-                        minHeight: compact ? 2 : 3,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
+      key: ValueKey(('video-history-date', day)),
+      padding: const EdgeInsets.fromLTRB(8, 16, 8, 10),
+      child: Semantics(
+        header: true,
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -468,122 +172,151 @@ class _VideoEntryCard extends StatelessWidget {
   }
 }
 
-class _VideoSnapshotCard extends StatelessWidget {
-  const _VideoSnapshotCard({
-    super.key,
-    required this.file,
-    required this.onOpen,
-    required this.onDelete,
-  });
-  final File file;
-  final VoidCallback onOpen, onDelete;
+String? _historyEpisode(String title) {
+  final season = RegExp(
+    r'\bs(\d{1,2})[ ._-]*e(\d{1,4})\b',
+    caseSensitive: false,
+  ).firstMatch(title.replaceAll('_', ' '));
+  if (season != null) {
+    return 'S${int.parse(season[1]!)} · Ep. ${int.parse(season[2]!)}';
+  }
+  final episode = RegExp(
+    r'\b(?:episode|ep)\.?\s*(\d{1,4})\b',
+    caseSensitive: false,
+  ).firstMatch(title);
+  final numbered = RegExp(
+    r'\s[-–]\s*(\d{1,3})(?:v\d+)?(?=\s|\[|\.|$)',
+    caseSensitive: false,
+  ).firstMatch(title);
+  final number = episode?[1] ?? numbered?[1];
+  return number == null ? null : 'Ep. ${int.parse(number)}';
+}
 
-  @override
-  Widget build(BuildContext context) {
+class _VideoHistoryRow extends StatelessWidget {
+  const _VideoHistoryRow({
+    super.key,
+    required this.entry,
+    required this.runtime,
+    required this.position,
+    required this.watched,
+    required this.onTap,
+    required this.onWatch,
+    required this.onRemove,
+    required this.onActions,
+    this.lookupDuration,
+    this.artwork,
+    this.metadata,
+    this.repository,
+  });
+
+  final VideoHistoryEntry entry;
+  final Duration runtime;
+  final Duration? position;
+  final bool watched;
+  final VoidCallback onTap, onWatch, onRemove, onActions;
+  final Future<Duration?>? lookupDuration;
+  final Widget? artwork;
+  final Future<MetadataMatch>? metadata;
+  final ChannelMetadataRepository? repository;
+
+  Widget _details(BuildContext context, Duration duration) {
+    final local = entry.playedAt.toLocal();
+    final time = MaterialLocalizations.of(context).formatTimeOfDay(
+      TimeOfDay.fromDateTime(local),
+      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+    );
+    final episode = _historyEpisode(entry.source.title);
+    final resume = position == null || position == Duration.zero
+        ? null
+        : '${clockText(position!)} / ${duration > Duration.zero ? clockText(duration) : '—:—'}';
+    return Text(
+      [?episode, time, ?resume].join(' · '),
+      semanticsLabel: [
+        ?episode,
+        time,
+        if (resume != null) 'Resume at ${clockText(position!)}',
+        if (watched) 'Watched',
+      ].join(', '),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.bodySmall
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+    );
+  }
+
+  Widget _row(BuildContext context, ChannelTitle? title) {
+    final source = entry.source;
     final colors = Theme.of(context).colorScheme;
-    final position = _snapshotPosition(file);
-    return AuralisPressFeedback(
-      builder: (context, states) => Material(
-        color: colors.surfaceContainerLow,
-        shape: auralisSurfaceShape(colors, radius: 24, borderOpacity: .35),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          statesController: states,
-          onTap: onOpen,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    final poster = title?.cover != null && repository != null
+        ? MetadataArtwork(
+            repository: repository!,
+            url: title!.cover,
+            poster: true,
+          )
+        : artwork ?? _VideoSourcePreview(source);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onActions,
+        onSecondaryTap: onActions,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
             children: [
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Stack(
-                  fit: StackFit.expand,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(width: 52, height: 78, child: poster),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Image.file(
-                      file,
-                      fit: BoxFit.cover,
-                      cacheWidth: 720,
-                      frameBuilder: (_, child, frame, _) => frame != null
-                          ? child
-                          : ColoredBox(
-                              color: colors.secondaryContainer,
-                              child: Icon(
-                                Icons.photo_outlined,
-                                color: colors.onSecondaryContainer,
-                                size: 40,
-                              ),
-                            ),
-                      errorBuilder: (_, _, _) => ColoredBox(
-                        color: colors.secondaryContainer,
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: colors.onSecondaryContainer,
-                          size: 40,
-                        ),
-                      ),
+                    Text(
+                      title?.title ?? source.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
                     ),
-                    PositionedDirectional(
-                      top: 10,
-                      end: 10,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: colors.scrim.withValues(alpha: .6),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: Icon(
-                            Icons.open_in_full_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
+                    const SizedBox(height: 4),
+                    if (runtime > Duration.zero || lookupDuration == null)
+                      _details(context, runtime)
+                    else
+                      FutureBuilder<Duration?>(
+                        future: lookupDuration,
+                        builder: (context, snapshot) =>
+                            _details(context, snapshot.data ?? Duration.zero),
                       ),
-                    ),
                   ],
                 ),
               ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 8, 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _snapshotTitle(file),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const Spacer(),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              position == null
-                                  ? 'PNG image'
-                                  : 'Frame at ${clockText(position)}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: colors.onSurfaceVariant,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Delete snapshot',
-                            onPressed: onDelete,
-                            icon: const Icon(
-                              Icons.delete_outline_rounded,
-                              size: 20,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: watched ? 'Mark as unwatched' : 'Mark as watched',
+                isSelected: watched,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
+                padding: const EdgeInsets.all(8),
+                icon: const Icon(
+                  Icons.radio_button_unchecked_rounded,
+                  size: 22,
                 ),
+                selectedIcon: Icon(
+                  Icons.check_circle_rounded,
+                  size: 22,
+                  color: colors.primary,
+                ),
+                onPressed: onWatch,
+              ),
+              IconButton(
+                tooltip: 'Remove from history',
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
+                padding: const EdgeInsets.all(8),
+                icon: const Icon(Icons.delete_outline_rounded, size: 22),
+                onPressed: onRemove,
               ),
             ],
           ),
@@ -591,4 +324,13 @@ class _VideoSnapshotCard extends StatelessWidget {
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) => metadata == null
+      ? _row(context, null)
+      : FutureBuilder<MetadataMatch>(
+          future: metadata,
+          builder: (context, snapshot) =>
+              _row(context, snapshot.data?.selected),
+        );
 }
