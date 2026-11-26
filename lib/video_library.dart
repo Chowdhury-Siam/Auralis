@@ -208,93 +208,85 @@ class VideoLibraryRow extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final progress = saved ? null : download;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
-        child: Material(
-          color: selected
-              ? colors.primaryContainer
-              : colors.surfaceContainerLow,
-          shape: auralisSurfaceShape(colors, radius: 18, borderOpacity: .35),
-          clipBehavior: Clip.antiAlias,
-          child: Semantics(
-            selected: selected,
-            child: InkWell(
-              onTap: onTap,
-              onLongPress: onLongPress,
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      8,
-                      8,
-                      8,
-                      progress == null ? 8 : 12,
+    return Material(
+      color: selected ? colors.primaryContainer : colors.surfaceContainerLow,
+      shape: auralisSurfaceShape(colors, radius: 18, borderOpacity: .35),
+      clipBehavior: Clip.antiAlias,
+      child: Semantics(
+        selected: selected,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  8,
+                  8,
+                  8,
+                  progress == null ? 8 : 12,
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox.square(dimension: 64, child: artwork),
                     ),
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: SizedBox.square(dimension: 64, child: artwork),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: selected
-                                      ? colors.onPrimaryContainer
-                                      : watched
-                                      ? colors.onSurfaceVariant
-                                      : null,
-                                ),
-                              ),
-                              if (subtitle != null)
-                                DefaultTextStyle(
-                                  style:
-                                      (theme.textTheme.labelSmall ??
-                                              const TextStyle())
-                                          .copyWith(
-                                            color: selected
-                                                ? colors.onPrimaryContainer
-                                                : colors.onSurfaceVariant,
-                                          ),
-                                  child: subtitle!,
-                                ),
-                              if (saved)
-                                _VideoOfflineBadge(
-                                  color: selected
-                                      ? colors.onPrimaryContainer
-                                      : colors.primary,
-                                ),
-                            ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: selected
+                                  ? colors.onPrimaryContainer
+                                  : watched
+                                  ? colors.onSurfaceVariant
+                                  : null,
+                            ),
                           ),
-                        ),
-                        if (trailing case final action?) ...[
-                          const SizedBox(width: 8),
-                          action,
+                          if (subtitle != null)
+                            DefaultTextStyle(
+                              style:
+                                  (theme.textTheme.labelSmall ??
+                                          const TextStyle())
+                                      .copyWith(
+                                        color: selected
+                                            ? colors.onPrimaryContainer
+                                            : colors.onSurfaceVariant,
+                                      ),
+                              child: subtitle!,
+                            ),
+                          if (saved)
+                            _VideoOfflineBadge(
+                              color: selected
+                                  ? colors.onPrimaryContainer
+                                  : colors.primary,
+                            ),
                         ],
-                        const SizedBox(width: 4),
-                      ],
+                      ),
                     ),
-                  ),
-                  if (progress != null)
-                    PositionedDirectional(
-                      start: 76,
-                      end: 10,
-                      bottom: 5,
-                      child: _VideoDownloadProgress(progress: progress),
-                    ),
-                ],
+                    if (trailing case final action?) ...[
+                      const SizedBox(width: 8),
+                      action,
+                    ],
+                    const SizedBox(width: 4),
+                  ],
+                ),
               ),
-            ),
+              if (progress != null)
+                PositionedDirectional(
+                  start: 76,
+                  end: 10,
+                  bottom: 5,
+                  child: _VideoDownloadProgress(progress: progress),
+                ),
+            ],
           ),
         ),
       ),
