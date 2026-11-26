@@ -203,9 +203,10 @@ void main() {
       });
       final counts = <String>[];
       Future<void> refresh() async {
-        // Start real filesystem work outside the fake widget clock.
-        await tester.runAsync(
-          () => tester.tap(find.byKey(const ValueKey('library-refresh'))),
+        await tester.pumpAndSettle();
+        await tester.drag(
+          find.byKey(const PageStorageKey(('channels', false))),
+          const Offset(0, 320),
         );
         await tester.pump();
       }
@@ -239,6 +240,8 @@ void main() {
       await refresh();
       await until(() => telegram.artworkRequests.isNotEmpty);
       expect(find.text('Caching 0 / 3'), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(find.byType(RefreshProgressIndicator), findsNothing);
       telegram.pause!.complete();
       await until(() => telegram.lyricRequests.length == 2 && !caching());
       expect(telegram.artworkRequests, ['40', '42']);
