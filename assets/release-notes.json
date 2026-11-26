@@ -1,6 +1,18 @@
 {
-  "current": "0.1.259",
+  "current": "0.1.261",
   "releases": [
+    {
+      "version": "0.1.261",
+      "changes": [
+        "Keep the poster grid as the only channel layout in Video Browse."
+      ]
+    },
+    {
+      "version": "0.1.260",
+      "changes": [
+        "Remove the sort button from the Video Library toolbar and default videos to Title (A–Z) when no video sort preference is saved."
+      ]
+    },
     {
       "version": "0.1.259",
       "changes": [
