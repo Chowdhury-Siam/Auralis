@@ -1463,7 +1463,8 @@ class TelegramService extends ChangeNotifier {
 
   // A null result means the check is pending. Keep channels available when
   // Telegram cannot determine their content, and retry on Browse refresh.
-  bool? browseChannelMatches(MusicChat channel, {required bool video}) {
+  bool? browseChannelMatches(MusicChat channel, {required AppInterface mode}) {
+    final video = mode == AppInterface.video;
     final key = (channel.id, video);
     final check = _browseChannelChecks.putIfAbsent(key, () {
       final check = _BrowseChannelCheck();
