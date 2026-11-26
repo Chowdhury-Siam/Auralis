@@ -23,8 +23,11 @@ void main() {
       const files = MusicChat(-3, 'Media files channel');
       const empty = MusicChat(-4, 'Empty channel');
       final inMusic = mode == AppInterface.music;
-      final excluded = inMusic ? audio : video;
-      final included = inMusic ? video : audio;
+      final included = inMusic ? audio : video;
+      final excluded = inMusic ? video : audio;
+      final modeFilter = inMusic
+          ? 'searchMessagesFilterAudio'
+          : 'searchMessagesFilterVideo';
       var emptyHasMedia = false;
       final td = FakeTd()
         ..onRequest = (request) async {
@@ -48,7 +51,9 @@ void main() {
                     (id == audio.id && filter == 'searchMessagesFilterAudio') ||
                         (id == video.id &&
                             filter == 'searchMessagesFilterVideo') ||
-                        (id == empty.id && emptyHasMedia)
+                        (id == empty.id &&
+                            emptyHasMedia &&
+                            filter == modeFilter)
                     ? 1
                     : 0,
               };
