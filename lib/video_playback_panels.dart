@@ -466,7 +466,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
       if (index < 0) return;
       switch (action) {
         case 'play': Navigator.pop(dialog, _queue[index]);
-        case 'playlist': await saveVideoPlaylist(dialog, _data, widget.music.settings.save, [entry]);
         case 'watched':
           _data.setWatched(entry, !_data.isWatched(entry));
           _saveSettings();
@@ -622,13 +621,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
             },
           ),
           actions: [
-            FilledButton.tonalIcon(
-              onPressed: () => saveVideoPlaylist(
-                dialog, _data, widget.music.settings.save, List<VideoSource>.of(_queue),
-              ),
-              icon: const Icon(Icons.playlist_add_rounded),
-              label: const Text('Save as playlist'),
-            ),
             FilterChip(
               selected: _shuffle,
               showCheckmark: false,
@@ -831,11 +823,17 @@ extension _PlaybackPanels on _VideoPlaybackState {
         RegExp(r'[^\p{L}\p{N}._-]+', unicode: true),
         '_',
       );
-      final stem = title.characters.take(72).toString();
+      final stem = String.fromCharCodes(title.runes.take(48));
       final filename =
           '${stem.isEmpty ? 'video' : stem}-${position.inMilliseconds}ms.png';
       await storeVideoSnapshot(bytes, filename);
-      _notice('Frame saved to Video snapshots.');
+      _notice(
+        Platform.isAndroid
+          ? 'Snapshot saved to Download/Snapshots.'
+          : 'Snapshot saved to Snapshots in Downloads.',
+      );
+    } on PlatformException catch (error) {
+      _notice(error.message ?? 'Could not save the video frame.');
     } catch (_) {
       _notice('Could not save the video frame.');
     }
