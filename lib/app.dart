@@ -326,6 +326,7 @@ class _PlayerShellState extends State<PlayerShell>
   _cacheReport;
   final search = TextEditingController();
   final _discoveryFocus = FocusNode();
+  bool _browseSearchOpen = false;
   SettingsSection? _settingsSection;
   late final ChannelLibrary library;
   late final Listenable _shellUpdates;
@@ -636,11 +637,13 @@ class _PlayerShellState extends State<PlayerShell>
     if (page == _Page.settings) {
       _settingsSection = null;
     }
-    if (page != destination && page != _Page.nowPlaying) {
+    final leavingPage = page != destination && page != _Page.nowPlaying;
+    if (leavingPage) {
       FocusManager.instance.primaryFocus?.unfocus();
       search.clear();
     }
     setState(() {
+      if (leavingPage) _browseSearchOpen = false;
       if (_mainPages.contains(page)) _primaryPage = page;
       destination = page;
       _closingPlayer = false;
@@ -659,6 +662,8 @@ class _PlayerShellState extends State<PlayerShell>
       }
     } else if (destination == _Page.library && _selectedArtist != null) {
       _selectArtist(null);
+    } else if (destination == _Page.browse && _browseSearchOpen) {
+      _closeDiscoverySearch();
     } else if (destination == _Page.settings || destination == _Page.telegram) {
       _navigate(_primaryPage);
     } else if (destination != _rootPage) {
@@ -1134,6 +1139,10 @@ class _PlayerShellState extends State<PlayerShell>
     });
     telegram.clearMusicArtworkMemory();
     await library.refresh();
+    unawaited(_cacheLibraryMedia(generation));
+  }
+
+  Future<void> _cacheLibraryMedia(int generation) async {
     if (!mounted || generation != _cacheGeneration || !telegram.ready) return;
     final tracks = List<Track>.of(library.tracks);
     final scope = _libraryCacheScope;
@@ -1281,8 +1290,15 @@ class _PlayerShellState extends State<PlayerShell>
   void _openTelegram() => _navigate(_Page.telegram);
 
   void _focusDiscovery() {
-    _navigate(_Page.browse);
+    if (destination != _Page.browse) _navigate(_Page.browse);
+    setState(() => _browseSearchOpen = true);
     _discoveryFocus.requestFocus();
+  }
+
+  void _closeDiscoverySearch() {
+    _discoveryFocus.unfocus();
+    search.clear();
+    setState(() => _browseSearchOpen = false);
   }
 
   bool _savingTaggedSong = false;
@@ -1763,31 +1779,6 @@ class _PlayerShellState extends State<PlayerShell>
       style: TextStyle(color: _colors.onErrorContainer, fontSize: 12),
     ),
   );
-  Widget _search(String hint, {bool discover = false}) => TextField(
-    controller: search,
-    focusNode: discover ? _discoveryFocus : null,
-    textInputAction: TextInputAction.search,
-    decoration: InputDecoration(
-      hintText: hint,
-      enabledBorder: discover ? auralisFieldBorder(radius: 28) : null,
-      focusedBorder: discover
-          ? auralisFieldBorder(
-              radius: 28,
-              side: BorderSide(color: _colors.primary),
-            )
-          : null,
-      prefixIcon: const Icon(Icons.search_rounded, size: 20),
-      contentPadding: const EdgeInsets.symmetric(vertical: 12),
-      suffixIcon: search.text.isEmpty
-          ? null
-          : IconButton(
-              onPressed: search.clear,
-              tooltip: 'Clear search',
-              icon: const Icon(Icons.close_rounded, size: 18),
-            ),
-    ),
-  );
-
   Future<String?> _editPlaylist({String? previous}) =>
       showAuralisDialog<String>(
         context: context,
