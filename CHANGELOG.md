@@ -1,5 +1,14 @@
 # Auralis changes
 
+## 0.1.267
+
+- Align the Download and Install buttons with the App updates card on narrow screens.
+
+## 0.1.266
+
+- Hide channels without videos in Music Browse and channels without music in Video Browse.
+- Press and hold a channel in Music Browse to delete it from Auralis Music on this device.
+
 ## 0.1.265
 
 - Pull down to refresh Music Browse in the grid and list layouts.
