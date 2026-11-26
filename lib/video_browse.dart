@@ -3,27 +3,13 @@ part of 'telegram_video_view.dart';
 extension _VideoBrowse on _TelegramVideoViewState {
   List<MusicChat> _matchingChannels(String query) {
     if (!_ready) return const [];
-    final opened = <int, DateTime>{};
-    if (_browseRecentlyOpened) {
-      for (final entry in widget.music.settings.videoPlayback.history.values) {
-        final id = int.tryParse(entry.source.channelId ?? '');
-        if (id == null) continue;
-        final previous = opened[id];
-        if (previous == null || entry.playedAt.isAfter(previous)) {
-          opened[id] = entry.playedAt;
-        }
-      }
-    }
+    final folderId = _browseFolderId;
     return _channels.where((channel) {
-      return (!_browseRecentlyOpened || opened.containsKey(channel.id)) &&
-          channel.title.toLowerCase().contains(query);
-    }).toList()..sort((a, b) {
-      if (_browseRecentlyOpened) {
-        final newest = opened[b.id]!.compareTo(opened[a.id]!);
-        if (newest != 0) return newest;
-      }
-      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-    });
+        return (folderId == null ||
+                _telegram.isChannelInFolder(channel.id, folderId)) &&
+            channel.title.toLowerCase().contains(query);
+      }).toList()
+      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
   }
 
   Widget _channelSearch(BuildContext context) {
@@ -31,7 +17,8 @@ extension _VideoBrowse on _TelegramVideoViewState {
     final channels = _matchingChannels(query);
     final padding = EdgeInsets.only(bottom: _bottomPadding(context));
     final showHeader = MediaQuery.viewInsetsOf(this.context).bottom == 0;
-    final collectionKey = ValueKey((query, _browseRecentlyOpened));
+    final folders = _telegram.chatFolders;
+    final collectionKey = ValueKey((query, _browseFolderId));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -85,27 +72,24 @@ extension _VideoBrowse on _TelegramVideoViewState {
                   ),
           ),
         ),
-        if (_ready && showHeader)
+        if (_ready && showHeader && folders.isNotEmpty)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                ChoiceChip(
-                  label: const Text('All channels'),
-                  selected: !_browseRecentlyOpened,
-                  showCheckmark: false,
-                  onSelected: (_) =>
-                      _updateBrowse(() => _browseRecentlyOpened = false),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('Recently opened'),
-                  selected: _browseRecentlyOpened,
-                  showCheckmark: false,
-                  onSelected: (_) =>
-                      _updateBrowse(() => _browseRecentlyOpened = true),
-                ),
+                for (final folder in folders)
+                  Padding(
+                    key: ValueKey(folder.id),
+                    padding: const EdgeInsetsDirectional.only(end: 8),
+                    child: ChoiceChip(
+                      label: Text(folder.name),
+                      selected: _browseFolderId == folder.id,
+                      showCheckmark: false,
+                      onSelected: (selected) =>
+                          _selectBrowseFolder(selected ? folder.id : null),
+                    ),
+                  ),
               ],
             ),
           )
@@ -113,29 +97,12 @@ extension _VideoBrowse on _TelegramVideoViewState {
           const SizedBox(height: 8),
         Expanded(
           child: LibraryRefresh(
-            onRefresh: _refresh,
+            onRefresh: () => _refresh(browseFolders: true),
             child: channels.isEmpty
                 ? ListView(
                     key: collectionKey,
                     padding: padding,
-                    children: [
-                      if (!_ready)
-                        _connectState(context)
-                      else if (query.isNotEmpty)
-                        _emptyState(context, title: 'No matching channels')
-                      else if (_browseRecentlyOpened)
-                        _emptyState(
-                          context,
-                          title: 'No recently opened channels',
-                          description:
-                              'Channels appear here after you play a video.',
-                        )
-                      else
-                        _emptyState(
-                          context,
-                          title: 'No Telegram channels available',
-                        ),
-                    ],
+                    children: [_emptyBrowse(context, query)],
                   )
                 : _browseChannelsAsList
                 ? ListView.separated(
@@ -184,6 +151,45 @@ extension _VideoBrowse on _TelegramVideoViewState {
     );
   }
 
+  Widget _emptyBrowse(BuildContext context, String query) {
+    if (!_ready) return _connectState(context);
+    if (_browseFolderLoad case final loading?) {
+      return FutureBuilder<bool>(
+        future: loading,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snapshot.data == false) {
+            return _emptyState(
+              context,
+              title: 'Could not load this folder',
+              action: TextButton(
+                onPressed: () => _selectBrowseFolder(_browseFolderId),
+                child: const Text('Retry'),
+              ),
+            );
+          }
+          return _emptyState(
+            context,
+            title: query.isEmpty
+                ? 'No channels in this folder'
+                : 'No matching channels in this folder',
+          );
+        },
+      );
+    }
+    return _emptyState(
+      context,
+      title: query.isEmpty
+          ? 'No Telegram channels available'
+          : 'No matching channels',
+    );
+  }
+
   Widget _browseChannelTile(MusicChat channel) {
     final selected = channel.id == _library?.channel.id;
     final artwork = _BrowseChannelArtwork(
@@ -208,6 +214,7 @@ extension _VideoBrowse on _TelegramVideoViewState {
                   ? const Icon(Icons.check_circle_rounded, size: 24)
                   : null,
               onTap: () => _chooseChannel(channel),
+              onLongPress: () => _deleteBrowseChannel(channel),
             )
           : _BrowsePoster(
               title: channel.title,
@@ -215,8 +222,52 @@ extension _VideoBrowse on _TelegramVideoViewState {
               selected: selected,
               artwork: artwork,
               onTap: () => _chooseChannel(channel),
+              onLongPress: () => _deleteBrowseChannel(channel),
             ),
     );
+  }
+
+  Future<void> _deleteBrowseChannel(MusicChat channel) async {
+    if (_deletingBrowseChannel) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final confirmed = await confirmAuralisAction(
+      context,
+      title: 'Delete channel?',
+      message: 'Remove “${channel.title}” from Auralis Video on this device?',
+      confirmLabel: 'Delete',
+      destructive: true,
+    );
+    if (!mounted || !_ready || confirmed != true || _deletingBrowseChannel) {
+      return;
+    }
+
+    final settings = widget.music.settings;
+    if (!settings.hiddenVideoChannelIds.add(channel.id)) return;
+    final wasSelected = settings.videoChannelId == channel.id;
+    if (wasSelected) settings.videoChannelId = null;
+    _deletingBrowseChannel = true;
+    try {
+      await settings.save();
+    } catch (_) {
+      settings.hiddenVideoChannelIds.remove(channel.id);
+      if (wasSelected) settings.videoChannelId ??= channel.id;
+      if (mounted) {
+        _updateBrowse(() {});
+        _notice('Could not delete the channel. Please try again.');
+      }
+      return;
+    } finally {
+      _deletingBrowseChannel = false;
+    }
+    if (!mounted) return;
+    _updateBrowse(() {
+      _videoSources.remove(channel.id);
+      _videoCounts.remove(channel.id);
+      if (_library?.channel.id == channel.id) {
+        _library = null;
+        _showSearchChannel = false;
+      }
+    });
   }
 }
 
@@ -227,13 +278,14 @@ class _BrowsePoster extends StatelessWidget {
     required this.selected,
     required this.artwork,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final String title;
   final String? subtitle;
   final bool selected;
   final Widget artwork;
-  final VoidCallback onTap;
+  final VoidCallback onTap, onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -255,6 +307,7 @@ class _BrowsePoster extends StatelessWidget {
           child: InkWell(
             statesController: states,
             onTap: onTap,
+            onLongPress: onLongPress,
             child: Stack(
               fit: StackFit.expand,
               children: [
