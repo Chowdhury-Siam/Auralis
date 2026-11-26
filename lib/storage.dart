@@ -127,6 +127,7 @@ class AppSettings {
   bool setupComplete = false;
   AppInterface defaultInterface = AppInterface.music;
   int? videoChannelId;
+  final hiddenMusicChannelIds = <int>{};
   final hiddenVideoChannelIds = <int>{};
   VideoPlaybackData videoPlayback = VideoPlaybackData();
   MusicVisualizerSettings musicVisualizer = MusicVisualizerSettings();
@@ -147,6 +148,9 @@ class AppSettings {
   static const defaultLibrarySort = LibrarySort.title;
   LibrarySort librarySort = defaultLibrarySort;
   List<MusicChat> selectedChannels = [];
+  Iterable<MusicChat> get musicChannels => selectedChannels.where(
+    (channel) => !hiddenMusicChannelIds.contains(channel.id),
+  );
   Set<String> favoriteIds = {};
   Map<String, List<String>> playlists = {};
   final playlistPhotos = PlaylistPhotos();
@@ -179,6 +183,11 @@ class AppSettings {
     videoPlayback = VideoPlaybackData.fromJson(json['_videoPlayback']);
     playlistPhotos.load(json['_playlistPhotos']);
     applyJson(json);
+    final hiddenMusicChannels = json['_hiddenMusicChannelIds'];
+    hiddenMusicChannelIds.clear();
+    if (hiddenMusicChannels is List) {
+      hiddenMusicChannelIds.addAll(hiddenMusicChannels.whereType<int>());
+    }
     final hiddenChannels = json['_hiddenVideoChannelIds'];
     hiddenVideoChannelIds.clear();
     if (hiddenChannels is List) {
@@ -195,6 +204,7 @@ class AppSettings {
   Map<String, dynamic> _diskJson(Map<String, dynamic> snapshot) => {
     ...snapshot,
     '_sync': syncState,
+    '_hiddenMusicChannelIds': hiddenMusicChannelIds.toList(),
     '_hiddenVideoChannelIds': hiddenVideoChannelIds.toList(),
     '_videoPlayback': videoPlayback.toJson(),
     '_musicVisualizer': musicVisualizer.toJson(),
