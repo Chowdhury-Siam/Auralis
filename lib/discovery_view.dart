@@ -37,7 +37,7 @@ extension _DiscoveryPages on _PlayerShellState {
     final hasMusic = daily.isNotEmpty;
     final prompt = !telegram.ready
         ? 'Connect Telegram to bring your music into Auralis.'
-        : settings.selectedChannels.isEmpty
+        : settings.musicChannels.isEmpty
         ? 'Choose the Telegram channels you want in your music library.'
         : library.loading
         ? 'Your mix will be ready when your tracks load.'
@@ -255,7 +255,7 @@ extension _DiscoveryPages on _PlayerShellState {
                   label: Text(
                     !telegram.ready
                         ? 'Connect Telegram'
-                        : settings.selectedChannels.isEmpty
+                        : settings.musicChannels.isEmpty
                         ? 'Choose channels'
                         : 'Open Browse',
                   ),
@@ -348,6 +348,7 @@ extension _DiscoveryPages on _PlayerShellState {
       return;
     }
     telegram.clearChannelMediaCounts(video: false);
+    telegram.clearChannelMediaCounts(video: true);
     await Future.wait([
       telegram.action(telegram.refreshChats),
       _refreshLibrary(),
@@ -356,9 +357,7 @@ extension _DiscoveryPages on _PlayerShellState {
 
   Widget _discover() {
     final query = _browseSearchOpen ? search.text.trim().toLowerCase() : '';
-    final channels = telegram.ready
-        ? _matchingMusicChannels(query)
-        : const <MusicChat>[];
+    final (:channels, :checking) = _matchingMusicChannels(query);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -412,7 +411,7 @@ extension _DiscoveryPages on _PlayerShellState {
             child: channels.isEmpty
                 ? ListView(
                     padding: EdgeInsets.only(bottom: _dockPadding),
-                    children: [_musicBrowseEmpty(query)],
+                    children: [_musicBrowseEmpty(query, checking: checking)],
                   )
                 : _discoveryTiles(
                     page: 'channels',
@@ -454,19 +453,25 @@ extension _DiscoveryPages on _PlayerShellState {
           );
   }
 
-  List<MusicChat> _matchingMusicChannels(String query) {
+  ({List<MusicChat> channels, bool checking}) _matchingMusicChannels(
+    String query,
+  ) {
+    if (!telegram.ready) return (channels: const [], checking: false);
+    final settings = player.settings;
     final channels = {
-      for (final channel in player.settings.selectedChannels)
-        channel.id: channel,
+      for (final channel in settings.selectedChannels) channel.id: channel,
       for (final channel in telegram.channels) channel.id: channel,
     };
-    return channels.values
-        .where((channel) => channel.title.toLowerCase().contains(query))
-        .toList()
-      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    return matchingBrowseChannels(
+      channels.values.where(
+        (channel) => !settings.hiddenMusicChannelIds.contains(channel.id),
+      ),
+      query,
+      (channel) => telegram.browseChannelMatches(channel, video: true),
+    );
   }
 
-  Widget _musicBrowseEmpty(String query) {
+  Widget _musicBrowseEmpty(String query, {required bool checking}) {
     return DiscoveryCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -474,6 +479,8 @@ extension _DiscoveryPages on _PlayerShellState {
           Text(
             !telegram.ready
                 ? 'Connect Telegram for your music'
+                : checking
+                ? 'Checking channels…'
                 : query.isNotEmpty
                 ? 'No matching channels'
                 : 'No Telegram channels available',
@@ -484,7 +491,7 @@ extension _DiscoveryPages on _PlayerShellState {
               onPressed: _openTelegram,
               child: const Text('Connect Telegram'),
             )
-          else if (query.isEmpty)
+          else if (!checking && query.isEmpty)
             const Text(
               'Join a channel in Telegram, then pull down to refresh.',
             ),
@@ -525,8 +532,22 @@ extension _DiscoveryPages on _PlayerShellState {
         onTap: library.saving
             ? null
             : () => unawaited(library.select(channel, !selected)),
+        onLongPress: library.saving ? null : () => _deleteMusicChannel(channel),
       ),
     );
+  }
+
+  Future<void> _deleteMusicChannel(MusicChat channel) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final confirmed = await confirmAuralisAction(
+      context,
+      title: 'Delete channel?',
+      message: 'Remove “${channel.title}” from Auralis Music on this device?',
+      confirmLabel: 'Delete',
+      destructive: true,
+    );
+    if (!mounted || !telegram.ready || confirmed != true) return;
+    await library.hide(channel);
   }
 
   String _artistName(Track track) {
