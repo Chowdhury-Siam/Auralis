@@ -731,7 +731,10 @@ class _PlayerShellState extends State<PlayerShell>
         key: ValueKey((page, immersiveLyrics)),
         child: switch (page) {
           _Page.home => _home(),
-          _Page.browse => _discover(),
+          _Page.browse => ListenableBuilder(
+            listenable: telegram.browseMediaChanges,
+            builder: (_, _) => _discover(),
+          ),
           _Page.library => _library(),
           _Page.telegram => _telegramSignIn(),
           _Page.settings => _settingsPage(),
@@ -1127,7 +1130,7 @@ class _PlayerShellState extends State<PlayerShell>
 
   (String?, String) get _libraryCacheScope => (
     telegram.mediaCache.directory?.path,
-    player.settings.selectedChannels.map((channel) => channel.id).join(','),
+    player.settings.musicChannels.map((channel) => channel.id).join(','),
   );
 
   Future<void> _refreshLibrary() async {
@@ -2466,7 +2469,7 @@ class _PlayerShellState extends State<PlayerShell>
         ),
       );
     }
-    if (player.settings.selectedChannels.isEmpty) {
+    if (player.settings.musicChannels.isEmpty) {
       return _empty(
         Icons.campaign_rounded,
         'Choose your music channels',
