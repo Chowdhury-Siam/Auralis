@@ -87,11 +87,7 @@ void main() {
             : ValueKey(('video-collection-search', index)),
       );
       Future<void> select(String name) async {
-        await tester.tap(
-          find.byKey(const ValueKey('video-library-collection-menu')),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(PopupMenuItem<int>, name));
+        await tester.tap(find.byTooltip('Show $name'));
         await tester.pumpAndSettle();
       }
 
@@ -136,20 +132,8 @@ void main() {
       }
 
       checkPanel(0);
-      await tester.tap(
-        find.byKey(const ValueKey('video-library-collection-menu')),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.widgetWithText(PopupMenuItem<int>, 'Playlists'),
-        findsNothing,
-      );
-      expect(
-        find.widgetWithText(PopupMenuItem<int>, 'Snapshots'),
-        findsNothing,
-      );
-      await tester.tap(find.widgetWithText(PopupMenuItem<int>, 'History'));
-      await tester.pumpAndSettle();
+      expect(find.byTooltip('Library collection: All videos'), findsNothing);
+      await select('History');
       checkPanel(1);
       await showRow('Beta episode');
       if (size.width == 390) {
@@ -164,7 +148,7 @@ void main() {
       tester.view.viewInsets = const FakeViewPadding(bottom: 280);
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey('video-library-collection-menu')),
+        find.byKey(const ValueKey('video-library-indicator')),
         findsNothing,
       );
       expect(field(1), findsNothing);
