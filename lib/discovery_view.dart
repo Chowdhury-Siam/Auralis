@@ -348,7 +348,6 @@ extension _DiscoveryPages on _PlayerShellState {
       return;
     }
     telegram.clearChannelMediaCounts(video: false);
-    telegram.clearChannelMediaCounts(video: true);
     await Future.wait([
       telegram.action(telegram.refreshChats),
       _refreshLibrary(),
@@ -467,7 +466,8 @@ extension _DiscoveryPages on _PlayerShellState {
         (channel) => !settings.hiddenMusicChannelIds.contains(channel.id),
       ),
       query,
-      (channel) => telegram.browseChannelMatches(channel, video: true),
+      (channel) =>
+          telegram.browseChannelMatches(channel, mode: AppInterface.music),
     );
   }
 
