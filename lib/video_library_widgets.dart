@@ -16,49 +16,54 @@ class _VideoHistoryLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final horizontal = embedded ? 8.0 : 16.0;
-    final scroll = Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1120),
-        child: CustomScrollView(
-          key: const ValueKey('video-collection-scroll'),
-          slivers: [
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                embedded ? 4 : 12,
-                horizontal,
-                8,
-              ),
-              sliver: SliverToBoxAdapter(
-                child: Row(
-                  key: const ValueKey('video-collection-header'),
-                  children: [
-                    if (!embedded) const BackButton(),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(
-                          'Video history',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ),
+    final scroll = CustomScrollView(
+      key: const ValueKey('video-collection-scroll'),
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            embedded ? 4 : 12,
+            horizontal,
+            8,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: Row(
+              key: const ValueKey('video-collection-header'),
+              children: [
+                if (!embedded) const BackButton(),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      'Video history',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
                     ),
-                    ?trailing,
-                  ],
+                  ),
                 ),
-              ),
+                ?trailing,
+              ],
             ),
-            SliverPadding(
-              padding: EdgeInsets.symmetric(horizontal: horizontal),
-              sliver: content,
-            ),
-            SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
-          ],
+          ),
+        ),
+        SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: horizontal),
+          sliver: content,
+        ),
+        SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
+      ],
+    );
+    if (embedded) return scroll;
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1120),
+            child: scroll,
+          ),
         ),
       ),
     );
-    return embedded ? scroll : Scaffold(body: SafeArea(child: scroll));
   }
 }
 
