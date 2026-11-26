@@ -1,5 +1,9 @@
 # Auralis changes
 
+## 0.1.268
+
+- Show channels with audio in Music Browse and channels with video in Video Browse.
+
 ## 0.1.267
 
 - Align the Download and Install buttons with the App updates card on narrow screens.
