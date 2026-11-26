@@ -4,10 +4,8 @@ Auralis 0.1.144+145 builds on the Video mode port from the supplied Auralis 0.1.
 
 ## Using the additions
 
-- Music and Video use the same playlist artwork cards and option menus. Use **Change playlist photo** or **Reset photo** in a card's menu; custom photos stay on the device and are not included in portable backups or Worker Sync.
-- All Library collections share the rounded search-and-content panel. Playlists can be found by their name or video titles, History by video title or channel, and Snapshots by frame title or filename. Each section keeps its own filter. Searching does not change saved queues, history or frame files; clear a playlist filter to restore drag-to-reorder handles.
-- **Playlists** creates named video lists and lets you add files, reorder entries, rename lists, and remove items. Save the current queue to a named playlist. Telegram entries store chat and message IDs and resolve again through TDLib when reopened. Access to an Android document depends on the provider's persisted read grant.
-- **Save video frame** adds a PNG to **Snapshots**, where it can be previewed, exported, or deleted. **Player settings** controls whether the capture includes rendered subtitles.
+- Video Library includes **All videos**, **History**, and **Offline**. Channel search is in Browse, and the channel details title picker can correct metadata.
+- **Save video frame** writes a PNG directly to `Download/Snapshots` on Android or `Downloads/Snapshots` on Windows. **Player settings** controls whether the capture includes rendered subtitles.
 - **History** lists opened local and Telegram videos and shows saved resume positions. Episodes are marked watched at the end of playback or with the check button beside the episode. Update the Auralis sync Worker to share Telegram history, resume positions, and watched markers between devices.
 
 ## Review of partially implemented areas
@@ -29,4 +27,4 @@ The Android workflow still uses SDK-provided Ninja and a checksum-verified gperf
 
 Host checks passed for Android tooling, release policy, release notes, and the sync worker. A synthetic FFmpeg clip test verified trim duration, H.264 output, audio removal, and 480×480 crop and resize. Flutter and the Android SDK were unavailable in the delivery workspace. The added Flutter tests, full GitHub Actions APK assembly, and playback/export on an actual Android device still need to run.
 
-For the first ARM64 device check, open a Telegram video and close it using the player Back button and the mini-player Close button. Switch to Music and reopen Video mode. Exit the app with video playing, repeat while opening a video, and check the resume position after relaunch. Reopen a saved playlist and export a snapshot.
+For the first ARM64 device check, open a Telegram video and close it using the player Back button and the mini-player Close button. Switch to Music and reopen Video mode. Exit the app with video playing, repeat while opening a video, and check the resume position after relaunch. Capture a frame and check for the PNG in `Download/Snapshots`.
