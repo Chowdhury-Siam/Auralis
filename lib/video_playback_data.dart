@@ -729,14 +729,8 @@ class VideoPlaybackData {
       ? Duration(milliseconds: value)
       : null;
 
-  factory VideoPlaybackData.fromJson(
-    Object? json, {
-    LibrarySort fallbackSort = LibrarySort.title,
-  }) {
-    final videoFallback = LibrarySort.videoValues.contains(fallbackSort)
-        ? fallbackSort
-        : LibrarySort.title;
-    final data = VideoPlaybackData()..librarySort = videoFallback;
+  factory VideoPlaybackData.fromJson(Object? json) {
+    final data = VideoPlaybackData();
     if (json is! Map) return data;
     if (json['channelSettings'] case final Map channels) {
       for (final entry in channels.entries) {
@@ -750,7 +744,7 @@ class VideoPlaybackData {
     }
     data.librarySort = LibrarySort.videoValues.firstWhere(
       (sort) => sort.name == json['librarySort'],
-      orElse: () => videoFallback,
+      orElse: () => data.librarySort,
     );
     if (json['watched'] case final List watched) {
       data._watched.addAll(
