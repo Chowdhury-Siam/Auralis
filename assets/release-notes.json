@@ -1,6 +1,18 @@
 {
-  "current": "0.1.248",
+  "current": "0.1.250",
   "releases": [
+    {
+      "version": "0.1.250",
+      "changes": [
+        "Remove the remaining Open video files folder shortcut from Video Home."
+      ]
+    },
+    {
+      "version": "0.1.249",
+      "changes": [
+        "Remove search fields from Video Library All videos and Playlists while keeping channel search in Browse and manual metadata title selection."
+      ]
+    },
     {
       "version": "0.1.248",
       "changes": [
