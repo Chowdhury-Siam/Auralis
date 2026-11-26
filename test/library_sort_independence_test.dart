@@ -113,7 +113,7 @@ void main() {
   );
 
   test(
-    'legacy shared sort migrates once without later following Music',
+    'Video defaults to Title A–Z when only Music has a saved sort',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'auralis-sort-migration-',
@@ -133,13 +133,13 @@ void main() {
         final migrated = AppSettings(file);
         await migrated.load();
         expect(migrated.librarySort, LibrarySort.oldest);
-        expect(migrated.videoPlayback.librarySort, LibrarySort.oldest);
+        expect(migrated.videoPlayback.librarySort, LibrarySort.title);
         migrated.librarySort = LibrarySort.duration;
         await migrated.save();
         final restored = AppSettings(file);
         await restored.load();
         expect(restored.librarySort, LibrarySort.duration);
-        expect(restored.videoPlayback.librarySort, LibrarySort.oldest);
+        expect(restored.videoPlayback.librarySort, LibrarySort.title);
         if (oldVideoData != null) {
           expect(restored.videoPlayback.seekSeconds, 25);
         }
@@ -155,9 +155,7 @@ void main() {
     });
     expect(settings.videoPlayback.librarySort, LibrarySort.title);
     expect(
-      VideoPlaybackData.fromJson({
-        'librarySort': 'mostPlayed',
-      }, fallbackSort: LibrarySort.mostPlayed).librarySort,
+      VideoPlaybackData.fromJson({'librarySort': 'mostPlayed'}).librarySort,
       LibrarySort.title,
     );
     settings.videoPlayback.librarySort = LibrarySort.newest;
