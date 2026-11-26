@@ -421,10 +421,7 @@ class VideoChannelSettings {
 }
 
 class VideoPlaybackData {
-  static const playlistItemLimit = 1000;
-
   LibrarySort librarySort = LibrarySort.title;
-  final playlists = <String, List<VideoSource>>{};
   final history = <String, VideoHistoryEntry>{};
   final _watched = <String>{};
   final _watchedFiles = <String>{};
@@ -621,28 +618,6 @@ class VideoPlaybackData {
     positions.clear();
   }
 
-  void putPlaylist(String name, Iterable<VideoSource> items) {
-    name = name.trim();
-    if (name.isEmpty ||
-        name.length > 80 ||
-        (playlists.length >= 100 && !playlists.containsKey(name))) {
-      throw const FormatException(
-        'Use a name of 1–80 characters and up to 100 playlists.',
-      );
-    }
-    final entries = <String, VideoSource>{};
-    for (final item in items) {
-      if (!item.canPlay) continue;
-      entries.putIfAbsent(item.id, () => item);
-      if (entries.length > playlistItemLimit) {
-        throw const FormatException(
-          'A video playlist can hold up to 1,000 videos.',
-        );
-      }
-    }
-    playlists[name] = entries.values.toList();
-  }
-
   Duration durationOf(VideoSource source) {
     final saved = _runtimes[source.id];
     final size = source.telegram?.size ?? 0;
@@ -719,9 +694,6 @@ class VideoPlaybackData {
       history.removeWhere((_, entry) => entry.source.telegram != null);
       positions.removeWhere((id, _) => id.startsWith('telegram:'));
       _runtimes.removeWhere((id, _) => id.startsWith('telegram:'));
-    }
-    for (final list in playlists.values) {
-      list.removeWhere((source) => source.telegram != null);
     }
     bookmarks.removeWhere((id, _) => id.startsWith('telegram:'));
     skipSegments.removeWhere((id, _) => id.startsWith('telegram:'));
@@ -803,22 +775,6 @@ class VideoPlaybackData {
             entry.value is String &&
             isSubtitleStyle(entry.key as String, entry.value as String)) {
           data.subtitleStyle[entry.key as String] = entry.value as String;
-        }
-      }
-    }
-    if (json['playlists'] case final Map lists) {
-      for (final entry in lists.entries.take(100)) {
-        if (entry.key case final String name
-            when name.trim().isNotEmpty && name.length <= 80) {
-          if (entry.value case final List items) {
-            data.putPlaylist(
-              name,
-              items
-                  .take(playlistItemLimit)
-                  .map(VideoSource.restore)
-                  .whereType<VideoSource>(),
-            );
-          }
         }
       }
     }
@@ -969,10 +925,6 @@ class VideoPlaybackData {
     'ambientMode': ambientMode,
     'snapshotSubtitles': snapshotSubtitles,
     'subtitleStyle': subtitleStyle,
-    'playlists': {
-      for (final entry in playlists.entries)
-        entry.key: [for (final item in entry.value) item.toJson()],
-    },
     'history': [
       for (final entry in history.values)
         {
