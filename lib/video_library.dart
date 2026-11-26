@@ -173,6 +173,7 @@ class VideoLibraryRow extends StatelessWidget {
     this.trailing,
     this.offline,
     required this.onTap,
+    this.onLongPress,
   });
 
   final String title;
@@ -182,6 +183,7 @@ class VideoLibraryRow extends StatelessWidget {
   final Widget? trailing;
   final ({OfflineMedia media, String id})? offline;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +222,7 @@ class VideoLibraryRow extends StatelessWidget {
             selected: selected,
             child: InkWell(
               onTap: onTap,
+              onLongPress: onLongPress,
               child: Stack(
                 children: [
                   Padding(
