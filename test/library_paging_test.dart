@@ -196,8 +196,8 @@ void main() {
                 'Favorites',
                 'Playlists',
                 'Recently played',
-                'Offline',
               ];
+        expect(find.byTooltip('Show Offline'), findsNothing);
         for (final label in labels.skip(1)) {
           await tester.drag(pager, const Offset(-320, 0));
           await tester.pumpAndSettle();
@@ -220,6 +220,10 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        expect(
+          find.widgetWithText(PopupMenuItem<int>, 'Offline'),
+          findsNothing,
+        );
         if (video) {
           expect(
             find.widgetWithText(PopupMenuItem<int>, 'Playlists'),
