@@ -59,9 +59,8 @@ def verify_source(root):
     assert re.search(r"(?m)^distributionSha256Sum=[a-f0-9]{64}$", wrapper), "Gradle distribution checksum is required."
     manifest = ET.parse(android / "app/src/main/AndroidManifest.xml").getroot()
     ns = "{http://schemas.android.com/apk/res/android}"
-    permissions = {
-        node.get(ns + "name"): node for node in manifest.findall("uses-permission")
-    }
+    permission_nodes = manifest.findall("uses-permission") + manifest.findall("uses-permission-sdk-23")
+    permissions = {node.get(ns + "name") for node in permission_nodes}
     assert "android.permission.REQUEST_INSTALL_PACKAGES" in permissions
     build = (android / "app/build.gradle.kts").read_text()
     assert 'applicationId = "com.auralis.siam"' in build
@@ -74,7 +73,10 @@ def verify_source(root):
     assert "android.permission.INTERNET" in permissions
     assert "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" in permissions
     assert "android.permission.MANAGE_EXTERNAL_STORAGE" not in permissions
-    assert "android.permission.WRITE_EXTERNAL_STORAGE" not in permissions
+    # Snapshots use the legacy public Downloads directory on Android 7–9.
+    for node in permission_nodes:
+        if node.get(ns + "name") == "android.permission.WRITE_EXTERNAL_STORAGE":
+            assert node.get(ns + "maxSdkVersion") == "28", "Snapshot storage permission must be capped at API 28."
     # The device-library source was removed. Explicit document/video pickers
     # use URI grants and must not reintroduce broad storage/media permissions.
     retired_media_permissions = {
@@ -83,7 +85,7 @@ def verify_source(root):
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
     }
-    unexpected = retired_media_permissions & permissions.keys()
+    unexpected = retired_media_permissions & permissions
     assert not unexpected, f"Removed device library must not request media permissions: {sorted(unexpected)}"
     assert manifest.find("application").get(ns + "allowBackup") == "false"
     assert (android / "gradle/wrapper/gradle-wrapper.jar").stat().st_size > 1000
