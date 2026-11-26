@@ -135,7 +135,12 @@ void main() {
       await tester.tap(find.byTooltip('Show list'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Show grid'), findsOneWidget);
-      await tester.enterText(find.byType(TextField), 'Missing');
+      await tester.tap(find.byTooltip('Search channels'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search channels'),
+        'Missing',
+      );
       await tester.pumpAndSettle();
       expect(find.text('No matching channels'), findsOneWidget);
       await tester.tap(find.byTooltip('Library'));
@@ -231,6 +236,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('track-title-1:0')), findsOneWidget);
     expect(find.byKey(const ValueKey('track-title-1:1')), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    tester.view.physicalSize = const Size(1920, 1080);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Home'));
+    await tester.pumpAndSettle();
+    const rightEdge = 1920 - 26;
+    expect(tester.getRect(find.byType(DiscoveryHero)).right, rightEdge);
+    await tester.tap(find.byTooltip('Browse'));
+    await tester.pumpAndSettle();
+    final searchButton = find.byTooltip('Search channels');
+    final search = find.widgetWithText(TextField, 'Search channels');
+    expect(search, findsNothing);
+    expect(tester.getRect(searchButton).right, closeTo(rightEdge, 6));
+    expect(tester.getRect(find.byType(GridView)).right, rightEdge);
+    await tester.tap(searchButton);
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(search).focusNode!.hasFocus, isTrue);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
