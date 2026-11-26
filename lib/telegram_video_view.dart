@@ -522,6 +522,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   Future<void> _refresh({bool browseFolders = false}) async {
     if (!_ready) return;
     _telegram.clearChannelMediaCounts(video: true);
+    if (browseFolders) _telegram.clearChannelMediaCounts(video: false);
     setState(_videoCounts.clear);
     final results = _library;
     if (browseFolders && _browseFolderId != null) {
@@ -646,8 +647,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
           listenable: Listenable.merge([_telegram, widget.music.viewChanges]),
           builder: (context, _) => switch (_tab) {
             0 => _home(context),
-            1 when !_showSearchChannel || _library == null => _channelSearch(
-              context,
+            1 when !_showSearchChannel || _library == null => ListenableBuilder(
+              listenable: _telegram.browseMediaChanges,
+              builder: (context, _) => _channelSearch(context),
             ),
             1 => _browser(context),
             _ => _videoLibrary(context),
