@@ -38,6 +38,7 @@ internal class VideoWindow(
 
     private val channel = MethodChannel(messenger, "app.auralis/video")
     private val documents = VideoDocuments(activity, messenger, io)
+    private val snapshots = VideoSnapshots(activity, io)
     private val toggleAction = "${activity.packageName}.VIDEO_PIP_TOGGLE"
     private var picker: MethodChannel.Result? = null
     private var autoPip = false
@@ -73,6 +74,11 @@ internal class VideoWindow(
                 when (call.method) {
                     "openFiles" -> openFiles(result)
                     "videoDuration" -> videoDuration(call.arguments as? String, result)
+                    "saveSnapshot" -> snapshots.save(
+                        requireNotNull(call.argument<String>("name")),
+                        requireNotNull(call.argument<ByteArray>("bytes")),
+                        result,
+                    )
                     "immersiveMode" -> {
                         immersive = call.arguments == true
                         updateSystemBars()
@@ -285,11 +291,14 @@ internal class VideoWindow(
         return true
     }
 
+    fun onPermissionsResult(requestCode: Int): Boolean = snapshots.onPermissionsResult(requestCode)
+
     fun close() {
         closed = true
         immersive = false
         updateSystemBars()
         documents.close()
+        snapshots.close()
         if (supported) activity.unregisterReceiver(receiver)
         picker?.success(null)
         picker = null
