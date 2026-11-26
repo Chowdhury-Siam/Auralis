@@ -24,10 +24,14 @@ class ChannelLibrary extends ChangeNotifier {
 
   int? trackCount(int channelId) => _trackCounts[channelId];
 
-  bool selected(int id) => settings.selectedChannels.any((c) => c.id == id);
+  bool selected(int id) => settings.musicChannels.any((c) => c.id == id);
 
   Future<void> select(MusicChat channel, bool selected) async {
-    if (saving || _disposed) return;
+    if (saving ||
+        _disposed ||
+        settings.hiddenMusicChannelIds.contains(channel.id)) {
+      return;
+    }
     final previous = settings.selectedChannels;
     final selection = [
       for (final c in previous)
@@ -35,6 +39,34 @@ class ChannelLibrary extends ChangeNotifier {
       if (selected) channel,
     ];
     settings.selectedChannels = selection;
+    await _saveSelection(
+      rollback: () {
+        // Sign-out or sync may already have replaced this selection.
+        if (identical(settings.selectedChannels, selection)) {
+          settings.selectedChannels = previous;
+        }
+      },
+      failureMessage:
+          'Could not save your channel selection. Please try again.',
+    );
+  }
+
+  Future<void> hide(MusicChat channel) async {
+    if (saving || _disposed) return;
+    final wasSelected = selected(channel.id);
+    if (!settings.hiddenMusicChannelIds.add(channel.id)) return;
+    await _saveSelection(
+      rollback: () => settings.hiddenMusicChannelIds.remove(channel.id),
+      failureMessage: 'Could not delete the channel. Please try again.',
+      reload: wasSelected,
+    );
+  }
+
+  Future<void> _saveSelection({
+    required VoidCallback rollback,
+    required String failureMessage,
+    bool reload = true,
+  }) async {
     saving = true;
     error = null;
     notifyListeners();
@@ -42,16 +74,13 @@ class ChannelLibrary extends ChangeNotifier {
     try {
       await settings.save();
     } catch (_) {
-      // Sign-out or sync may already have replaced this selection.
-      if (identical(settings.selectedChannels, selection)) {
-        settings.selectedChannels = previous;
-      }
-      saveError = 'Could not save your channel selection. Please try again.';
+      rollback();
+      saveError = failureMessage;
     } finally {
       saving = false;
     }
     if (_disposed) return;
-    if (saveError == null || _refreshAfterSave) {
+    if (_refreshAfterSave || (saveError == null && reload)) {
       await _refresh(selectionError: saveError);
     } else {
       error = saveError;
@@ -88,7 +117,7 @@ class ChannelLibrary extends ChangeNotifier {
     tracks.clear();
     _trackCounts.clear();
     error = selectionError;
-    final channels = List<MusicChat>.of(settings.selectedChannels);
+    final channels = settings.musicChannels.toList();
     loading = telegram.ready && channels.isNotEmpty;
     notifyListeners();
     if (!loading) return;
