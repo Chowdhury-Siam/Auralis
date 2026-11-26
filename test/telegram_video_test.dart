@@ -179,11 +179,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('video-library-collection-menu')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('History'));
+      await tester.tap(find.byTooltip('Show History'));
       await tester.pumpAndSettle();
 
       expect(
