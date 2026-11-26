@@ -1,5 +1,11 @@
 # Auralis changes
 
+## 0.1.257
+
+- Open the metadata source selector in a scrollable dialog and fit the title search to its results.
+- Press and hold a channel in Video Browse to delete it from Auralis Video on this device.
+- Move the Video Library controls and artwork higher on phones and tighten the spacing around the page indicators.
+
 ## 0.1.256
 
 - Replace the Video Browse refresh buttons with pull-to-refresh on the channel grid, list, and episode list.
