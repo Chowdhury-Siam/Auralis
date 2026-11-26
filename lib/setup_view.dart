@@ -398,7 +398,7 @@ class _SetupViewState extends State<SetupView> with WidgetsBindingObserver {
       children: [
         Text(
           widget.telegram.ready
-              ? '${prefs.selectedChannels.length} channels selected'
+              ? '${prefs.musicChannels.length} channels selected'
               : 'Sign in with your own Telegram account. You can also do this later.',
           textAlign: TextAlign.center,
         ),
