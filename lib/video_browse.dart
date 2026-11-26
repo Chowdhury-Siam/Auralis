@@ -11,7 +11,8 @@ extension _VideoBrowse on _TelegramVideoViewState {
             _telegram.isChannelInFolder(channel.id, folderId),
       ),
       query,
-      (channel) => _telegram.browseChannelMatches(channel, video: false),
+      (channel) =>
+          _telegram.browseChannelMatches(channel, mode: AppInterface.video),
     );
   }
 
