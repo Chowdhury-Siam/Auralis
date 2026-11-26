@@ -168,13 +168,21 @@ void main() {
         );
         await tester.pumpAndSettle();
         final searchField = find.widgetWithText(TextField, 'Search channels');
-        expect(searchField, findsOneWidget);
+        final searchButton = find.byTooltip('Search channels');
+        expect(searchField, findsNothing);
+        expect(searchButton, findsOneWidget);
         expect(find.byTooltip('Settings'), findsNothing);
         expect(find.byTooltip('Choose video channel'), findsNothing);
         expect(find.text(channel.title), findsOneWidget);
         expect(find.text('Music only'), findsOneWidget);
         expect(settings.videoChannelId, isNull);
 
+        await tester.tap(searchButton);
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(searchField).focusNode!.hasFocus,
+          isTrue,
+        );
         await tester.enterText(searchField, 'Full movie');
         await tester.testTextInput.receiveAction(TextInputAction.search);
         await tester.pumpAndSettle();
@@ -183,6 +191,13 @@ void main() {
           td.requests.where((r) => r['@type'] == 'searchChatMessages'),
           isEmpty,
         );
+        await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+        await tester.pumpAndSettle();
+        expect(searchField, findsNothing);
+        expect(find.text('Music only'), findsOneWidget);
+        await tester.tap(searchButton);
+        await tester.pumpAndSettle();
+        expect(tester.widget<TextField>(searchField).controller!.text, isEmpty);
 
         await tester.enterText(searchField, channel.title.toUpperCase());
         await tester.testTextInput.receiveAction(TextInputAction.search);
@@ -210,7 +225,7 @@ void main() {
         final libraryRowSize = tester.getSize(videoRow);
         expect(libraryRowSize.height, searchRowSize.height);
         expect(libraryRowSize.width, searchRowSize.width - 16);
-        expect(find.byType(LibraryCollectionMenu<int>), findsOneWidget);
+        expect(find.byType(LibraryCollectionMenu<int>), findsNothing);
         expect(
           find.widgetWithText(TextField, 'Search your videos'),
           findsNothing,
@@ -478,6 +493,8 @@ void main() {
       expect(channelRow(archive), findsOneWidget);
       final searchesBefore = td.requests.length;
       final searchField = find.widgetWithText(TextField, 'Search channels');
+      await tester.tap(find.byTooltip('Search channels'));
+      await tester.pumpAndSettle();
       await tester.enterText(searchField, 'CINE');
       await tester.pumpAndSettle();
       expect(channelRow(channel), findsNothing);
@@ -715,14 +732,16 @@ void main() {
       }
 
       await openTab(Icons.video_library_rounded);
-      final menu = find.byKey(const ValueKey('video-library-collection-menu'));
+      final indicator = find.byKey(const ValueKey('video-library-indicator'));
       expect(find.byKey(const ValueKey('video-library-search')), findsNothing);
       expect(find.byType(TextField), findsNothing);
       expect(find.byKey(ValueKey('${channel.id}:30')), findsOneWidget);
       expect(find.text('Zebra'), findsOneWidget);
       await openTab(Icons.explore_outlined);
       final channelSearch = find.widgetWithText(TextField, 'Search channels');
-      expect(channelSearch, findsOneWidget);
+      expect(channelSearch, findsNothing);
+      await tester.tap(find.byTooltip('Search channels'));
+      await tester.pumpAndSettle();
       await tester.enterText(channelSearch, 'Cinema');
       tester.view.viewInsets = const FakeViewPadding(bottom: 280);
       await tester.pumpAndSettle();
@@ -734,7 +753,7 @@ void main() {
       tester.view.resetViewInsets();
       await tester.pumpAndSettle();
       await openTab(Icons.video_library_rounded);
-      expect(menu, findsOneWidget);
+      expect(indicator, findsOneWidget);
       expect(find.byType(TextField), findsNothing);
       expect(find.byKey(ValueKey('${channel.id}:30')), findsOneWidget);
       expect(find.text('Zebra'), findsOneWidget);
@@ -755,6 +774,7 @@ void main() {
     const Size(320, 568),
     const Size(844, 390),
     const Size(1280, 800),
+    const Size(1920, 1080),
   ]) {
     testWidgets('Video Home, Browse and Library fit $size with large text', (
       tester,
@@ -805,17 +825,27 @@ void main() {
       await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      final rightEdge = size.width - (size.width < 1180 ? 16 : 26);
+      final hero = find.byKey(const ValueKey('video-home-hero'));
+      expect(tester.getRect(hero).right, rightEdge);
       expect(find.text('History'), findsNothing);
-      final optionsMenu = find.byKey(
-        const ValueKey('video-library-collection-menu'),
-      );
-      expect(optionsMenu, findsNothing);
+      final indicator = find.byKey(const ValueKey('video-library-indicator'));
+      expect(indicator, findsNothing);
       if (size.width >= 900) expect(find.byType(AppSidebar), findsOneWidget);
       await tester.tap(find.byIcon(Icons.explore_outlined));
       await tester.pumpAndSettle();
       final searchField = find.widgetWithText(TextField, 'Search channels');
-      expect(searchField, findsOneWidget);
+      final searchButton = find.byTooltip('Search channels');
+      expect(searchField, findsNothing);
+      expect(tester.getRect(searchButton).right, closeTo(rightEdge, 6));
+      expect(tester.getRect(find.byType(GridView)).right, rightEdge);
+      if (size.width == 1920) {
+        final poster = find.byKey(ValueKey(channel.id));
+        expect(tester.getSize(poster).width, lessThan(200));
+      }
       expect(find.text('Trailer'), findsNothing);
+      await tester.tap(searchButton);
+      await tester.pumpAndSettle();
       await tester.enterText(searchField, 'number 18');
       await tester.pumpAndSettle();
       final lastChannel = find.text('Long Telegram channel title number 18');
@@ -826,40 +856,42 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text('Trailer'), findsOneWidget);
-      expect(optionsMenu.hitTestable(), findsOneWidget);
-      final collectionTitle = find.byKey(const ValueKey('video-library-title'));
-      expect(
-        tester.getSize(optionsMenu).width -
-            tester.getSize(collectionTitle).width,
-        lessThanOrEqualTo(40),
-      );
+      expect(find.byTooltip('Show All videos').hitTestable(), findsOneWidget);
       expect(find.byTooltip('Library options'), findsNothing);
       expect(find.byTooltip('Refresh videos'), findsNothing);
       final panel = find.byKey(const ValueKey(('video-library-panel', 0)));
-      final toolbar = tester.getRect(find.byType(LibraryToolbar));
-      expect(toolbar.top, 30);
-      expect(tester.getTopLeft(panel).dy - toolbar.bottom, 18);
+      expect(tester.getRect(panel).right, rightEdge);
+      final episode = find.byKey(ValueKey('${channel.id}:30'));
+      final episodeCard = find
+          .descendant(of: episode, matching: find.byType(Material))
+          .first;
+      expect(tester.getRect(episodeCard).right, rightEdge - 8);
+      final dots = tester.getRect(indicator);
+      expect(dots.center.dx, tester.getRect(panel).center.dx);
+      if (size.width >= 900) {
+        expect(dots.top, 30);
+        expect(dots.height, 18);
+        expect(tester.getRect(panel).top, dots.bottom);
+      } else {
+        final settings = find.byTooltip('Settings');
+        expect(settings.hitTestable(), findsOneWidget);
+        final button = tester.getRect(
+          find.ancestor(of: settings, matching: find.byType(IconButton)),
+        );
+        expect(dots.center.dy, button.center.dy);
+        expect(tester.getRect(panel).top, button.bottom);
+      }
       expect(find.byTooltip('Shuffle collection'), findsNothing);
       expect(find.byKey(const ValueKey('video-library-counts')), findsNothing);
       expect(find.byTooltip('Sort Library'), findsNothing);
-      expect(find.byType(LibraryCollectionMenu<int>), findsOneWidget);
+      expect(find.byType(LibraryToolbar), findsNothing);
+      expect(find.byType(LibraryCollectionMenu<int>), findsNothing);
       expect(find.text('1 video · Cinema'), findsNothing);
-      await tester.tap(optionsMenu);
-      await tester.pumpAndSettle();
-      expect(
-        find.widgetWithText(PopupMenuItem<int>, 'All videos'),
-        findsOneWidget,
-      );
-      expect(
-        find.widgetWithText(PopupMenuItem<int>, 'History'),
-        findsOneWidget,
-      );
-      expect(find.widgetWithText(PopupMenuItem<int>, 'Offline'), findsNothing);
-      expect(find.text('Playlists').hitTestable(), findsNothing);
-      expect(find.text('Snapshots').hitTestable(), findsNothing);
-      await tester.tap(find.text('History'));
+      await tester.tap(find.byTooltip('Show History'));
       await tester.pumpAndSettle();
       expect(find.text('Video history'), findsOneWidget);
+      final history = find.byKey(const ValueKey('video-collection-scroll'));
+      expect(tester.getRect(history).right, rightEdge - 8);
       expect(tester.takeException(), isNull);
     });
   }
