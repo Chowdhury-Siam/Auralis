@@ -23,7 +23,6 @@ enum LocalMediaView {
   genres('Genres'),
   videos('All videos'),
   history('History'),
-  offline('Offline'),
   favorites('Favorites'),
   folders('Folders');
 
@@ -483,7 +482,6 @@ extension LocalMediaViewIcon on LocalMediaView {
     LocalMediaView.genres => Icons.category_outlined,
     LocalMediaView.videos => Icons.video_library_rounded,
     LocalMediaView.history => Icons.history_rounded,
-    LocalMediaView.offline => Icons.download_done_rounded,
     LocalMediaView.favorites => Icons.favorite_rounded,
     LocalMediaView.folders => Icons.folder_outlined,
   };
