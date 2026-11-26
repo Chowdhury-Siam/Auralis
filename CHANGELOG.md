@@ -1,5 +1,29 @@
 # Auralis changes
 
+## 0.1.253
+
+- Remove video playlists and the Snapshots gallery from Video mode.
+- Save captured PNG frames directly to the Snapshots folder in Downloads.
+
+## 0.1.252
+
+- Redesign Video History as a plain list grouped by local calendar date, with poster artwork, episode numbers, playback times and saved resume positions.
+- Use identified channel titles and posters when available, with video artwork as a fallback.
+- Keep watched toggles and direct delete buttons beside each entry. Hold a row for its other video actions.
+
+## 0.1.251
+
+- Remove the Video Library toolbar's three-dot menu.
+- Make the video collection selector shorter with smaller text, padding and dropdown so the All videos label fits on phones.
+
+## 0.1.250
+
+- Remove the remaining Open video files folder shortcut from Video Home.
+
+## 0.1.249
+
+- Remove search fields from Video Library All videos and Playlists while keeping channel search in Browse and manual metadata title selection.
+
 ## 0.1.248
 
 - Remove the On this device libraries, source switches and folder management from Music and Video. Retire old source preferences without deleting media files.
