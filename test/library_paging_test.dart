@@ -150,7 +150,6 @@ void main() {
         addTearDown(tester.view.resetDevicePixelRatio);
         addTearDown(tester.view.resetPhysicalSize);
         final settings = MemorySettings()..defaultInterface = mode;
-        settings.videoPlayback.putPlaylist('Watch later', []);
         settings.playlists['Evening mix'] = [];
         final audio = FakeAudio();
         final player = PlayerController(
@@ -190,7 +189,7 @@ void main() {
           ValueKey(video ? 'video-library-title' : 'page-title'),
         );
         final labels = video
-            ? ['All videos', 'Playlists', 'History', 'Snapshots', 'Offline']
+            ? ['All videos', 'History', 'Offline']
             : [
                 'All songs',
                 'Artists',
@@ -201,18 +200,6 @@ void main() {
               ];
         for (final label in labels.skip(1)) {
           await tester.drag(pager, const Offset(-320, 0));
-          if (label == 'Snapshots') {
-            // Directory reads run in the real zone, unlike page animations.
-            for (var frame = 0; frame < 30; frame++) {
-              await tester.runAsync(
-                () => Future<void>.delayed(const Duration(milliseconds: 5)),
-              );
-              await tester.pump(const Duration(milliseconds: 16));
-              if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
-                break;
-              }
-            }
-          }
           await tester.pumpAndSettle();
           expect(tester.widget<Text>(title).data, label);
           expect(navigation.hitTestable(), findsOneWidget);
@@ -233,35 +220,30 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(PopupMenuItem<int>, 'Playlists'));
-        await tester.pumpAndSettle();
-        expect(tester.widget<Text>(title).data, 'Playlists');
-        expect(
-          find.text(video ? 'Watch later' : 'Evening mix'),
-          findsOneWidget,
-        );
         if (video) {
-          await tester.ensureVisible(find.text('Watch later'));
-          await tester.tap(find.text('Watch later'));
+          expect(
+            find.widgetWithText(PopupMenuItem<int>, 'Playlists'),
+            findsNothing,
+          );
+          expect(
+            find.widgetWithText(PopupMenuItem<int>, 'Snapshots'),
+            findsNothing,
+          );
+          await tester.tap(find.widgetWithText(PopupMenuItem<int>, 'History'));
           await tester.pumpAndSettle();
-          expect(find.text('Your playlist starts here'), findsOneWidget);
-          await tester.drag(pager, const Offset(-320, 0));
-          await tester.pumpAndSettle();
-          await tester.drag(pager, const Offset(320, 0));
-          await tester.pumpAndSettle();
-          expect(find.text('Your playlist starts here'), findsOneWidget);
-          await tester.binding.handlePopRoute();
-          await tester.pumpAndSettle();
-          expect(find.text('Video playlists'), findsOneWidget);
-          expect(tester.widget<Text>(title).data, 'Playlists');
+          expect(find.text('Video history'), findsOneWidget);
+          expect(tester.widget<Text>(title).data, 'History');
           await tester.binding.handlePopRoute();
           await tester.pumpAndSettle();
           expect(tester.widget<Text>(title).data, 'All videos');
+        } else {
+          await tester.tap(
+            find.widgetWithText(PopupMenuItem<int>, 'Playlists'),
+          );
+          await tester.pumpAndSettle();
+          expect(tester.widget<Text>(title).data, 'Playlists');
+          expect(find.text('Evening mix'), findsOneWidget);
         }
-        expect(
-          settings.videoPlayback.playlists.containsKey('Watch later'),
-          isTrue,
-        );
         expect(settings.playlists.containsKey('Evening mix'), isTrue);
       },
       variant: TargetPlatformVariant({
@@ -272,7 +254,7 @@ void main() {
   }
 
   testWidgets(
-    'embedded video playlist playback calls its owner without popping Library',
+    'embedded video history playback calls its owner without popping Library',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1280, 800);
@@ -283,7 +265,7 @@ void main() {
         Uri.file('/movies/episode.mp4'),
         'Episode',
       );
-      data.putPlaylist('Season', [source]);
+      data.recordVideo(source);
       VideoSelection? selected;
       await tester.pumpWidget(
         MaterialApp(
@@ -291,17 +273,13 @@ void main() {
           home: VideoLibraryPage(
             data: data,
             save: () async {},
-            pickFiles: () async => [],
-            playlists: true,
             embedded: true,
             onPlay: (value) => selected = value,
           ),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Season'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Play playlist'));
+      await tester.tap(find.text('Episode'));
       await tester.pumpAndSettle();
       expect(selected!.$1, [source]);
       expect(selected!.$2, 0);
