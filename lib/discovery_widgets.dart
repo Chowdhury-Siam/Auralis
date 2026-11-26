@@ -15,6 +15,25 @@ import 'models.dart';
       _ => (colors.secondaryFixedDim, colors.onSecondaryFixed),
     };
 
+({List<MusicChat> channels, bool checking}) matchingBrowseChannels(
+  Iterable<MusicChat> candidates,
+  String query,
+  bool? Function(MusicChat) hasMedia,
+) {
+  final channels = <MusicChat>[];
+  var checking = false;
+  for (final channel in candidates) {
+    if (!channel.title.toLowerCase().contains(query)) continue;
+    final matches = hasMedia(channel);
+    if (matches == null) checking = true;
+    if (matches == true) channels.add(channel);
+  }
+  channels.sort(
+    (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+  );
+  return (channels: channels, checking: checking);
+}
+
 class BrowseSearchField extends StatelessWidget {
   const BrowseSearchField({
     super.key,
@@ -274,6 +293,7 @@ class DiscoveryTile extends StatelessWidget {
     required this.icon,
     required this.index,
     required this.onTap,
+    this.onLongPress,
     this.leading,
     this.list = false,
     this.selected,
@@ -282,7 +302,7 @@ class DiscoveryTile extends StatelessWidget {
   final String? subtitle;
   final IconData icon;
   final int index;
-  final VoidCallback? onTap;
+  final VoidCallback? onTap, onLongPress;
   final Widget? leading;
   final bool list;
   final bool? selected;
@@ -324,10 +344,12 @@ class DiscoveryTile extends StatelessWidget {
                           color: foreground,
                         ),
                   onTap: onTap,
+                  onLongPress: onLongPress,
                 )
               : InkWell(
                   statesController: states,
                   onTap: onTap,
+                  onLongPress: onLongPress,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
