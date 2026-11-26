@@ -1,13 +1,43 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'video_duration.dart';
 import 'video_playback_data.dart';
 
 const videoIntentChannel = MethodChannel('app.auralis/video_intents');
 const _videoFileChannel = MethodChannel('app.auralis/video');
+
+Future<void> storeVideoSnapshot(Uint8List bytes, String filename) async {
+  final timestamp = DateTime.now().microsecondsSinceEpoch;
+  final suffix = Random().nextInt(1 << 32).toRadixString(16);
+  final name = '$timestamp-$suffix-$filename';
+  if (Platform.isAndroid) {
+    await _videoFileChannel.invokeMethod<void>('saveSnapshot', {
+      'name': name,
+      'bytes': bytes,
+    });
+    return;
+  }
+  final downloads = await getDownloadsDirectory();
+  if (downloads == null) {
+    throw const FileSystemException('Downloads unavailable');
+  }
+  final directory = await Directory(p.join(downloads.path, 'Snapshots'))
+      .create(recursive: true);
+  final destination = p.join(directory.path, name);
+  final temporary = File('$destination.partial');
+  try {
+    await temporary.writeAsBytes(bytes, flush: true);
+    await temporary.rename(destination);
+  } finally {
+    if (await temporary.exists()) await temporary.delete();
+  }
+}
 
 const videoExtensions = [
   'mp4',
