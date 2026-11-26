@@ -197,6 +197,13 @@ void main() {
       expect(channelSearch, findsNothing);
       expect(searchButton, findsOneWidget);
       expect(find.text('Artists'), findsNothing);
+      await pumpUntil(
+        tester,
+        () =>
+            find.text('≈ 3 tracks').evaluate().isNotEmpty &&
+            find.text('≈ 1 track').evaluate().isNotEmpty,
+        reason: 'Browse did not load the filtered channels and track counts',
+      );
       expect(find.text('≈ 3 tracks'), findsOneWidget);
       expect(find.text('≈ 1 track'), findsOneWidget);
       await tester.tap(searchButton);
