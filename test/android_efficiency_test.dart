@@ -43,7 +43,7 @@ void main() {
         expect(find.byIcon(Icons.folder_open_rounded), findsNothing);
         await tester.tap(find.byTooltip('Library').first);
         await tester.pumpAndSettle();
-        expect(find.byType(LibraryLayout), findsOneWidget);
+        expect(find.byType(LibraryPageIndicator), findsOneWidget);
         expect(
           find.byTooltip('Telegram · Switch to On this device'),
           findsNothing,
