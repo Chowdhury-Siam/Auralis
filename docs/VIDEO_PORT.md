@@ -4,7 +4,7 @@ Auralis 0.1.144+145 builds on the Video mode port from the supplied Auralis 0.1.
 
 ## Using the additions
 
-- Video Library includes **All videos**, **History**, and **Offline**. Channel search is in Browse, and the channel details title picker can correct metadata.
+- Video Library includes **All videos** and **History**. Channel search is in Browse, and the channel details title picker can correct metadata and show the source.
 - **Save video frame** writes a PNG directly to `Download/Snapshots` on Android or `Downloads/Snapshots` on Windows. **Player settings** controls whether the capture includes rendered subtitles.
 - **History** lists opened local and Telegram videos and shows saved resume positions. Episodes are marked watched at the end of playback or with the check button beside the episode. Update the Auralis sync Worker to share Telegram history, resume positions, and watched markers between devices.
 
