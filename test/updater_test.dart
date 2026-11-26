@@ -445,8 +445,12 @@ void main() {
   });
 
   testWidgets(
-    'Android install buttons open the installer without an app dialog',
+    'Android update actions align on phones and open the installer directly',
     (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
       var calls = 0;
       late Completer<void> started, finish;
       final updates = AppUpdater(
@@ -465,10 +469,7 @@ void main() {
         },
       );
       addTearDown(updates.dispose);
-      await tester.runAsync(() async {
-        await updates.check();
-        await updates.download();
-      });
+      await tester.runAsync(updates.check);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -482,13 +483,45 @@ void main() {
         ),
       );
       expect(calls, 0);
+      final settingsCard = find.byType(UpdateSettings);
+      final download = find.descendant(
+        of: settingsCard,
+        matching: find.widgetWithText(FilledButton, 'Download 0.2.0'),
+      );
+      expect(
+        tester.getSize(download).width,
+        tester.getSize(settingsCard).width,
+      );
+      expect(
+        tester.getTopLeft(download).dy,
+        greaterThan(tester.getRect(find.text('Check now')).bottom),
+      );
+      tester.view.physicalSize = const Size(720, 844);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getCenter(download).dy,
+        tester.getCenter(find.text('Check now')).dy,
+      );
+      tester.view.physicalSize = const Size(390, 844);
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async => tester.tap(download));
+      await pumpUntil(
+        tester,
+        () => updates.downloaded != null,
+        reason: 'The download button did not finish downloading the update',
+      );
+      await tester.pumpAndSettle();
       final bannerButton = find.descendant(
         of: find.byType(UpdateBanner),
         matching: find.widgetWithText(FilledButton, 'Install update'),
       );
       final settingsButton = find.descendant(
-        of: find.byType(UpdateSettings),
+        of: settingsCard,
         matching: find.widgetWithText(FilledButton, 'Install update'),
+      );
+      expect(
+        tester.getSize(settingsButton).width,
+        tester.getSize(settingsCard).width,
       );
       for (final button in [bannerButton, settingsButton]) {
         await tester.ensureVisible(button);
