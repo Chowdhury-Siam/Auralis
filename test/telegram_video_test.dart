@@ -292,9 +292,17 @@ void main() {
       expect(refresh, findsNothing);
       await tester.tap(browse);
       await tester.pumpAndSettle();
-      expect(find.text('No Telegram channels available'), findsOneWidget);
-      expect(refresh, findsOneWidget);
+      final emptyBrowse = find.text('No Telegram channels available');
+      expect(emptyBrowse, findsOneWidget);
+      expect(refresh, findsNothing);
       expect(find.text(channel.title), findsNothing);
+      int channelRefreshes() => td.requests
+          .where((request) => request['@type'] == 'loadChats')
+          .length;
+      final emptyRefreshes = channelRefreshes();
+      await tester.drag(emptyBrowse, const Offset(0, 320));
+      await tester.pumpAndSettle();
+      expect(channelRefreshes(), greaterThan(emptyRefreshes));
       td.events.add({
         '@type': 'updateNewChat',
         'chat': {
@@ -373,20 +381,16 @@ void main() {
         isFalse,
       );
 
-      final refreshes = td.requests
-          .where((r) => r['@type'] == 'loadChats')
-          .length;
+      final refreshes = channelRefreshes();
       final videoSearches = td.requests
           .where((r) => r['@type'] == 'searchChatMessages')
           .length;
       await tester.tap(browse);
       await tester.pumpAndSettle();
-      await tester.tap(refresh);
+      expect(refresh, findsNothing);
+      await tester.drag(find.byType(GridView), const Offset(0, 320));
       await tester.pumpAndSettle();
-      expect(
-        td.requests.where((r) => r['@type'] == 'loadChats').length,
-        greaterThan(refreshes),
-      );
+      expect(channelRefreshes(), greaterThan(refreshes));
       expect(
         td.requests.where((r) => r['@type'] == 'searchChatMessages').length,
         greaterThan(videoSearches),
