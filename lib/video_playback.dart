@@ -19,6 +19,7 @@ import 'models.dart';
 import 'player.dart';
 import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
+import 'video_files.dart' show storeVideoSnapshot;
 import 'video_playback_data.dart';
 import 'video_settings.dart';
 import 'video_library.dart';
