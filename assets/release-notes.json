@@ -1,6 +1,28 @@
 {
-  "current": "0.1.250",
+  "current": "0.1.253",
   "releases": [
+    {
+      "version": "0.1.253",
+      "changes": [
+        "Remove video playlists and the Snapshots gallery from Video mode.",
+        "Save captured PNG frames directly to the Snapshots folder in Downloads."
+      ]
+    },
+    {
+      "version": "0.1.252",
+      "changes": [
+        "Redesign Video History as a plain list grouped by local calendar date, with poster artwork, episode numbers, playback times and saved resume positions.",
+        "Use identified channel titles and posters when available, with video artwork as a fallback.",
+        "Keep watched toggles and direct delete buttons beside each entry. Hold a row for its other video actions."
+      ]
+    },
+    {
+      "version": "0.1.251",
+      "changes": [
+        "Remove the Video Library toolbar's three-dot menu.",
+        "Make the video collection selector shorter with smaller text, padding and dropdown so the All videos label fits on phones."
+      ]
+    },
     {
       "version": "0.1.250",
       "changes": [
