@@ -107,7 +107,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   late bool _ready;
   late final StreamSubscription<({int chatId, Track video})> _postSubscription;
   _VideoResults? _library;
-  bool _showSearchChannel = false, _browseChannelsAsList = false;
+  bool _showSearchChannel = false;
   bool _deletingBrowseChannel = false;
   int? _browseFolderId;
   Future<bool>? _browseFolderLoad;
@@ -771,7 +771,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
       collections: [for (final view in _collections) (view.label, view.icon)],
       index: _libraryCollection,
       onSelected: _selectVideoCollection,
-      collectionAction: _libraryCollection == 0 ? _sortButton() : null,
       onSettings: MediaQuery.sizeOf(context).width < 900
           ? widget.onSettings
           : null,
