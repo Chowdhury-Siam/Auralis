@@ -101,22 +101,11 @@ extension _VideoHome on _TelegramVideoViewState {
         key: const PageStorageKey('video-home-scroll'),
         padding: EdgeInsets.only(bottom: _bottomPadding(context)),
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Auralis Video',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              IconButton.filledTonal(
-                tooltip: 'Open video files',
-                onPressed: () => unawaited(_openHomeFiles()),
-                icon: const Icon(Icons.folder_open_rounded, size: 21),
-              ),
-            ],
+          Text(
+            'Auralis Video',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 10),
           _videoHomeHero(
