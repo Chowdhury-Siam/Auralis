@@ -1,20 +1,23 @@
 part of 'telegram_video_view.dart';
 
 extension _VideoBrowse on _TelegramVideoViewState {
-  List<MusicChat> _matchingChannels(String query) {
-    if (!_ready) return const [];
+  ({List<MusicChat> channels, bool checking}) _matchingChannels(String query) {
+    if (!_ready) return (channels: const [], checking: false);
     final folderId = _browseFolderId;
-    return _channels.where((channel) {
-        return (folderId == null ||
-                _telegram.isChannelInFolder(channel.id, folderId)) &&
-            channel.title.toLowerCase().contains(query);
-      }).toList()
-      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    return matchingBrowseChannels(
+      _channels.where(
+        (channel) =>
+            folderId == null ||
+            _telegram.isChannelInFolder(channel.id, folderId),
+      ),
+      query,
+      (channel) => _telegram.browseChannelMatches(channel, video: false),
+    );
   }
 
   Widget _channelSearch(BuildContext context) {
     final query = _search.text.trim().toLowerCase();
-    final channels = _matchingChannels(query);
+    final (:channels, :checking) = _matchingChannels(query);
     final padding = EdgeInsets.only(bottom: _bottomPadding(context));
     final showHeader = MediaQuery.viewInsetsOf(this.context).bottom == 0;
     final folders = _telegram.chatFolders;
@@ -52,8 +55,12 @@ extension _VideoBrowse on _TelegramVideoViewState {
             onChanged: (_) => _updateBrowse(() {}),
             onCleared: () => _updateBrowse(() {}),
             onSubmitted: (text) {
-              final matches = _matchingChannels(text.trim().toLowerCase());
-              if (matches.length == 1) _chooseChannel(matches.single);
+              final (:channels, :checking) = _matchingChannels(
+                text.trim().toLowerCase(),
+              );
+              if (!checking && channels.length == 1) {
+                _chooseChannel(channels.single);
+              }
             },
           ),
         if (_ready && showHeader && folders.isNotEmpty)
@@ -86,7 +93,9 @@ extension _VideoBrowse on _TelegramVideoViewState {
                 ? ListView(
                     key: collectionKey,
                     padding: padding,
-                    children: [_emptyBrowse(context, query)],
+                    children: [
+                      _emptyBrowse(context, query, checking: checking),
+                    ],
                   )
                 : LayoutBuilder(
                     builder: (context, constraints) {
@@ -124,8 +133,13 @@ extension _VideoBrowse on _TelegramVideoViewState {
     );
   }
 
-  Widget _emptyBrowse(BuildContext context, String query) {
+  Widget _emptyBrowse(
+    BuildContext context,
+    String query, {
+    required bool checking,
+  }) {
     if (!_ready) return _connectState(context);
+    if (checking) return _emptyState(context, title: 'Checking channels…');
     if (_browseFolderLoad case final loading?) {
       return FutureBuilder<bool>(
         future: loading,
