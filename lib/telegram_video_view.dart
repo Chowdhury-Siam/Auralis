@@ -13,7 +13,6 @@ import 'discovery_widgets.dart';
 import 'app_navigation.dart';
 import 'app_motion.dart';
 import 'app_popups.dart';
-import 'app_theme.dart';
 import 'player.dart';
 import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
@@ -94,6 +93,8 @@ class _VideoResults {
 class _TelegramVideoViewState extends State<TelegramVideoView> {
   TelegramService get _telegram => widget.telegram;
   final _search = TextEditingController();
+  final _browseSearchFocus = FocusNode();
+  bool _browseSearchOpen = false;
   final _videoSources = <int>{};
   final _videoCounts = <int, int>{};
   final _durationLookups = <(String, int?, int), Future<Duration?>>{};
@@ -192,6 +193,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
         _ready = _telegram.ready;
         _library = null;
         _showSearchChannel = false;
+        _browseSearchOpen = false;
         _browseFolderId = null;
         _browseFolderLoad = null;
         _search.clear();
@@ -562,6 +564,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     }
     unawaited(_playbackRelease.whenComplete(_proxy.close));
     _search.dispose();
+    _browseSearchFocus.dispose();
     super.dispose();
   }
 
@@ -579,6 +582,19 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   }
 
   void _updateBrowse(VoidCallback update) => setState(update);
+
+  void _openBrowseSearch() {
+    setState(() => _browseSearchOpen = true);
+    _browseSearchFocus.requestFocus();
+  }
+
+  void _closeBrowseSearch() {
+    _browseSearchFocus.unfocus();
+    setState(() {
+      _search.clear();
+      _browseSearchOpen = false;
+    });
+  }
 
   void _selectBrowseFolder(int? id) => setState(() {
     _browseFolderId = id;
@@ -626,24 +642,16 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
           size.width < 1180 ? 16 : 26,
           0,
         ),
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1150),
-            child: ListenableBuilder(
-              listenable: Listenable.merge([
-                _telegram,
-                widget.music.viewChanges,
-              ]),
-              builder: (context, _) => switch (_tab) {
-                0 => _home(context),
-                1 when !_showSearchChannel || _library == null =>
-                  _channelSearch(context),
-                1 => _browser(context),
-                _ => _videoLibrary(context),
-              },
+        child: ListenableBuilder(
+          listenable: Listenable.merge([_telegram, widget.music.viewChanges]),
+          builder: (context, _) => switch (_tab) {
+            0 => _home(context),
+            1 when !_showSearchChannel || _library == null => _channelSearch(
+              context,
             ),
-          ),
+            1 => _browser(context),
+            _ => _videoLibrary(context),
+          },
         ),
       ),
     );
@@ -657,6 +665,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
         }
         if (_tab == 1 && _showSearchChannel) {
           _showChannelSearch();
+        } else if (_tab == 1 && _browseSearchOpen) {
+          _closeBrowseSearch();
         } else {
           _selectTab(0);
         }
@@ -760,38 +770,58 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     onSelected: _setVideoSort,
   );
 
-  Widget _videoLibrary(BuildContext context) => _telegramVideoLibrary(context);
-
-  Widget _telegramVideoLibrary(BuildContext context) {
+  Widget _videoLibrary(BuildContext context) {
     final settings = widget.music.settings;
-    return LibraryLayout(
-      // Scaffold consumes body insets; read them above the Scaffold.
-      keyboardOpen: MediaQuery.viewInsetsOf(this.context).bottom > 0,
-      compactCollection: true,
-      collections: [for (final view in _collections) (view.label, view.icon)],
-      index: _libraryCollection,
-      onSelected: _selectVideoCollection,
-      onSettings: MediaQuery.sizeOf(context).width < 900
-          ? widget.onSettings
-          : null,
-      menuKey: const ValueKey('video-library-collection-menu'),
-      titleKey: const ValueKey('video-library-title'),
-      indicatorKey: const ValueKey('video-library-indicator'),
-      reducedMotion: settings.reducedMotion,
-      body: LibraryCollectionPager(
-        key: const ValueKey('video-library-pager'),
-        index: _libraryCollection,
-        count: _collections.length,
-        reducedMotion: settings.reducedMotion,
-        onChanged: _selectVideoCollection,
-        itemBuilder: (context, index) => switch (_collections[index]) {
-          LocalMediaView.history => _videoHistory(
-            context,
-            active: index == _libraryCollection,
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Scaffold consumes body insets; read them above the Scaffold.
+        if (MediaQuery.viewInsetsOf(this.context).bottom == 0)
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              if (MediaQuery.sizeOf(context).width < 900 &&
+                  widget.onSettings != null)
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: IconButton.filledTonal(
+                    tooltip: 'Settings',
+                    style: IconButton.styleFrom(
+                      backgroundColor: colors.primaryContainer,
+                      foregroundColor: colors.onPrimaryContainer,
+                    ),
+                    onPressed: widget.onSettings,
+                    icon: const Icon(Icons.settings_outlined, size: 20),
+                  ),
+                ),
+              LibraryPageIndicator(
+                key: const ValueKey('video-library-indicator'),
+                labels: [for (final view in _collections) view.label],
+                index: _libraryCollection,
+                onSelected: _selectVideoCollection,
+                reducedMotion: settings.reducedMotion,
+                compact: true,
+              ),
+            ],
           ),
-          _ => _browser(context),
-        },
-      ),
+        Expanded(
+          child: LibraryCollectionPager(
+            key: const ValueKey('video-library-pager'),
+            index: _libraryCollection,
+            count: _collections.length,
+            reducedMotion: settings.reducedMotion,
+            onChanged: _selectVideoCollection,
+            itemBuilder: (context, index) => switch (_collections[index]) {
+              LocalMediaView.history => _videoHistory(
+                context,
+                active: index == _libraryCollection,
+              ),
+              _ => _browser(context),
+            },
+          ),
+        ),
+      ],
     );
   }
 
