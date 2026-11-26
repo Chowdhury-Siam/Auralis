@@ -213,79 +213,71 @@ extension _DiscoveryPages on _PlayerShellState {
         ),
       ],
     );
-    return Align(
-      alignment: Alignment.topLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1150),
-        child: ListView(
-          key: const PageStorageKey('home-scroll'),
-          padding: EdgeInsets.only(bottom: _dockPadding),
-          children: [
-            Text(
-              'AURALIS',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: _colors.primary,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 10),
-            DiscoveryHero(
-              tracks: daily.take(4).toList(),
-              artwork: (track) =>
-                  Artwork(seed: track.title, telegram: telegram, track: track),
-              description: hasMusic
-                  ? 'A daily mix from your music library.'
-                  : prompt,
-              action: hasMusic
-                  ? IconButton.filled(
-                      tooltip: 'Shuffle Daily Mix',
-                      onPressed: () {
-                        final shuffled = List<Track>.of(daily)..shuffle();
-                        player.play(shuffled.first, from: shuffled);
-                      },
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size(60, 60),
-                      ),
-                      icon: const Icon(Icons.shuffle_rounded, size: 26),
-                    )
-                  : FilledButton.tonalIcon(
-                      onPressed: !telegram.ready
-                          ? _openTelegram
-                          : _openMusicChannels,
-                      icon: Icon(
-                        !telegram.ready
-                            ? Icons.send_rounded
-                            : Icons.library_music_rounded,
-                      ),
-                      label: Text(
-                        !telegram.ready
-                            ? 'Connect Telegram'
-                            : settings.selectedChannels.isEmpty
-                            ? 'Choose channels'
-                            : 'Open Browse',
-                      ),
-                    ),
-            ),
-            const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, box) => box.maxWidth >= 760
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(flex: 6, child: mixCard),
-                        const SizedBox(width: 16),
-                        Expanded(flex: 5, child: side),
-                      ],
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [mixCard, const SizedBox(height: 18), side],
-                    ),
-            ),
-          ],
+    return ListView(
+      key: const PageStorageKey('home-scroll'),
+      padding: EdgeInsets.only(bottom: _dockPadding),
+      children: [
+        Text(
+          'AURALIS',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: _colors.primary,
+            letterSpacing: 2,
+            fontWeight: FontWeight.w800,
+          ),
         ),
-      ),
+        const SizedBox(height: 10),
+        DiscoveryHero(
+          tracks: daily.take(4).toList(),
+          artwork: (track) =>
+              Artwork(seed: track.title, telegram: telegram, track: track),
+          description: hasMusic
+              ? 'A daily mix from your music library.'
+              : prompt,
+          action: hasMusic
+              ? IconButton.filled(
+                  tooltip: 'Shuffle Daily Mix',
+                  onPressed: () {
+                    final shuffled = List<Track>.of(daily)..shuffle();
+                    player.play(shuffled.first, from: shuffled);
+                  },
+                  style: IconButton.styleFrom(minimumSize: const Size(60, 60)),
+                  icon: const Icon(Icons.shuffle_rounded, size: 26),
+                )
+              : FilledButton.tonalIcon(
+                  onPressed: !telegram.ready
+                      ? _openTelegram
+                      : _openMusicChannels,
+                  icon: Icon(
+                    !telegram.ready
+                        ? Icons.send_rounded
+                        : Icons.library_music_rounded,
+                  ),
+                  label: Text(
+                    !telegram.ready
+                        ? 'Connect Telegram'
+                        : settings.selectedChannels.isEmpty
+                        ? 'Choose channels'
+                        : 'Open Browse',
+                  ),
+                ),
+        ),
+        const SizedBox(height: 16),
+        LayoutBuilder(
+          builder: (context, box) => box.maxWidth >= 760
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 6, child: mixCard),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 5, child: side),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [mixCard, const SizedBox(height: 18), side],
+                ),
+        ),
+      ],
     );
   }
 
@@ -347,86 +339,91 @@ extension _DiscoveryPages on _PlayerShellState {
     );
   }
 
+  Future<void> _refreshMusicBrowse() async {
+    if (!telegram.ready ||
+        telegram.busy ||
+        library.saving ||
+        library.loading ||
+        _cachingLibrary) {
+      return;
+    }
+    telegram.clearChannelMediaCounts(video: false);
+    await Future.wait([
+      telegram.action(telegram.refreshChats),
+      _refreshLibrary(),
+    ]);
+  }
+
   Widget _discover() {
-    final query = search.text.trim().toLowerCase();
+    final query = _browseSearchOpen ? search.text.trim().toLowerCase() : '';
     final channels = telegram.ready
         ? _matchingMusicChannels(query)
         : const <MusicChat>[];
-    return Align(
-      alignment: Alignment.topLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1150),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _search('Search your Channel', discover: true),
-            const SizedBox(height: 12),
-            if (telegram.ready && telegram.error != null)
-              _banner(telegram.error!),
-            if (library.error != null) _banner(library.error!),
-            if (!_keyboardOpen) ...[
-              _sectionHeading(
-                MediaQuery.textScalerOf(context).scale(20) > 30
-                    ? 'Browse'
-                    : 'Browse channels',
-                action: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (telegram.ready)
-                      IconButton(
-                        key: const ValueKey('library-refresh'),
-                        tooltip: 'Refresh library',
-                        onPressed:
-                            telegram.busy ||
-                                library.saving ||
-                                library.loading ||
-                                _cachingLibrary
-                            ? null
-                            : () {
-                                telegram.clearChannelMediaCounts(video: false);
-                                unawaited(
-                                  telegram.action(telegram.refreshChats),
-                                );
-                                unawaited(_refreshLibrary());
-                              },
-                        icon: const Icon(Icons.refresh_rounded),
-                      ),
-                    if (channels.isNotEmpty)
-                      discoveryLayoutButton(
-                        list: _browseAsList,
-                        onPressed: _toggleBrowseLayout,
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (!_keyboardOpen &&
-                (_cachingLibrary || _cacheReport?.scope == _libraryCacheScope))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: _libraryCacheStatus(),
-                ),
-              ),
-            Expanded(
-              child: channels.isEmpty
-                  ? ListView(
-                      padding: EdgeInsets.only(bottom: _dockPadding),
-                      children: [_musicBrowseEmpty(query)],
-                    )
-                  : _discoveryTiles(
-                      page: 'channels',
-                      list: _browseAsList,
-                      count: channels.length,
-                      itemBuilder: (_, index) =>
-                          _musicChannelTile(channels[index], index),
-                    ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!_keyboardOpen) ...[
+          _sectionHeading(
+            MediaQuery.textScalerOf(context).scale(20) > 30
+                ? 'Browse'
+                : 'Browse channels',
+            action: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (channels.isNotEmpty)
+                  discoveryLayoutButton(
+                    list: _browseAsList,
+                    onPressed: _toggleBrowseLayout,
+                  ),
+                if (!_browseSearchOpen)
+                  IconButton(
+                    tooltip: 'Search channels',
+                    icon: const Icon(Icons.search_rounded, size: 20),
+                    onPressed: _focusDiscovery,
+                  ),
+              ],
             ),
-          ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (_browseSearchOpen) ...[
+          BrowseSearchField(
+            key: const ValueKey('music-browse-search'),
+            controller: search,
+            focusNode: _discoveryFocus,
+            onClose: _closeDiscoverySearch,
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (telegram.ready && telegram.error != null) _banner(telegram.error!),
+        if (library.error != null) _banner(library.error!),
+        if (!_keyboardOpen &&
+            (_cachingLibrary || _cacheReport?.scope == _libraryCacheScope))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: _libraryCacheStatus(),
+            ),
+          ),
+        Expanded(
+          child: LibraryRefresh(
+            onRefresh: _refreshMusicBrowse,
+            child: channels.isEmpty
+                ? ListView(
+                    padding: EdgeInsets.only(bottom: _dockPadding),
+                    children: [_musicBrowseEmpty(query)],
+                  )
+                : _discoveryTiles(
+                    page: 'channels',
+                    list: _browseAsList,
+                    count: channels.length,
+                    itemBuilder: (_, index) =>
+                        _musicChannelTile(channels[index], index),
+                  ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -488,7 +485,9 @@ extension _DiscoveryPages on _PlayerShellState {
               child: const Text('Connect Telegram'),
             )
           else if (query.isEmpty)
-            const Text('Join a channel in Telegram, then refresh Browse.'),
+            const Text(
+              'Join a channel in Telegram, then pull down to refresh.',
+            ),
         ],
       ),
     );
