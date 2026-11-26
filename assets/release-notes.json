@@ -1,6 +1,19 @@
 {
-  "current": "0.1.265",
+  "current": "0.1.267",
   "releases": [
+    {
+      "version": "0.1.267",
+      "changes": [
+        "Align the Download and Install buttons with the App updates card on narrow screens."
+      ]
+    },
+    {
+      "version": "0.1.266",
+      "changes": [
+        "Hide channels without videos in Music Browse and channels without music in Video Browse.",
+        "Press and hold a channel in Music Browse to delete it from Auralis Music on this device."
+      ]
+    },
     {
       "version": "0.1.265",
       "changes": [
