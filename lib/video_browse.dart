@@ -23,25 +23,12 @@ extension _VideoBrowse on _TelegramVideoViewState {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_ready && showHeader) ...[
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  query.isEmpty ? 'Browse channels' : 'Matching channels',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ),
-              if (channels.isNotEmpty)
-                discoveryLayoutButton(
-                  list: _browseChannelsAsList,
-                  onPressed: () => _updateBrowse(
-                    () => _browseChannelsAsList = !_browseChannelsAsList,
-                  ),
-                ),
-            ],
+          Text(
+            query.isEmpty ? 'Browse channels' : 'Matching channels',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
         ],
@@ -103,17 +90,6 @@ extension _VideoBrowse on _TelegramVideoViewState {
                     key: collectionKey,
                     padding: padding,
                     children: [_emptyBrowse(context, query)],
-                  )
-                : _browseChannelsAsList
-                ? ListView.separated(
-                    key: collectionKey,
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: padding,
-                    itemCount: channels.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (_, index) =>
-                        _browseChannelTile(channels[index]),
                   )
                 : LayoutBuilder(
                     builder: (context, constraints) {
@@ -204,26 +180,14 @@ extension _VideoBrowse on _TelegramVideoViewState {
       estimate: () => _telegram.channelMediaCount(channel.id, video: true),
       unit: 'video',
       selected: selected,
-      builder: (subtitle) => _browseChannelsAsList
-          ? VideoLibraryRow(
-              title: channel.title,
-              subtitle: subtitle == null ? null : Text(subtitle),
-              selected: selected,
-              artwork: artwork,
-              trailing: selected
-                  ? const Icon(Icons.check_circle_rounded, size: 24)
-                  : null,
-              onTap: () => _chooseChannel(channel),
-              onLongPress: () => _deleteBrowseChannel(channel),
-            )
-          : _BrowsePoster(
-              title: channel.title,
-              subtitle: subtitle,
-              selected: selected,
-              artwork: artwork,
-              onTap: () => _chooseChannel(channel),
-              onLongPress: () => _deleteBrowseChannel(channel),
-            ),
+      builder: (subtitle) => _BrowsePoster(
+        title: channel.title,
+        subtitle: subtitle,
+        selected: selected,
+        artwork: artwork,
+        onTap: () => _chooseChannel(channel),
+        onLongPress: () => _deleteBrowseChannel(channel),
+      ),
     );
   }
 
