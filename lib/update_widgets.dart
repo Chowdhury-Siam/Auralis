@@ -134,23 +134,30 @@ class UpdateSettings extends StatelessWidget {
                 ),
                 child: const Text('What changed'),
               ),
-            if (updater.available != null && updater.downloaded == null)
-              FilledButton.tonal(
-                onPressed: updater.downloading || updater.checking
-                    ? null
-                    : updater.download,
-                child: Text(
-                  updater.downloading
-                      ? 'Downloading…'
-                      : 'Download ${updater.available!.version}',
+            if (updater.available != null || updater.downloaded != null)
+              LayoutBuilder(
+                builder: (context, constraints) => SizedBox(
+                  width: constraints.maxWidth < 480
+                      ? constraints.maxWidth
+                      : null,
+                  child: updater.downloaded != null
+                      ? FilledButton(
+                          onPressed: updater.installing || updater.checking
+                              ? null
+                              : () => confirmUpdate(context, updater),
+                          child: Text(updater.installLabel),
+                        )
+                      : FilledButton.tonal(
+                          onPressed: updater.downloading || updater.checking
+                              ? null
+                              : updater.download,
+                          child: Text(
+                            updater.downloading
+                                ? 'Downloading…'
+                                : 'Download ${updater.available!.version}',
+                          ),
+                        ),
                 ),
-              ),
-            if (updater.downloaded != null)
-              FilledButton(
-                onPressed: updater.installing || updater.checking
-                    ? null
-                    : () => confirmUpdate(context, updater),
-                child: Text(updater.installLabel),
               ),
           ],
         ),
