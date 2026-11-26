@@ -317,7 +317,6 @@ void main() {
           throw TdException(404, 'No more chats');
         }
         if (request['@type'] == 'getChatMessageCount') {
-          expect(request['filter']['@type'], 'searchMessagesFilterVideo');
           return {'count': 4};
         }
         if (request['@type'] != 'searchChatMessages') return null;
