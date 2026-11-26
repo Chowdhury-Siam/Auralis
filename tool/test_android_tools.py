@@ -72,6 +72,26 @@ class AndroidToolsTest(unittest.TestCase):
                     with self.assertRaisesRegex(AssertionError, 'Removed device library'):
                         verify.verify_source(fixture)
 
+    def test_source_rejects_snapshot_write_permission_on_api_29_or_newer(self):
+        root = Path(__file__).resolve().parents[1]
+        ns = '{http://schemas.android.com/apk/res/android}'
+        with tempfile.TemporaryDirectory() as temp:
+            fixture = Path(temp)
+            shutil.copytree(root / 'android', fixture / 'android',
+                            ignore=shutil.ignore_patterns('.gradle', 'build', 'local.properties', 'jniLibs'))
+            manifest = fixture / 'android/app/src/main/AndroidManifest.xml'
+            tree = ET.parse(manifest)
+            permission = next(node for node in tree.getroot().findall('uses-permission')
+                              if node.get(ns + 'name') == 'android.permission.WRITE_EXTERNAL_STORAGE')
+            self.assertEqual(permission.attrib.pop(ns + 'maxSdkVersion'), '28')
+            for cap in (None, '29'):
+                with self.subTest(cap=cap):
+                    if cap is not None:
+                        permission.set(ns + 'maxSdkVersion', cap)
+                    tree.write(manifest, encoding='utf-8')
+                    with self.assertRaisesRegex(AssertionError, 'capped at API 28'):
+                        verify.verify_source(fixture)
+
     def test_native_validation_rejects_wrong_architecture_and_alignment(self):
         verify.verify_elf(elf(), 'arm64-v8a')
         verify.verify_elf(elf(62), 'x86_64')
