@@ -7,6 +7,7 @@ import 'package:auralis/player.dart';
 import 'package:auralis/storage.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
+import 'package:auralis/video_files.dart';
 import 'package:auralis/video_playback.dart';
 import 'package:auralis/video_playback_data.dart';
 import 'package:flutter/material.dart';
@@ -14,8 +15,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart' as mpv;
 import 'package:media_kit_video/media_kit_video.dart';
+// ignore: depend_on_referenced_packages
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 import 'fakes.dart';
+
+class _SnapshotDownloads extends PathProviderPlatform {
+  _SnapshotDownloads(this.directory);
+
+  final Directory directory;
+
+  @override
+  Future<String?> getDownloadsPath() async => directory.path;
+}
 
 class _TestPlayerCore extends mpv.PlatformPlayer {
   _TestPlayerCore() : super(configuration: const mpv.PlayerConfiguration());
@@ -354,6 +366,37 @@ class _SkipVideoFixture {
 }
 
 void main() {
+  test(
+    'snapshots create the Downloads subfolder and save separate PNGs',
+    () async {
+      final downloads = await Directory.systemTemp.createTemp(
+        'auralis-downloads-',
+      );
+      addTearDown(() => downloads.delete(recursive: true));
+      final previousProvider = PathProviderPlatform.instance;
+      PathProviderPlatform.instance = _SnapshotDownloads(downloads);
+      addTearDown(() => PathProviderPlatform.instance = previousProvider);
+
+      final png = await File('test/fixtures/cover.png').readAsBytes();
+      await Future.wait([
+        storeVideoSnapshot(png, 'video-1000ms.png'),
+        storeVideoSnapshot(png, 'video-1000ms.png'),
+      ]);
+
+      final directory = await downloads.list().single as Directory;
+      expect(
+        directory.uri.pathSegments.where((segment) => segment.isNotEmpty).last,
+        'Snapshots',
+      );
+      final frames = await directory.list().toList();
+      expect(frames, hasLength(2));
+      for (final frame in frames.cast<File>()) {
+        expect(frame.path, endsWith('-video-1000ms.png'));
+        expect(await frame.readAsBytes(), png);
+      }
+    },
+  );
+
   testWidgets('tap speed toggles 2× and 1× while holding opens the picker', (
     tester,
   ) async {
@@ -1239,13 +1282,12 @@ void main() {
     },
   );
 
-  test('playlist and history restore Telegram and local videos only', () {
+  test('history restores Telegram and local videos from older settings', () {
     final data = VideoPlaybackData();
     final local = VideoSource.file(
       Uri.parse('content://provider/video/1'),
       'Local',
     );
-    final other = VideoSource.file(Uri.file('/movies/other.mp4'), 'Other');
     final telegram = VideoSource.telegram(
       const Track(
         id: '-1001:42',
@@ -1255,7 +1297,6 @@ void main() {
         fileId: 7,
       ),
     );
-    data.putPlaylist('Queue', [telegram, local, other, local]);
     data.recordVideo(local, at: DateTime.utc(2026, 10, 1));
     data.recordVideo(telegram, at: DateTime.utc(2026, 10, 2));
     data.recordVideo(local, at: DateTime.utc(2026, 10, 3));
@@ -1272,15 +1313,16 @@ void main() {
       'uri': 'https://youtu.be/test',
       'web': {'height': 720},
     };
-    (json['playlists']['Queue'] as List).add(oldWeb);
+    json['playlists'] = {
+      'Queue': [telegram.toJson(), local.toJson()],
+    };
     (json['history'] as List).add({
       'source': oldWeb,
       'at': '2026-10-04T00:00:00Z',
     });
     final restored = VideoPlaybackData.fromJson(json);
-    final list = restored.playlists['Queue']!;
-    expect(list.map((source) => source.id), [telegram.id, local.id, other.id]);
-    expect(list.first.telegram!.fileId, isNull);
+    expect(restored.toJson(), isNot(contains('playlists')));
+    expect(restored.history[telegram.id]!.source.telegram!.fileId, isNull);
     expect(
       VideoSource.restore({
         'title': 'Playlist',
@@ -1292,33 +1334,10 @@ void main() {
     expect(restored.history[local.id]!.playedAt, DateTime.utc(2026, 10, 3));
     expect(restored.subtitleStyle, {'sub-pos': '75'});
     restored.clearTelegram();
-    expect(restored.playlists['Queue']!.map((source) => source.id), [
-      local.id,
-      other.id,
-    ]);
     expect(restored.history.keys, [local.id]);
     restored.removeHistory(local.id);
     expect(restored.positions, isEmpty);
-    expect(restored.playlists['Queue']!.length, 2);
   });
-
-  test(
-    'adding to a full Video playlist reports the limit without losing entries',
-    () {
-      VideoSource video(int id) =>
-          VideoSource.file(Uri.file('/movies/$id.mp4'), 'Video $id');
-      final data = VideoPlaybackData();
-      final items = List.generate(1000, video);
-      data.putPlaylist('Full', items);
-      expect(
-        () => data.putPlaylist('Full', [...items, video(1000)]),
-        throwsFormatException,
-      );
-      expect(data.playlists['Full'], items);
-      data.putPlaylist('Full', [...items, items.first]);
-      expect(data.playlists['Full'], items);
-    },
-  );
 
   test(
     'local and Telegram resume points survive each other’s history limit',
@@ -2028,7 +2047,7 @@ void main() {
           await tester.tap(find.byTooltip('Now playing queue'));
           await tester.pumpAndSettle();
           expect(find.text('Queue'), findsOneWidget);
-          expect(find.text('Save as playlist').hitTestable(), findsOneWidget);
+          expect(find.text('Save as playlist'), findsNothing);
           expect(
             find.widgetWithText(FilterChip, 'Shuffle').hitTestable(),
             findsOneWidget,
@@ -2085,9 +2104,7 @@ void main() {
           final brightness = x < transportCenter.dx && Platform.isAndroid;
           final feedback = tester.getCenter(
             find.byIcon(
-              brightness
-                  ? Icons.brightness_6_rounded
-                  : Icons.volume_up_rounded,
+              brightness ? Icons.brightness_6_rounded : Icons.volume_up_rounded,
             ),
           );
           expect(feedback.dx < transportCenter.dx, brightness);
