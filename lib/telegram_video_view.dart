@@ -618,7 +618,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           size.width < 1180 ? 16 : 30,
-          !wide && _tab == 2
+          _tab == 2
               ? 6
               : size.height < 560
               ? 12
