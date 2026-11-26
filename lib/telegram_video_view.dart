@@ -12,6 +12,7 @@ import 'local_media.dart';
 import 'discovery_widgets.dart';
 import 'app_navigation.dart';
 import 'app_motion.dart';
+import 'app_popups.dart';
 import 'app_theme.dart';
 import 'player.dart';
 import 'telegram/stream_proxy.dart';
@@ -107,7 +108,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   late final StreamSubscription<({int chatId, Track video})> _postSubscription;
   _VideoResults? _library;
   bool _showSearchChannel = false, _browseChannelsAsList = false;
-  bool _browseRecentlyOpened = false;
+  bool _deletingBrowseChannel = false;
+  int? _browseFolderId;
+  Future<bool>? _browseFolderLoad;
   int _tab = 0;
   int _libraryCollection = 0;
   static const _collections = [LocalMediaView.videos, LocalMediaView.history];
@@ -119,11 +122,18 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
 
   bool get _showingPlayer => _playbackSources != null && !_videoMinimized;
 
-  List<MusicChat> get _channels => {
-    for (final channel in widget.music.settings.selectedChannels)
-      channel.id: channel,
-    for (final channel in _telegram.channels) channel.id: channel,
-  }.values.toList();
+  List<MusicChat> get _channels =>
+      {
+            for (final channel in widget.music.settings.selectedChannels)
+              channel.id: channel,
+            for (final channel in _telegram.channels) channel.id: channel,
+          }.values
+          .where(
+            (channel) => !widget.music.settings.hiddenVideoChannelIds.contains(
+              channel.id,
+            ),
+          )
+          .toList();
 
   @override
   void initState() {
@@ -182,7 +192,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
         _ready = _telegram.ready;
         _library = null;
         _showSearchChannel = false;
-        _browseRecentlyOpened = false;
+        _browseFolderId = null;
+        _browseFolderLoad = null;
         _search.clear();
         _videoSources.clear();
         _videoCounts.clear();
@@ -190,6 +201,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
         _durationLookups.clear();
       });
       if (_ready) unawaited(_refreshChannels());
+    }
+    if (_browseFolderId != null &&
+        !_telegram.chatFolders.any((folder) => folder.id == _browseFolderId)) {
+      _selectBrowseFolder(null);
     }
     _restoreLibraryChannel();
   }
@@ -214,12 +229,15 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   }
 
   Future<void> _browseChannel(MusicChat channel) {
+    final settings = widget.music.settings;
+    if (settings.hiddenVideoChannelIds.contains(channel.id)) {
+      return Future<void>.value();
+    }
     final results = _VideoResults(channel);
     unawaited(widget.channelMetadata?.identify(channel.id, channel.title));
     setState(() {
       _library = results;
     });
-    final settings = widget.music.settings;
     if (settings.videoChannelId != channel.id) {
       settings.videoChannelId = channel.id;
       unawaited(
@@ -499,14 +517,18 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     }
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({bool browseFolders = false}) async {
     if (!_ready) return;
     _telegram.clearChannelMediaCounts(video: true);
     setState(_videoCounts.clear);
     final results = _library;
+    if (browseFolders && _browseFolderId != null) {
+      _selectBrowseFolder(_browseFolderId);
+    }
     await Future.wait([
       if (results != null && !results.loading) _browseChannel(results.channel),
       _refreshChannels(reportError: true),
+      if (browseFolders) ?_browseFolderLoad,
     ]);
   }
 
@@ -558,6 +580,13 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
 
   void _updateBrowse(VoidCallback update) => setState(update);
 
+  void _selectBrowseFolder(int? id) => setState(() {
+    _browseFolderId = id;
+    _browseFolderLoad = id == null
+        ? null
+        : _telegram.loadChatFolder(id).then((_) => true, onError: (_) => false);
+  });
+
   void _chooseChannel(MusicChat channel) {
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _showSearchChannel = _search.text.trim().isNotEmpty);
@@ -589,7 +618,11 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           size.width < 1180 ? 16 : 30,
-          size.height < 560 ? 12 : 26,
+          !wide && _tab == 2
+              ? 6
+              : size.height < 560
+              ? 12
+              : 26,
           size.width < 1180 ? 16 : 26,
           0,
         ),
