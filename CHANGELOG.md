@@ -1,5 +1,13 @@
 # Auralis changes
 
+## 0.1.259
+
+- Remove the Offline collection and the three-dot toolbar menu from Music Library.
+
+## 0.1.258
+
+- Move the Video Library toolbar higher on desktop and bring the details panel closer to it.
+
 ## 0.1.257
 
 - Open the metadata source selector in a scrollable dialog and fit the title search to its results.
