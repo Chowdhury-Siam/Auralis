@@ -65,6 +65,7 @@ class LibraryLayout extends StatelessWidget {
     this.indicatorKey,
     this.reducedMotion = false,
     this.keyboardOpen = false,
+    this.compactCollection = false,
   });
 
   final List<(String, IconData)> collections;
@@ -74,7 +75,7 @@ class LibraryLayout extends StatelessWidget {
   final Widget? sourceButton, collectionAction, moreActions;
   final VoidCallback? onSettings;
   final Key? menuKey, titleKey, indicatorKey;
-  final bool reducedMotion, keyboardOpen;
+  final bool reducedMotion, keyboardOpen, compactCollection;
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +90,7 @@ class LibraryLayout extends StatelessWidget {
               key: menuKey,
               titleKey: titleKey,
               title: label,
+              compact: compactCollection,
               icon: icon,
               tooltip: 'Library collection: $label',
               onSelected: onSelected,
@@ -696,6 +698,7 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
     required this.itemBuilder,
     required this.onSelected,
     this.titleKey,
+    this.compact = false,
   });
 
   final String title, tooltip;
@@ -703,6 +706,7 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
   final PopupMenuItemBuilder<T> itemBuilder;
   final ValueChanged<T> onSelected;
   final Key? titleKey;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -712,7 +716,8 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
     const outer = Radius.circular(32), inner = Radius.circular(6);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 160;
+        final narrow = constraints.maxWidth < 160;
+        final height = compact ? 44.0 : 52.0;
         return AuralisPopupMenu<T>(
           tooltip: tooltip,
           constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
@@ -723,9 +728,9 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
             children: [
               Flexible(
                 child: Container(
-                  constraints: const BoxConstraints(minHeight: 52),
+                  constraints: BoxConstraints(minHeight: height),
                   padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 10 : 14,
+                    horizontal: compact || narrow ? 10 : 14,
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
@@ -738,9 +743,9 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (!compact) ...[
-                        Icon(icon, color: foreground, size: 22),
-                        const SizedBox(width: 8),
+                      if (!narrow) ...[
+                        Icon(icon, color: foreground, size: compact ? 20 : 22),
+                        SizedBox(width: compact ? 6 : 8),
                       ],
                       Flexible(
                         child: Text(
@@ -750,7 +755,7 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: foreground,
-                            fontSize: compact ? 19 : 25,
+                            fontSize: compact ? 18 : (narrow ? 19 : 25),
                             fontWeight: FontWeight.w700,
                             letterSpacing: -.6,
                           ),
@@ -762,8 +767,8 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Container(
-                width: compact ? 36 : 48,
-                height: 52,
+                width: compact ? 32 : (narrow ? 36 : 48),
+                height: height,
                 decoration: BoxDecoration(
                   color: background,
                   borderRadius: const BorderRadiusDirectional.horizontal(
