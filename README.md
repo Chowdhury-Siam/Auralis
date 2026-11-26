@@ -53,7 +53,7 @@ Browse your Telegram media, build playlists with custom photos, follow lyrics, o
 
 Auralis has two interfaces: **Music** combines audio from selected Telegram channels; **Video** browses Telegram video posts and opens local video files. Hold **Home** to switch modes, or choose the startup interface in Settings.
 
-The charcoal and violet interface adapts from phone navigation to a desktop sidebar. Music and Video share playlist cards, custom playlist photos, swipeable Library collections, and consistent search panels. Artwork, lyrics, and playback controls remain specific to each mode.
+The charcoal and violet interface adapts from phone navigation to a desktop sidebar. Music and Video share swipeable Library collections and consistent content panels. Artwork, lyrics, and playback controls remain specific to each mode.
 
 Music and Video keep independent Library sort choices, including in Settings.
 Changing one mode's order does not change the other. Video sorting is saved with
@@ -80,7 +80,7 @@ Select multiple Telegram channels, search by title, artist, or channel, and sort
 
 ### 💜 Favorites & Playlists
 
-Keep favorites, create ordered playlists, and return to recently played music. Music and Video use the same rounded playlist cards and photo controls, but their entries stay separate. Music collections save locally and can be included in a backup; custom playlist photos stay on the device.
+Keep favorites, create ordered playlists, and return to recently played music. Music collections save locally and can be included in a backup; custom playlist photos stay on the device.
 
 ### 🎧 A Queue That Follows You
 
@@ -259,12 +259,11 @@ See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality note
 
 | Collection | What you can do |
 | --- | --- |
-| **All videos** | Browse the selected Telegram channel, search titles, sort, open item Options / Info, and mark episodes watched |
-| **Playlists** | Use the same artwork-card layout as Music; create, rename, remove and customize playlists; add local video files or save player queue entries |
+| **All videos** | Browse the selected Telegram channel, sort, open item Options / Info, and mark episodes watched |
 | **History** | Resume opened videos, see Telegram thumbnails, toggle watched status, remove entries or clear history |
-| **Snapshots** | Preview, export or delete saved PNG frames |
+| **Offline** | Play Telegram videos saved for offline viewing |
 
-All videos and Playlists have separate search filters. Playlist searches match names and video titles. Clear a video playlist filter to restore drag-to-reorder handles. Filtering does not change saved queues or playback indices.
+Search for channels in Browse, or use the channel details title picker to correct metadata. **Save video frame** writes a PNG directly to `Download/Snapshots` on Android or `Downloads/Snapshots` on Windows.
 
 The full player supports audio/subtitle track selection, external and secondary subtitles, chapters/bookmarks, speed, sleep timer, snapshots, video sizing, and picture-processing options. Japanese audio and English subtitles are preferred when available; manual choices apply to the current video. Android supports immersive full-player controls and picture in picture where the device permits it. Video settings and playback diagnostics stay separate from Music's Lyrics & artwork settings.
 
@@ -280,7 +279,7 @@ episode. No section lengths are guessed and no new automatic network lookup
 is added. Existing automatic skipping remains limited to saved ranges.
 See [video skip-button behavior and verification](docs/VIDEO_SKIP.md).
 
-Telegram videos and local files play their **original sources**. There is no quality selector or alternate-stream switching. Picture processing does not create new source resolutions. Telegram history/resume/watched metadata can sync; local file access, video playlists, snapshots and playlist photos remain device-local.
+Telegram videos and local files play their **original sources**. There is no quality selector or alternate-stream switching. Picture processing does not create new source resolutions. Telegram history/resume/watched metadata can sync; local file access, snapshots and Music playlist photos remain device-local.
 
 See [Video mode](docs/VIDEO_PORT.md) and [the playback guide](docs/GUIDE.md#telegram-video). Hardware decoding, HDR and platform integration depend on the device and native build.
 
@@ -290,11 +289,11 @@ See [Video mode](docs/VIDEO_PORT.md) and [the playback guide](docs/GUIDE.md#tele
 
 ## 🖼️ Playlist Photos and Motion
 
-In either interface, open **Library → Playlists → the card's three-dot menu → Change playlist photo**. Choose a PNG, JPEG or WebP image (up to 12 MiB). Android's image picker can supply other decodable formats. Auralis keeps a normalized PNG copy, bounded to 512 pixels on its longest side, rather than depending on the original file path. Animated inputs use their first frame.
+In Music, open **Library → Playlists → the card's three-dot menu → Change playlist photo**. Choose a PNG, JPEG or WebP image (up to 12 MiB). Android's image picker can supply other decodable formats. Auralis keeps a normalized PNG copy, bounded to 512 pixels on its longest side, rather than depending on the original file path. Animated inputs use their first frame.
 
-**Reset photo** restores the automatic artwork/fallback. Cancelling the picker or choosing an invalid image leaves the existing photo unchanged. Photos follow playlist renames. Music and Video photo references are separate; Music photo references are scoped to the local sync-account namespace. Custom photos and their file references are not uploaded or included in portable backups.
+**Reset photo** restores the automatic artwork/fallback. Cancelling the picker or choosing an invalid image leaves the existing photo unchanged. Photos follow playlist renames. Music photo references are scoped to the local sync-account namespace. Custom photos and their file references are not uploaded or included in portable backups.
 
-Long lists and grids have a gentle bounce for direct vertical drags. Mouse-wheel scrolling, horizontal paging, seek bars and sliders remain precise; reorderable video lists retain clamping. Tappable playlist/discovery cards and themed buttons have subtle spring press feedback without changing layout or touch targets. The system's **Reduce Motion / Remove animations** setting disables the added effects; there is no separate app-specific motion toggle.
+Long lists and grids have a gentle bounce for direct vertical drags. Mouse-wheel scrolling, horizontal paging, seek bars and sliders remain precise. Tappable playlist/discovery cards and themed buttons have subtle spring press feedback without changing layout or touch targets. The system's **Reduce Motion / Remove animations** setting disables the added effects; there is no separate app-specific motion toggle.
 
 ---
 
@@ -434,7 +433,7 @@ Current limits include no local music importer, equalizer, crossfade, persistent
 | --- | --- |
 | `lib/app.dart` | Responsive navigation, Library, collections, player screens, and Telegram forms |
 | `lib/player.dart` | Native audio backend, queue, and playback state |
-| `lib/music_playlist_widgets.dart` / `lib/playlist_photos.dart` | Shared Music/Video playlist cards and device-local custom photos |
+| `lib/music_playlist_widgets.dart` / `lib/playlist_photos.dart` | Music playlist cards and device-local custom photos |
 | `lib/app_motion.dart` | Accessibility-aware scrolling and spring press feedback |
 | `lib/lyrics.dart` / `lib/lyrics_view.dart` | Lyrics loading, parsing, and display |
 | `lib/telegram/` | TDLib transport, channel indexing, metadata extraction, and streaming proxy |
@@ -475,7 +474,7 @@ Telegram audio is temporary: its local copy is removed when switching tracks, st
 
 ### Android efficiency and Library sources
 
-The “On this device” library source, source switch and folder-management interface have been removed in both modes. Existing installations ignore the retired source preferences; this does not delete media files, favorites, playlists or playback history. Telegram collections, Save for offline, explicit video opening and saved video playlists remain available.
+The “On this device” library source, source switch and folder-management interface have been removed in both modes. Existing installations ignore the retired source preferences; this does not delete media files, favorites, playlists or playback history. Telegram collections, Save for offline, and explicit video opening remain available.
 
 Seek-bar animation now repaints the existing slider instead of rebuilding it on every animation frame. Hidden player/library layers stop unnecessary painting and ticking. Video browsing and visualizer controls use structural playback notifications, while lyrics, seeking, statistics recording, Android media controls and sync retain their original playback event stream. Home statistics refresh on displayed-second changes. Large settings snapshots encode off the UI isolate, identical persisted snapshots skip the disk write, and idle sync responses no longer reapply an unchanged library. Channel artwork uses chunked byte buffers and large metadata replies decode off the UI isolate.
 
