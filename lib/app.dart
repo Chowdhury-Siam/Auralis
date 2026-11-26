@@ -2310,7 +2310,6 @@ class _PlayerShellState extends State<PlayerShell>
     ('Favorites', Icons.favorite_rounded),
     ('Playlists', Icons.playlist_play_rounded),
     ('Recently played', Icons.history_rounded),
-    ('Offline', Icons.download_done_rounded),
   ];
 
   void _selectLibraryCollection(String value) => setState(() {
@@ -2359,22 +2358,6 @@ class _PlayerShellState extends State<PlayerShell>
               onPressed: () => setState(() => _artistsAsList = !_artistsAsList),
             )
           : _librarySortButton(),
-      moreActions: LibraryActionsMenu(
-        actions: [
-          (
-            label: 'Refresh library',
-            icon: Icons.refresh_rounded,
-            onSelected: telegram.ready && !library.loading
-                ? () => unawaited(library.refresh())
-                : null,
-          ),
-          (
-            label: 'Choose channels',
-            icon: Icons.playlist_add_rounded,
-            onSelected: _openMusicChannels,
-          ),
-        ],
-      ),
       onSettings: _mobileNavigation ? () => _navigate(_Page.settings) : null,
       menuKey: const ValueKey('library-collection-menu'),
       titleKey: const ValueKey('page-title'),
@@ -2474,7 +2457,6 @@ class _PlayerShellState extends State<PlayerShell>
   }
 
   Widget _libraryCollectionBody(String scope) {
-    if (scope == 'Offline') return _offlineSongs();
     final tracks = _collectionTracks(scope);
     final active = scope == collection;
     if (scope == 'Playlists' && (!active || selectedPlaylist == null)) {
@@ -2534,28 +2516,8 @@ class _PlayerShellState extends State<PlayerShell>
     );
   }
 
-  Widget _offlineSongs({String? query}) {
-    final tracks = telegram.offline.tracks(video: false);
-    if (tracks.isEmpty) {
-      return _empty(
-        Icons.download_rounded,
-        'No offline songs',
-        'Choose Save for offline from a song’s actions.',
-        bottomPadding: _dockPadding,
-      );
-    }
-    return _trackList(
-      _visibleTracks(tracks, query: query ?? search.text),
-      key: const PageStorageKey('offline-songs'),
-    );
-  }
-
-  List<Track> _visibleTracks(
-    List<Track> tracks, {
-    bool preserveOrder = false,
-    String? query,
-  }) {
-    final filter = (query ?? search.text).trim().toLowerCase();
+  List<Track> _visibleTracks(List<Track> tracks, {bool preserveOrder = false}) {
+    final filter = search.text.trim().toLowerCase();
     final visible = tracks
         .where(
           (t) => '${t.title} ${t.artist} ${t.source}'.toLowerCase().contains(
