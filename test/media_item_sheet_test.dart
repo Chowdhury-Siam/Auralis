@@ -292,6 +292,7 @@ void main() {
     expect(find.text('Play next'), findsOneWidget);
     expect(find.text('Remove from queue'), findsOneWidget);
     expect(find.text('Mark as watched'), findsOneWidget);
+    expect(find.text('Add to playlist'), findsNothing);
     expect(find.text('Add to favorites'), findsNothing);
     expect(find.text('Delete'), findsNothing);
     await tester.tap(find.byTooltip('Close actions'));
@@ -304,7 +305,7 @@ void main() {
     );
     await tester.tap(find.text('Open actions'));
     await tester.pumpAndSettle();
-    expect(find.text('Add to playlist'), findsOneWidget);
+    expect(find.text('Add to playlist'), findsNothing);
     expect(find.text('Play next'), findsNothing);
     expect(find.text('Mark as watched'), findsOneWidget);
     expect(find.text('Remove from queue'), findsNothing);
