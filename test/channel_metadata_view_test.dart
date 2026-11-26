@@ -67,7 +67,6 @@ void main() {
                 channelId: -1,
                 channelName: 'Channel name',
                 repository: repository,
-                videoCount: 8,
                 onPlay: () => plays++,
               ),
             ),
@@ -77,7 +76,13 @@ void main() {
       repository.requests[-1]!.complete(const MetadataMatch(selected: title));
       await tester.pumpAndSettle();
       expect(find.text('Official title'), findsOneWidget);
-      expect(find.text('8 channel videos'), findsOneWidget);
+      expect(find.text('Channel name'), findsNothing);
+      expect(find.textContaining('channel videos'), findsNothing);
+      expect(find.text('Source: AniList'), findsNothing);
+      expect(
+        find.text('12 catalogue episodes · 24 min / episode'),
+        findsOneWidget,
+      );
       final start = find.byKey(const ValueKey('channel-metadata-play'));
       await tester.ensureVisible(start);
       await tester.tap(start);
@@ -87,6 +92,13 @@ void main() {
       await tester.tap(choose);
       await tester.pumpAndSettle();
       expect(find.text('Find the correct title'), findsOneWidget);
+      if (scale == 1) {
+        await tester.tap(find.text('Metadata source'));
+        await tester.pumpAndSettle();
+        expect(find.text('Source: AniList'), findsOneWidget);
+        await tester.tap(find.widgetWithText(TextButton, 'Close'));
+        await tester.pumpAndSettle();
+      }
       final candidate = find.byKey(
         const ValueKey(('metadata-candidate', 'AniList:12')),
       );
@@ -112,7 +124,6 @@ void main() {
                 channelId: id,
                 channelName: 'Channel $id',
                 repository: repository,
-                videoCount: 1,
               ),
             ),
           ),
@@ -123,7 +134,7 @@ void main() {
       repository.requests[1]!.complete(const MetadataMatch(selected: title));
       await tester.pumpAndSettle();
       expect(find.text('Official title'), findsNothing);
-      expect(find.text('Channel 2'), findsWidgets);
+      expect(find.text('Channel 2'), findsOneWidget);
       repository.requests[2]!.complete(const MetadataMatch(failed: true));
       await tester.pumpAndSettle();
       expect(find.text('Identify title'), findsOneWidget);
