@@ -7,6 +7,8 @@ import 'package:auralis/channel_metadata_view.dart';
 import 'package:auralis/library_widgets.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
+import 'package:auralis/storage.dart';
+import 'package:auralis/telegram/td_transport.dart';
 import 'package:auralis/video_playback_data.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
@@ -261,7 +263,7 @@ void main() {
   }
 
   testWidgets(
-    'find and switch video channels, sort videos and use square thumbnails',
+    'filter Browse by Telegram chat folders, switch channels and sort videos',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(390, 844);
@@ -271,7 +273,34 @@ void main() {
       final metadata = _BrowseMetadata(archive.id);
       addTearDown(metadata.close);
       final td = FakeTd();
+      const movies = {'@type': 'chatListFolder', 'chat_folder_id': 7};
+      const series = {'@type': 'chatListFolder', 'chat_folder_id': 8};
+      Json folder(int id, String name) => {
+        'id': id,
+        'name': {
+          'text': {'text': name},
+        },
+      };
+      void publishChannel(MusicChat chat, List<Json> lists) => td.events.add({
+        '@type': 'updateNewChat',
+        'chat': {
+          'id': chat.id,
+          'title': chat.title,
+          'type': {'@type': 'chatTypeSupergroup', 'is_channel': true},
+          'chat_lists': lists,
+        },
+      });
+      var seriesPages = 0;
       td.onRequest = (request) async {
+        if (request['@type'] == 'loadChats' &&
+            request['chat_list']['@type'] == 'chatListFolder') {
+          if (request['chat_list']['chat_folder_id'] == 8) {
+            seriesPages++;
+            if (seriesPages == 2) publishChannel(archive, [series]);
+            if (seriesPages <= 2) return {'@type': 'ok'};
+          }
+          throw TdException(404, 'No more chats');
+        }
         if (request['@type'] == 'getChatMessageCount') {
           expect(request['filter']['@type'], 'searchMessagesFilterVideo');
           return {'count': 4};
@@ -291,11 +320,8 @@ void main() {
           'next_from_message_id': 0,
         };
       };
-      final telegram = TelegramService(
-        Directory('unused'),
-        MemoryVault(),
-        transport: td,
-      )..state = 'authorizationStateReady';
+      final directory = Directory.systemTemp.createTempSync('auralis-folders-');
+      final telegram = TelegramService(directory, MemoryVault(), transport: td);
       final settings = MemorySettings()
         ..defaultInterface = AppInterface.video
         ..selectedChannels = [channel, archive]
@@ -309,7 +335,17 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         await player.shutdown();
         await telegram.shutdown();
+        directory.deleteSync(recursive: true);
       });
+      await tester.runAsync(() async {
+        await telegram.start(
+          apiId: 12345,
+          apiHash: 'abcdef0123456789abcdef0123456789',
+        );
+        td.auth('authorizationStateReady');
+        await telegram.refreshChats();
+      });
+      expect(telegram.error, isNull);
       await tester.pumpWidget(
         AuralisApp(
           player: player,
@@ -429,19 +465,56 @@ void main() {
       );
       expect(countIn(channel, '2 videos'), findsOneWidget);
       expect(countIn(archive, '≈ 4 videos'), findsOneWidget);
-      settings.videoPlayback.recordVideo(alphaSource);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Recently opened'));
+      expect(find.byType(ChoiceChip), findsNothing);
+      publishChannel(channel, [movies]);
+      td.events.add({
+        '@type': 'updateChatFolders',
+        'chat_folders': [folder(8, 'Series'), folder(7, 'Movies')],
+      });
+      await tester.pumpAndSettle();
+      final seriesChip = find.widgetWithText(ChoiceChip, 'Series');
+      final moviesChip = find.widgetWithText(ChoiceChip, 'Movies');
+      expect(
+        tester.getTopLeft(seriesChip).dx,
+        lessThan(tester.getTopLeft(moviesChip).dx),
+      );
+      expect(find.widgetWithText(ChoiceChip, 'All channels'), findsNothing);
+      expect(find.widgetWithText(ChoiceChip, 'Recently opened'), findsNothing);
+      await tester.tap(moviesChip);
       await tester.pumpAndSettle();
       expect(channelRow(channel), findsOneWidget);
       expect(channelRow(archive), findsNothing);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'All channels'));
+      await tester.tap(moviesChip);
+      await tester.pumpAndSettle();
+      expect(channelRow(channel), findsOneWidget);
+      expect(channelRow(archive), findsOneWidget);
+      await tester.tap(seriesChip);
+      await tester.pumpAndSettle();
+      expect(seriesPages, 3);
+      expect(channelRow(channel), findsNothing);
+      expect(channelRow(archive), findsOneWidget);
+      td.events.add({
+        '@type': 'updateChatRemovedFromList',
+        'chat_id': archive.id,
+        'chat_list': series,
+      });
+      await tester.pumpAndSettle();
+      expect(channelRow(archive), findsNothing);
+      expect(find.text('No channels in this folder'), findsOneWidget);
+      td.events.add({
+        '@type': 'updateChatAddedToList',
+        'chat_id': archive.id,
+        'chat_list': series,
+      });
       await tester.pumpAndSettle();
       expect(channelRow(archive), findsOneWidget);
       final searchesBefore = td.requests.length;
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Search channels'),
-        'ARCHI',
-      );
+      final searchField = find.widgetWithText(TextField, 'Search channels');
+      await tester.enterText(searchField, 'CINE');
+      await tester.pumpAndSettle();
+      expect(channelRow(channel), findsNothing);
+      expect(find.text('No matching channels in this folder'), findsOneWidget);
+      await tester.enterText(searchField, 'ARCHI');
       await tester.pumpAndSettle();
       expect(find.text('Matching channels'), findsOneWidget);
       expect(grid, findsOneWidget);
@@ -473,7 +546,6 @@ void main() {
 
       await tester.tap(find.byTooltip('Back to channels'));
       await tester.pumpAndSettle();
-      final searchField = find.widgetWithText(TextField, 'Search channels');
       expect(countIn(archive, '1 video'), findsOneWidget);
       expect(
         find.descendant(
@@ -488,6 +560,12 @@ void main() {
       expect(grid, findsOneWidget);
       expect(countIn(archive, '1 video'), findsOneWidget);
       expect(tester.widget<TextField>(searchField).controller!.text, 'ARCHI');
+      td.events.add({
+        '@type': 'updateChatFolders',
+        'chat_folders': [folder(7, 'Movies')],
+      });
+      await tester.pumpAndSettle();
+      expect(seriesChip, findsNothing);
       await tester.enterText(searchField, 'cine');
       await tester.pumpAndSettle();
       expect(find.text(archive.title), findsNothing);
@@ -505,6 +583,91 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  test('deleted Video channels are remembered on this device', () async {
+    final directory = await Directory.systemTemp.createTemp('video-browse-');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = File('${directory.path}/settings.json');
+    final settings = AppSettings(file);
+    await settings.save();
+    final loaded = AppSettings(file);
+    await loaded.load();
+    expect(loaded.hiddenVideoChannelIds, isEmpty);
+    loaded.hiddenVideoChannelIds.add(channel.id);
+    await loaded.save();
+    final restored = AppSettings(file);
+    await restored.load();
+    expect(restored.hiddenVideoChannelIds, {channel.id});
+  });
+
+  testWidgets('Browse can delete channels from the grid and list', (
+    tester,
+  ) async {
+    const other = MusicChat(-100456, 'Second channel');
+    final td = FakeTd()
+      ..onRequest = (request) async => request['@type'] == 'searchChatMessages'
+          ? {'messages': [], 'next_from_message_id': 0}
+          : null;
+    final telegram = TelegramService(
+      Directory('unused'),
+      MemoryVault(),
+      transport: td,
+    )..state = 'authorizationStateReady';
+    final settings = MemorySettings()
+      ..defaultInterface = AppInterface.video
+      ..selectedChannels = [channel, other]
+      ..videoChannelId = channel.id;
+    final player = PlayerController(
+      FakeAudio(),
+      TelegramStreamProxy(telegram.request),
+      settings,
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      await player.shutdown();
+      await telegram.shutdown();
+    });
+    await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('video-navigation')),
+        matching: find.byIcon(Icons.explore_outlined),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final first = find.byKey(ValueKey(channel.id));
+    final second = find.byKey(ValueKey(other.id));
+    Future<void> hold(Finder tile) async {
+      await tester.longPress(tile);
+      await tester.pumpAndSettle();
+      expect(find.text('Delete channel?'), findsOneWidget);
+    }
+
+    await hold(first);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(first, findsOneWidget);
+    expect(settings.videoChannelId, channel.id);
+    await hold(first);
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    expect(first, findsNothing);
+    expect(second, findsOneWidget);
+    expect(settings.videoChannelId, isNull);
+
+    await tester.tap(find.byTooltip('Show list'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GridView), findsNothing);
+    await hold(second);
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    expect(second, findsNothing);
+    expect(settings.selectedChannels, [channel, other]);
+    expect(settings.hiddenVideoChannelIds, {channel.id, other.id});
+    expect(find.text('No Telegram channels available'), findsOneWidget);
+  });
 
   testWidgets(
     'Video Library has no search while Browse channel search stays available with the keyboard',
@@ -600,9 +763,13 @@ void main() {
     ) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = size;
+      tester.view.padding = const FakeViewPadding(top: 24);
+      tester.view.viewPadding = const FakeViewPadding(top: 24);
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final td = FakeTd();
       td.onRequest = (request) async => request['@type'] == 'searchChatMessages'
@@ -672,6 +839,9 @@ void main() {
       expect(find.byTooltip('Refresh videos'), findsNothing);
       final sort = find.byTooltip('Sort Library');
       final panel = find.byKey(const ValueKey(('video-library-panel', 0)));
+      final toolbar = tester.getRect(find.byType(LibraryToolbar));
+      if (size.width < 900) expect(toolbar.top, 30);
+      expect(tester.getTopLeft(panel).dy - toolbar.bottom, 24);
       expect(find.byTooltip('Shuffle collection'), findsNothing);
       expect(find.byKey(const ValueKey('video-library-counts')), findsNothing);
       expect(sort.hitTestable(), findsOneWidget);
