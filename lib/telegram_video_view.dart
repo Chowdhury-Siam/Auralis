@@ -522,7 +522,6 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   Future<void> _refresh({bool browseFolders = false}) async {
     if (!_ready) return;
     _telegram.clearChannelMediaCounts(video: true);
-    if (browseFolders) _telegram.clearChannelMediaCounts(video: false);
     setState(_videoCounts.clear);
     final results = _library;
     if (browseFolders && _browseFolderId != null) {
