@@ -176,14 +176,7 @@ class AppSettings {
     musicVisualizer = MusicVisualizerSettings.fromJson(
       json['_musicVisualizer'],
     );
-    videoPlayback = VideoPlaybackData.fromJson(
-      json['_videoPlayback'],
-      // Before independent Video sorting, both modes used the Music value.
-      fallbackSort: LibrarySort.values.firstWhere(
-        (sort) => sort.name == json['librarySort'],
-        orElse: () => defaultLibrarySort,
-      ),
-    );
+    videoPlayback = VideoPlaybackData.fromJson(json['_videoPlayback']);
     playlistPhotos.load(json['_playlistPhotos']);
     applyJson(json);
     final hiddenChannels = json['_hiddenVideoChannelIds'];
