@@ -39,6 +39,8 @@ void main() {
         });
         await tester.pumpWidget(AuralisApp(player: player, telegram: telegram));
         await tester.pumpAndSettle();
+        expect(find.byTooltip('Open video files'), findsNothing);
+        expect(find.byIcon(Icons.folder_open_rounded), findsNothing);
         await tester.tap(find.byTooltip('Library').first);
         await tester.pumpAndSettle();
         expect(find.byType(LibraryLayout), findsOneWidget);
@@ -47,10 +49,15 @@ void main() {
           findsNothing,
         );
         expect(find.text('Choose folder'), findsNothing);
-        await tester.tap(find.byTooltip('Library actions'));
-        await tester.pumpAndSettle();
-        expect(find.text('Manage folders'), findsNothing);
-        expect(find.text('Refresh library'), findsOneWidget);
+        final actions = find.byTooltip('Library actions');
+        if (mode == AppInterface.video) {
+          expect(actions, findsNothing);
+        } else {
+          await tester.tap(actions);
+          await tester.pumpAndSettle();
+          expect(find.text('Manage folders'), findsNothing);
+          expect(find.text('Refresh library'), findsOneWidget);
+        }
         expect(td.requests.where((r) => r['@type'] == 'scanFolders'), isEmpty);
       },
     );
