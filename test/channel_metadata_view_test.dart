@@ -22,6 +22,7 @@ const title = ChannelTitle(
 class FakeMetadata extends ChannelMetadataRepository {
   FakeMetadata() : super(Directory('unused'));
   final requests = <int, Completer<MetadataMatch>>{};
+  final searchedKinds = <MetadataKind>[];
   ChannelTitle? selected;
   @override
   Future<MetadataMatch> identify(int id, String name) =>
@@ -30,7 +31,11 @@ class FakeMetadata extends ChannelMetadataRepository {
   Future<List<ChannelTitle>> search(
     String query, {
     MetadataKind kind = MetadataKind.any,
-  }) async => [title];
+  }) async {
+    searchedKinds.add(kind);
+    return [title];
+  }
+
   @override
   Future<void> select(int id, String name, ChannelTitle value) async {
     selected = value;
@@ -92,6 +97,24 @@ void main() {
       await tester.tap(choose);
       await tester.pumpAndSettle();
       expect(find.text('Find the correct title'), findsOneWidget);
+      final sourcePicker = find.widgetWithText(ListTile, 'Search in');
+      await tester.ensureVisible(sourcePicker);
+      await tester.tap(sourcePicker);
+      await tester.pumpAndSettle();
+      final automatic = find.widgetWithText(
+        ListTile,
+        'Automatic · AniList first',
+      );
+      expect(tester.widget<ListTile>(automatic.last).selected, isTrue);
+      final films = find.widgetWithText(ListTile, 'Films · Wikipedia');
+      await tester.ensureVisible(films);
+      await tester.tap(films);
+      await tester.pumpAndSettle();
+      expect(repository.searchedKinds, [MetadataKind.any, MetadataKind.film]);
+      expect(
+        find.widgetWithText(ListTile, 'Films · Wikipedia'),
+        findsOneWidget,
+      );
       if (scale == 1) {
         await tester.tap(find.text('Metadata source'));
         await tester.pumpAndSettle();
