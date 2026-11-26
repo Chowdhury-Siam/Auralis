@@ -840,8 +840,8 @@ void main() {
       final sort = find.byTooltip('Sort Library');
       final panel = find.byKey(const ValueKey(('video-library-panel', 0)));
       final toolbar = tester.getRect(find.byType(LibraryToolbar));
-      if (size.width < 900) expect(toolbar.top, 30);
-      expect(tester.getTopLeft(panel).dy - toolbar.bottom, 24);
+      expect(toolbar.top, 30);
+      expect(tester.getTopLeft(panel).dy - toolbar.bottom, 18);
       expect(find.byTooltip('Shuffle collection'), findsNothing);
       expect(find.byKey(const ValueKey('video-library-counts')), findsNothing);
       expect(sort.hitTestable(), findsOneWidget);
