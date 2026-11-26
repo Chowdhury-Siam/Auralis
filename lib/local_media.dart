@@ -22,18 +22,13 @@ enum LocalMediaView {
   artists('Artists'),
   genres('Genres'),
   videos('All videos'),
-  playlists('Playlists'),
   history('History'),
-  snapshots('Snapshots'),
   offline('Offline'),
   favorites('Favorites'),
   folders('Folders');
 
   const LocalMediaView(this.label);
   final String label;
-
-  bool get isSavedVideoCollection =>
-      this == playlists || this == history || this == snapshots;
 }
 
 String? _tag(Object? value) {
@@ -487,9 +482,7 @@ extension LocalMediaViewIcon on LocalMediaView {
     LocalMediaView.artists => Icons.person_rounded,
     LocalMediaView.genres => Icons.category_outlined,
     LocalMediaView.videos => Icons.video_library_rounded,
-    LocalMediaView.playlists => Icons.playlist_play_rounded,
     LocalMediaView.history => Icons.history_rounded,
-    LocalMediaView.snapshots => Icons.photo_library_outlined,
     LocalMediaView.offline => Icons.download_done_rounded,
     LocalMediaView.favorites => Icons.favorite_rounded,
     LocalMediaView.folders => Icons.folder_outlined,
