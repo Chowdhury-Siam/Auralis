@@ -12,10 +12,9 @@ class ChannelMetadataHeader extends StatefulWidget {
     required this.channelId,
     required this.channelName,
     required this.repository,
-    required this.videoCount,
     this.onPlay,
   });
-  final int channelId, videoCount;
+  final int channelId;
   final String channelName;
   final ChannelMetadataRepository repository;
   final VoidCallback? onPlay;
@@ -47,12 +46,16 @@ class _ChannelMetadataHeaderState extends State<ChannelMetadataHeader> {
     }
   }
 
-  Future<void> _choose() async {
+  Future<void> _choose(ChannelTitle? selected) async {
     final repository = widget.repository;
     final id = widget.channelId, name = widget.channelName;
     final result = await showAuralisDialog<ChannelTitle>(
       context: context,
-      builder: (_) => _TitleSearch(repository: repository, initialQuery: name),
+      builder: (_) => _TitleSearch(
+        repository: repository,
+        initialQuery: name,
+        selected: selected,
+      ),
     );
     if (result == null) return;
     await repository.select(id, name, result);
@@ -85,11 +88,6 @@ class _ChannelMetadataHeaderState extends State<ChannelMetadataHeader> {
             title?.title ?? widget.channelName,
             key: const ValueKey('channel-metadata-title'),
             style: theme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            widget.channelName,
-            style: theme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
           ),
           if (title != null) ...[
             if (title.studio?.isNotEmpty == true) ...[
@@ -186,15 +184,11 @@ class _ChannelMetadataHeaderState extends State<ChannelMetadataHeader> {
                             ),
                           TextButton.icon(
                             key: const ValueKey('channel-metadata-choose'),
-                            onPressed: _choose,
+                            onPressed: () => _choose(title),
                             icon: const Icon(Icons.manage_search_rounded),
                             label: Text(
                               title == null ? 'Identify title' : 'Change title',
                             ),
-                          ),
-                          Text(
-                            '${widget.videoCount} channel videos',
-                            style: theme.bodySmall,
                           ),
                         ],
                       ),
@@ -261,41 +255,6 @@ class _ChannelMetadataHeaderState extends State<ChannelMetadataHeader> {
                             ],
                           ),
                         ],
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: () => showAuralisDialog<void>(
-                            context: context,
-                            builder: (c) => AuralisDialog(
-                              title: Text('Source: ${title.provider}'),
-                              content: SelectableText(
-                                [
-                                  if (title.url != null) title.url!,
-                                  if (title.provider == 'TVmaze') 'TVmaze · CC BY-SA 4.0 · https://www.tvmaze.com/api',
-                                  if (title.provider == 'Wikipedia') 'Wikipedia contributors · CC BY-SA · Image rights vary; see the source article.',
-                                  if (title.provider == 'AniList') 'Title information and artwork from AniList.',
-                                ].join('\n\n'),
-                              ),
-                              actions: [
-                                if (title.url != null)
-                                  TextButton(
-                                    onPressed: () async {
-                                      await Clipboard.setData(
-                                        ClipboardData(text: title.url!),
-                                      );
-                                    },
-                                    child: const Text('Copy source link'),
-                                  ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(c),
-                                  child: const Text('Close'),
-                                ),
-                              ],
-                            ),
-                          ),
-                          child: Text(
-                            'Source: ${title.provider}${data?.manual == true ? ' · Selected by you' : ''}',
-                          ),
-                        ),
                       ],
                     ],
                   ),
@@ -315,10 +274,12 @@ class MetadataArtwork extends StatefulWidget {
     required this.repository,
     required this.url,
     this.poster = false,
+    this.fallback,
   });
   final ChannelMetadataRepository repository;
   final String? url;
   final bool poster;
+  final Widget? fallback;
   @override
   State<MetadataArtwork> createState() => _MetadataArtworkState();
 }
@@ -346,10 +307,12 @@ class _MetadataArtworkState extends State<MetadataArtwork> {
 
   @override
   Widget build(BuildContext context) {
-    final fallback = ColoredBox(
-      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-      child: const Center(child: Icon(Icons.movie_outlined, size: 32)),
-    );
+    final fallback =
+        widget.fallback ??
+        ColoredBox(
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          child: const Center(child: Icon(Icons.movie_outlined, size: 32)),
+        );
     return ClipRRect(
       borderRadius: BorderRadius.circular(widget.poster ? 12 : 0),
       child: FutureBuilder<File?>(
@@ -368,9 +331,14 @@ class _MetadataArtworkState extends State<MetadataArtwork> {
 }
 
 class _TitleSearch extends StatefulWidget {
-  const _TitleSearch({required this.repository, required this.initialQuery});
+  const _TitleSearch({
+    required this.repository,
+    required this.initialQuery,
+    required this.selected,
+  });
   final ChannelMetadataRepository repository;
   final String initialQuery;
+  final ChannelTitle? selected;
   @override
   State<_TitleSearch> createState() => _TitleSearchState();
 }
@@ -427,6 +395,37 @@ class _TitleSearchState extends State<_TitleSearch> {
         _busy = false;
       });
     }
+  }
+
+  void _showSource(ChannelTitle title) {
+    FocusScope.of(context).unfocus();
+    showAuralisDialog<void>(
+      context: context,
+      builder: (dialog) => AuralisDialog(
+        title: Text('Source: ${title.provider}'),
+        content: SelectableText(
+          [
+            if (title.url != null) title.url!,
+            if (title.provider == 'TVmaze')
+              'TVmaze · CC BY-SA 4.0 · https://www.tvmaze.com/api',
+            if (title.provider == 'Wikipedia') 'Wikipedia contributors · CC BY-SA · Image rights vary; see the source article.',
+            if (title.provider == 'AniList')
+              'Title information and artwork from AniList.',
+          ].join('\n\n'),
+        ),
+        actions: [
+          if (title.url case final url?)
+            TextButton(
+              onPressed: () => Clipboard.setData(ClipboardData(text: url)),
+              child: const Text('Copy source link'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -545,6 +544,11 @@ class _TitleSearchState extends State<_TitleSearch> {
         ],
       ),
       actions: [
+        if (widget.selected case final title?)
+          TextButton(
+            onPressed: () => _showSource(title),
+            child: const Text('Metadata source'),
+          ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
