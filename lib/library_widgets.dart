@@ -64,7 +64,6 @@ class LibraryLayout extends StatelessWidget {
     this.indicatorKey,
     this.reducedMotion = false,
     this.keyboardOpen = false,
-    this.compactCollection = false,
   });
 
   final List<(String, IconData)> collections;
@@ -74,7 +73,7 @@ class LibraryLayout extends StatelessWidget {
   final Widget? sourceButton, collectionAction;
   final VoidCallback? onSettings;
   final Key? menuKey, titleKey, indicatorKey;
-  final bool reducedMotion, keyboardOpen, compactCollection;
+  final bool reducedMotion, keyboardOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +88,6 @@ class LibraryLayout extends StatelessWidget {
               key: menuKey,
               titleKey: titleKey,
               title: label,
-              compact: compactCollection,
               icon: icon,
               tooltip: 'Library collection: $label',
               onSelected: onSelected,
@@ -129,7 +127,6 @@ class LibraryLayout extends StatelessWidget {
             index: index,
             onSelected: onSelected,
             reducedMotion: reducedMotion,
-            compact: compactCollection,
           ),
         ],
         Expanded(child: body),
@@ -657,7 +654,7 @@ class LibraryPageIndicator extends StatelessWidget {
   }
 }
 
-/// The collection selector shared by Music and Video Library.
+/// The Music Library collection selector.
 class LibraryCollectionMenu<T> extends StatelessWidget {
   const LibraryCollectionMenu({
     super.key,
@@ -667,7 +664,6 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
     required this.itemBuilder,
     required this.onSelected,
     this.titleKey,
-    this.compact = false,
   });
 
   final String title, tooltip;
@@ -675,7 +671,6 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
   final PopupMenuItemBuilder<T> itemBuilder;
   final ValueChanged<T> onSelected;
   final Key? titleKey;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -692,100 +687,63 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
           itemBuilder: itemBuilder,
           onSelected: onSelected,
-          child: compact
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 32),
-                    padding: const EdgeInsetsDirectional.fromSTEB(10, 4, 7, 4),
-                    decoration: BoxDecoration(
-                      color: background,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            key: titleKey,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: foreground,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.expand_more_rounded,
-                          size: 16,
-                          color: foreground,
-                        ),
-                      ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Container(
+                  constraints: BoxConstraints(minHeight: height),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: narrow ? 10 : 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: background,
+                    borderRadius: const BorderRadiusDirectional.horizontal(
+                      start: outer,
+                      end: inner,
                     ),
                   ),
-                )
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Container(
-                        constraints: BoxConstraints(minHeight: height),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: narrow ? 10 : 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: background,
-                          borderRadius:
-                              const BorderRadiusDirectional.horizontal(
-                                start: outer,
-                                end: inner,
-                              ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (!narrow) ...[
-                              Icon(icon, color: foreground, size: 22),
-                              const SizedBox(width: 8),
-                            ],
-                            Flexible(
-                              child: Text(
-                                title,
-                                key: titleKey,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: foreground,
-                                  fontSize: narrow ? 19 : 25,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -.6,
-                                ),
-                              ),
-                            ),
-                          ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!narrow) ...[
+                        Icon(icon, color: foreground, size: 22),
+                        const SizedBox(width: 8),
+                      ],
+                      Flexible(
+                        child: Text(
+                          title,
+                          key: titleKey,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: foreground,
+                            fontSize: narrow ? 19 : 25,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.6,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Container(
-                      width: narrow ? 36 : 48,
-                      height: height,
-                      decoration: BoxDecoration(
-                        color: background,
-                        borderRadius: const BorderRadiusDirectional.horizontal(
-                          start: inner,
-                          end: outer,
-                        ),
-                      ),
-                      child: Icon(Icons.expand_more_rounded, color: foreground),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+              ),
+              const SizedBox(width: 4),
+              Container(
+                width: narrow ? 36 : 48,
+                height: height,
+                decoration: BoxDecoration(
+                  color: background,
+                  borderRadius: const BorderRadiusDirectional.horizontal(
+                    start: inner,
+                    end: outer,
+                  ),
+                ),
+                child: Icon(Icons.expand_more_rounded, color: foreground),
+              ),
+            ],
+          ),
         );
       },
     );
