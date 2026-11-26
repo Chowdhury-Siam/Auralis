@@ -58,7 +58,6 @@ class LibraryLayout extends StatelessWidget {
     required this.body,
     this.sourceButton,
     this.collectionAction,
-    this.moreActions,
     this.onSettings,
     this.menuKey,
     this.titleKey,
@@ -72,7 +71,7 @@ class LibraryLayout extends StatelessWidget {
   final int index;
   final ValueChanged<int> onSelected;
   final Widget body;
-  final Widget? sourceButton, collectionAction, moreActions;
+  final Widget? sourceButton, collectionAction;
   final VoidCallback? onSettings;
   final Key? menuKey, titleKey, indicatorKey;
   final bool reducedMotion, keyboardOpen, compactCollection;
@@ -122,7 +121,6 @@ class LibraryLayout extends StatelessWidget {
                   icon: const Icon(Icons.settings_outlined, size: 20),
                 ),
               ],
-              ?moreActions,
             ],
           ),
           LibraryPageIndicator(
@@ -160,38 +158,6 @@ class LibraryToolbar extends StatelessWidget {
         ),
       ),
       ...actions,
-    ],
-  );
-}
-
-typedef LibraryAction = ({
-  String label,
-  IconData icon,
-  VoidCallback? onSelected,
-});
-
-class LibraryActionsMenu extends StatelessWidget {
-  const LibraryActionsMenu({super.key, required this.actions});
-
-  final List<LibraryAction> actions;
-
-  @override
-  Widget build(BuildContext context) => AuralisPopupMenu<int>(
-    tooltip: 'Library actions',
-    icon: const Icon(Icons.more_vert_rounded, size: 20),
-    onSelected: (index) => actions[index].onSelected?.call(),
-    itemBuilder: (_) => [
-      for (final (index, action) in actions.indexed)
-        PopupMenuItem<int>(
-          value: index,
-          enabled: action.onSelected != null,
-          padding: EdgeInsets.zero,
-          child: AuralisMenuRow(
-            title: action.label,
-            icon: action.icon,
-            enabled: action.onSelected != null,
-          ),
-        ),
     ],
   );
 }
@@ -664,7 +630,7 @@ class LibraryPageIndicator extends StatelessWidget {
                 onTap: () => onSelected(page),
                 child: SizedBox(
                   width: 32,
-                  height: compact ? 24 : 28,
+                  height: compact ? 18 : 28,
                   child: Center(
                     child: AnimatedContainer(
                       duration:
