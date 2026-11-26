@@ -127,6 +127,7 @@ class AppSettings {
   bool setupComplete = false;
   AppInterface defaultInterface = AppInterface.music;
   int? videoChannelId;
+  final hiddenVideoChannelIds = <int>{};
   VideoPlaybackData videoPlayback = VideoPlaybackData();
   MusicVisualizerSettings musicVisualizer = MusicVisualizerSettings();
   void Function(Map<String, dynamic>)? captureSync;
@@ -185,6 +186,11 @@ class AppSettings {
     );
     playlistPhotos.load(json['_playlistPhotos']);
     applyJson(json);
+    final hiddenChannels = json['_hiddenVideoChannelIds'];
+    hiddenVideoChannelIds.clear();
+    if (hiddenChannels is List) {
+      hiddenVideoChannelIds.addAll(hiddenChannels.whereType<int>());
+    }
     syncState = json['_sync'] is Map<String, dynamic>
         ? json['_sync'] as Map<String, dynamic>
         : {};
@@ -196,6 +202,7 @@ class AppSettings {
   Map<String, dynamic> _diskJson(Map<String, dynamic> snapshot) => {
     ...snapshot,
     '_sync': syncState,
+    '_hiddenVideoChannelIds': hiddenVideoChannelIds.toList(),
     '_videoPlayback': videoPlayback.toJson(),
     '_musicVisualizer': musicVisualizer.toJson(),
     '_playlistPhotos': playlistPhotos.toJson(),
