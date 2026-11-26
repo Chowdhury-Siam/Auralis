@@ -131,6 +131,7 @@ class LibraryLayout extends StatelessWidget {
             index: index,
             onSelected: onSelected,
             reducedMotion: reducedMotion,
+            compact: compactCollection,
           ),
         ],
         Expanded(child: body),
@@ -636,12 +637,14 @@ class LibraryPageIndicator extends StatelessWidget {
     required this.index,
     required this.onSelected,
     this.reducedMotion = false,
+    this.compact = false,
   });
 
   final List<String> labels;
   final int index;
   final ValueChanged<int> onSelected;
   final bool reducedMotion;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -661,7 +664,7 @@ class LibraryPageIndicator extends StatelessWidget {
                 onTap: () => onSelected(page),
                 child: SizedBox(
                   width: 32,
-                  height: 28,
+                  height: compact ? 24 : 28,
                   child: Center(
                     child: AnimatedContainer(
                       duration:
