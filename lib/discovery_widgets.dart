@@ -15,6 +15,61 @@ import 'models.dart';
       _ => (colors.secondaryFixedDim, colors.onSecondaryFixed),
     };
 
+class BrowseSearchField extends StatelessWidget {
+  const BrowseSearchField({
+    super.key,
+    required this.controller,
+    required this.focusNode,
+    required this.onClose,
+    this.onChanged,
+    this.onSubmitted,
+    this.onCleared,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final VoidCallback onClose;
+  final ValueChanged<String>? onChanged, onSubmitted;
+  final VoidCallback? onCleared;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          textInputAction: TextInputAction.search,
+          onChanged: onChanged,
+          onSubmitted: onSubmitted,
+          decoration: InputDecoration(
+            hintText: 'Search channels',
+            enabledBorder: auralisFieldBorder(radius: 24),
+            focusedBorder: auralisFieldBorder(
+              radius: 24,
+              side: BorderSide(color: Theme.of(context).colorScheme.primary),
+            ),
+            prefixIcon: const Icon(Icons.search_rounded, size: 20),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            suffixIcon: controller.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear channel search',
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () {
+                      controller.clear();
+                      onCleared?.call();
+                    },
+                  ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 4),
+      TextButton(onPressed: onClose, child: const Text('Cancel')),
+    ],
+  );
+}
+
 class DiscoveryCard extends StatelessWidget {
   const DiscoveryCard({
     super.key,
