@@ -465,7 +465,9 @@ void main() {
       expect(find.byType(AppNavigation), findsOneWidget);
       await tester.tap(find.byTooltip('Browse'));
       await tester.pumpAndSettle();
-      expect(find.text('Search your Channel'), findsOneWidget);
+      await tester.tap(find.byTooltip('Search channels'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextField, 'Search channels'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Example');
       await tester.pumpAndSettle();
       expect(find.text('Example'), findsOneWidget);
