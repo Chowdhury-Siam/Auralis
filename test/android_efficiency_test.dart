@@ -49,15 +49,7 @@ void main() {
           findsNothing,
         );
         expect(find.text('Choose folder'), findsNothing);
-        final actions = find.byTooltip('Library actions');
-        if (mode == AppInterface.video) {
-          expect(actions, findsNothing);
-        } else {
-          await tester.tap(actions);
-          await tester.pumpAndSettle();
-          expect(find.text('Manage folders'), findsNothing);
-          expect(find.text('Refresh library'), findsOneWidget);
-        }
+        expect(find.byTooltip('Library actions'), findsNothing);
         expect(td.requests.where((r) => r['@type'] == 'scanFolders'), isEmpty);
       },
     );
