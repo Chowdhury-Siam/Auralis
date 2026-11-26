@@ -203,7 +203,8 @@ void main() {
         expect(find.text('Continue watching'), findsOneWidget);
         expect(find.text('Local episode'), findsOneWidget);
         expect(find.text('Resume at 9:00'), findsOneWidget);
-        expect(find.byTooltip('Open video files'), findsOneWidget);
+        expect(find.byTooltip('Open video files'), findsNothing);
+        expect(find.byIcon(Icons.folder_open_rounded), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
