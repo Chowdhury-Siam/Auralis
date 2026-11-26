@@ -1,5 +1,21 @@
 # Auralis changes
 
+## 0.1.265
+
+- Pull down to refresh Music Browse in the grid and list layouts.
+
+## 0.1.264
+
+- Open channel search from a magnifying-glass icon in the top-right corner of Browse in Video and Music modes.
+
+## 0.1.263
+
+- Remove the Video Library collection dropdown and move the content up below the page indicators.
+
+## 0.1.262
+
+- Use the available desktop width on Music Home and Browse and on Video Home, Browse and Library.
+
 ## 0.1.261
 
 - Keep the poster grid as the only channel layout in Video Browse.
