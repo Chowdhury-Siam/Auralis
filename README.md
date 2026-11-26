@@ -261,7 +261,6 @@ See the [lyrics guide](docs/GUIDE.md#now-playing-lyrics) and [audio-quality note
 | --- | --- |
 | **All videos** | Browse the selected Telegram channel, sort, open item Options / Info, and mark episodes watched |
 | **History** | Resume opened videos, see Telegram thumbnails, toggle watched status, remove entries or clear history |
-| **Offline** | Play Telegram videos saved for offline viewing |
 
 Search for channels in Browse, or use the channel details title picker to correct metadata. **Save video frame** writes a PNG directly to `Download/Snapshots` on Android or `Downloads/Snapshots` on Windows.
 
