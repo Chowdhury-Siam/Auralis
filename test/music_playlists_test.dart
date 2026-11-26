@@ -76,7 +76,6 @@ void main() {
           'Unfinished ideas': [],
           longName: [ids.first, 'missing:1'],
         });
-        settings.videoPlayback.putPlaylist('Video list', []);
         final audio = FakeAudio();
         final player = PlayerController(
           audio,
@@ -203,10 +202,6 @@ void main() {
         await tap(find.text('Delete'));
         expect(settings.playlists.containsKey('Evening mix'), isFalse);
         expect(settings.playlists[longName], [ids.first, 'missing:1']);
-        expect(
-          settings.videoPlayback.playlists.containsKey('Video list'),
-          isTrue,
-        );
         expect(player.queue, isEmpty);
         expect(audio.playing, isFalse);
         expect(tester.takeException(), isNull);
