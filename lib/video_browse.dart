@@ -23,42 +23,39 @@ extension _VideoBrowse on _TelegramVideoViewState {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_ready && showHeader) ...[
-          Text(
-            query.isEmpty ? 'Browse channels' : 'Matching channels',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  query.isEmpty ? 'Browse channels' : 'Matching channels',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (!_browseSearchOpen)
+                IconButton(
+                  tooltip: 'Search channels',
+                  icon: const Icon(Icons.search_rounded, size: 20),
+                  onPressed: _openBrowseSearch,
+                ),
+            ],
           ),
-          const SizedBox(height: 8),
         ],
-        TextField(
-          controller: _search,
-          enabled: _ready,
-          textInputAction: TextInputAction.search,
-          onChanged: (_) => _updateBrowse(() {}),
-          onSubmitted: (text) {
-            final matches = _matchingChannels(text.trim().toLowerCase());
-            if (matches.length == 1) _chooseChannel(matches.single);
-          },
-          decoration: InputDecoration(
-            hintText: 'Search channels',
-            enabledBorder: auralisFieldBorder(radius: 24),
-            focusedBorder: auralisFieldBorder(
-              radius: 24,
-              side: BorderSide(color: Theme.of(context).colorScheme.primary),
-            ),
-            prefixIcon: const Icon(Icons.search_rounded, size: 20),
-            contentPadding: const EdgeInsets.symmetric(vertical: 12),
-            suffixIcon: _search.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: 'Clear channel search',
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    onPressed: () => _updateBrowse(_search.clear),
-                  ),
+        if (_browseSearchOpen)
+          BrowseSearchField(
+            key: const ValueKey('video-browse-search'),
+            controller: _search,
+            focusNode: _browseSearchFocus,
+            onClose: _closeBrowseSearch,
+            onChanged: (_) => _updateBrowse(() {}),
+            onCleared: () => _updateBrowse(() {}),
+            onSubmitted: (text) {
+              final matches = _matchingChannels(text.trim().toLowerCase());
+              if (matches.length == 1) _chooseChannel(matches.single);
+            },
           ),
-        ),
         if (_ready && showHeader && folders.isNotEmpty)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -97,7 +94,7 @@ extension _VideoBrowse on _TelegramVideoViewState {
                       final width = constraints.maxWidth;
                       final columns = width < 210
                           ? 1
-                          : ((width + gap) / 178).floor().clamp(2, 6);
+                          : math.max(2, ((width + gap) / 178).floor());
                       final tileWidth = (width - gap * (columns - 1)) / columns;
                       final visibleHeight =
                           constraints.maxHeight - padding.bottom;
