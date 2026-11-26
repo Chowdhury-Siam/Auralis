@@ -344,6 +344,13 @@ class _TitleSearch extends StatefulWidget {
 }
 
 class _TitleSearchState extends State<_TitleSearch> {
+  static const _sources = {
+    MetadataKind.any: 'Automatic · AniList first',
+    MetadataKind.anime: 'Anime · AniList',
+    MetadataKind.series: 'TV series · TVmaze',
+    MetadataKind.film: 'Films · Wikipedia',
+  };
+
   late final _query = TextEditingController(
     text: cleanChannelTitle(widget.initialQuery),
   );
@@ -397,6 +404,30 @@ class _TitleSearchState extends State<_TitleSearch> {
     }
   }
 
+  Future<void> _chooseSource() async {
+    FocusScope.of(context).unfocus();
+    final kind = await showAuralisDialog<MetadataKind>(
+      context: context,
+      builder: (dialog) => AuralisDialog(
+        title: const Text('Search in'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final entry in _sources.entries)
+              AuralisChoiceTile(
+                title: Text(entry.value),
+                selected: entry.key == _kind,
+                onTap: () => Navigator.pop(dialog, entry.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || kind == null || kind == _kind) return;
+    _kind = kind;
+    await _search();
+  }
+
   void _showSource(ChannelTitle title) {
     FocusScope.of(context).unfocus();
     showAuralisDialog<void>(
@@ -430,9 +461,6 @@ class _TitleSearchState extends State<_TitleSearch> {
 
   @override
   Widget build(BuildContext context) {
-    final height =
-        MediaQuery.sizeOf(context).height -
-        MediaQuery.viewInsetsOf(context).vertical;
     return AuralisDialog(
       title: const Text('Find the correct title'),
       width: 560,
@@ -464,34 +492,11 @@ class _TitleSearchState extends State<_TitleSearch> {
             ),
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<MetadataKind>(
-            initialValue: _kind,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Search in'),
-            items: const [
-              DropdownMenuItem(
-                value: MetadataKind.any,
-                child: Text('Automatic · AniList first'),
-              ),
-              DropdownMenuItem(
-                value: MetadataKind.anime,
-                child: Text('Anime · AniList'),
-              ),
-              DropdownMenuItem(
-                value: MetadataKind.series,
-                child: Text('TV series · TVmaze'),
-              ),
-              DropdownMenuItem(
-                value: MetadataKind.film,
-                child: Text('Films · Wikipedia'),
-              ),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                _kind = value;
-                _search();
-              }
-            },
+          AuralisChoiceTile(
+            title: const Text('Search in'),
+            subtitle: Text(_sources[_kind]!),
+            trailing: const Icon(Icons.expand_more_rounded),
+            onTap: _chooseSource,
           ),
           const SizedBox(height: 8),
           if (_busy)
@@ -501,46 +506,38 @@ class _TitleSearchState extends State<_TitleSearch> {
           else if (_rows.isEmpty)
             const Text('No matching titles. Try another name or catalogue.')
           else
-            SizedBox(
-              height: (height * .4).clamp(120.0, 360.0),
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: _rows.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final row = _rows[index];
-                  return ListTile(
-                    key: ValueKey(('metadata-candidate', row.key)),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 2,
-                      vertical: 6,
-                    ),
-                    leading: SizedBox(
-                      width: 42,
-                      height: 62,
-                      child: MetadataArtwork(
-                        repository: widget.repository,
-                        url: row.cover,
-                        poster: true,
-                      ),
-                    ),
-                    title: Text(row.title),
-                    subtitle: Text(
-                      [
-                        row.provider,
-                        if (row.year != null) '${row.year}',
-                        if (row.format != null) row.format!,
-                        if (row.nativeTitle != null) row.nativeTitle!,
-                        if (row.description.isNotEmpty) row.description,
-                      ].join(' · '),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () => Navigator.pop(context, row),
-                  );
-                },
+            for (final (index, row) in _rows.indexed) ...[
+              if (index > 0) const Divider(height: 1),
+              ListTile(
+                key: ValueKey(('metadata-candidate', row.key)),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 2,
+                  vertical: 6,
+                ),
+                leading: SizedBox(
+                  width: 42,
+                  height: 62,
+                  child: MetadataArtwork(
+                    repository: widget.repository,
+                    url: row.cover,
+                    poster: true,
+                  ),
+                ),
+                title: Text(row.title),
+                subtitle: Text(
+                  [
+                    row.provider,
+                    if (row.year != null) '${row.year}',
+                    if (row.format != null) row.format!,
+                    if (row.nativeTitle != null) row.nativeTitle!,
+                    if (row.description.isNotEmpty) row.description,
+                  ].join(' · '),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => Navigator.pop(context, row),
               ),
-            ),
+            ],
         ],
       ),
       actions: [
