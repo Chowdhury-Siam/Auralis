@@ -192,18 +192,30 @@ void main() {
       expect(find.byTooltip('Telegram'), findsNothing);
       await tester.tap(find.text('Choose channels'));
       await tester.pumpAndSettle();
-      expect(find.text('Search your Channel'), findsOneWidget);
+      final channelSearch = find.widgetWithText(TextField, 'Search channels');
+      final searchButton = find.byTooltip('Search channels');
+      expect(channelSearch, findsNothing);
+      expect(searchButton, findsOneWidget);
       expect(find.text('Artists'), findsNothing);
       expect(find.text('≈ 3 tracks'), findsOneWidget);
       expect(find.text('≈ 1 track'), findsOneWidget);
-      await tester.enterText(find.byType(TextField), 'channel -2');
+      await tester.tap(searchButton);
+      await tester.pumpAndSettle();
+      await tester.enterText(channelSearch, 'channel -2');
       await tester.pumpAndSettle();
       expect(find.text('Channel -1'), findsNothing);
       await tester.tap(find.text('Channel -2'));
       await tester.pumpAndSettle();
       expect(find.text('1 track'), findsOneWidget);
-      await tester.tap(find.byTooltip('Clear search'));
+      await tester.tap(find.byTooltip('Clear channel search'));
       await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(channelSearch).controller!.text, isEmpty);
+      await tester.enterText(channelSearch, 'channel -2');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(channelSearch, findsNothing);
+      expect(find.text('Channel -1'), findsOneWidget);
       await tester.tap(find.byTooltip('Show list'));
       await tester.pump();
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
@@ -228,8 +240,23 @@ void main() {
           .length;
       await tester.tap(find.byTooltip('Browse'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('library-refresh')));
+      expect(find.byTooltip('Refresh library'), findsNothing);
+      int chatRefreshes() =>
+          td.requests.where((r) => r['@type'] == 'loadChats').length;
+      final chatsBeforeRefresh = chatRefreshes();
+      await tester.drag(
+        find.byKey(const PageStorageKey(('channels', true))),
+        const Offset(0, 320),
+      );
+      await pumpUntil(
+        tester,
+        () =>
+            chatRefreshes() > chatsBeforeRefresh &&
+            find.byType(RefreshProgressIndicator).evaluate().isEmpty,
+        reason: 'Pull-to-refresh did not finish reloading Music Browse.',
+      );
       await tester.pumpAndSettle();
+      expect(chatRefreshes(), chatsBeforeRefresh + 2);
       expect(
         td.requests.where((r) => r['@type'] == 'searchChatMessages').length,
         greaterThan(scansBeforeRefresh),
@@ -446,7 +473,12 @@ void main() {
         TelegramStreamProxy((_) async => {}),
         AppSettings(File('unused')),
       );
-      final telegram = TelegramService(Directory('unused'), MemoryVault());
+      final td = FakeTd();
+      final telegram = TelegramService(
+        Directory('unused'),
+        MemoryVault(),
+        transport: td,
+      );
       final updater = AppUpdater(
         currentVersion: '0.1.0',
         directory: Directory('unused'),
@@ -509,9 +541,24 @@ void main() {
         expect(find.text('Telegram connected'), findsOneWidget);
         await tester.tap(find.text('Choose channels'));
         await tester.pumpAndSettle();
-        expect(find.text('Search your Channel'), findsOneWidget);
+        expect(find.byTooltip('Search channels'), findsOneWidget);
         expect(find.text('No Telegram channels available'), findsOneWidget);
-        expect(find.byTooltip('Refresh library'), findsOneWidget);
+        expect(find.byTooltip('Refresh library'), findsNothing);
+        final before = td.requests
+            .where((r) => r['@type'] == 'loadChats')
+            .length;
+        await tester.drag(
+          find.descendant(
+            of: find.byType(RefreshIndicator),
+            matching: find.byType(ListView),
+          ),
+          const Offset(0, 320),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          td.requests.where((r) => r['@type'] == 'loadChats'),
+          hasLength(before + 2),
+        );
         expect(tester.takeException(), isNull);
         telegram.state = 'disconnected';
         expect(find.byTooltip('Now playing'), findsNothing);
