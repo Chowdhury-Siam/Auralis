@@ -1,5 +1,19 @@
 # Auralis changes
 
+## 0.1.256
+
+- Replace the Video Browse refresh buttons with pull-to-refresh on the channel grid, list, and episode list.
+
+## 0.1.255
+
+- Redesign Video Browse with a responsive poster grid, an optional list view, and a Recently opened channel filter.
+- Use saved title posters when available and Telegram channel photos as a fallback.
+
+## 0.1.254
+
+- Make the Video Library selector smaller and remove the Offline collection.
+- Remove the repeated channel name and channel video count from the details card. Find metadata attribution under Change title.
+
 ## 0.1.253
 
 - Remove video playlists and the Snapshots gallery from Video mode.
