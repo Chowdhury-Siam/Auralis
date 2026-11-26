@@ -688,7 +688,7 @@ class LibraryPageIndicator extends StatelessWidget {
   }
 }
 
-/// The split collection heading shared by Music and Video Library.
+/// The collection selector shared by Music and Video Library.
 class LibraryCollectionMenu<T> extends StatelessWidget {
   const LibraryCollectionMenu({
     super.key,
@@ -717,69 +717,106 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final narrow = constraints.maxWidth < 160;
-        final height = compact ? 44.0 : 52.0;
+        const height = 52.0;
         return AuralisPopupMenu<T>(
           tooltip: tooltip,
           constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
           itemBuilder: itemBuilder,
           onSelected: onSelected,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Container(
-                  constraints: BoxConstraints(minHeight: height),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact || narrow ? 10 : 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: background,
-                    borderRadius: const BorderRadiusDirectional.horizontal(
-                      start: outer,
-                      end: inner,
+          child: compact
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 32),
+                    padding: const EdgeInsetsDirectional.fromSTEB(10, 4, 7, 4),
+                    decoration: BoxDecoration(
+                      color: background,
+                      borderRadius: BorderRadius.circular(18),
                     ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!narrow) ...[
-                        Icon(icon, color: foreground, size: compact ? 20 : 22),
-                        SizedBox(width: compact ? 6 : 8),
-                      ],
-                      Flexible(
-                        child: Text(
-                          title,
-                          key: titleKey,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: foreground,
-                            fontSize: compact ? 18 : (narrow ? 19 : 25),
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -.6,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            key: titleKey,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: foreground,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.expand_more_rounded,
+                          size: 16,
+                          color: foreground,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Container(
+                        constraints: BoxConstraints(minHeight: height),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: narrow ? 10 : 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: background,
+                          borderRadius:
+                              const BorderRadiusDirectional.horizontal(
+                                start: outer,
+                                end: inner,
+                              ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!narrow) ...[
+                              Icon(icon, color: foreground, size: 22),
+                              const SizedBox(width: 8),
+                            ],
+                            Flexible(
+                              child: Text(
+                                title,
+                                key: titleKey,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: foreground,
+                                  fontSize: narrow ? 19 : 25,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -.6,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 4),
+                    Container(
+                      width: narrow ? 36 : 48,
+                      height: height,
+                      decoration: BoxDecoration(
+                        color: background,
+                        borderRadius: const BorderRadiusDirectional.horizontal(
+                          start: inner,
+                          end: outer,
+                        ),
+                      ),
+                      child: Icon(Icons.expand_more_rounded, color: foreground),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 4),
-              Container(
-                width: compact ? 32 : (narrow ? 36 : 48),
-                height: height,
-                decoration: BoxDecoration(
-                  color: background,
-                  borderRadius: const BorderRadiusDirectional.horizontal(
-                    start: inner,
-                    end: outer,
-                  ),
-                ),
-                child: Icon(Icons.expand_more_rounded, color: foreground),
-              ),
-            ],
-          ),
         );
       },
     );
