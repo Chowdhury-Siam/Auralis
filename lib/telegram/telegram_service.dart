@@ -25,6 +25,10 @@ import 'phone_login.dart';
 
 typedef _Cover = ({Uint8List bytes, int shortEdge});
 
+class _BrowseChannelCheck {
+  bool? matches;
+}
+
 class TelegramService extends ChangeNotifier {
   TelegramService(
     this.directory,
@@ -1276,7 +1280,7 @@ class TelegramService extends ChangeNotifier {
       state = 'disconnected';
     }
     if (!ready) {
-      _channelMediaCounts.clear();
+      _clearChannelMediaCounts();
       clearImageCache();
       if (state == 'authorizationStateLoggingOut' ||
           state == 'authorizationStateClosed') {
@@ -1442,9 +1446,69 @@ class TelegramService extends ChangeNotifier {
   }
 
   final _channelMediaCounts = <(int, bool), Future<int?>>{};
+  final _browseChannelChecks = <(int, bool), _BrowseChannelCheck>{};
+  final _browseMediaWorkers = List.generate(4, (_) => Future<void>.value());
+  int _nextBrowseMediaWorker = 0;
+  final browseMediaChanges = ValueNotifier(0);
 
   void clearChannelMediaCounts({required bool video}) {
     _channelMediaCounts.removeWhere((key, _) => key.$2 == video);
+    _browseChannelChecks.removeWhere((key, _) => key.$2 == video);
+  }
+
+  void _clearChannelMediaCounts() {
+    _channelMediaCounts.clear();
+    _browseChannelChecks.clear();
+  }
+
+  // A null result means the check is pending. Keep channels available when
+  // Telegram cannot determine their content, and retry on Browse refresh.
+  bool? browseChannelMatches(MusicChat channel, {required bool video}) {
+    final key = (channel.id, video);
+    final check = _browseChannelChecks.putIfAbsent(key, () {
+      final check = _BrowseChannelCheck();
+      final worker = _nextBrowseMediaWorker++ % _browseMediaWorkers.length;
+      bool current() => ready && identical(_browseChannelChecks[key], check);
+      _browseMediaWorkers[worker] = _browseMediaWorkers[worker].then((_) async {
+        if (!current()) return;
+        final matches = await _checkBrowseMedia(channel, video, current);
+        if (!current()) return;
+        check.matches = matches;
+        browseMediaChanges.value++;
+      });
+      return check;
+    });
+    return check.matches;
+  }
+
+  Future<bool> _checkBrowseMedia(
+    MusicChat channel,
+    bool video,
+    bool Function() current,
+  ) async {
+    final count = await channelMediaCount(channel.id, video: video);
+    if (count != 0 || !current()) return true;
+    // TDLib's audio and video counts exclude files sent as documents.
+    var before = 0;
+    try {
+      do {
+        final page = video
+            ? await videos(channel, before: before, documents: true)
+            : await music(
+                channel.id,
+                channel.title,
+                before: before,
+                documents: true,
+              );
+        if (!current() || page.tracks.isNotEmpty) return true;
+        final next = page.nextMessageId;
+        if (next != 0 && before != 0 && next >= before) return true;
+        before = next;
+      } while (before != 0);
+      return false;
+    } catch (_) {
+      return true;
+    }
   }
 
   // Browse can show this estimate without scanning every document in a channel.
@@ -1725,7 +1789,7 @@ class TelegramService extends ChangeNotifier {
       await restoreData();
       safeToRestart = true;
       _channels.clear();
-      _channelMediaCounts.clear();
+      _clearChannelMediaCounts();
     } catch (_) {
       if (installed) await database.delete(recursive: true);
       if (moved) await old.rename(database.path);
@@ -1785,7 +1849,7 @@ class TelegramService extends ChangeNotifier {
     }
     _secrets = {};
     _channels.clear();
-    _channelMediaCounts.clear();
+    _clearChannelMediaCounts();
     clearImageCache();
     credentialRecoveryRequired = false;
     state = 'disconnected';
@@ -1799,7 +1863,7 @@ class TelegramService extends ChangeNotifier {
     connection = _clientClosed ? 'Offline' : 'Signing out';
     _channels.clear();
     _clearChatFolders();
-    _channelMediaCounts.clear();
+    _clearChannelMediaCounts();
     clearImageCache();
     _secrets = {..._secrets}
       ..remove('apiId')
@@ -1842,6 +1906,8 @@ class TelegramService extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_videoPosts.close());
+    _clearChannelMediaCounts();
+    browseMediaChanges.dispose();
     offline.dispose();
     super.dispose();
   }
@@ -1851,6 +1917,7 @@ class TelegramService extends ChangeNotifier {
     authenticationLink = null;
     authenticationPhoneNumber = null;
     _clearChatFolders();
+    _clearChannelMediaCounts();
     clearImageCache();
     await _subscription?.cancel();
     try {
