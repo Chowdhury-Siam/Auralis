@@ -111,10 +111,12 @@ void main() {
         ),
         findsOneWidget,
       );
-      await tester.tap(browse);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(TextField));
-      await tester.pump();
+      final search = find.widgetWithText(TextField, 'Search channels');
+      expect(tester.widget<TextField>(search).focusNode!.hasFocus, isTrue);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
       await tester.pump();
       expect(audio.volumes, isEmpty);
