@@ -132,6 +132,35 @@ void main() {
   });
 
   test(
+    'hiding a music channel removes its tracks and persists on this device',
+    () async {
+      const source = MusicChat(-1, 'One');
+      final fallback = td.onRequest!;
+      td.onRequest = (request) async {
+        if (request['@type'] == 'searchChatMessages' &&
+            request['filter']['@type'] == 'searchMessagesFilterAudio') {
+          return {
+            'messages': [message(source.id, 1)],
+            'next_from_message_id': 0,
+          };
+        }
+        return fallback(request);
+      };
+      await library.select(source, true);
+      expect(library.tracks, hasLength(1));
+      await library.hide(source);
+      expect(library.tracks, isEmpty);
+      expect(library.selected(source.id), isFalse);
+      expect(settings.toJson().containsKey('_hiddenMusicChannelIds'), isFalse);
+      final restored = AppSettings(settings.file);
+      await restored.load();
+      expect(restored.hiddenMusicChannelIds, {source.id});
+      expect(restored.selectedChannels.single.id, source.id);
+      expect(restored.hiddenVideoChannelIds, isEmpty);
+    },
+  );
+
+  test(
     'deselection cancels a pending response and cannot resurrect removed music',
     () async {
       final pending = Completer<Json>();
