@@ -129,6 +129,44 @@ void main() {
     expect(original, [a, b, c, unknown]);
   });
 
+  test(
+    'settings can write past a stale temp path and retry a failed save',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('auralis-save-retry-');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File('${dir.path}/settings.json');
+      await Directory('${file.path}.tmp').create();
+      final settings = AppSettings(file);
+      final player = PlayerController(
+        FakeAudio(),
+        TelegramStreamProxy((_) async => {}),
+        settings,
+      );
+      addTearDown(player.shutdown);
+      const track = Track(id: '1', title: 'Song', artist: '', source: 'Test');
+
+      // A directory at the destination forces the atomic rename to fail.
+      final blocked = await Directory(file.path).create();
+      await player.toggleFavorite(track);
+      expect(player.settingsSaveFailed, isTrue);
+      expect(settings.favoriteIds, {track.id});
+      await blocked.delete();
+
+      await player.retrySavingChanges();
+      expect(player.settingsSaveFailed, isFalse);
+      final reloaded = AppSettings(file);
+      await reloaded.load();
+      expect(reloaded.favoriteIds, {track.id});
+      expect(
+        await dir
+            .list()
+            .where((entry) => entry.path.contains('.auralis-write-'))
+            .isEmpty,
+        isTrue,
+      );
+    },
+  );
+
   test('settings serialize rapid writes and clamp persisted volume', () async {
     final dir = await Directory.systemTemp.createTemp('auralis-settings-');
     addTearDown(() => dir.delete(recursive: true));
