@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import '../models.dart';
 import 'td_transport.dart';
+import 'video_stream_cache.dart';
 
 class ByteRange {
   const ByteRange(this.start, this.end);
@@ -41,9 +43,14 @@ class TelegramStreamProxy {
     this.request, {
     this.stallTimeout = const Duration(seconds: 45),
     this.releaseAudio,
+    this.videoCache,
+    this.cancelPreload,
   });
   final TdRequest request;
   final Duration stallTimeout;
+  final VideoStreamCache? videoCache;
+  final Future<void> Function(int fileId)? cancelPreload;
+  static const _videoWindow = 8 * 1024 * 1024;
   final Future<void> Function(int fileId)? releaseAudio;
   Future<void>? _cleanup;
   HttpServer? _server;
@@ -55,14 +62,18 @@ class TelegramStreamProxy {
   final Map<String, Track> _tracks = {};
   final Map<int, Completer<void>> _ranges = {};
   int? _preloadId;
+  int _preloadSize = 0, _preloadLimit = 0, _preloadGeneration = 0;
+  bool _preloadPaused = false;
   Future<void>? _preloadWork;
   final _errors = StreamController<String>.broadcast();
   Stream<String> get errors => _errors.stream;
+  final _expired = StreamController<Track>.broadcast();
+  Stream<Track> get expiredReferences => _expired.stream;
   int _sequence = 0;
   int _sourceGeneration = 0;
-  bool _closing = false;
+  bool _closing = false, _acceptReads = true;
   bool get hasActiveSource => _tracks.isNotEmpty;
-  bool get hasPreload => _preloadId != null;
+  bool get hasPreload => _preloadId != null && !_preloadPaused;
   bool isPreloading(int fileId) => _preloadId == fileId;
   bool isStreaming(int fileId) =>
       _tracks.values.any((track) => track.fileId == fileId);
@@ -80,7 +91,8 @@ class TelegramStreamProxy {
     }
     await (_starting ??= _start());
     if (isPreloading(track.fileId!)) {
-      await _preloadWork;
+      _preloadId = null;
+      _preloadGeneration++;
     } else {
       unawaited(preload(null));
     }
@@ -92,56 +104,107 @@ class TelegramStreamProxy {
     // Old URLs expire when another item is opened; this bounds metadata retention.
     _tracks.clear();
     _tracks[key] = track;
-    if (_preloadId == track.fileId) _preloadId = null;
+    _acceptReads = true;
     return Uri.parse('http://127.0.0.1:${_server!.port}/$_token/$key');
   }
 
-  /// TDLib accepts byte ranges. Use the average bitrate to budget ten
-  /// seconds at the start, and cap the budget for unusually large videos.
+  /// TDLib takes a byte budget. Use the average bitrate for ten seconds,
+  /// with a small fallback for unknown runtimes and a cap below the full file.
   Future<void> preload(Track? track, {Duration? duration}) {
     final runtime = duration ?? track?.duration ?? Duration.zero;
-    final limit = min(
-      16 * 1024 * 1024,
-      track != null && runtime > const Duration(seconds: 10)
-          ? track.size * 10000000 ~/ runtime.inMicroseconds
-          : track?.size ?? 0,
+    final size = track?.size ?? 0;
+    final estimate = runtime > Duration.zero
+        ? size * 10000000 ~/ runtime.inMicroseconds
+        : 1024 * 1024;
+    final partial = runtime > const Duration(seconds: 10)
+        ? size - min<int>(512 * 1024, max<int>(1, size ~/ 2))
+        : size ~/ 2;
+    final limit = min<int>(
+      min<int>(16 * 1024 * 1024, partial),
+      max<int>(1, estimate),
     );
-    final fileId =
-        track == null || runtime <= Duration.zero || limit <= 0 || _closing
-        ? null
-        : track.fileId;
-    if (fileId == _preloadId) return _preloadWork ?? Future<void>.value();
+    final id = _closing || limit <= 0 ? null : track?.fileId;
+    if (id == _preloadId &&
+        (id == null || limit == _preloadLimit && size == _preloadSize)) {
+      return _preloadWork ?? Future<void>.value();
+    }
     final previous = _preloadId;
+    _preloadId = id;
+    _preloadSize = size;
+    _preloadLimit = limit;
+    return _updatePreload(previous == id ? null : previous);
+  }
+
+  Future<void> pausePreload(bool paused) {
+    if (_preloadPaused == paused) return Future<void>.value();
+    _preloadPaused = paused;
+    return _preloadId == null ? Future<void>.value() : _updatePreload(null);
+  }
+
+  Future<void> _updatePreload(int? release) {
+    final id = _preloadId, size = _preloadSize, limit = _preloadLimit;
+    final generation = ++_preloadGeneration;
     final pending = _preloadWork;
-    _preloadId = fileId;
+    bool current(int fileId) =>
+        generation == _preloadGeneration && !_closing && !isStreaming(fileId);
     late final Future<void> work;
     work =
         () async {
           await pending;
-          if (previous != null &&
-              !isStreaming(previous) &&
-              !isPreloading(previous)) {
-            await _releaseFile(previous);
+          if (release != null &&
+              !isStreaming(release) &&
+              !isPreloading(release)) {
+            await _releaseFile(release);
           }
-          if (fileId != null && isPreloading(fileId) && !isStreaming(fileId)) {
-            try {
-              await request({
-                '@type': 'downloadFile',
-                'file_id': fileId,
-                'priority': 2,
-                'offset': 0,
-                'limit': limit,
-                'synchronous': false,
-              });
-            } catch (_) {
-              // The normal playback request can still open the next video.
+          if (id == null || !current(id)) return;
+          try {
+            if (_preloadPaused) {
+              if (cancelPreload case final cancel?) {
+                await cancel(id);
+              } else {
+                await _cancelDownload(id);
+              }
+              return;
             }
+            final cached = videoCache?.contiguousPrefix(id, size, limit) ?? 0;
+            if (cached >= limit) return;
+            final start = cached + max<int>(0, await _downloaded(id, cached));
+            if (current(id) && start < limit) {
+              await _download(id, start, limit - start, priority: 2);
+            }
+          } catch (_) {
+            // Foreground playback can still open the next video.
           }
         }().whenComplete(() {
           if (identical(_preloadWork, work)) _preloadWork = null;
         });
     return _preloadWork = work;
   }
+
+  Future<Json> _cancelDownload(int id) => request({
+    '@type': 'cancelDownloadFile',
+    'file_id': id,
+    'only_if_pending': false,
+  });
+
+  Future<int> _downloaded(int id, int offset) async {
+    final result = await request({
+      '@type': 'getFileDownloadedPrefixSize',
+      'file_id': id,
+      'offset': offset,
+    });
+    return (result['size'] as num? ?? 0).toInt();
+  }
+
+  Future<Json> _download(int id, int offset, int limit, {int priority = 32}) =>
+      request({
+        '@type': 'downloadFile',
+        'file_id': id,
+        'priority': priority,
+        'offset': offset,
+        'limit': limit,
+        'synchronous': false,
+      });
 
   Future<void> _start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -159,7 +222,7 @@ class TelegramStreamProxy {
     final track = segments.length == 2 && segments[0] == _token
         ? _tracks[segments[1]]
         : null;
-    if (track == null || _closing) {
+    if (track == null || _closing || !_acceptReads) {
       response.statusCode = HttpStatus.forbidden;
       await response.close();
       return;
@@ -228,16 +291,19 @@ class TelegramStreamProxy {
     bool active() =>
         !disconnected &&
         !_closing &&
+        _acceptReads &&
         !cancelled.isCompleted &&
         _ranges[fileId] == cancelled &&
         _tracks[segments[1]] != null;
     // Forward cancellation only to the pending operation. Racing every read
     // against the range's lifetime future retains completed chunk results.
     Completer<void>? pendingCancellation;
-    unawaited(cancelled.future.then<void>((_) {
-      final pending = pendingCancellation;
-      if (pending != null && !pending.isCompleted) pending.complete();
-    }));
+    unawaited(
+      cancelled.future.then<void>((_) {
+        final pending = pendingCancellation;
+        if (pending != null && !pending.isCompleted) pending.complete();
+      }),
+    );
     Future<T> current<T>(Future<T> operation) async {
       final signal = pendingCancellation = Completer<void>();
       if (cancelled.isCompleted) signal.complete();
@@ -252,31 +318,52 @@ class TelegramStreamProxy {
         pendingCancellation = null;
       }
     }
+
     try {
-      // TDLib's newest downloadFile offset replaces the previous one. Old reads
-      // may finish later, but cannot retarget the download or report a seek error.
-      await current(
-        request({
-          '@type': 'downloadFile',
-          'file_id': fileId,
-          'priority': 32,
-          'offset': range.start,
-          'limit': range.length,
-          'synchronous': false,
-        }),
-      );
-      var offset = range.start;
+      final cache = videoCache;
+      if (cache == null) {
+        await current(_download(fileId, range.start, range.length));
+      }
+      var offset = range.start, downloadEnd = range.start;
+      var retried = false;
       var deadline = DateTime.now().add(stallTimeout);
+      Future<void> fillWindow() async {
+        final length = min(_videoWindow, range.end - offset + 1);
+        await current(_download(fileId, offset, length));
+        downloadEnd = offset + length;
+      }
+
       while (offset <= range.end && active()) {
-        final prefix = await current(
-          request({
-            '@type': 'getFileDownloadedPrefixSize',
-            'file_id': fileId,
-            'offset': offset,
-          }),
-        );
+        var count = min(VideoStreamCache.pageSize, range.end - offset + 1);
+        if (cache != null) {
+          count = min(
+            count,
+            VideoStreamCache.pageSize - offset % VideoStreamCache.pageSize,
+          );
+          final hit = await current(
+            cache.read(fileId, track.size, offset, count),
+          );
+          if (!active()) break;
+          if (hit != null) {
+            response.add(hit);
+            await current(response.flush());
+            offset += hit.length;
+            deadline = DateTime.now().add(stallTimeout);
+            continue;
+          }
+        }
+        // Check TDLib before moving the download offset. The next episode
+        // may already have this range, even if its download was parked.
+        final available = await current(_downloaded(fileId, offset));
         if (!active()) break;
-        final available = (prefix['size'] as num).toInt();
+        if (cache != null &&
+            (available <= 0 && offset >= downloadEnd ||
+                offset < downloadEnd &&
+                    downloadEnd < range.end + 1 &&
+                    downloadEnd - offset <= 512 * 1024)) {
+          await fillWindow();
+          if (!active()) break;
+        }
         if (available <= 0) {
           if (DateTime.now().isAfter(deadline)) {
             throw TimeoutException('Telegram buffer stalled');
@@ -284,20 +371,28 @@ class TelegramStreamProxy {
           await Future<void>.delayed(const Duration(milliseconds: 100));
           continue;
         }
-        final count = min(128 * 1024, min(available, range.end - offset + 1));
-        final data = await current(
-          request({
-            '@type': 'readFilePart',
-            'file_id': fileId,
-            'offset': offset,
-            'count': count,
-          }),
-        );
-        if (!active()) break;
-        final bytes = base64Decode(data['data'] as String);
-        if (bytes.length != count) {
-          throw StateError('Incomplete Telegram cache read');
+        count = min(count, available);
+        Uint8List bytes;
+        try {
+          final data = await current(
+            request({
+              '@type': 'readFilePart',
+              'file_id': fileId,
+              'offset': offset,
+              'count': count,
+            }),
+          );
+          if (!active()) break;
+          bytes = base64Decode(data['data'] as String);
+          if (bytes.length != count) throw const FormatException('Short read');
+        } catch (_) {
+          if (cache == null || retried || !active()) rethrow;
+          retried = true;
+          await fillWindow();
+          continue;
         }
+        retried = false;
+        cache?.store(fileId, track.size, offset, bytes);
         response.add(bytes);
         await current(response.flush());
         offset += count;
@@ -307,11 +402,20 @@ class TelegramStreamProxy {
       // The player closes its old request when seeking or changing tracks.
     } on HttpException {
       // A disconnected playback request must not stop the server.
-    } catch (_) {
+    } catch (failure) {
       if (active() && !_errors.isClosed) {
-        _errors.add(
-          'Telegram could not fill the audio buffer. Try the track again.',
-        );
+        final message = failure is TdException
+            ? failure.message.toLowerCase()
+            : '';
+        if (videoCache != null &&
+            (message.contains('file_reference') ||
+                message.contains('file reference') ||
+                message.contains('file_id') ||
+                message.contains('file id'))) {
+          _expired.add(track);
+        } else {
+          _errors.add('Telegram could not fill the playback buffer.');
+        }
       }
     } finally {
       cancel();
@@ -329,6 +433,7 @@ class TelegramStreamProxy {
     await _server?.close(force: true);
     await stop();
     await _errors.close();
+    await _expired.close();
   }
 
   /// Unblocks the player without deleting the Telegram buffer. The next
@@ -349,8 +454,13 @@ class TelegramStreamProxy {
     }
   }
 
-  Future<void> stop() async {
+  Future<void> stop({bool keepPreload = false}) async {
     ++_sourceGeneration;
+    if (keepPreload) {
+      unawaited(pausePreload(true));
+      await _stopDownloads();
+      return;
+    }
     final preloadCleanup = preload(null);
     await _stopDownloads();
     await preloadCleanup;
@@ -396,6 +506,11 @@ class TelegramStreamProxy {
         // Startup cleanup retries files left after disconnection.
       }
     }
+  }
+
+  void endVideoReads() {
+    _acceptReads = false;
+    _cancelRanges();
   }
 
   void _cancelRanges() {
