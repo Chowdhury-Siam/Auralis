@@ -10,6 +10,38 @@ import 'package:auralis/video_playback_data.dart';
 void main() {
   Map<String,dynamic> snapshot() => AppSettings(File('unused')).toJson();
   SyncDocument doc(String actor,Map<String,dynamic> snapshot) => SyncDocument({'device':actor*32})..capture(snapshot);
+  test('legacy watching totals migrate once and retries preserve per-device counters', () {
+    final first = AppSettings(File('device-a'))
+      ..videoPlayback = VideoPlaybackData.fromJson({
+        'watching': {'telegram': [30000, 1], 'local': [15000, 1]},
+      });
+    final second = AppSettings(File('device-b'));
+    final a = doc('a', first.toJson()), b = doc('b', second.toJson());
+    first.librarySort = LibrarySort.mostPlayed;
+    a.capture(first.toJson());
+    b.merge(a.records);
+    second.applyJson(b.project(second.toJson()));
+    expect(second.videoPlayback.watchTime, const Duration(seconds: 45));
+    expect(second.videoPlayback.videoPlays, 2);
+    expect(second.librarySort, LibrarySort.mostPlayed);
+
+    final local = VideoSource.file(Uri.file('/private/video.mp4'), 'Private');
+    final original = detached(a.records);
+    first.videoPlayback = VideoPlaybackData.fromJson(first.videoPlayback.toJson());
+    first.videoPlayback.recordWatching(local, const Duration(seconds: 15), newPlay: false);
+    second.videoPlayback.recordWatching(local, const Duration(seconds: 10), newPlay: true);
+    a.capture(first.toJson());
+    b.capture(second.toJson());
+    a.merge(b.records);
+    b.merge(a.records);
+    b.merge(original);
+    for (final (device, settings) in [(a, first), (b, second)]) {
+      expect(device.records.keys.where(SyncDocument.isWatchingRecord), hasLength(3));
+      settings.applyJson(device.project(settings.toJson()));
+      expect(settings.videoPlayback.watchTime, const Duration(seconds: 70));
+      expect(settings.videoPlayback.videoPlays, 3);
+    }
+  });
   test('Telegram recent history and watched marks merge across devices', () {
     const episode = VideoSource.telegram(Track(
       id: '-100123:19', title: 'Episode 19', artist: '', source: 'TV',
