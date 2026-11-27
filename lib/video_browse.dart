@@ -48,7 +48,7 @@ extension _VideoBrowse on _TelegramVideoViewState {
           ),
         ],
         if (_browseSearchOpen)
-          BrowseSearchField(
+          InlineSearchField(
             key: const ValueKey('video-browse-search'),
             controller: _search,
             focusNode: _browseSearchFocus,
