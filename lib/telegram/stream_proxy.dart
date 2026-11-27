@@ -62,6 +62,7 @@ class TelegramStreamProxy {
   final Map<String, Track> _tracks = {};
   final Map<int, Completer<void>> _ranges = {};
   int? _preloadId;
+  VideoCacheKey? _preloadCacheKey;
   int _preloadSize = 0, _preloadLimit = 0, _preloadGeneration = 0;
   bool _preloadPaused = false;
   Future<void>? _preloadWork;
@@ -92,6 +93,7 @@ class TelegramStreamProxy {
     await (_starting ??= _start());
     if (isPreloading(track.fileId!)) {
       _preloadId = null;
+      _preloadCacheKey = null;
       _preloadGeneration++;
     } else {
       unawaited(preload(null));
@@ -124,12 +126,19 @@ class TelegramStreamProxy {
       max<int>(1, estimate),
     );
     final id = _closing || limit <= 0 ? null : track?.fileId;
+    final cacheKey = id == null || track == null
+        ? null
+        : videoCache?.keyFor(track);
     if (id == _preloadId &&
-        (id == null || limit == _preloadLimit && size == _preloadSize)) {
+        (id == null ||
+            limit == _preloadLimit &&
+                size == _preloadSize &&
+                cacheKey == _preloadCacheKey)) {
       return _preloadWork ?? Future<void>.value();
     }
     final previous = _preloadId;
     _preloadId = id;
+    _preloadCacheKey = cacheKey;
     _preloadSize = size;
     _preloadLimit = limit;
     return _updatePreload(previous == id ? null : previous);
@@ -142,7 +151,8 @@ class TelegramStreamProxy {
   }
 
   Future<void> _updatePreload(int? release) {
-    final id = _preloadId, size = _preloadSize, limit = _preloadLimit;
+    final id = _preloadId, limit = _preloadLimit;
+    final cacheKey = _preloadCacheKey;
     final generation = ++_preloadGeneration;
     final pending = _preloadWork;
     bool current(int fileId) =>
@@ -166,7 +176,11 @@ class TelegramStreamProxy {
               }
               return;
             }
-            final cached = videoCache?.contiguousPrefix(id, size, limit) ?? 0;
+            final cache = videoCache;
+            final cached = cache == null || cacheKey == null
+                ? 0
+                : await cache.contiguousPrefix(cacheKey, limit);
+            if (!current(id)) return;
             if (cached >= limit) return;
             final start = cached + max<int>(0, await _downloaded(id, cached));
             if (current(id) && start < limit) {
@@ -321,6 +335,7 @@ class TelegramStreamProxy {
 
     try {
       final cache = videoCache;
+      final cacheKey = cache?.keyFor(track);
       if (cache == null) {
         await current(_download(fileId, range.start, range.length));
       }
@@ -335,14 +350,12 @@ class TelegramStreamProxy {
 
       while (offset <= range.end && active()) {
         var count = min(VideoStreamCache.pageSize, range.end - offset + 1);
-        if (cache != null) {
+        if (cache != null && cacheKey != null) {
           count = min(
             count,
             VideoStreamCache.pageSize - offset % VideoStreamCache.pageSize,
           );
-          final hit = await current(
-            cache.read(fileId, track.size, offset, count),
-          );
+          final hit = await current(cache.read(cacheKey, offset, count));
           if (!active()) break;
           if (hit != null) {
             response.add(hit);
@@ -392,7 +405,9 @@ class TelegramStreamProxy {
           continue;
         }
         retried = false;
-        cache?.store(fileId, track.size, offset, bytes);
+        if (cache != null && cacheKey != null) {
+          cache.store(cacheKey, offset, bytes);
+        }
         response.add(bytes);
         await current(response.flush());
         offset += count;
