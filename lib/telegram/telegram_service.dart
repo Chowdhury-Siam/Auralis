@@ -1461,8 +1461,8 @@ class TelegramService extends ChangeNotifier {
     _browseChannelChecks.clear();
   }
 
-  // A null result means the check is pending. Keep channels available when
-  // Telegram cannot determine their content, and retry on Browse refresh.
+  // A null result means the check is pending. Browse only shows channels
+  // where a supported media message was found.
   bool? browseChannelMatches(MusicChat channel, {required AppInterface mode}) {
     final video = mode == AppInterface.video;
     final key = (channel.id, video);
@@ -1487,29 +1487,39 @@ class TelegramService extends ChangeNotifier {
     bool video,
     bool Function() current,
   ) async {
-    final count = await channelMediaCount(channel.id, video: video);
-    if (count != 0 || !current()) return true;
-    // TDLib's audio and video counts exclude files sent as documents.
-    var before = 0;
-    try {
-      do {
-        final page = video
-            ? await videos(channel, before: before, documents: true)
-            : await music(
-                channel.id,
-                channel.title,
-                before: before,
-                documents: true,
-              );
-        if (!current() || page.tracks.isNotEmpty) return true;
-        final next = page.nextMessageId;
-        if (next != 0 && before != 0 && next >= before) return true;
-        before = next;
-      } while (before != 0);
-      return false;
-    } catch (_) {
-      return true;
+    if (video) {
+      try {
+        if ((await recentVideos(channel)).isNotEmpty) return true;
+      } catch (_) {
+        // Continue with media search when recent history is unavailable.
+      }
     }
+
+    Future<bool> hasMedia({required bool documents}) async {
+      var before = 0;
+      try {
+        do {
+          if (!current()) return false;
+          final page = video
+              ? await videos(channel, before: before, documents: documents)
+              : await music(
+                  channel.id,
+                  channel.title,
+                  before: before,
+                  documents: documents,
+                );
+          if (page.tracks.isNotEmpty) return true;
+          final next = page.nextMessageId;
+          if (before != 0 && next >= before) return false;
+          before = next;
+        } while (before != 0);
+      } catch (_) {
+        // A failed search offers no evidence. The next refresh retries it.
+      }
+      return false;
+    }
+
+    return await hasMedia(documents: false) || await hasMedia(documents: true);
   }
 
   // Browse can show this estimate without scanning every document in a channel.
