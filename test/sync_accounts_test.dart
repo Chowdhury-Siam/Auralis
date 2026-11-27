@@ -11,6 +11,7 @@ import 'package:auralis/sync/deployment.dart';
 import 'package:auralis/sync/deployment_view.dart';
 import 'package:auralis/sync/settings_view.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
+import 'package:auralis/video_playback_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -318,7 +319,7 @@ void main() {
       final cloud = SyncDocument({});
       final revisions = <String, int>{};
       var revision = 0;
-      var paginated = false, unavailable = false;
+      var paginated = false, unavailable = false, watchingSupported = false;
       final client = AccountClient()
         ..syncReply = (request, data) {
           expect(
@@ -332,6 +333,9 @@ void main() {
             );
           }
           final ops = data['ops'] as Map<String, dynamic>;
+          if (!watchingSupported) {
+            expect(ops.keys.any(SyncDocument.isWatchingRecord), isFalse);
+          }
           expect(ops.length, lessThanOrEqualTo(100));
           for (final entry in ops.entries) {
             final before = jsonEncode(cloud.records[entry.key]);
@@ -353,6 +357,7 @@ void main() {
               jsonEncode({
                 'cursor': cursor,
                 'more': cursor < revision,
+                if (watchingSupported) VideoWatchingStats.key: true,
                 'records': {
                   for (final entry in page) entry.key: cloud.records[entry.key],
                 },
@@ -366,6 +371,28 @@ void main() {
           ..playlists = {
             'Phone mix': ['song-0'],
           };
+        final local = VideoSource.file(
+          Uri.file('/movies/private.mp4'),
+          'Private local file',
+        );
+        const video = VideoSource.telegram(
+          Track(
+            id: '-100123:19',
+            title: 'Episode 19',
+            artist: '',
+            source: 'TV',
+          ),
+        );
+        desktop.videoPlayback.recordWatching(
+          local,
+          const Duration(seconds: 30),
+          newPlay: true,
+        );
+        phone.videoPlayback.recordWatching(
+          video,
+          const Duration(seconds: 45),
+          newPlay: true,
+        );
         Track song(int i) => Track(
           id: 'song-$i',
           title: 'Song $i',
@@ -400,6 +427,32 @@ void main() {
           expect(phone.listening.tracks, hasLength(205));
           expect(phone.listening.days['2026-10-20']!.milliseconds, 205000);
           expect(phone.listening.days['2026-10-21']!.milliseconds, 2500);
+          expect(desktop.videoPlayback.watchTime, const Duration(seconds: 30));
+          expect(phone.videoPlayback.watchTime, const Duration(seconds: 45));
+          expect(
+            a.document.dirty.where(SyncDocument.isWatchingRecord),
+            hasLength(1),
+          );
+          expect(
+            b.document.dirty.where(SyncDocument.isWatchingRecord),
+            hasLength(1),
+          );
+          watchingSupported = true;
+          await a.flush();
+          await b.flush();
+          await a.flush();
+          for (final device in [desktop, phone]) {
+            expect(device.videoPlayback.watchTime, const Duration(seconds: 75));
+            expect(device.videoPlayback.videoPlays, 2);
+          }
+          expect(
+            jsonEncode(cloud.records),
+            isNot(contains('/movies/private.mp4')),
+          );
+          expect(
+            jsonEncode(cloud.records),
+            isNot(contains('Private local file')),
+          );
 
           phone.favoriteIds.remove('desktop-favorite');
           phone.favoriteIds.add('phone-favorite');
@@ -485,33 +538,45 @@ void main() {
     automatic: false,
   ).toJson();
 
-  test('sync reports a Worker page that claims more without advancing its cursor', () async {
-    var syncRequests = 0;
-    final client = AccountClient()
-      ..syncReply = (_, data) => Response(utf8.encode(jsonEncode({
-        'cursor': data['cursor'],
-        // Recover on a later request so a regression fails quickly.
-        'more': ++syncRequests == 2,
-        'records': <String, dynamic>{},
-      })));
-    await HttpOverrides.runZoned(() async {
-      final settings = AccountSettings();
-      var paused = false;
-      final sync = SyncController(settings, AccountVault(), onApplied: () {}, paused: () => paused);
-      try {
-        await sync.connect('https://sync.example', 'd' * 64);
-        expect(syncRequests, 2);
-        expect(sync.error, contains('could not apply the sync data'));
-        expect(sync.document.dirty, isNotEmpty);
-        await sync.sync();
-        expect(sync.error, isNull);
-        expect(sync.document.dirty, isEmpty);
-      } finally {
-        paused = true;
-        await sync.close();
-      }
-    }, createHttpClient: (_) => client);
-  });
+  test(
+    'sync reports a Worker page that claims more without advancing its cursor',
+    () async {
+      var syncRequests = 0;
+      final client = AccountClient()
+        ..syncReply = (_, data) => Response(
+          utf8.encode(
+            jsonEncode({
+              'cursor': data['cursor'],
+              // Recover on a later request so a regression fails quickly.
+              'more': ++syncRequests == 2,
+              'records': <String, dynamic>{},
+            }),
+          ),
+        );
+      await HttpOverrides.runZoned(() async {
+        final settings = AccountSettings();
+        var paused = false;
+        final sync = SyncController(
+          settings,
+          AccountVault(),
+          onApplied: () {},
+          paused: () => paused,
+        );
+        try {
+          await sync.connect('https://sync.example', 'd' * 64);
+          expect(syncRequests, 2);
+          expect(sync.error, contains('could not apply the sync data'));
+          expect(sync.document.dirty, isNotEmpty);
+          await sync.sync();
+          expect(sync.error, isNull);
+          expect(sync.document.dirty, isEmpty);
+        } finally {
+          paused = true;
+          await sync.close();
+        }
+      }, createHttpClient: (_) => client);
+    },
+  );
 
   test('an unclaimed Worker guides the user to owner registration', () async {
     final client = AccountClient()
@@ -795,6 +860,15 @@ void main() {
         final settings = AccountSettings()
           ..favoriteIds = {'local-alice'}
           ..volume = 17;
+        final source = VideoSource.file(
+          Uri.file('/movies/test.mp4'),
+          'Test file',
+        );
+        settings.videoPlayback.recordWatching(
+          source,
+          const Duration(seconds: 12),
+          newPlay: true,
+        );
         final sync = SyncController(
           settings,
           AccountVault(),
@@ -807,6 +881,7 @@ void main() {
           await settings.save();
           await sync.signIn('https://sync.example', 'bob', 'test-password');
           expect(settings.favoriteIds, isEmpty);
+          expect(settings.videoPlayback.watchTime, Duration.zero);
           expect(settings.volume, 17);
           settings.favoriteIds.add('offline-bob');
           await settings.save();
@@ -814,6 +889,7 @@ void main() {
             sync.savedAccounts.firstWhere((u) => u.username == 'alice'),
           );
           expect(settings.favoriteIds, {'local-alice', 'offline-alice'});
+          expect(settings.videoPlayback.watchTime, const Duration(seconds: 12));
           expect(
             settings.syncState['dirty'],
             contains(SyncDocument.key(['favorite', 'offline-alice'])),
@@ -825,6 +901,7 @@ void main() {
           expect(sync.account!.username, 'alice');
           await sync.signOut(keepLocal: false);
           expect(settings.favoriteIds, isEmpty);
+          expect(settings.videoPlayback.watchTime, Duration.zero);
           await sync.switchAccount(
             sync.savedAccounts.firstWhere((u) => u.username == 'bob'),
           );
