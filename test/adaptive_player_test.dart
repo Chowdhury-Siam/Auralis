@@ -511,11 +511,14 @@ void main() {
         expect(find.byTooltip('Refresh library'), findsNothing);
         expect(find.byTooltip('Shuffle collection'), findsNothing);
         final sort = find.byTooltip('Sort Library');
+        final search = find.byTooltip('Search Library');
         expect(sort.hitTestable(), findsOneWidget);
+        expect(search.hitTestable(), findsOneWidget);
+        expect(find.byType(TextField), findsNothing);
         expect(
-          tester.getRect(sort).bottom,
-          lessThan(tester.getRect(find.byType(TextField).first).top),
-          reason: '$size puts Sort in the Library header',
+          tester.getCenter(sort).dy,
+          tester.getCenter(search).dy,
+          reason: '$size puts Sort and Search together in the Library header',
         );
 
         expect(
