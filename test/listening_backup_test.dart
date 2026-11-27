@@ -359,7 +359,7 @@ void main() {
         ..volume = 23;
       await settings.save();
       final original = await settings.file.readAsString();
-      await Directory('${settings.file.path}.tmp').create();
+      await Directory('${dir.path}/auralis-before-restore.json').create();
       final player = PlayerController(
         FakeAudio(),
         TelegramStreamProxy((_) async => {}),
