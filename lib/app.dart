@@ -32,6 +32,7 @@ import 'telegram_video_view.dart';
 import 'video_files.dart';
 import 'video_playback_data.dart';
 import 'video_settings.dart';
+import 'video_watching_stats_view.dart';
 import 'updater.dart';
 import 'update_widgets.dart';
 import 'wave_seek_bar.dart';
@@ -288,11 +289,10 @@ class _PlayerShellState extends State<PlayerShell>
   _Page get _rootPage => widget.startOnHome ? _Page.home : _Page.library;
   late _Page destination = _rootPage;
   late _Page _primaryPage = _rootPage;
-  bool _browseAsList = false, _artistsAsList = false, _mixExpanded = false;
+  bool _mixExpanded = false;
   late bool _videoMode;
   List<VideoSource>? _incomingVideos;
   void _toggleMixExpanded() => setState(() => _mixExpanded = !_mixExpanded);
-  void _toggleBrowseLayout() => setState(() => _browseAsList = !_browseAsList);
   void _openRecent() {
     _navigate(_Page.library);
     _selectLibraryCollection('Recently played');
@@ -325,8 +325,8 @@ class _PlayerShellState extends State<PlayerShell>
   })?
   _cacheReport;
   final search = TextEditingController();
-  final _discoveryFocus = FocusNode();
-  bool _browseSearchOpen = false;
+  final _discoveryFocus = FocusNode(), _librarySearchFocus = FocusNode();
+  bool _browseSearchOpen = false, _librarySearchOpen = false;
   SettingsSection? _settingsSection;
   late final ChannelLibrary library;
   late final Listenable _shellUpdates;
@@ -643,7 +643,10 @@ class _PlayerShellState extends State<PlayerShell>
       search.clear();
     }
     setState(() {
-      if (leavingPage) _browseSearchOpen = false;
+      if (leavingPage) {
+        _browseSearchOpen = false;
+        _librarySearchOpen = false;
+      }
       if (_mainPages.contains(page)) _primaryPage = page;
       destination = page;
       _closingPlayer = false;
@@ -660,6 +663,8 @@ class _PlayerShellState extends State<PlayerShell>
       } else {
         unawaited(_closeNowPlaying());
       }
+    } else if (destination == _Page.library && _librarySearchOpen) {
+      _closeLibrarySearch();
     } else if (destination == _Page.library && _selectedArtist != null) {
       _selectArtist(null);
     } else if (destination == _Page.browse && _browseSearchOpen) {
@@ -690,6 +695,7 @@ class _PlayerShellState extends State<PlayerShell>
     widget.sync?.removeListener(_syncChanged);
     search.dispose();
     _discoveryFocus.dispose();
+    _librarySearchFocus.dispose();
     super.dispose();
   }
 
@@ -1275,6 +1281,10 @@ class _PlayerShellState extends State<PlayerShell>
     }
   }
 
+  Future<void> _openWatchingStats() => Navigator.of(context).push<void>(
+    MaterialPageRoute(builder: (_) => WatchingStatsPage(player: player)),
+  );
+
   Future<void> _openSetup() => Navigator.of(context).push<void>(
     MaterialPageRoute(
       builder: (context) => SetupView(
@@ -1475,7 +1485,8 @@ class _PlayerShellState extends State<PlayerShell>
         return PopScope<Object?>(
           canPop:
               destination == _rootPage &&
-              !(destination == _Page.library && _selectedArtist != null),
+              !(destination == _Page.library &&
+                  (_selectedArtist != null || _librarySearchOpen)),
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop) _back();
           },
@@ -2313,6 +2324,17 @@ class _PlayerShellState extends State<PlayerShell>
     search.clear();
   });
 
+  void _openLibrarySearch() {
+    setState(() => _librarySearchOpen = true);
+    _librarySearchFocus.requestFocus();
+  }
+
+  void _closeLibrarySearch() {
+    _librarySearchFocus.unfocus();
+    search.clear();
+    setState(() => _librarySearchOpen = false);
+  }
+
   Widget _librarySortButton() => LibrarySortMenu(
     selected: player.settings.librarySort,
     options: LibrarySort.values,
@@ -2346,27 +2368,35 @@ class _PlayerShellState extends State<PlayerShell>
       collections: _libraryCollections,
       index: index,
       onSelected: select,
-      collectionAction: artistOverview
-          ? discoveryLayoutButton(
-              list: _artistsAsList,
-              onPressed: () => setState(() => _artistsAsList = !_artistsAsList),
-            )
-          : _librarySortButton(),
+      collectionAction: _librarySortButton(),
+      searchButton: _librarySearchOpen
+          ? null
+          : IconButton(
+              tooltip: 'Search Library',
+              icon: const Icon(Icons.search_rounded, size: 20),
+              onPressed: _openLibrarySearch,
+            ),
       onSettings: _mobileNavigation ? () => _navigate(_Page.settings) : null,
       menuKey: const ValueKey('library-collection-menu'),
       titleKey: const ValueKey('page-title'),
       indicatorKey: const ValueKey('music-library-indicator'),
       reducedMotion: settings.reducedMotion,
       body: LibraryContentPanel(
-        search: LibrarySearchField(
-          fieldKey: const ValueKey('music-library-search'),
-          controller: search,
-          hint: playlistOverview
-              ? 'Search playlists'
-              : artistOverview
-              ? 'Search your Artists'
-              : 'Search your music',
-        ),
+        search: _librarySearchOpen
+            ? InlineSearchField(
+                fieldKey: const ValueKey('music-library-search'),
+                controller: search,
+                focusNode: _librarySearchFocus,
+                hint: playlistOverview
+                    ? 'Search playlists'
+                    : artistOverview
+                    ? 'Search your Artists'
+                    : 'Search your music',
+                clearTooltip: 'Clear search',
+                onClose: _closeLibrarySearch,
+                onSubmitted: (_) => _librarySearchFocus.unfocus(),
+              )
+            : null,
         details: [
           if (artist != null)
             Row(
@@ -3831,10 +3861,14 @@ class _PlayerShellState extends State<PlayerShell>
     SettingsSection.data => [
       ListTile(
         leading: const PreferenceIcon(Icons.bar_chart_rounded),
-        title: const Text('Listening stats'),
-        subtitle: const Text('Listening time & play counts'),
+        title: Text(_videoMode ? 'Watching stats' : 'Listening stats'),
+        subtitle: Text(
+          _videoMode
+              ? 'Watch time & video plays'
+              : 'Listening time & play counts',
+        ),
         trailing: const Icon(Icons.chevron_right_rounded, size: 18),
-        onTap: () => _stats(),
+        onTap: _videoMode ? _openWatchingStats : () => _stats(),
       ),
       ListTile(
         leading: const PreferenceIcon(Icons.backup_outlined),
