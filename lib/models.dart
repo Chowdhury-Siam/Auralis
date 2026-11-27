@@ -50,6 +50,7 @@ class Track {
     required this.artist,
     required this.source,
     this.fileId,
+    this.remoteFileUniqueId,
     this.localUri,
     this.coverFileId,
     this.coverPreview,
@@ -62,6 +63,7 @@ class Track {
   });
   final String id, title, artist, source, mime;
   final int? fileId, coverFileId;
+  final String? remoteFileUniqueId;
   final Uri? localUri;
   final Uint8List? coverPreview;
   final int size, date;
@@ -99,6 +101,8 @@ class Track {
         (file['size'] as int) <= 0) {
       return null;
     }
+    final remote = file['remote'];
+    final uniqueId = remote is Map ? remote['unique_id'] : null;
     final caption = (content['caption']?['text'] as String? ?? '').trim();
     final title = p.basenameWithoutExtension(name);
     return Track(
@@ -111,6 +115,9 @@ class Track {
       artist: '',
       source: source,
       fileId: file['id'] as int,
+      remoteFileUniqueId: uniqueId is String && uniqueId.isNotEmpty
+          ? uniqueId
+          : null,
       size: file['size'] as int,
       duration: Duration(seconds: media['duration'] as int? ?? 0),
       videoWidth: media['width'] as int?,
