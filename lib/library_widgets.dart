@@ -56,8 +56,8 @@ class LibraryLayout extends StatelessWidget {
     required this.index,
     required this.onSelected,
     required this.body,
-    this.sourceButton,
     this.collectionAction,
+    this.searchButton,
     this.onSettings,
     this.menuKey,
     this.titleKey,
@@ -70,7 +70,7 @@ class LibraryLayout extends StatelessWidget {
   final int index;
   final ValueChanged<int> onSelected;
   final Widget body;
-  final Widget? sourceButton, collectionAction;
+  final Widget? collectionAction, searchButton;
   final VoidCallback? onSettings;
   final Key? menuKey, titleKey, indicatorKey;
   final bool reducedMotion, keyboardOpen;
@@ -105,8 +105,8 @@ class LibraryLayout extends StatelessWidget {
               ],
             ),
             actions: [
-              ?sourceButton,
               ?collectionAction,
+              ?searchButton,
               if (onSettings != null) ...[
                 const SizedBox(width: 4),
                 IconButton.filledTonal(
@@ -205,50 +205,6 @@ class LibraryContentPanel extends StatelessWidget {
         if (loading) const LinearProgressIndicator(minHeight: 2),
         Expanded(child: body),
       ],
-    ),
-  );
-}
-
-class LibrarySearchField extends StatelessWidget {
-  const LibrarySearchField({
-    super.key,
-    required this.controller,
-    required this.hint,
-    this.fieldKey,
-    this.onChanged,
-    this.onCleared,
-    this.autocorrect = true,
-  });
-
-  final TextEditingController controller;
-  final Key? fieldKey;
-  final String hint;
-  final ValueChanged<String>? onChanged;
-  final VoidCallback? onCleared;
-  final bool autocorrect;
-
-  @override
-  Widget build(BuildContext context) => TextField(
-    key: fieldKey,
-    controller: controller,
-    autocorrect: autocorrect,
-    textInputAction: TextInputAction.search,
-    onChanged: onChanged,
-    onSubmitted: (_) => FocusScope.of(context).unfocus(),
-    decoration: InputDecoration(
-      hintText: hint,
-      prefixIcon: const Icon(Icons.search_rounded, size: 20),
-      contentPadding: const EdgeInsets.symmetric(vertical: 12),
-      suffixIcon: controller.text.isEmpty
-          ? null
-          : IconButton(
-              tooltip: 'Clear search',
-              onPressed: () {
-                controller.clear();
-                onCleared?.call();
-              },
-              icon: const Icon(Icons.close_rounded, size: 18),
-            ),
     ),
   );
 }
@@ -680,69 +636,72 @@ class LibraryCollectionMenu<T> extends StatelessWidget {
     const outer = Radius.circular(32), inner = Radius.circular(6);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final narrow = constraints.maxWidth < 160;
+        final compact = constraints.maxWidth < 280;
+        final showIcon = constraints.maxWidth >= 220;
         const height = 52.0;
         return AuralisPopupMenu<T>(
           tooltip: tooltip,
           constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
           itemBuilder: itemBuilder,
           onSelected: onSelected,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Container(
-                  constraints: BoxConstraints(minHeight: height),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: narrow ? 10 : 14,
-                    vertical: 8,
+          child: IntrinsicHeight(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Flexible(
+                  child: Container(
+                    constraints: BoxConstraints(minHeight: height),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 10 : 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: background,
+                      borderRadius: const BorderRadiusDirectional.horizontal(
+                        start: outer,
+                        end: inner,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (showIcon) ...[
+                          Icon(icon, color: foreground, size: 22),
+                          const SizedBox(width: 8),
+                        ],
+                        Flexible(
+                          child: Text(
+                            title,
+                            key: titleKey,
+                            style: TextStyle(
+                              color: foreground,
+                              fontSize: compact ? 19 : 25,
+                              height: 1.12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -.6,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                ),
+                const SizedBox(width: 4),
+                Container(
+                  width: compact ? 36 : 48,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: background,
                     borderRadius: const BorderRadiusDirectional.horizontal(
-                      start: outer,
-                      end: inner,
+                      start: inner,
+                      end: outer,
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!narrow) ...[
-                        Icon(icon, color: foreground, size: 22),
-                        const SizedBox(width: 8),
-                      ],
-                      Flexible(
-                        child: Text(
-                          title,
-                          key: titleKey,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: foreground,
-                            fontSize: narrow ? 19 : 25,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -.6,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: Icon(Icons.expand_more_rounded, color: foreground),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Container(
-                width: narrow ? 36 : 48,
-                height: height,
-                decoration: BoxDecoration(
-                  color: background,
-                  borderRadius: const BorderRadiusDirectional.horizontal(
-                    start: inner,
-                    end: outer,
-                  ),
-                ),
-                child: Icon(Icons.expand_more_rounded, color: foreground),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
