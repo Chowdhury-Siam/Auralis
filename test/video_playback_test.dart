@@ -10,6 +10,7 @@ import 'package:auralis/telegram/telegram_service.dart';
 import 'package:auralis/video_files.dart';
 import 'package:auralis/video_playback.dart';
 import 'package:auralis/video_playback_data.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -374,6 +375,140 @@ class _SkipVideoFixture {
 }
 
 void main() {
+  for (final size in [const Size(390, 844), const Size(844, 390)]) {
+    testWidgets(
+      'Vertical swipe levels and opposite-side meters fit ${size.width}×${size.height}',
+      (tester) async {
+        final fixture = _SkipVideoFixture();
+        final messenger = tester.binding.defaultBinaryMessenger;
+        const channel = MethodChannel('app.auralis/video');
+        final brightnessChanges = <double>[];
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'brightness' && call.arguments is double) {
+            brightnessChanges.add(call.arguments as double);
+          }
+          return call.method == 'getBrightness' ? .5 : null;
+        });
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+        fixture.settings.videoPlayback.gestureOptions.hideSeconds = 0;
+        addTearDown(() => fixture.close(tester));
+        await fixture.mount(tester);
+        tester.view.physicalSize = size;
+        await fixture.native.setVolume(50);
+        await tester.pumpAndSettle();
+
+        final center = size.center(Offset.zero);
+        final transport = tester.getRect(find.byTooltip('Pause video'));
+        final initialVolume = fixture.native.state.volume;
+        Future<void> checkLevel({
+          required double x,
+          required IconData icon,
+          required bool meterOnRight,
+          required double Function() current,
+          required double initial,
+        }) async {
+          final gesture = await tester.startGesture(Offset(x, center.dy + 14));
+          await gesture.moveBy(const Offset(0, -25));
+          await gesture.moveBy(const Offset(0, -34));
+          await tester.pump();
+          final meter = find.byIcon(icon);
+          expect(meter, findsOneWidget);
+          expect(tester.getCenter(meter).dx > center.dx, meterOnRight);
+          final bar = find.byType(LinearProgressIndicator);
+          final firstValue = tester.widget<LinearProgressIndicator>(bar).value!;
+          expect(tester.getRect(bar).bottom, lessThan(transport.top));
+          expect(current(), greaterThan(initial));
+          await gesture.moveBy(const Offset(0, 64));
+          await tester.pump();
+          expect(
+            tester.widget<LinearProgressIndicator>(bar).value!,
+            lessThan(firstValue),
+          );
+          expect(current(), lessThan(initial));
+          await tester.pump(const Duration(milliseconds: 1100));
+          expect(meter, findsOneWidget);
+          await gesture.up();
+          await tester.pump(const Duration(milliseconds: 850));
+          await tester.pumpAndSettle();
+          expect(meter, findsNothing);
+        }
+
+        if (defaultTargetPlatform == TargetPlatform.android) {
+          await checkLevel(
+            x: 78,
+            icon: Icons.brightness_6_rounded,
+            meterOnRight: true,
+            current: () => brightnessChanges.last,
+            initial: .5,
+          );
+        } else {
+          await tester.dragFrom(
+            Offset(78, center.dy + 14),
+            const Offset(0, -60),
+          );
+          await tester.pumpAndSettle();
+          expect(brightnessChanges, isEmpty);
+          expect(find.byType(LinearProgressIndicator), findsNothing);
+        }
+        expect(fixture.native.state.volume, initialVolume);
+        final brightnessCount = brightnessChanges.length;
+        await checkLevel(
+          x: size.width - 78,
+          icon: Icons.volume_up_rounded,
+          meterOnRight: false,
+          current: () => fixture.native.state.volume,
+          initial: initialVolume,
+        );
+        expect(brightnessChanges, hasLength(brightnessCount));
+        expect(fixture.native.seeks, isEmpty);
+
+        final seek = await tester.startGesture(Offset(78, center.dy + 14));
+        await seek.moveBy(const Offset(30, 0));
+        await seek.moveBy(const Offset(55, 0));
+        await tester.pump();
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+        await seek.up();
+        await tester.pumpAndSettle();
+        expect(fixture.native.seeks.last, greaterThan(Duration.zero));
+        expect(brightnessChanges, hasLength(brightnessCount));
+      },
+      variant: const TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.windows,
+      }),
+    );
+  }
+
+  testWidgets('Picture controls retain HDR processing without Anime4K', (
+    tester,
+  ) async {
+    final fixture = _SkipVideoFixture();
+    fixture.native.properties.addAll({
+      'current-vo': 'gpu-next',
+      'target-colorspace-hint': 'no',
+    });
+    addTearDown(() => fixture.close(tester));
+    await fixture.mount(tester);
+
+    await tester.tap(find.byTooltip('More player controls'));
+    await tester.pumpAndSettle();
+    final picture = find.text('Picture & display');
+    await tester.ensureVisible(picture);
+    await tester.tap(picture);
+    await tester.pumpAndSettle();
+    expect(find.text('Anime4K'), findsNothing);
+    expect(find.text('Ambient lighting'), findsOneWidget);
+
+    final hdr = find.text('HDR processing');
+    await tester.ensureVisible(hdr);
+    await tester.tap(hdr);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Linear HDR'));
+    await tester.pumpAndSettle();
+    expect(fixture.settings.videoPlayback.hdrProfile, VideoHdrProfile.linear);
+    expect(fixture.native.properties['target-colorspace-hint'], 'yes');
+  });
+
   test(
     'snapshots create the Downloads subfolder and save separate PNGs',
     () async {
@@ -2291,7 +2426,6 @@ void main() {
         await tester.tapAt(seekZone);
         await tester.pumpAndSettle();
         expect(native.state.position, const Duration(seconds: 10));
-        final transportCenter = tester.getCenter(pauseButton);
         expect(
           tester
               .getCenter(
@@ -2308,35 +2442,6 @@ void main() {
               .dy,
           lessThan(tester.getTopLeft(pauseButton).dy),
         );
-        for (final x in [200.0, 1080.0]) {
-          final volumeBefore = native.state.volume;
-          final drag = await tester.startGesture(Offset(x, 420));
-          await drag.moveBy(const Offset(0, 25));
-          await drag.moveBy(const Offset(0, 60));
-          await tester.pump();
-          final brightness = x < transportCenter.dx && Platform.isAndroid;
-          final feedback = tester.getCenter(
-            find.byIcon(
-              brightness ? Icons.brightness_6_rounded : Icons.volume_up_rounded,
-            ),
-          );
-          expect(feedback.dx < transportCenter.dx, brightness);
-          final meter = tester.widget<LinearProgressIndicator>(
-            find.byType(LinearProgressIndicator),
-          );
-          final fraction = meter.value!;
-          expect(fraction, inExclusiveRange(0.0, 1.0));
-          expect(find.text('${(fraction * 100).round()}%'), findsOneWidget);
-          if (brightness) {
-            expect(native.state.volume, volumeBefore);
-          } else {
-            expect(native.state.volume, lessThan(volumeBefore));
-            expect(fraction, closeTo(native.state.volume / 100, .0001));
-          }
-          await drag.up();
-          await tester.pump();
-        }
-
         await tester.tap(find.byTooltip('Lock controls'));
         await tester.pumpAndSettle();
         expect(find.byTooltip('More player controls'), findsNothing);
