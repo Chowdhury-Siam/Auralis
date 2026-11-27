@@ -1,47 +1,5 @@
 part of 'video_playback.dart';
 
-enum _Upscale {
-  off('Off'),
-  a('A'),
-  b('B'),
-  c('C'),
-  aPlus('A+'),
-  bPlus('B+'),
-  cPlus('C+');
-
-  const _Upscale(this.label);
-  final String label;
-
-  List<String> shaders(String quality) {
-    final restore = 'Restore_CNN_$quality';
-    final soft = 'Restore_CNN_Soft_$quality';
-    final upscale = 'Upscale_CNN_x2_$quality';
-    final denoise = 'Upscale_Denoise_CNN_x2_$quality';
-    const down = 'AutoDownscalePre_x2';
-    return [
-      if (this != off) 'Clamp_Highlights',
-      ...switch (this) {
-        off => const <String>[],
-        a => [restore, upscale, down, upscale],
-        b => [soft, upscale, down, upscale],
-        c => [denoise, down, upscale],
-        aPlus => [restore, upscale, down, restore, upscale],
-        bPlus => [soft, upscale, down, soft, upscale],
-        cPlus => [denoise, down, restore, upscale],
-      },
-    ];
-  }
-}
-
-enum _ShaderQuality {
-  fast('Fast', 'S'),
-  balanced('Balanced', 'M'),
-  high('High', 'L');
-
-  const _ShaderQuality(this.label, this.suffix);
-  final String label, suffix;
-}
-
 enum _Ambient {
   off('Off'),
   glow('Glow'),
@@ -121,7 +79,7 @@ extension _PlaybackProcessing on _VideoPlaybackState {
     if (!Platform.isAndroid ||
         !_canPlay ||
         _player?.state.playing != true ||
-        (_upscale == _Upscale.off && _ambient == _Ambient.off)) {
+        _ambient == _Ambient.off) {
       return;
     }
     try {
@@ -132,7 +90,6 @@ extension _PlaybackProcessing on _VideoPlaybackState {
       final throttled = headroom >= .75;
       if (throttled != _thermalLimit) {
         _thermalLimit = throttled;
-        await _applyUpscaling();
         _changed();
       }
     } on PlatformException {
@@ -140,52 +97,6 @@ extension _PlaybackProcessing on _VideoPlaybackState {
     } on MissingPluginException {
       // Widget tests do not have Android thermal services.
     }
-  }
-
-  Future<void> _updateUpscaling() async {
-    try {
-      await _applyUpscaling();
-    } catch (_) {
-      if (_canPlay) _notice('Could not load the selected video shaders.');
-    }
-  }
-
-  Future<void> _upscalePanel(BuildContext context) async {
-    final action = await _choose<_PanelAction>(context, 'Anime4K', [
-      for (final value in _Upscale.values)
-        (
-          value: () async {
-            _upscale = value;
-            await _updateUpscaling();
-            final state = _player!.state;
-            if (value != _Upscale.off &&
-                ((state.width ?? 0) >= 3840 || (state.height ?? 0) >= 2160)) {
-              _notice('Anime4K is disabled for this 4K video.');
-            }
-          },
-          label: value.label,
-          selected: value == _upscale,
-        ),
-      (
-        value: () async {
-          final quality = await _choose<_ShaderQuality>(
-            context,
-            'Anime4K quality',
-            [
-              for (final value in _ShaderQuality.values)
-                (value: value, label: value.label, selected: value == _quality),
-            ],
-          );
-          if (_canPlay && quality != null) {
-            _quality = quality;
-            await _updateUpscaling();
-          }
-        },
-        label: 'Quality · ${_quality.label}',
-        selected: false,
-      ),
-    ]);
-    if (_canPlay && context.mounted && action != null) await action();
   }
 
   Future<void> _ambientPanel(BuildContext context) async {
