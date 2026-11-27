@@ -17,8 +17,8 @@ function backend() {
  }};
  return {room:new AuralisRoom(state),db,state};
 }
-async function sync(room,ops={},cursor=0,videoActivity=false) {
- const response=await room.fetch(new Request('https://example.com/v1/sync',{method:'POST',body:JSON.stringify({ops,cursor,videoActivity})}));
+async function sync(room,ops={},cursor=0,videoActivity=false,videoWatching=false) {
+ const response=await room.fetch(new Request('https://example.com/v1/sync',{method:'POST',body:JSON.stringify({ops,cursor,videoActivity,videoWatching})}));
  return {status:response.status,body:await response.json()};
 }
 test('video activity merges with tombstones and stays hidden from older clients', async()=>{
@@ -50,6 +50,24 @@ test('offline additions merge, tombstones win and retries do not duplicate revis
  response=await sync(room,{[a]:r(null,2)},response.body.cursor);assert.equal(response.body.records[a].value,null);
  const cursor=response.body.cursor;
  response=await sync(room,{[a]:r(true,1)});assert.equal(response.body.records[a].value,null);assert.equal(response.body.cursor,cursor);
+ db.close();
+});
+test('watching counters keep per-device maxima and are filtered for older apps', async()=>{
+ const {room,db}=backend();
+ const a=key(['videoStats',actor]),b=key(['videoStats',other]);
+ const local={source:'local',milliseconds:30000,plays:1};
+ const video={source:'telegram',milliseconds:45000,plays:2};
+ const initial=await sync(room,{[a]:r(local),[b]:r(video,1,other)},0,true,true);
+ assert.equal(initial.status,200);
+ assert.equal(initial.body.videoWatching,true);
+ assert.deepEqual((await sync(room,{},0,true)).body.records,{});
+ const retried=await sync(room,{[a]:r(local),[b]:r(video,1,other)},0,true,true);
+ assert.equal(retried.body.cursor,initial.body.cursor);
+ const stale=await sync(room,{[a]:r({...local,milliseconds:5000,plays:0},2)},0,true,true);
+ assert.deepEqual(stale.body.records[a].value,local);
+ assert.deepEqual(stale.body.records[b].value,video);
+ const invalid=await sync(room,{[a]:r({...local,path:'/private.mp4'})},0,true,true);
+ assert.equal(invalid.status,400);
  db.close();
 });
 test('per-device listening counters and shared baseline merge by maximum',()=>{
