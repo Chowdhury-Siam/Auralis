@@ -360,19 +360,8 @@ extension _DiscoveryPages on _PlayerShellState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (!_keyboardOpen) ...[
-          _sectionHeading(
-            MediaQuery.textScalerOf(context).scale(20) > 30
-                ? 'Browse'
-                : 'Browse channels',
-            action: _browseSearchOpen
-                ? null
-                : IconButton(
-                    tooltip: 'Search channels',
-                    icon: const Icon(Icons.search_rounded, size: 20),
-                    onPressed: _focusDiscovery,
-                  ),
-          ),
+        if (!_keyboardOpen && !_browseSearchOpen) ...[
+          BrowseChannelsHeader(onSearch: _focusDiscovery),
           const SizedBox(height: 8),
         ],
         if (_browseSearchOpen) ...[
