@@ -6,13 +6,14 @@ import 'package:auralis/player.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/telegram_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
 
 void main() {
   // Keep Flutter's wide fallback test font: loading a host font hid this overflow.
-  testWidgets('search and collection use separate cards on phone and desktop', (
+  testWidgets('Library search opens from the toolbar on phone and desktop', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -48,10 +49,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       final menu = find.byKey(const ValueKey('library-collection-menu'));
-      final search = find.byType(TextField);
+      final search = find.byKey(const ValueKey('music-library-search'));
+      final searchButton = find.byTooltip('Search Library');
       expect(find.byType(ChoiceChip), findsNothing);
-      expect(search, findsOneWidget);
-      expect(find.descendant(of: search, matching: menu), findsNothing);
+      expect(search, findsNothing);
+      expect(searchButton.hitTestable(), findsOneWidget);
       expect(
         find.byKey(const ValueKey('mini-now-playing-layout')),
         findsNothing,
@@ -70,12 +72,15 @@ void main() {
         final rect = tester.getRect(menu);
         expect(rect.left, greaterThanOrEqualTo(0));
         expect(rect.right, lessThanOrEqualTo(size.width));
-        final searchBounds = tester.getRect(search);
         expect(find.byTooltip('Shuffle collection'), findsNothing);
-        expect(rect.bottom, lessThan(searchBounds.top));
+        expect(search, findsNothing);
+        expect(searchButton.hitTestable(), findsOneWidget);
+        final title = find.byKey(const ValueKey('page-title'));
+        expect(tester.widget<Text>(title).data, collection);
         expect(
-          tester.widget<Text>(find.byKey(const ValueKey('page-title'))).data,
-          collection,
+          tester.renderObject<RenderParagraph>(title).didExceedMaxLines,
+          isFalse,
+          reason: '$collection at $size',
         );
         if (collection == 'Recently played') {
           expect(find.text('Clear history'), findsNothing);
@@ -83,6 +88,11 @@ void main() {
           expect(tester.takeException(), isNull);
         }
       }
+      await tester.tap(searchButton);
+      await tester.pumpAndSettle();
+      expect(searchButton, findsNothing);
+      expect(tester.widget<TextField>(search).focusNode!.hasFocus, isTrue);
+      expect(tester.getRect(menu).bottom, lessThan(tester.getRect(search).top));
       await tester.enterText(search, 'song');
       await tester.pumpAndSettle();
       if (size.width == 320) {
@@ -100,7 +110,16 @@ void main() {
       await tester.tap(find.byTooltip('Clear search'));
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(search).controller!.text, isEmpty);
-      expect(tester.takeException(), isNull, reason: '$size search and clear');
+      await tester.enterText(search, 'another song');
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(search, findsNothing);
+      await tester.tap(searchButton);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(search).controller!.text, isEmpty);
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: '$size search and cancel');
     }
     await tester.pumpWidget(const SizedBox());
   });
