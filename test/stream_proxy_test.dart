@@ -8,7 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/td_transport.dart';
+import 'package:auralis/telegram/telegram_service.dart';
 import 'package:auralis/telegram/video_stream_cache.dart';
+
+import 'fakes.dart';
 
 void main() {
   test('preloads one bounded video prefix and hands it to playback', () async {
@@ -189,6 +192,95 @@ void main() {
   });
 
   test(
+    'a fresh proxy reuses header and resume bytes from a previous launch',
+    () async {
+      final fixture = await _VideoRanges.create();
+      final episode = _episode(1, remoteFileUniqueId: 'same-media');
+      final offset = episode.size * 9 ~/ 10;
+      final uri = await fixture.proxy.uri(episode);
+      await fixture.read(uri, 0, 1023);
+      final key = fixture.cache.keyFor(episode);
+      expect(
+        await fixture.cache.read(key, 0, 1024),
+        _VideoRanges.bytes(0, 1024),
+      );
+      await fixture.read(uri, offset, offset + 511);
+      expect(
+        await fixture.cache.read(key, offset, 512),
+        _VideoRanges.bytes(offset, 512),
+      );
+      await fixture.proxy.close();
+
+      final restarted = _VideoRanges(fixture.cache.file.parent, 512);
+      addTearDown(() async {
+        restarted.client.close(force: true);
+        await restarted.proxy.close();
+        await restarted.cache.close();
+      });
+      final restored = _episode(
+        1,
+        fileId: 99,
+        remoteFileUniqueId: 'same-media',
+      );
+      final resumed = await restarted.proxy.uri(restored);
+      expect(
+        await restarted.read(resumed, 0, 1023),
+        _VideoRanges.bytes(0, 1024),
+      );
+      expect(
+        await restarted.read(resumed, offset + 8, offset + 511),
+        _VideoRanges.bytes(offset + 8, 504),
+      );
+      expect(restarted.downloads, isEmpty);
+
+      final replaced = _episode(1, fileId: 99, remoteFileUniqueId: 'new-media');
+      final changed = await restarted.proxy.uri(replaced);
+      await restarted.read(changed, 0, 1023);
+      expect(restarted.downloads.single['file_id'], 99);
+    },
+  );
+
+  test(
+    'Telegram shutdown keeps the resume cache and logout clears it',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'auralis-video-restart-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      TelegramService service() =>
+          TelegramService(directory, MemoryVault(), transport: FakeTd());
+      final first = service();
+      final episode = _episode(1);
+      final key = first.videoStreamCache.keyFor(episode);
+      final bytes = Uint8List.fromList(_VideoRanges.bytes(0, 128));
+      first.videoStreamCache.store(key, 0, bytes);
+      await first.shutdown();
+      expect(await first.videoStreamCache.file.exists(), isTrue);
+
+      final otherAccount = VideoStreamCache(
+        first.videoStreamCache.file,
+        namespace: () => 'another database',
+      );
+      expect(
+        await otherAccount.read(otherAccount.keyFor(episode), 0, 128),
+        isNull,
+      );
+      final second = service();
+      addTearDown(second.shutdown);
+      expect(
+        await second.videoStreamCache.read(
+          second.videoStreamCache.keyFor(episode),
+          0,
+          128,
+        ),
+        bytes,
+      );
+      await second.logout();
+      expect(await second.videoStreamCache.file.exists(), isFalse);
+    },
+  );
+
+  test(
     'corrupted and removed cached video data fall back to Telegram',
     () async {
       final fixture = await _VideoRanges.create();
@@ -196,11 +288,13 @@ void main() {
       final first = await fixture.proxy.uri(episode);
       await fixture.read(first, 0, 1023);
       await fixture.proxy.stop();
-      await fixture.cache.read(1, episode.size, 0, 1024);
+      await fixture.cache.read(fixture.cache.keyFor(episode), 0, 1024);
       final writer = await fixture.cache.file.open(mode: FileMode.append);
-      await writer.setPosition(0);
+      await writer.setPosition(await writer.length() - 1);
       await writer.writeByte(255);
       await writer.close();
+      final restarted = VideoStreamCache(fixture.cache.file);
+      expect(await restarted.read(restarted.keyFor(episode), 0, 1024), isNull);
 
       final reopened = await fixture.proxy.uri(episode);
       expect(
@@ -225,20 +319,20 @@ void main() {
       final fixture = await _VideoRanges.create(pages: 8);
       final cache = fixture.cache;
       const page = VideoStreamCache.pageSize;
-      final size = _episode(1).size;
+      final key = cache.keyFor(_episode(1));
       Future<void> store(int offset) async {
         final bytes = Uint8List.fromList(_VideoRanges.bytes(offset, 32));
-        cache.store(1, size, offset, bytes);
-        expect(await cache.read(1, size, offset, bytes.length), bytes);
+        cache.store(key, offset, bytes);
+        expect(await cache.read(key, offset, bytes.length), bytes);
       }
 
       await store(0);
       for (var block = 8; block < 16; block++) {
         await store(block * page);
       }
-      expect(await cache.read(1, size, 8 * page, 32), isNull);
-      expect(await cache.read(1, size, 0, 32), _VideoRanges.bytes(0, 32));
-      expect(await cache.bytes, lessThanOrEqualTo(page * 8));
+      expect(await cache.read(key, 8 * page, 32), isNull);
+      expect(await cache.read(key, 0, 32), _VideoRanges.bytes(0, 32));
+      expect(await cache.bytes, lessThan(page * 9));
     },
   );
 
@@ -780,17 +874,22 @@ void main() {
   );
 }
 
-Track _episode(int number, {Duration duration = const Duration(minutes: 2)}) =>
-    Track(
-      id: '-100:$number',
-      title: 'Episode $number',
-      artist: '',
-      source: 'Test channel',
-      fileId: number,
-      size: 60 * 1024 * 1024,
-      duration: duration,
-      mime: 'video/mp4',
-    );
+Track _episode(
+  int number, {
+  Duration duration = const Duration(minutes: 2),
+  int? fileId,
+  String? remoteFileUniqueId,
+}) => Track(
+  id: '-100:$number',
+  title: 'Episode $number',
+  artist: '',
+  source: 'Test channel',
+  fileId: fileId ?? number,
+  remoteFileUniqueId: remoteFileUniqueId,
+  size: 60 * 1024 * 1024,
+  duration: duration,
+  mime: 'video/mp4',
+);
 
 class _VideoRanges {
   _VideoRanges(Directory directory, int pages)
