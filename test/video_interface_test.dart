@@ -1,9 +1,12 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:auralis/app.dart';
 import 'package:auralis/app_navigation.dart';
 import 'package:auralis/channel_metadata.dart';
 import 'package:auralis/channel_metadata_view.dart';
+import 'package:auralis/discovery_widgets.dart';
 import 'package:auralis/library_widgets.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
@@ -46,6 +49,18 @@ class _BrowseMetadata extends ChannelMetadataRepository {
 
   @override
   Future<File?> image(String url) async => File('test/fixtures/cover.png');
+}
+
+class _ThumbnailTelegram extends TelegramService {
+  _ThumbnailTelegram(FakeTd transport, this.fullThumbnail)
+    : super(Directory('unused'), MemoryVault(), transport: transport);
+
+  final Future<Uint8List?> fullThumbnail;
+  final _missingThumbnail = Future<Uint8List?>.value();
+
+  @override
+  Future<Uint8List?> videoThumbnail(int fileId, String title) =>
+      fileId == 93 ? fullThumbnail : _missingThumbnail;
 }
 
 void main() {
@@ -281,6 +296,91 @@ void main() {
     );
   }
 
+  testWidgets('Video Library uses the series poster for missing thumbnails', (
+    tester,
+  ) async {
+    final metadata = _BrowseMetadata(channel.id);
+    addTearDown(metadata.close);
+    final fullThumbnail = Completer<Uint8List?>();
+    final fullImage = File('test/fixtures/cover.png').readAsBytesSync();
+    final mini = base64Encode(
+      File('test/fixtures/theme-orange.png').readAsBytesSync(),
+    );
+    Json episode(int id, {int? thumbnail}) {
+      final message = post(id, 'Episode $id.mp4');
+      final video = message['content']['video'] as Json;
+      video['minithumbnail'] = {'data': mini};
+      if (thumbnail != null) {
+        video['thumbnail'] = {
+          'file': {'id': thumbnail},
+        };
+      }
+      return message;
+    }
+
+    final watched = episode(1);
+    final td = FakeTd()
+      ..onRequest = (request) async => switch (request['@type']) {
+        'searchChatMessages' => {
+          'messages': [
+            if (request['filter']?['@type'] == 'searchMessagesFilterVideo') ...[
+              watched,
+              episode(2, thumbnail: 92),
+              episode(3, thumbnail: 93),
+            ],
+          ],
+          'next_from_message_id': 0,
+        },
+        _ => null,
+      };
+    final telegram = _ThumbnailTelegram(td, fullThumbnail.future)
+      ..state = 'authorizationStateReady';
+    final settings = MemorySettings()
+      ..defaultInterface = AppInterface.video
+      ..selectedChannels = [channel]
+      ..videoChannelId = channel.id;
+    settings.videoPlayback.setWatched(
+      VideoSource.telegram(Track.fromVideoMessage(watched, channel.title)!),
+      true,
+    );
+    final player = PlayerController(
+      FakeAudio(),
+      TelegramStreamProxy(telegram.request),
+      settings,
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      await player.shutdown();
+      await telegram.shutdown();
+    });
+
+    await tester.pumpWidget(
+      AuralisApp(player: player, telegram: telegram, channelMetadata: metadata),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.video_library_rounded));
+    await tester.pumpAndSettle();
+    Finder insideEpisode(int id, Finder matching) => find.descendant(
+      of: find.byKey(ValueKey('${channel.id}:$id')),
+      matching: matching,
+    );
+    for (final id in [1, 2, 3]) {
+      final poster = insideEpisode(id, find.byType(MetadataArtwork));
+      expect(
+        tester.widget<MetadataArtwork>(poster).url,
+        _BrowseMetadata.posterUrl,
+      );
+    }
+    expect(insideEpisode(1, find.byType(ColorFiltered)), findsOneWidget);
+    expect(insideEpisode(2, find.byType(ColorFiltered)), findsNothing);
+    fullThumbnail.complete(fullImage);
+    await tester.pumpAndSettle();
+    expect(insideEpisode(3, find.byType(MetadataArtwork)), findsNothing);
+    final artwork = tester.widget<Image>(insideEpisode(3, find.byType(Image)));
+    final image = (artwork.image as ResizeImage).imageProvider as MemoryImage;
+    expect(image.bytes, fullImage);
+  });
+
   testWidgets(
     'filter Browse by Telegram chat folders, switch channels and sort videos',
     (tester) async {
@@ -470,10 +570,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(channelRow(channel), findsOneWidget);
       expect(channelRow(archive), findsNothing);
+      expect(find.text('1 video channel'), findsOneWidget);
       await tester.tap(moviesChip);
       await tester.pumpAndSettle();
       expect(channelRow(channel), findsOneWidget);
       expect(channelRow(archive), findsOneWidget);
+      expect(find.text('2 video channels'), findsOneWidget);
       await tester.tap(seriesChip);
       await tester.pumpAndSettle();
       expect(seriesPages, 3);
@@ -846,7 +948,9 @@ void main() {
       final searchField = find.widgetWithText(TextField, 'Search channels');
       final searchButton = find.byTooltip('Search channels');
       expect(searchField, findsNothing);
-      expect(tester.getRect(searchButton).right, closeTo(rightEdge, 6));
+      final header = tester.getRect(find.byType(BrowseChannelsHeader));
+      expect(header.right, rightEdge);
+      expect(tester.getRect(searchButton).right, closeTo(header.right - 14, 4));
       expect(tester.getRect(find.byType(GridView)).right, rightEdge);
       if (size.width == 1920) {
         final poster = find.byKey(ValueKey(channel.id));
