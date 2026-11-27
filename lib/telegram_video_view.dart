@@ -49,9 +49,10 @@ class TelegramVideoView extends StatefulWidget {
 }
 
 class _VideoResults {
-  _VideoResults(this.channel);
+  _VideoResults(this.channel, this.metadata);
 
   final MusicChat channel;
+  Future<MetadataMatch>? metadata;
   final videos = <String, Track>{};
   Track? latest;
   final cursors = <bool, int>{false: 0, true: 0};
@@ -241,8 +242,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     if (_library != null && _library!.channel.id != channel.id) {
       unawaited(_proxy.preload(null));
     }
-    final results = _VideoResults(channel);
-    unawaited(widget.channelMetadata?.identify(channel.id, channel.title));
+    final results = _VideoResults(
+      channel,
+      widget.channelMetadata?.identify(channel.id, channel.title),
+    );
     setState(() {
       _library = results;
     });
@@ -939,12 +942,13 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     );
   }
 
-  Widget _videoArtwork(Track video, {bool watched = false}) {
+  Widget _videoArtwork(Track video, {bool watched = false, Widget? fallback}) {
     final artwork = _VideoArtwork(
       telegram: _telegram,
       title: video.title,
       fileId: video.coverFileId,
       preview: video.coverPreview,
+      fallback: fallback,
     );
     if (!watched) return artwork;
     return ColorFiltered(
@@ -961,18 +965,42 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
         const <Track>[];
     final loading = results?.loading ?? false;
     final failed = results?.failed ?? false;
+    final repository = widget.channelMetadata;
+    final metadata = results?.metadata;
+    const placeholder = _VideoArtworkPlaceholder(Icons.movie_outlined);
+    final episodeFallback = repository == null || metadata == null
+        ? placeholder
+        : FutureBuilder<MetadataMatch>(
+            future: metadata,
+            builder: (context, snapshot) {
+              final cover = snapshot.data?.selected?.cover;
+              if (cover == null) return placeholder;
+              return MetadataArtwork(
+                key: ValueKey(cover),
+                repository: repository,
+                url: cover,
+                poster: true,
+                fallback: placeholder,
+              );
+            },
+          );
     final list = LibraryRefresh(
       onRefresh: _refresh,
       child: CustomScrollView(
         key: ValueKey((searching, results)),
         slivers: [
-          if (!searching && results != null && widget.channelMetadata != null)
+          if (!searching && results != null && repository != null)
             SliverToBoxAdapter(
               child: ChannelMetadataHeader(
                 key: ValueKey(('channel-metadata', results.channel.id)),
                 channelId: results.channel.id,
                 channelName: results.channel.title,
-                repository: widget.channelMetadata!,
+                repository: repository,
+                onSelectionChanged: () => setState(() {
+                  results.metadata = repository.identifySaved(
+                    results.channel.id,
+                  );
+                }),
                 onPlay: videos.isEmpty
                     ? null
                     : () => unawaited(_play(videos.first)),
@@ -1020,7 +1048,11 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
                   lookup: _lookupVideoDuration(source),
                   status: status,
                 ),
-                artwork: _videoArtwork(video, watched: watched),
+                artwork: _videoArtwork(
+                  video,
+                  watched: watched,
+                  fallback: episodeFallback,
+                ),
                 offline: (media: _telegram.offline, id: video.id),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1088,6 +1120,7 @@ class _VideoArtwork extends StatelessWidget {
     required this.title,
     required this.fileId,
     required this.preview,
+    this.fallback,
     this.placeholderIcon = Icons.movie_outlined,
   });
 
@@ -1095,26 +1128,23 @@ class _VideoArtwork extends StatelessWidget {
   final String title;
   final int? fileId;
   final Uint8List? preview;
+  final Widget? fallback;
   final IconData placeholderIcon;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = ColoredBox(
-      color: colors.secondaryContainer,
-      child: Center(
-        child: Icon(placeholderIcon, color: colors.onSecondaryContainer),
-      ),
-    );
+    final placeholder = _VideoArtworkPlaceholder(placeholderIcon);
     final preview = this.preview;
     final thumbnail = fileId;
-    final fallback = preview == null
-        ? placeholder
-        : Image.memory(
-            preview,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => placeholder,
-          );
+    final fallback =
+        this.fallback ??
+        (preview == null
+            ? placeholder
+            : Image.memory(
+                preview,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => placeholder,
+              ));
     return thumbnail == null
         ? fallback
         : FutureBuilder<Uint8List?>(
@@ -1128,5 +1158,20 @@ class _VideoArtwork extends StatelessWidget {
                     errorBuilder: (_, _, _) => fallback,
                   ),
           );
+  }
+}
+
+class _VideoArtworkPlaceholder extends StatelessWidget {
+  const _VideoArtworkPlaceholder(this.icon);
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: colors.secondaryContainer,
+      child: Center(child: Icon(icon, color: colors.onSecondaryContainer)),
+    );
   }
 }
