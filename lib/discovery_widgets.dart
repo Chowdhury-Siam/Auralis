@@ -35,52 +35,186 @@ import 'models.dart';
 }
 
 class BrowseChannelsHeader extends StatelessWidget {
-  const BrowseChannelsHeader({super.key, required this.onSearch});
+  const BrowseChannelsHeader({
+    super.key,
+    required this.mode,
+    required this.channelCount,
+    required this.onSearch,
+  });
 
+  final AppInterface mode;
+  final int? channelCount;
   final VoidCallback onSearch;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    return Row(
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: colors.primaryContainer,
-          ),
-          child: Icon(
-            Icons.tag_rounded,
-            size: 21,
-            color: colors.onPrimaryContainer,
+    final accent = mode == AppInterface.music
+        ? colors.primary
+        : colors.tertiary;
+    final count = channelCount;
+    final detail = count == null
+        ? '${mode.label} on Telegram'
+        : '$count ${mode.name} ${count == 1 ? 'channel' : 'channels'}';
+    return Material(
+      shape: auralisSurfaceShape(colors, borderOpacity: .8),
+      clipBehavior: Clip.antiAlias,
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: AlignmentDirectional.topStart,
+            end: AlignmentDirectional.bottomEnd,
+            colors: [
+              Color.alphaBlend(accent.withValues(alpha: .08), colors.surface),
+              Color.alphaBlend(
+                accent.withValues(alpha: .21),
+                colors.surfaceContainerHigh,
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            MediaQuery.textScalerOf(context).scale(20) > 30
-                ? 'Browse'
-                : 'Browse channels',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: -.35,
+        child: Stack(
+          children: [
+            PositionedDirectional(
+              top: 0,
+              bottom: 0,
+              end: 0,
+              width: 156,
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _BrowseHeaderArt(
+                    mode: mode,
+                    accent: accent,
+                    direction: Directionality.of(context),
+                  ),
+                ),
+              ),
             ),
-          ),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 94),
+              child: Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(18, 14, 14, 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            header: true,
+                            child: Text(
+                              'Browse channels',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                color: colors.onSurface,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -.65,
+                                height: 1.12,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            detail,
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      tooltip: 'Search channels',
+                      style: IconButton.styleFrom(
+                        backgroundColor: colors.surfaceContainerHighest,
+                        foregroundColor: colors.onSurface,
+                        minimumSize: const Size.square(48),
+                      ),
+                      icon: const Icon(Icons.search_rounded, size: 23),
+                      onPressed: onSearch,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-        IconButton.filledTonal(
-          tooltip: 'Search channels',
-          icon: const Icon(Icons.search_rounded, size: 20),
-          onPressed: onSearch,
-        ),
-      ],
+      ),
     );
   }
+}
+
+class _BrowseHeaderArt extends CustomPainter {
+  const _BrowseHeaderArt({
+    required this.mode,
+    required this.accent,
+    required this.direction,
+  });
+
+  final AppInterface mode;
+  final Color accent;
+  final TextDirection direction;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (direction == TextDirection.rtl) {
+      canvas.translate(size.width, 0);
+      canvas.scale(-1, 1);
+    }
+    final fill = Paint()..color = accent.withValues(alpha: .11);
+    final line = Paint()
+      ..color = accent.withValues(alpha: .26)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    if (mode == AppInterface.music) {
+      final center = Offset(size.width - 21, size.height * .73);
+      canvas.drawCircle(center, 63, fill);
+      for (final radius in const [63.0, 54.0, 48.0, 42.0, 36.0, 22.0, 5.0]) {
+        canvas.drawCircle(center, radius, line);
+      }
+      return;
+    }
+
+    canvas.translate(size.width - 35, size.height * .61);
+    canvas.rotate(-.38);
+    final strip = RRect.fromLTRBR(-47, -66, 47, 112, const Radius.circular(9));
+    canvas.drawRRect(strip, fill);
+    canvas.drawRRect(strip, line);
+    for (final top in const [-53.0, 0.0, 53.0]) {
+      final frame = RRect.fromLTRBR(
+        -31,
+        top,
+        31,
+        top + 45,
+        const Radius.circular(4),
+      );
+      canvas.drawRRect(frame, line);
+    }
+    final perforation = Paint()..color = line.color;
+    for (var top = -53.0; top < 106; top += 13) {
+      for (final left in const [-42.0, 36.0]) {
+        canvas.drawRRect(
+          RRect.fromLTRBR(
+            left,
+            top,
+            left + 6,
+            top + 6,
+            const Radius.circular(1.5),
+          ),
+          perforation,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BrowseHeaderArt oldDelegate) =>
+      mode != oldDelegate.mode ||
+      accent != oldDelegate.accent ||
+      direction != oldDelegate.direction;
 }
 
 class InlineSearchField extends StatelessWidget {
