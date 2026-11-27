@@ -280,7 +280,9 @@ void main() {
     final searchButton = find.byTooltip('Search channels');
     final search = find.widgetWithText(TextField, 'Search channels');
     expect(search, findsNothing);
-    expect(tester.getRect(searchButton).right, closeTo(rightEdge, 6));
+    final header = tester.getRect(find.byType(BrowseChannelsHeader));
+    expect(header.right, rightEdge);
+    expect(tester.getRect(searchButton).right, closeTo(header.right - 14, 4));
     expect(tester.getRect(find.byType(GridView)).right, rightEdge);
     await tester.tap(searchButton);
     await tester.pumpAndSettle();
