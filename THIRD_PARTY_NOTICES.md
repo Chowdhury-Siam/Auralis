@@ -61,8 +61,7 @@ The Android media_kit plugin downloads v1.1.7 native archives from [libmpv-andro
 
 ## Video player references and bundled assets
 
-- mpvRx (Ritesh Prajapati and contributors) provided the Android player design and Anime4K preset reference. Its project is available under AGPL-3.0. Auralis implements the player in Flutter on its existing libmpv backend.
+- mpvRx (Ritesh Prajapati and contributors) provided the Android player design reference. Its project is available under AGPL-3.0. Auralis implements the player in Flutter on its existing libmpv backend.
 - Wyzie and AniSkip are optional services contacted from their player controls.
-- The Anime4K shader files in `assets/shaders/anime4k/` are from the supplied mpvRx archive. The original bloc97 MIT notices and the public-domain notice in the downscale shader are retained in the files.
 - HDR Toys shaders in `assets/shaders/hdr-toys/` follow the supplied mpvRx profiles and retain the [HDR Toys](https://github.com/natural-harmonia-gropius/hdr-toys) MIT license.
 - DejaVu Sans is bundled as the Android subtitle fallback. See `assets/fonts/LICENSE-DejaVu.txt`.
