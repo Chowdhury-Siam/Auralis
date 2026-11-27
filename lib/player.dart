@@ -312,13 +312,9 @@ class PlayerController extends ChangeNotifier {
     if (_statsRevision == _savedStatsRevision) return;
     final revision = _statsRevision;
     try {
-      await settings.save();
+      await _saveSettings();
       _savedStatsRevision = max(_savedStatsRevision, revision);
     } catch (_) {
-      if (!_closed) {
-        error = 'Listening statistics could not be saved. Check application storage.';
-        notifyListeners();
-      }
       if (failOnError) rethrow;
     }
   }
@@ -493,14 +489,32 @@ class PlayerController extends ChangeNotifier {
     unawaited(_persist());
   }
 
-  Future<void> _persist() async {
+  bool _settingsSaveFailed = false;
+  bool get settingsSaveFailed => _settingsSaveFailed;
+
+  void _setSettingsSaveFailed(bool value) {
+    if (_closed || _settingsSaveFailed == value) return;
+    _settingsSaveFailed = value;
+    notifyListeners();
+  }
+
+  Future<void> _saveSettings() async {
     try {
       await settings.save();
+      _setSettingsSaveFailed(false);
     } catch (_) {
-      if (!_closed) {
-        error = 'Changes are active for this session, but could not be saved. Check that application storage is writable.';
-        notifyListeners();
-      }
+      _setSettingsSaveFailed(true);
+      rethrow;
+    }
+  }
+
+  Future<void> retrySavingChanges() => _persist();
+
+  Future<void> _persist() async {
+    try {
+      await _saveSettings();
+    } catch (_) {
+      // The shell offers a retry while the pending changes remain in memory.
     }
   }
 
