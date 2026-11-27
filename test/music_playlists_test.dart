@@ -184,6 +184,7 @@ void main() {
         expect(settings.playlists['Evening mix'], ids);
         await tap(find.byTooltip('Back to playlists'));
 
+        await tap(find.byTooltip('Search Library'));
         await tester.enterText(find.byType(TextField), 'no matching playlist');
         await tester.pumpAndSettle();
         await showInOverview(find.text('No playlists found'));
