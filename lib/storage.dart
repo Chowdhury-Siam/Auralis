@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:crypto/crypto.dart';
+import 'package:path/path.dart' as p;
 
 import 'video_playback_data.dart';
 import 'models.dart';
@@ -112,11 +113,21 @@ class SecretVault {
 }
 
 Future<void> atomicWrite(File file, List<int> data) async {
-  await file.parent.create(recursive: true);
-  final temporary = File('${file.path}.tmp');
-  await temporary.writeAsBytes(data, flush: true);
-  // Dart's rename replaces an existing ordinary file on Windows.
-  await temporary.rename(file.path);
+  final parent = file.absolute.parent;
+  await parent.create(recursive: true);
+  // A previous interrupted write or another writer must never share the temp file.
+  final staging = await parent.createTemp('.auralis-write-');
+  try {
+    final temporary = File(p.join(staging.path, 'pending'));
+    await temporary.writeAsBytes(data, flush: true);
+    await temporary.rename(file.absolute.path);
+  } finally {
+    try {
+      await staging.delete(recursive: true);
+    } on FileSystemException {
+      // Cleanup must preserve the result of the write or rename.
+    }
+  }
 }
 
 class AppSettings {
@@ -215,6 +226,7 @@ class AppSettings {
 
   void applyJson(Map<String, dynamic> json) {
     videoPlayback.applyTelegramActivity(json[TelegramVideoActivity.key]);
+    videoPlayback.applyWatchingStats(json[VideoWatchingStats.key]);
     listening = ListeningStats.fromJson(json['listening']);
     // Retire the app-specific toggle, including settings restored from old backups.
     // The platform accessibility preference is still respected by the UI.
@@ -330,6 +342,7 @@ class AppSettings {
     'playlists': playlists,
     'recentIds': recentIds,
     TelegramVideoActivity.key: videoPlayback.telegramActivity(),
+    VideoWatchingStats.key: videoPlayback.watchingStats(),
     'repeatMode': repeatMode.name,
     'listening': listening.toJson(),
     'selectedChannels': [
