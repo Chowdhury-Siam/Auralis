@@ -34,20 +34,25 @@ import 'models.dart';
   return (channels: channels, checking: checking);
 }
 
-class BrowseSearchField extends StatelessWidget {
-  const BrowseSearchField({
+class InlineSearchField extends StatelessWidget {
+  const InlineSearchField({
     super.key,
+    this.fieldKey,
     required this.controller,
     required this.focusNode,
     required this.onClose,
+    this.hint = 'Search channels',
+    this.clearTooltip = 'Clear channel search',
     this.onChanged,
     this.onSubmitted,
     this.onCleared,
   });
 
+  final Key? fieldKey;
   final TextEditingController controller;
   final FocusNode focusNode;
   final VoidCallback onClose;
+  final String hint, clearTooltip;
   final ValueChanged<String>? onChanged, onSubmitted;
   final VoidCallback? onCleared;
 
@@ -56,13 +61,14 @@ class BrowseSearchField extends StatelessWidget {
     children: [
       Expanded(
         child: TextField(
+          key: fieldKey,
           controller: controller,
           focusNode: focusNode,
           textInputAction: TextInputAction.search,
           onChanged: onChanged,
           onSubmitted: onSubmitted,
           decoration: InputDecoration(
-            hintText: 'Search channels',
+            hintText: hint,
             enabledBorder: auralisFieldBorder(radius: 24),
             focusedBorder: auralisFieldBorder(
               radius: 24,
@@ -73,7 +79,7 @@ class BrowseSearchField extends StatelessWidget {
             suffixIcon: controller.text.isEmpty
                 ? null
                 : IconButton(
-                    tooltip: 'Clear channel search',
+                    tooltip: clearTooltip,
                     icon: const Icon(Icons.close_rounded, size: 18),
                     onPressed: () {
                       controller.clear();
@@ -236,15 +242,6 @@ SliverGridDelegateWithMaxCrossAxisExtent discoveryGridDelegate(
       108 + math.max(0, MediaQuery.textScalerOf(context).scale(18) - 18) * 3,
 );
 
-Widget discoveryLayoutButton({
-  required bool list,
-  required VoidCallback onPressed,
-}) => IconButton.filledTonal(
-  tooltip: list ? 'Show grid' : 'Show list',
-  onPressed: onPressed,
-  icon: Icon(list ? Icons.grid_view_rounded : Icons.view_list_rounded),
-);
-
 class ChannelMediaCount extends StatelessWidget {
   const ChannelMediaCount({
     super.key,
@@ -294,8 +291,6 @@ class DiscoveryTile extends StatelessWidget {
     required this.index,
     required this.onTap,
     this.onLongPress,
-    this.leading,
-    this.list = false,
     this.selected,
   });
   final String title;
@@ -303,8 +298,6 @@ class DiscoveryTile extends StatelessWidget {
   final IconData icon;
   final int index;
   final VoidCallback? onTap, onLongPress;
-  final Widget? leading;
-  final bool list;
   final bool? selected;
   @override
   Widget build(BuildContext context) {
@@ -320,104 +313,79 @@ class DiscoveryTile extends StatelessWidget {
         builder: (context, states) => Material(
           color: background,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(list ? 16 : 22),
+            borderRadius: BorderRadius.circular(22),
             side: isSelected ? BorderSide(color: foreground) : BorderSide.none,
           ),
           clipBehavior: Clip.antiAlias,
-          child: list
-              ? ListTile(
-                  statesController: states,
-                  leading: leading ?? Icon(icon, color: foreground),
-                  title: Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+          child: InkWell(
+            statesController: states,
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned(
+                  right: -10,
+                  bottom: -20,
+                  child: ExcludeSemantics(
+                    child: Transform.rotate(
+                      angle: -.18,
+                      child: Icon(
+                        icon,
+                        size: 98,
+                        color: foreground.withValues(alpha: .2),
+                      ),
+                    ),
                   ),
-                  subtitle: detail == null ? null : Text(detail),
-                  textColor: foreground,
-                  trailing: selected == false
-                      ? null
-                      : Icon(
-                          isSelected
-                              ? Icons.check_circle_rounded
-                              : Icons.chevron_right_rounded,
-                          color: foreground,
-                        ),
-                  onTap: onTap,
-                  onLongPress: onLongPress,
-                )
-              : InkWell(
-                  statesController: states,
-                  onTap: onTap,
-                  onLongPress: onLongPress,
-                  child: Stack(
-                    fit: StackFit.expand,
+                ),
+                if (isSelected)
+                  PositionedDirectional(
+                    top: 10,
+                    end: 10,
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      size: 18,
+                      color: foreground,
+                    ),
+                  ),
+                Padding(
+                  padding: EdgeInsetsDirectional.fromSTEB(
+                    12,
+                    12,
+                    isSelected ? 34 : 12,
+                    12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Positioned(
-                        right: -10,
-                        bottom: -20,
-                        child: ExcludeSemantics(
-                          child: Transform.rotate(
-                            angle: -.18,
-                            child: Icon(
-                              icon,
-                              size: 98,
-                              color: foreground.withValues(alpha: .2),
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (isSelected)
-                        PositionedDirectional(
-                          top: 10,
-                          end: 10,
-                          child: Icon(
-                            Icons.check_circle_rounded,
-                            size: 18,
+                      Flexible(
+                        child: Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
                             color: foreground,
+                            fontSize: 17,
+                            height: 1.12,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                      Padding(
-                        padding: EdgeInsetsDirectional.fromSTEB(
-                          12,
-                          12,
-                          isSelected ? 34 : 12,
-                          12,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: foreground,
-                                  fontSize: 17,
-                                  height: 1.12,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            if (detail != null) ...[
-                              const SizedBox(height: 5),
-                              Text(
-                                detail,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: foreground,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
                       ),
+                      if (detail != null) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          detail,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: foreground, fontSize: 12),
+                        ),
+                      ],
                     ],
                   ),
                 ),
+              ],
+            ),
+          ),
         ),
       ),
     );
