@@ -425,6 +425,9 @@ class VideoPlaybackData {
   final history = <String, VideoHistoryEntry>{};
   final _watched = <String>{};
   final _watchedFiles = <String>{};
+  static const _emptyWatching = (milliseconds: 0, plays: 0);
+  var _telegramWatching = _emptyWatching;
+  var _localWatching = _emptyWatching;
   static final _localVideoId = RegExp(r'^file:[a-f0-9]{64}$');
   final channels = <String, VideoChannelSettings>{};
   final subtitleStyle = <String, String>{};
@@ -500,6 +503,30 @@ class VideoPlaybackData {
       (entry) => (entry.source.telegram != null) == (source.telegram != null),
     );
     if (sameKind.length > _limit) history.remove(sameKind.first.source.id);
+  }
+
+  Duration get watchTime => Duration(
+    milliseconds: _telegramWatching.milliseconds + _localWatching.milliseconds,
+  );
+  int get videoPlays => _telegramWatching.plays + _localWatching.plays;
+  int get watchedCount => _watched.length + _watchedFiles.length;
+
+  void recordWatching(
+    VideoSource source,
+    Duration time, {
+    required bool newPlay,
+  }) {
+    final telegram = source.telegram != null;
+    final previous = telegram ? _telegramWatching : _localWatching;
+    final totals = (
+      milliseconds: previous.milliseconds + time.inMilliseconds,
+      plays: previous.plays + (newPlay ? 1 : 0),
+    );
+    if (telegram) {
+      _telegramWatching = totals;
+    } else {
+      _localWatching = totals;
+    }
   }
 
   bool isWatched(VideoSource source) => source.telegram == null
@@ -690,6 +717,7 @@ class VideoPlaybackData {
         );
       });
     } else {
+      _telegramWatching = _emptyWatching;
       _watched.clear();
       history.removeWhere((_, entry) => entry.source.telegram != null);
       positions.removeWhere((id, _) => id.startsWith('telegram:'));
@@ -732,6 +760,10 @@ class VideoPlaybackData {
   factory VideoPlaybackData.fromJson(Object? json) {
     final data = VideoPlaybackData();
     if (json is! Map) return data;
+    if (json['watching'] case final Map watching) {
+      data._telegramWatching = _readWatching(watching['telegram']);
+      data._localWatching = _readWatching(watching['local']);
+    }
     if (json['channelSettings'] case final Map channels) {
       for (final entry in channels.entries) {
         if (entry.key case final String id
@@ -909,6 +941,13 @@ class VideoPlaybackData {
   static String _configText(Object? value) =>
       value is String && value.length <= 32768 ? value : '';
 
+  static ({int milliseconds, int plays}) _readWatching(Object? raw) {
+    if (raw is! List || raw.length != 2) return _emptyWatching;
+    int count(Object? value) =>
+        value is int && value >= 0 && value <= (1 << 42) ? value : 0;
+    return (milliseconds: count(raw[0]), plays: count(raw[1]));
+  }
+
   Map<String, dynamic> toJson() => {
     'librarySort': librarySort.name,
     'channelSettings': {
@@ -916,6 +955,10 @@ class VideoPlaybackData {
     },
     'watched': _watched.toList(),
     'watchedFiles': _watchedFiles.toList(),
+    'watching': {
+      'telegram': [_telegramWatching.milliseconds, _telegramWatching.plays],
+      'local': [_localWatching.milliseconds, _localWatching.plays],
+    },
     'ambientMode': ambientMode,
     'snapshotSubtitles': snapshotSubtitles,
     'subtitleStyle': subtitleStyle,
