@@ -1,5 +1,25 @@
 part of 'video_playback.dart';
 
+Future<T?> _showPlaybackSheet<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+}) => showModalBottomSheet<T>(
+  context: context,
+  useRootNavigator: true,
+  useSafeArea: true,
+  isScrollControlled: true,
+  backgroundColor: Colors.transparent,
+  barrierColor: Colors.black45,
+  constraints: BoxConstraints(
+    maxWidth: 620,
+    maxHeight: MediaQuery.sizeOf(context).height * .9,
+  ),
+  sheetAnimationStyle: MediaQuery.disableAnimationsOf(context)
+      ? AnimationStyle.noAnimation
+      : null,
+  builder: (context) => SafeArea(top: false, child: builder(context)),
+);
+
 class _VideoPanel extends StatelessWidget {
   const _VideoPanel({
     required this.title,
@@ -11,6 +31,7 @@ class _VideoPanel extends StatelessWidget {
     this.width = 440,
     this.maxHeight = 580,
     this.scrollable = true,
+    this.embedded = false,
   });
 
   final String title;
@@ -20,7 +41,7 @@ class _VideoPanel extends StatelessWidget {
   final VoidCallback? onBack;
   final List<Widget> actions;
   final double width, maxHeight;
-  final bool scrollable;
+  final bool scrollable, embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -28,104 +49,130 @@ class _VideoPanel extends StatelessWidget {
     final colors = theme.colorScheme;
     final short = MediaQuery.sizeOf(context).height < 380;
     const padding = EdgeInsets.symmetric(horizontal: 16, vertical: 12);
-    return Dialog(
-      insetPadding: EdgeInsets.symmetric(horizontal: 14, vertical: short ? 8 : 24),
-      backgroundColor: colors.surfaceContainerHigh,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: colors.outlineVariant),
-      ),
-      constraints: BoxConstraints(maxWidth: width, maxHeight: maxHeight),
-      child: SizedBox(
-        width: width,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(16, short ? 4 : 12, 10, short ? 4 : 12),
-              child: Row(
-                children: [
-                  if (onBack != null)
-                    IconButton(
-                      onPressed: onBack,
-                      tooltip: 'Back to player controls',
-                      icon: const Icon(Icons.arrow_back_rounded),
-                    )
-                  else if (icon != null)
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.primaryContainer,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(9),
-                        child: Icon(icon, size: 20, color: colors.onPrimaryContainer),
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(24),
+      side: BorderSide(color: colors.outlineVariant),
+    );
+    final constraints = BoxConstraints(maxWidth: width, maxHeight: maxHeight);
+    final body = SizedBox(
+      width: width,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              short ? 4 : 12,
+              10,
+              short ? 4 : 12,
+            ),
+            child: Row(
+              children: [
+                if (onBack != null)
+                  IconButton(
+                    onPressed: onBack,
+                    tooltip: 'Back to player controls',
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  )
+                else if (icon != null)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(9),
+                      child: Icon(
+                        icon,
+                        size: 20,
+                        color: colors.onPrimaryContainer,
                       ),
                     ),
-                  if (onBack != null || icon != null) const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Semantics(
-                          header: true,
-                          child: Text(
-                            title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                  ),
+                if (onBack != null || icon != null) const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        if (!short && detail != null)
-                          Text(
-                            detail!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colors.onSurfaceVariant,
-                            ),
+                      ),
+                      if (!short && detail != null)
+                        Text(
+                          detail!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.onSurfaceVariant,
                           ),
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
-                  IconButton(
-                    tooltip: 'Close panel',
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Flexible(
-              child: scrollable
-                  ? SingleChildScrollView(
-                      key: ValueKey(title),
-                      primary: false,
-                      padding: padding,
-                      child: content,
-                    )
-                  : Padding(padding: padding, child: content),
-            ),
-            if (actions.isNotEmpty) ...[
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: OverflowBar(
-                  alignment: MainAxisAlignment.end,
-                  spacing: 6,
-                  overflowSpacing: 4,
-                  children: actions,
                 ),
+                IconButton(
+                  tooltip: 'Close panel',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Flexible(
+            child: scrollable
+                ? SingleChildScrollView(
+                    key: ValueKey(title),
+                    primary: false,
+                    padding: padding,
+                    child: content,
+                  )
+                : Padding(padding: padding, child: content),
+          ),
+          if (actions.isNotEmpty) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: OverflowBar(
+                alignment: MainAxisAlignment.end,
+                spacing: 6,
+                overflowSpacing: 4,
+                children: actions,
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
+    );
+    if (embedded) {
+      return ConstrainedBox(
+        constraints: constraints,
+        child: Material(
+          color: colors.surfaceContainerHigh.withValues(alpha: .98),
+          shape: shape,
+          clipBehavior: Clip.antiAlias,
+          child: body,
+        ),
+      );
+    }
+    return Dialog(
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: short ? 8 : 24,
+      ),
+      backgroundColor: colors.surfaceContainerHigh,
+      clipBehavior: Clip.antiAlias,
+      shape: shape,
+      constraints: constraints,
+      child: body,
     );
   }
 }
@@ -162,7 +209,8 @@ class _VideoMenuRow extends StatelessWidget {
               : Text(detail!, maxLines: 2, overflow: TextOverflow.ellipsis),
           leading: Icon(icon, size: 21),
           selected: selected ?? false,
-          trailing: trailing ??
+          trailing:
+              trailing ??
               Icon(
                 switch (selected) {
                   true => Icons.check_circle_outline_rounded,
@@ -203,7 +251,13 @@ class _VideoSectionLabel extends StatelessWidget {
 }
 
 class _VideoOption<T> {
-  const _VideoOption(this.value, this.label, this.icon, {this.detail, this.selected});
+  const _VideoOption(
+    this.value,
+    this.label,
+    this.icon, {
+    this.detail,
+    this.selected,
+  });
 
   final T value;
   final String label;
