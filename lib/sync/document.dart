@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../listening.dart';
+import '../models.dart';
 import '../video_playback_data.dart';
 
 String newSyncKey() => List.generate(32, (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join();
@@ -25,6 +26,7 @@ class SyncDocument {
   static String key(List<String> parts) => jsonEncode(parts);
   static bool isVideoRecord(String key) =>
       key.startsWith('["videoRecent",') || key.startsWith('["videoWatched",');
+  static bool isWatchingRecord(String key) => key.startsWith('["videoStats",');
   static int compare(Map a, Map b) {
     final clock = (a['clock'] as int).compareTo(b['clock'] as int);
     return clock == 0 ? (a['device'] as String).compareTo(b['device'] as String) : clock;
@@ -54,10 +56,22 @@ class SyncDocument {
                 ? !TelegramVideoActivity.isRecent(value) : value != true))) {
           throw const FormatException('Invalid Telegram video record.');
         }
+      case 'videoStats':
+        if (parts.length != 2 || !VideoWatchingStats.isId(parts[1]) ||
+            !VideoWatchingStats.isCounter(value)) {
+          throw const FormatException('Invalid watching counter.');
+        }
       case 'channel':
         if (parts.length != 2 || int.tryParse(parts[1] as String) == null || (value != null && (value is! String || value.length > 1000))) throw const FormatException('Invalid channel.');
       case 'pref':
-        if (parts.length != 2 || !((parts[1] == 'librarySort' && const ['newest','oldest','title','artist','duration'].contains(value)) || (parts[1] == 'repeatMode' && const ['off','all','one'].contains(value)))) throw const FormatException('Invalid shared preference.');
+        final supported = switch (parts[1]) {
+          'librarySort' => LibrarySort.values.any((sort) => sort.name == value),
+          'repeatMode' => PlaybackRepeat.values.any((mode) => mode.name == value),
+          _ => false,
+        };
+        if (parts.length != 2 || !supported) {
+          throw const FormatException('Invalid shared preference.');
+        }
       case 'stats' || 'day':
         if (parts.length != 3 || (parts[1] != 'baseline' && !RegExp(r'^[a-f0-9]{32}$').hasMatch(parts[1] as String)) || value is! Map) throw const FormatException('Invalid listening component.');
         final fields = parts[0] == 'stats' ? const ['title','artist','source','milliseconds','plays','lastListened'] : const ['milliseconds','plays'];
@@ -143,6 +157,17 @@ class SyncDocument {
         _put(['videoWatched', id], watched ? true : null, videoSeed);
       }
     }
+    final watching = snapshot[VideoWatchingStats.key] as Map? ?? {};
+    for (final entry in watching.entries) {
+      final parts = ['videoStats', entry.key as String];
+      final value = entry.value as Map;
+      final current = (records[key(parts)] as Map?)?['value'] as Map? ?? {};
+      _put(parts, {
+        ...value,
+        for (final field in ['milliseconds', 'plays'])
+          field: max(value[field] as int, current[field] as int? ?? 0),
+      }, seed);
+    }
     for (final kind in ['tracks','days']) {
       final before = (old['listening'] as Map?)?[kind] as Map? ?? {};
       final after = (snapshot['listening'] as Map)[kind] as Map;
@@ -205,7 +230,7 @@ class SyncDocument {
       final old = records[entry.key] as Map?;
       final kind = (jsonDecode(entry.key) as List).first;
       var result = old == null || compare(next, old) > 0 ? next : Map<String, dynamic>.from(old);
-      if (old != null && (kind == 'stats' || kind == 'day')) {
+      if (old != null && (kind == 'stats' || kind == 'day' || kind == 'videoStats')) {
         result = {...result, 'value': {...result['value'] as Map,
           for (final field in ['milliseconds','plays']) field: max((old['value'] as Map)[field] as int, (next['value'] as Map)[field] as int)}};
       }
@@ -223,6 +248,7 @@ class SyncDocument {
     final trackMetadata = <String, Map>{};
     final opened = <MapEntry<String, Map>>[];
     final watched = <String>[];
+    final watching = <String, dynamic>{};
     for (final entry in records.entries) {
       final parts = (jsonDecode(entry.key) as List).cast<String>(), r = entry.value as Map;
       if (parts.first == 'playlist') {
@@ -242,6 +268,7 @@ class SyncDocument {
         case 'recent': recent.add((parts[1], value as int));
         case 'videoRecent': opened.add(MapEntry(parts[1], value as Map));
         case 'videoWatched': watched.add(parts[1]);
+        case 'videoStats': watching[parts[1]] = value;
         case 'pref': result[parts[1]] = value;
         case 'channel': channels.add({'id': int.parse(parts[1]), 'title': value});
         case 'entry':
@@ -288,6 +315,7 @@ class SyncDocument {
       'recent': Map.fromEntries(opened.take(TelegramVideoActivity.recentLimit)),
       'watched': watched.take(TelegramVideoActivity.watchedLimit).toList(),
     };
+    result[VideoWatchingStats.key] = watching;
     final ordered = <String, List<String>>{};
     for (final e in playlists.entries) {
       final items = e.value.entries.toList()..sort((a,b) => a.value.$1 == b.value.$1 ? a.key.compareTo(b.key) : a.value.$1.compareTo(b.value.$1));
