@@ -361,8 +361,12 @@ extension _DiscoveryPages on _PlayerShellState {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (!_keyboardOpen && !_browseSearchOpen) ...[
-          BrowseChannelsHeader(onSearch: _focusDiscovery),
-          const SizedBox(height: 8),
+          BrowseChannelsHeader(
+            mode: AppInterface.music,
+            channelCount: checking || channels.isEmpty ? null : channels.length,
+            onSearch: _focusDiscovery,
+          ),
+          const SizedBox(height: 12),
         ],
         if (_browseSearchOpen) ...[
           InlineSearchField(
