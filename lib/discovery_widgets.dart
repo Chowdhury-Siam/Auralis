@@ -34,6 +34,55 @@ import 'models.dart';
   return (channels: channels, checking: checking);
 }
 
+class BrowseChannelsHeader extends StatelessWidget {
+  const BrowseChannelsHeader({super.key, required this.onSearch});
+
+  final VoidCallback onSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: colors.primaryContainer,
+          ),
+          child: Icon(
+            Icons.tag_rounded,
+            size: 21,
+            color: colors.onPrimaryContainer,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            MediaQuery.textScalerOf(context).scale(20) > 30
+                ? 'Browse'
+                : 'Browse channels',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: -.35,
+            ),
+          ),
+        ),
+        IconButton.filledTonal(
+          tooltip: 'Search channels',
+          icon: const Icon(Icons.search_rounded, size: 20),
+          onPressed: onSearch,
+        ),
+      ],
+    );
+  }
+}
+
 class InlineSearchField extends StatelessWidget {
   const InlineSearchField({
     super.key,
