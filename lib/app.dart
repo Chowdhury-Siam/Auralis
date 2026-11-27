@@ -770,7 +770,7 @@ class _PlayerShellState extends State<PlayerShell>
           ? EdgeInsets.zero
           : EdgeInsets.fromLTRB(
               narrow ? 16 : 30,
-              short ? 12 : 26,
+              page == _Page.browse ? 6 : (short ? 12 : 26),
               narrow ? 16 : 26,
               0,
             ),
@@ -791,6 +791,7 @@ class _PlayerShellState extends State<PlayerShell>
             SizedBox(height: short ? 10 : 22),
           ],
           if (widget.startupWarning != null) _banner(widget.startupWarning!),
+          if (player.settingsSaveFailed) _saveNotice(),
           if (player.error ?? player.audio.error case final String error)
             _banner(error),
           Expanded(
@@ -1781,6 +1782,34 @@ class _PlayerShellState extends State<PlayerShell>
             );
     },
   );
+  Widget _saveNotice() => Semantics(
+    liveRegion: true,
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsetsDirectional.only(start: 12, end: 4),
+      decoration: BoxDecoration(
+        color: _colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline_rounded, size: 18, color: _colors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Changes haven’t been saved.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          TextButton(
+            onPressed: player.retrySavingChanges,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    ),
+  );
+
   Widget _banner(String text) => Container(
     margin: const EdgeInsets.only(bottom: 12),
     padding: const EdgeInsets.all(12),
