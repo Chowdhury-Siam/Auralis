@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:auralis/app.dart';
+import 'package:auralis/listening.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/data_backup.dart';
 import 'package:auralis/player.dart';
@@ -79,6 +80,13 @@ void main() {
               .map((track) => track.id)
               .toList();
       expect(order(), ['b', 'a', 'z', 'c']);
+      final stats = ListeningStats();
+      final at = DateTime.utc(2026, 11, 27);
+      stats.record(tracks[0], 600000, counts['z']!, at);
+      stats.record(tracks[1], 300000, counts['a']!, at);
+      stats.record(tracks[2], 120000, counts['b']!, at);
+      expect(stats.mostPlayedTracks.map((entry) => entry.key), order().take(3));
+      expect(stats.topTracks.first.key, 'z');
       counts['c'] = 20;
       expect(order(), ['c', 'b', 'a', 'z']);
       counts.clear();
