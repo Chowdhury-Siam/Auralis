@@ -63,6 +63,36 @@ class ListeningStats {
         return result == 0 ? a.key.compareTo(b.key) : result;
       });
 
+  List<MapEntry<String, ListeningTrack>> get mostPlayedTracks =>
+      tracks.entries.toList()..sort((a, b) {
+        final byPlays = b.value.plays.compareTo(a.value.plays);
+        return byPlays != 0
+            ? byPlays
+            : compareTrackTitles(a.value.title, a.key, b.value.title, b.key);
+      });
+
+  List<MapEntry<String, int>> get mostPlayedArtists {
+    final artists = <String, ({String name, int plays})>{};
+    for (final track in tracks.values) {
+      final artist = track.artist.trim();
+      final name = artist.isEmpty ? 'Unknown artist' : artist;
+      final key = name.toLowerCase();
+      final previous = artists[key];
+      artists[key] = (
+        name: previous?.name ?? name,
+        plays: (previous?.plays ?? 0) + track.plays,
+      );
+    }
+    final keys = artists.keys.toList()
+      ..sort((a, b) {
+        final byPlays = artists[b]!.plays.compareTo(artists[a]!.plays);
+        return byPlays != 0 ? byPlays : a.compareTo(b);
+      });
+    return [
+      for (final key in keys) MapEntry(artists[key]!.name, artists[key]!.plays),
+    ];
+  }
+
   /// The Home card needs one result, not an allocation and full history sort
   /// on every position update. Preserve topTracks' ID tie-breaking exactly.
   MapEntry<String, ListeningTrack>? get topTrack {
