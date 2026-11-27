@@ -603,6 +603,27 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('settings-media')), findsNothing);
       expect(find.byKey(const ValueKey('settings-search')), findsNothing);
+      final source = VideoSource.telegram(
+        Track.fromVideoMessage(post(30, 'Feature.mp4'), channel.title)!,
+      );
+      player.settings.videoPlayback
+        ..recordWatching(source, const Duration(seconds: 75), newPlay: true)
+        ..setWatched(source, true);
+      final dataSync = find.text('Data & sync');
+      await tester.ensureVisible(dataSync);
+      await tester.tap(dataSync);
+      await tester.pumpAndSettle();
+      expect(find.text('Listening stats'), findsNothing);
+      expect(find.text('Backup & Restore'), findsOneWidget);
+      await tester.tap(find.text('Watching stats'));
+      await tester.pumpAndSettle();
+      expect(find.text('1m 15s'), findsOneWidget);
+      expect(find.text('Video plays on this device'), findsOneWidget);
+      expect(find.text('Videos marked watched'), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('settings-video')));
       await tester.pumpAndSettle();
       final decoder = find.widgetWithText(ListTile, 'Video decoder');
