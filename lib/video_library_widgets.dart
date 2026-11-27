@@ -107,8 +107,8 @@ class _EmptyVideoHistory extends StatelessWidget {
   }
 }
 
-class _VideoSourcePreview extends StatelessWidget {
-  const _VideoSourcePreview(this.source);
+class VideoSourcePreview extends StatelessWidget {
+  const VideoSourcePreview(this.source, {super.key});
   final VideoSource? source;
 
   @override
@@ -258,7 +258,7 @@ class _VideoHistoryRow extends StatelessWidget {
             url: title!.cover,
             poster: true,
           )
-        : artwork ?? _VideoSourcePreview(source);
+        : artwork ?? VideoSourcePreview(source);
     return Material(
       color: Colors.transparent,
       child: InkWell(
