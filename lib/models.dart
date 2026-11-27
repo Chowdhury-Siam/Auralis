@@ -252,9 +252,13 @@ enum LibrarySort {
       ),
     };
     if (result != 0) return result;
-    final byTitle = a.title.toLowerCase().compareTo(b.title.toLowerCase());
-    return byTitle != 0 ? byTitle : a.id.compareTo(b.id);
+    return compareTrackTitles(a.title, a.id, b.title, b.id);
   }
+}
+
+int compareTrackTitles(String titleA, String idA, String titleB, String idB) {
+  final byTitle = titleA.toLowerCase().compareTo(titleB.toLowerCase());
+  return byTitle != 0 ? byTitle : idA.compareTo(idB);
 }
 
 final _episodeNumber = RegExp(r's0*(\d+)e0*(\d+)');
