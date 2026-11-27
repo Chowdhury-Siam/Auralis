@@ -454,7 +454,7 @@ For changes, describe the affected flow and include relevant verification. Prese
 
 Original Auralis application code and procedural artwork are licensed under **AGPL-3.0-or-later**, copyright 2026 Auralis contributors. See [LICENSE](LICENSE).
 
-Auralis implements its own Flutter player using [mpvRx](https://github.com/Riteshp2001/mpvRx) as a design and workflow reference. The bundled Anime4K shaders retain their original notices. [PixelPlayer](https://github.com/PixelPlayerHQ/PixelPlayer) is a Music interface reference.
+Auralis implements its own Flutter player using [mpvRx](https://github.com/Riteshp2001/mpvRx) as a design and workflow reference. [PixelPlayer](https://github.com/PixelPlayerHQ/PixelPlayer) is a Music interface reference.
 
 Third-party libraries retain their own licenses, including Flutter's generated host code and the vendored playback runtime. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the [upstream audit](docs/UPSTREAM_AUDIT.md) for notices, corresponding-source obligations, and outstanding native distribution review.
 
