@@ -298,7 +298,8 @@ void main() {
     };
     await library.select(const MusicChat(-1, 'One'), true);
     final requests = td.requests.length;
-    await Directory('${settings.file.path}.tmp').create();
+    await settings.file.delete();
+    await Directory(settings.file.path).create();
     await library.select(const MusicChat(-1, 'One'), false);
 
     expect(settings.selectedChannels.single.id, -1);
