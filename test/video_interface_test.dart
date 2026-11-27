@@ -82,7 +82,9 @@ void main() {
             request['@type'] == 'searchChatMessages'
             ? {
                 'messages':
-                    request['filter']?['@type'] == 'searchMessagesFilterVideo'
+                    request['chat_id'] == channel.id &&
+                        request['filter']?['@type'] ==
+                            'searchMessagesFilterVideo'
                     ? [
                         post(30, 'Full movie.mp4'),
                         for (var index = 1; index <= 18; index++)
@@ -174,8 +176,12 @@ void main() {
         expect(find.byTooltip('Settings'), findsNothing);
         expect(find.byTooltip('Choose video channel'), findsNothing);
         expect(find.text(channel.title), findsOneWidget);
-        expect(find.text('Music only'), findsOneWidget);
+        expect(find.text('Music only'), findsNothing);
         expect(settings.videoChannelId, isNull);
+        int mediaSearchCount() => td.requests
+            .where((request) => request['@type'] == 'searchChatMessages')
+            .length;
+        final initialMediaChecks = mediaSearchCount();
 
         await tester.tap(searchButton);
         await tester.pumpAndSettle();
@@ -187,14 +193,11 @@ void main() {
         await tester.testTextInput.receiveAction(TextInputAction.search);
         await tester.pumpAndSettle();
         expect(find.text('No matching channels'), findsOneWidget);
-        expect(
-          td.requests.where((r) => r['@type'] == 'searchChatMessages'),
-          isEmpty,
-        );
+        expect(mediaSearchCount(), initialMediaChecks);
         await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
         await tester.pumpAndSettle();
         expect(searchField, findsNothing);
-        expect(find.text('Music only'), findsOneWidget);
+        expect(find.text('Music only'), findsNothing);
         await tester.tap(searchButton);
         await tester.pumpAndSettle();
         expect(tester.widget<TextField>(searchField).controller!.text, isEmpty);
@@ -248,6 +251,7 @@ void main() {
         expect(
           td.requests
               .where((r) => r['@type'] == 'searchChatMessages')
+              .skip(initialMediaChecks)
               .map((r) => r['query']),
           ['', ''],
         );
@@ -622,7 +626,13 @@ void main() {
     const other = MusicChat(-100456, 'Second channel');
     final td = FakeTd()
       ..onRequest = (request) async => request['@type'] == 'searchChatMessages'
-          ? {'messages': [], 'next_from_message_id': 0}
+          ? {
+              'messages': [
+                if (request['filter']?['@type'] == 'searchMessagesFilterVideo')
+                  {...post(30, 'Episode.mp4'), 'chat_id': request['chat_id']},
+              ],
+              'next_from_message_id': 0,
+            }
           : null;
     final telegram = TelegramService(
       Directory('unused'),
