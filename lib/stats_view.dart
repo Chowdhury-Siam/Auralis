@@ -39,7 +39,7 @@ class StatsDataDialog extends StatefulWidget {
 class _StatsDataDialogState extends State<StatsDataDialog> {
   late ListeningStats _stats, _sourceStats;
   bool _busy = false, _error = false, _confirming = false;
-  bool _showArtists = false, _chartPlays = false;
+  bool _showArtists = false, _chartPlays = false, _rankByTime = false;
   _StatsRange _range = _StatsRange.all;
   String? _status;
   PlayerController get player => widget.player;
@@ -411,65 +411,21 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     }
   }, operation: 'Restore');
 
-  Widget _metricCard(
-    String label,
-    String value,
-    IconData icon, {
-    bool second = false,
-  }) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final foreground = colors.onSurface;
-    final accent = second ? colors.tertiary : colors.primary;
-    return _StatsPanel(
-      color: colors.surfaceContainerLow,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: .12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: accent, size: 22),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: colors.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: theme.textTheme.headlineMedium?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _overview(int milliseconds, int plays) => LayoutBuilder(
     key: const ValueKey('stats-summary'),
     builder: (context, box) {
-      final time = _metricCard(
-        'Listened',
-        listeningTime(milliseconds),
-        Icons.headphones_rounded,
+      final time = StatsMetricCard(
+        label: 'Listened',
+        value: listeningTime(milliseconds),
+        icon: Icons.headphones_rounded,
       );
       final count = Tooltip(
         message: 'A play counts after 30 seconds, or half of a shorter track.',
-        child: _metricCard(
-          'Plays',
-          '$plays',
-          Icons.play_circle_outline_rounded,
-          second: true,
+        child: StatsMetricCard(
+          label: 'Plays',
+          value: '$plays',
+          icon: Icons.play_circle_outline_rounded,
+          secondary: true,
         ),
       );
       return box.maxWidth < 280 ||
@@ -517,7 +473,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     for (final point in points) {
       if (amount(point) > (peak == null ? 0 : amount(peak))) peak = point;
     }
-    return _StatsPanel(
+    return StatsPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -602,7 +558,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
       'Saturday',
       'Sunday',
     ][byWeekday.indexOf(peak)];
-    return _StatsPanel(
+    return StatsPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -647,31 +603,36 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     );
   }
 
-  Widget _ranking(
-    List<MapEntry<String, ListeningTrack>> tracks,
-    List<MapEntry<String, int>> artists,
-  ) {
+  Widget _ranking(List<MapEntry<String, ListeningTrack>> tracksByTime) {
     final colors = Theme.of(context).colorScheme;
+    String plays(int count) => '$count ${count == 1 ? 'play' : 'plays'}';
     final rows = _showArtists
         ? [
-            for (final artist in artists.take(10))
+            for (final artist
+                in (_rankByTime ? _stats.topArtists : _stats.mostPlayedArtists)
+                    .take(10))
               (artist.key, '', artist.value),
           ]
         : [
-            for (final track in tracks.take(10))
+            for (final track
+                in (_rankByTime ? tracksByTime : _stats.mostPlayedTracks).take(
+                  10,
+                ))
               (
                 track.value.title,
-                '${track.value.artist} · ${track.value.plays} plays',
-                track.value.milliseconds,
+                '${track.value.artist} · ${_rankByTime ? plays(track.value.plays) : listeningTime(track.value.milliseconds)}',
+                _rankByTime ? track.value.milliseconds : track.value.plays,
               ),
           ];
-    return _StatsPanel(
+    return StatsPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _section(
-            'Your most played',
-            subtitle: 'All-time ranking by listening time',
+            _rankByTime ? 'Your most listened to' : 'Your most played',
+            subtitle: _rankByTime
+                ? 'All-time ranking by listening time'
+                : 'All-time ranking by play count',
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -690,11 +651,26 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
               ),
             ],
           ),
+          Wrap(
+            spacing: 6,
+            children: [
+              ChoiceChip(
+                label: const Text('Rank by plays'),
+                selected: !_rankByTime,
+                onSelected: (_) => setState(() => _rankByTime = false),
+              ),
+              ChoiceChip(
+                label: const Text('Rank by time'),
+                selected: _rankByTime,
+                onSelected: (_) => setState(() => _rankByTime = true),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
-          for (final (index, (name, detail, time)) in rows.indexed)
+          for (final (index, (name, detail, value)) in rows.indexed)
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),
-              child: _StatsPanel(
+              child: StatsPanel(
                 radius: 16,
                 color: index == 0
                     ? colors.primaryContainer.withValues(alpha: .4)
@@ -747,7 +723,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
                           child: Align(
                             alignment: Alignment.centerRight,
                             child: Text(
-                              listeningTime(time),
+                              _rankByTime ? listeningTime(value) : plays(value),
                               textAlign: TextAlign.end,
                             ),
                           ),
@@ -758,7 +734,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: LinearProgressIndicator(
-                        value: time / math.max(1, rows.first.$3),
+                        value: value / math.max(1, rows.first.$3),
                         minHeight: 3,
                         backgroundColor: colors.surfaceContainerHighest,
                       ),
@@ -781,7 +757,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         .fold(0, (sum, track) => sum + track.value.milliseconds);
     final fraction = total == 0 ? 0.0 : time / total;
     final colors = Theme.of(context).colorScheme;
-    return _StatsPanel(
+    return StatsPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -841,7 +817,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
         ? _stats.plays
         : days.values.fold(0, (sum, day) => sum + day.plays);
     final ranking = tracks.isEmpty
-        ? _StatsPanel(
+        ? StatsPanel(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Column(
@@ -861,7 +837,7 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
               ),
             ),
           )
-        : _ranking(tracks, _stats.topArtists);
+        : _ranking(tracks);
     final timeline = _timeline(points);
     final habits = _habits(days);
     final concentration = tracks.isEmpty
@@ -1161,20 +1137,11 @@ class _StatsDataDialogState extends State<StatsDataDialog> {
     if (widget.fullscreen) {
       return PopScope<Object?>(
         canPop: !_busy,
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text(title),
-            leading: close,
-            actions: [refresh],
-          ),
-          body: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1120),
-                child: SizedBox.expand(child: content),
-              ),
-            ),
-          ),
+        child: StatsPage(
+          title: title,
+          close: close,
+          actions: [refresh],
+          child: content,
         ),
       );
     }
@@ -1410,8 +1377,96 @@ class ListeningBars extends StatelessWidget {
   }
 }
 
-class _StatsPanel extends StatelessWidget {
-  const _StatsPanel({
+class StatsPage extends StatelessWidget {
+  const StatsPage({
+    super.key,
+    required this.title,
+    required this.close,
+    required this.child,
+    this.actions = const [],
+  });
+
+  final String title;
+  final Widget close, child;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(title), leading: close, actions: actions),
+    body: SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: SizedBox.expand(child: child),
+        ),
+      ),
+    ),
+  );
+}
+
+class StatsMetricCard extends StatelessWidget {
+  const StatsMetricCard({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.secondary = false,
+    this.highlighted = false,
+  });
+
+  final String label, value;
+  final IconData icon;
+  final bool secondary, highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final accent = secondary ? colors.tertiary : colors.primary;
+    return StatsPanel(
+      color: highlighted
+          ? colors.primaryContainer.withValues(alpha: .4)
+          : colors.surfaceContainerLow,
+      radius: highlighted ? 26 : 24,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: accent, size: 22),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style:
+                (highlighted
+                        ? theme.textTheme.headlineLarge
+                        : theme.textTheme.headlineMedium)
+                    ?.copyWith(
+                      color: colors.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StatsPanel extends StatelessWidget {
+  const StatsPanel({
+    super.key,
     required this.child,
     this.color,
     this.radius = 24,
