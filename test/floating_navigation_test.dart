@@ -132,9 +132,7 @@ void main() {
       await tester.tap(find.byTooltip('Browse'));
       await tester.pumpAndSettle();
       expect(find.text('Browse channels'), findsOneWidget);
-      await tester.tap(find.byTooltip('Show list'));
-      await tester.pumpAndSettle();
-      expect(find.byTooltip('Show grid'), findsOneWidget);
+      expect(find.byType(GridView), findsOneWidget);
       await tester.tap(find.byTooltip('Search channels'));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -144,6 +142,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('No matching channels'), findsOneWidget);
       await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Search Library'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Song 29');
       await tester.pumpAndSettle();
@@ -167,7 +167,7 @@ void main() {
       (i) => Track(
         id: '1:$i',
         title: 'Track $i',
-        artist: i.isEven ? 'Lunar' : 'Solar',
+        artist: i == 5 ? 'Zephyr' : (i.isEven ? 'Lunar' : 'Solar'),
         source: 'Music',
       ),
     );
@@ -213,18 +213,49 @@ void main() {
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
 
+    settings.listening.record(tracks[1], 30000, 2, DateTime.now());
+    settings.listening.record(tracks[3], 30000, 1, DateTime.now());
     await tester.tap(find.byTooltip('Library'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('library-collection-menu')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Artists'));
     await tester.pumpAndSettle();
+    final grid = find.byKey(const PageStorageKey('music-artists-grid'));
+    final lunar = find.widgetWithText(DiscoveryTile, 'Lunar');
+    final solar = find.widgetWithText(DiscoveryTile, 'Solar');
+    expect(tester.widget(grid), isA<GridView>());
+    expect(
+      find.descendant(of: lunar, matching: find.text('3 songs')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: solar, matching: find.text('2 songs')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.widgetWithText(DiscoveryTile, 'Zephyr'),
+        matching: find.text('1 song'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Show list'), findsNothing);
+    expect(find.byTooltip('Show grid'), findsNothing);
+    expect(tester.getTopLeft(lunar).dx, lessThan(tester.getTopLeft(solar).dx));
+    await tester.tap(find.byTooltip('Sort Library'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Most played'));
+    await tester.pumpAndSettle();
+    expect(settings.librarySort, LibrarySort.mostPlayed);
+    expect(tester.getTopLeft(solar).dx, lessThan(tester.getTopLeft(lunar).dx));
+    await tester.tap(find.byTooltip('Search Library'));
+    await tester.pumpAndSettle();
     expect(find.text('Search your Artists'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'sol');
     await tester.pumpAndSettle();
-    final lunar = find.widgetWithText(DiscoveryTile, 'Lunar');
     expect(lunar, findsNothing);
-    await tester.tap(find.widgetWithText(DiscoveryTile, 'Solar'));
+    await tester.tap(solar);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('track-title-1:1')), findsOneWidget);
     expect(find.byKey(const ValueKey('track-title-1:0')), findsNothing);
