@@ -367,7 +367,7 @@ class VideoSettingsOptions extends StatelessWidget {
             icon: Icons.touch_app_outlined,
             description:
                 'Toggle each input independently. The master Tap and swipe switch '
-                'still controls touch gestures. Buttons, Back/unlock and the locked skip button stay available.',
+                'controls touch gestures. Buttons, Back/unlock and the locked skip button stay available.',
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
