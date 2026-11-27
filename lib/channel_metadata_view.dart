@@ -13,11 +13,13 @@ class ChannelMetadataHeader extends StatefulWidget {
     required this.channelName,
     required this.repository,
     this.onPlay,
+    this.onSelectionChanged,
   });
   final int channelId;
   final String channelName;
   final ChannelMetadataRepository repository;
   final VoidCallback? onPlay;
+  final VoidCallback? onSelectionChanged;
   @override
   State<ChannelMetadataHeader> createState() => _ChannelMetadataHeaderState();
 }
@@ -66,6 +68,7 @@ class _ChannelMetadataHeaderState extends State<ChannelMetadataHeader> {
       _expanded = false;
       _match = repository.identifySaved(id);
     });
+    widget.onSelectionChanged?.call();
   }
 
   Widget _art(String? url, {bool poster = false}) =>
