@@ -25,9 +25,6 @@ void main() {
       final inMusic = mode == AppInterface.music;
       final included = inMusic ? audio : video;
       final excluded = inMusic ? video : audio;
-      final modeFilter = inMusic
-          ? 'searchMessagesFilterAudio'
-          : 'searchMessagesFilterVideo';
       var emptyHasMedia = false;
       final td = FakeTd()
         ..onRequest = (request) async {
@@ -46,22 +43,22 @@ void main() {
                 'type': {'@type': 'chatTypeSupergroup', 'is_channel': true},
               };
             case 'getChatMessageCount':
-              return {
-                'count':
-                    (id == audio.id && filter == 'searchMessagesFilterAudio') ||
-                        (id == video.id &&
-                            filter == 'searchMessagesFilterVideo') ||
-                        (id == empty.id &&
-                            emptyHasMedia &&
-                            filter == modeFilter)
-                    ? 1
-                    : 0,
-              };
+              return {'count': id == files.id ? -1 : 9};
             case 'searchChatMessages':
               final first = request['from_message_id'] == 0;
               final documents = filter == 'searchMessagesFilterDocument';
               return {
                 'messages': [
+                  if (filter == 'searchMessagesFilterAudio' &&
+                      (id == audio.id ||
+                          (inMusic && id == empty.id && emptyHasMedia)))
+                    message(id as int, 30),
+                  if (filter == 'searchMessagesFilterVideo' &&
+                      (id == video.id ||
+                          (!inMusic && id == empty.id && emptyHasMedia)))
+                    {...post(30, 'Episode.mp4'), 'chat_id': id},
+                  if (id == empty.id && documents)
+                    message(empty.id, 21, name: 'notes.pdf', document: true),
                   if (id == files.id && documents)
                     if (first)
                       message(files.id, 20, name: 'notes.pdf', document: true)
@@ -111,6 +108,9 @@ void main() {
       expect(find.text(files.title), findsOneWidget);
       expect(find.text(excluded.title), findsNothing);
       expect(find.text(empty.title), findsNothing);
+      expect(find.byType(GridView), findsOneWidget);
+      expect(find.byTooltip('Show list'), findsNothing);
+      expect(find.byTooltip('Show grid'), findsNothing);
 
       await tester.tap(find.byTooltip('Search channels'));
       await tester.pumpAndSettle();
@@ -124,6 +124,10 @@ void main() {
       await tester.drag(find.byType(GridView), const Offset(0, 350));
       await tester.pumpAndSettle();
       expect(find.text(empty.title), findsOneWidget);
+      emptyHasMedia = false;
+      await tester.drag(find.byType(GridView), const Offset(0, 350));
+      await tester.pumpAndSettle();
+      expect(find.text(empty.title), findsNothing);
 
       if (inMusic) {
         Future<void> hold(MusicChat chat) async {
@@ -140,8 +144,6 @@ void main() {
         await tester.tap(find.text('Delete'));
         await tester.pumpAndSettle();
         expect(find.text(included.title), findsNothing);
-        await tester.tap(find.byTooltip('Show list'));
-        await tester.pumpAndSettle();
         await hold(files);
         await tester.tap(find.text('Delete'));
         await tester.pumpAndSettle();
