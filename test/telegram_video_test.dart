@@ -40,6 +40,11 @@ void main() {
   test('Telegram videos with alternate files use the original file', () async {
     final message = post(12, 'Trailer.mp4');
     final content = message['content'] as Map<String, dynamic>;
+    final video = content['video'] as Json;
+    video['video'] = <String, dynamic>{
+      ...video['video'] as Json,
+      'remote': {'unique_id': 'stable-trailer-id'},
+    };
     content['alternative_videos'] = [
       {
         'width': 640,
@@ -50,6 +55,7 @@ void main() {
     ];
     final track = Track.fromVideoMessage(message, channel.title)!;
     expect(track.fileId, 12);
+    expect(track.remoteFileUniqueId, 'stable-trailer-id');
     expect(track.size, 64);
     expect(track.videoWidth, 720);
     expect(track.videoHeight, 1280);
