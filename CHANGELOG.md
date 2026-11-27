@@ -1,5 +1,24 @@
 # Auralis changes
 
+## 0.1.272
+
+- Open Watching stats from Video mode to see watch time, plays and videos marked watched.
+
+## 0.1.271
+
+- Keep Music Library collection names fully visible on narrow screens.
+- Show the number of songs on each artist card.
+- Show channels in Browse only after finding audio or video for the active mode.
+
+## 0.1.270
+
+- Keep Artists in a grid and use Sort Library to order the artist cards and their songs.
+
+## 0.1.269
+
+- Use the channel card grid as the only layout in Music Browse.
+- Open Music Library search from a magnifying-glass button in the toolbar.
+
 ## 0.1.268
 
 - Show channels with audio in Music Browse and channels with video in Video Browse.
