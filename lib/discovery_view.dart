@@ -365,27 +365,18 @@ extension _DiscoveryPages on _PlayerShellState {
             MediaQuery.textScalerOf(context).scale(20) > 30
                 ? 'Browse'
                 : 'Browse channels',
-            action: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (channels.isNotEmpty)
-                  discoveryLayoutButton(
-                    list: _browseAsList,
-                    onPressed: _toggleBrowseLayout,
-                  ),
-                if (!_browseSearchOpen)
-                  IconButton(
+            action: _browseSearchOpen
+                ? null
+                : IconButton(
                     tooltip: 'Search channels',
                     icon: const Icon(Icons.search_rounded, size: 20),
                     onPressed: _focusDiscovery,
                   ),
-              ],
-            ),
           ),
           const SizedBox(height: 8),
         ],
         if (_browseSearchOpen) ...[
-          BrowseSearchField(
+          InlineSearchField(
             key: const ValueKey('music-browse-search'),
             controller: search,
             focusNode: _discoveryFocus,
@@ -412,9 +403,8 @@ extension _DiscoveryPages on _PlayerShellState {
                     padding: EdgeInsets.only(bottom: _dockPadding),
                     children: [_musicBrowseEmpty(query, checking: checking)],
                   )
-                : _discoveryTiles(
-                    page: 'channels',
-                    list: _browseAsList,
+                : _discoveryGrid(
+                    key: const PageStorageKey('music-browse-grid'),
                     count: channels.length,
                     itemBuilder: (_, index) =>
                         _musicChannelTile(channels[index], index),
@@ -425,32 +415,18 @@ extension _DiscoveryPages on _PlayerShellState {
     );
   }
 
-  Widget _discoveryTiles({
-    required String page,
-    required bool list,
+  Widget _discoveryGrid({
+    required Key key,
     required int count,
     required IndexedWidgetBuilder itemBuilder,
-  }) {
-    final key = PageStorageKey((page, list));
-    final padding = EdgeInsets.only(bottom: _dockPadding);
-    return list
-        ? ListView.separated(
-            key: key,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: padding,
-            itemCount: count,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: itemBuilder,
-          )
-        : GridView.builder(
-            key: key,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: padding,
-            gridDelegate: discoveryGridDelegate(context),
-            itemCount: count,
-            itemBuilder: itemBuilder,
-          );
-  }
+  }) => GridView.builder(
+    key: key,
+    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+    padding: EdgeInsets.only(bottom: _dockPadding),
+    gridDelegate: discoveryGridDelegate(context),
+    itemCount: count,
+    itemBuilder: itemBuilder,
+  );
 
   ({List<MusicChat> channels, bool checking}) _matchingMusicChannels(
     String query,
@@ -513,22 +489,7 @@ extension _DiscoveryPages on _PlayerShellState {
         subtitle: subtitle,
         icon: Icons.campaign_rounded,
         index: index,
-        list: _browseAsList,
         selected: selected,
-        leading: _browseAsList
-            ? SizedBox.square(
-                dimension: 40,
-                child: ClipOval(
-                  child: Artwork(
-                    seed: channel.title,
-                    small: true,
-                    telegram: telegram,
-                    fileId: channel.photoFileId,
-                    preview: channel.photoPreview,
-                  ),
-                ),
-              )
-            : null,
         onTap: library.saving
             ? null
             : () => unawaited(library.select(channel, !selected)),
@@ -557,35 +518,67 @@ extension _DiscoveryPages on _PlayerShellState {
 
   Widget _musicArtists(List<Track> tracks) {
     final query = search.text.trim().toLowerCase();
-    final artists = <String, String>{};
+    final sort = player.settings.librarySort;
+    final history = player.settings.listening.tracks;
+    final artists = <String, ({String name, int? rank, int songCount})>{};
     for (final track in tracks) {
       final name = _artistName(track);
       final key = name.toLowerCase();
-      if (key.contains(query)) {
-        artists.putIfAbsent(key, () => name);
-      }
+      if (!key.contains(query)) continue;
+      final previous = artists[key];
+      final previousRank = previous?.rank;
+      final rank = switch (sort) {
+        LibrarySort.newest =>
+          track.date == 0
+              ? previousRank
+              : math.min(previousRank ?? -track.date, -track.date),
+        LibrarySort.oldest =>
+          track.date == 0
+              ? previousRank
+              : math.min(previousRank ?? track.date, track.date),
+        LibrarySort.duration =>
+          track.duration == Duration.zero
+              ? previousRank
+              : (previousRank ?? 0) + track.duration.inMilliseconds,
+        LibrarySort.mostPlayed =>
+          (previousRank ?? 0) - (history[track.id]?.plays ?? 0),
+        LibrarySort.title || LibrarySort.artist => 0,
+      };
+      artists[key] = (
+        name: previous?.name ?? name,
+        rank: rank,
+        songCount: (previous?.songCount ?? 0) + 1,
+      );
     }
-    final keys = artists.keys.toList()..sort();
-    if (keys.isEmpty) {
+    if (artists.isEmpty) {
       return _empty(
         Icons.person_search_rounded,
         'No matching artists',
         'Try another artist name.',
       );
     }
-    return _discoveryTiles(
-      page: 'artists',
-      list: _artistsAsList,
+    final keys = artists.keys.toList()
+      ..sort((a, b) {
+        final order = switch ((artists[a]!.rank, artists[b]!.rank)) {
+          (final int left, final int right) => left.compareTo(right),
+          (null, int()) => 1,
+          (int(), null) => -1,
+          (null, null) => 0,
+        };
+        return order == 0 ? a.compareTo(b) : order;
+      });
+    return _discoveryGrid(
+      key: const PageStorageKey('music-artists-grid'),
       count: keys.length,
       itemBuilder: (_, index) {
-        final artist = artists[keys[index]]!;
+        final (:name, :songCount, rank: _) = artists[keys[index]]!;
         return DiscoveryTile(
           key: ValueKey(keys[index]),
-          title: artist,
+          title: name,
+          subtitle: '$songCount ${songCount == 1 ? 'song' : 'songs'}',
           icon: Icons.person_rounded,
           index: index,
-          list: _artistsAsList,
-          onTap: () => _selectArtist(artist),
+          onTap: () => _selectArtist(name),
         );
       },
     );
