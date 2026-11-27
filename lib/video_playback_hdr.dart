@@ -60,33 +60,27 @@ extension _VideoHdrPipeline on _VideoPlaybackState {
       _player != null &&
       await _native.getProperty('current-vo') == 'gpu-next';
 
-  Future<void> _applyUpscaling() {
-    final operation = _shaderUpdates.then((_) => _applyVideoShaders());
+  Future<void> _updateHdrProcessing() async {
+    final operation = _shaderUpdates.then((_) => _applyHdrProcessing());
     _shaderUpdates = operation.catchError((Object _) {});
-    return operation;
+    try {
+      await operation;
+    } catch (_) {
+      if (_canPlay) _notice('Could not apply HDR processing.');
+    }
   }
 
-  Future<void> _applyVideoShaders() async {
+  Future<void> _applyHdrProcessing() async {
     if (!_canPlay || _player == null) return;
     final desired = _data.hdrProfile;
     final profile = desired != VideoHdrProfile.off && await _hasHdrRenderer()
         ? desired
         : VideoHdrProfile.off;
     if (!_canPlay) return;
-    final video = _player!.state;
-    final highResolution =
-        (video.width ?? 0) >= 3840 || (video.height ?? 0) >= 2160;
-    final quality = _thermalLimit ? _ShaderQuality.fast : _quality;
-    final paths = [
-      if (!highResolution)
-        for (final shader in _upscale.shaders(quality.suffix))
-          'anime4k/Anime4K_$shader.glsl',
-      for (final shader in _hdrFiles(profile)) 'hdr-toys/$shader',
-    ];
     final files = <String>[];
-    for (final path in paths) {
+    for (final shader in _hdrFiles(profile)) {
       if (!_canPlay) return;
-      files.add(await _cacheVideoShader(path));
+      files.add(await _cacheVideoShader('hdr-toys/$shader'));
     }
     if (!_canPlay) return;
 
@@ -144,7 +138,7 @@ extension _VideoHdrPipeline on _VideoPlaybackState {
     if (choice == null || !_canPlay) return;
     _data.hdrProfile = choice;
     _saveSettings();
-    await _updateUpscaling();
+    await _updateHdrProcessing();
     if (!available &&
         choice != VideoHdrProfile.off &&
         _activeHdr == VideoHdrProfile.off) {
