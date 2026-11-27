@@ -93,6 +93,32 @@ class VideoHistoryEntry {
   final DateTime playedAt;
 }
 
+class VideoWatchingStats {
+  static const key = 'videoWatching';
+  static const sources = ['telegram', 'local'];
+  static const maxCounter = 1 << 42;
+  static final _id = RegExp(r'^[a-f0-9]{32}$');
+
+  static bool isId(Object? value) => value is String && _id.hasMatch(value);
+
+  static bool isCounter(Object? value) {
+    bool valid(Object? n) => n is int && n >= 0 && n <= maxCounter;
+    return value is Map &&
+        value.length == 3 &&
+        sources.contains(value['source']) &&
+        valid(value['milliseconds']) &&
+        valid(value['plays']);
+  }
+
+  static String newId() {
+    final random = math.Random.secure();
+    return List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+  }
+}
+
 class TelegramVideoActivity {
   static const key = 'videoActivity';
   static const recentLimit = 300;
@@ -425,9 +451,8 @@ class VideoPlaybackData {
   final history = <String, VideoHistoryEntry>{};
   final _watched = <String>{};
   final _watchedFiles = <String>{};
-  static const _emptyWatching = (milliseconds: 0, plays: 0);
-  var _telegramWatching = _emptyWatching;
-  var _localWatching = _emptyWatching;
+  final _watchingOrigins = <String, String>{};
+  final _watching = <String, Map<String, dynamic>>{};
   static final _localVideoId = RegExp(r'^file:[a-f0-9]{64}$');
   final channels = <String, VideoChannelSettings>{};
   final subtitleStyle = <String, String>{};
@@ -468,6 +493,8 @@ class VideoPlaybackData {
   VideoGestureOptions gestureOptions = VideoGestureOptions();
   bool autoAdvance = true, background = false, autoPip = false;
   bool volumeBoost = false, autoplay = true;
+  bool audioPitchCorrection = true;
+  double defaultVideoSpeed = 1;
   bool autoSkip = false;
   bool gpuNext = false;
   bool matchRefreshRate = false;
@@ -505,27 +532,68 @@ class VideoPlaybackData {
     if (sameKind.length > _limit) history.remove(sameKind.first.source.id);
   }
 
-  Duration get watchTime => Duration(
-    milliseconds: _telegramWatching.milliseconds + _localWatching.milliseconds,
-  );
-  int get videoPlays => _telegramWatching.plays + _localWatching.plays;
+  int _watchingTotal(String field, {String? source}) => _watching.values
+      .where((value) => source == null || value['source'] == source)
+      .fold<int>(
+        0,
+        (total, value) => math.min(1 << 52, total + (value[field] as int)),
+      );
+  Duration get watchTime =>
+      Duration(milliseconds: _watchingTotal('milliseconds'));
+  int get videoPlays => _watchingTotal('plays');
   int get watchedCount => _watched.length + _watchedFiles.length;
+
+  ({int milliseconds, int plays}) watchingTotals({required bool telegram}) {
+    final source = telegram ? 'telegram' : 'local';
+    return (
+      milliseconds: _watchingTotal('milliseconds', source: source),
+      plays: _watchingTotal('plays', source: source),
+    );
+  }
 
   void recordWatching(
     VideoSource source,
     Duration time, {
     required bool newPlay,
   }) {
-    final telegram = source.telegram != null;
-    final previous = telegram ? _telegramWatching : _localWatching;
-    final totals = (
-      milliseconds: previous.milliseconds + time.inMilliseconds,
-      plays: previous.plays + (newPlay ? 1 : 0),
+    _addWatching(
+      source.telegram != null ? 'telegram' : 'local',
+      time.inMilliseconds,
+      newPlay ? 1 : 0,
     );
-    if (telegram) {
-      _telegramWatching = totals;
-    } else {
-      _localWatching = totals;
+  }
+
+  void _addWatching(String source, int milliseconds, int plays) {
+    if (milliseconds <= 0 && plays <= 0) return;
+    final id = _watchingOrigins.putIfAbsent(source, VideoWatchingStats.newId);
+    final previous = _watching[id];
+    _watching[id] = {
+      'source': source,
+      'milliseconds': math.min(
+        VideoWatchingStats.maxCounter,
+        (previous?['milliseconds'] as int? ?? 0) + milliseconds,
+      ),
+      'plays': math.min(
+        VideoWatchingStats.maxCounter,
+        (previous?['plays'] as int? ?? 0) + plays,
+      ),
+    };
+  }
+
+  Map<String, dynamic> watchingStats() => {
+    for (final entry in _watching.entries) entry.key: {...entry.value},
+  };
+
+  void applyWatchingStats(Object? value) {
+    if (value is! Map) return;
+    _watching.clear();
+    for (final entry in value.entries) {
+      if (VideoWatchingStats.isId(entry.key) &&
+          VideoWatchingStats.isCounter(entry.value)) {
+        _watching[entry.key as String] = Map<String, dynamic>.from(
+          entry.value as Map,
+        );
+      }
     }
   }
 
@@ -717,7 +785,8 @@ class VideoPlaybackData {
         );
       });
     } else {
-      _telegramWatching = _emptyWatching;
+      _watching.removeWhere((_, counter) => counter['source'] == 'telegram');
+      _watchingOrigins.remove('telegram');
       _watched.clear();
       history.removeWhere((_, entry) => entry.source.telegram != null);
       positions.removeWhere((id, _) => id.startsWith('telegram:'));
@@ -760,9 +829,29 @@ class VideoPlaybackData {
   factory VideoPlaybackData.fromJson(Object? json) {
     final data = VideoPlaybackData();
     if (json is! Map) return data;
-    if (json['watching'] case final Map watching) {
-      data._telegramWatching = _readWatching(watching['telegram']);
-      data._localWatching = _readWatching(watching['local']);
+    if (json['watchingOrigins'] case final Map origins) {
+      for (final source in VideoWatchingStats.sources) {
+        if (VideoWatchingStats.isId(origins[source])) {
+          data._watchingOrigins[source] = origins[source] as String;
+        }
+      }
+    }
+    if (json[VideoWatchingStats.key] case final Map watching) {
+      data.applyWatchingStats(watching);
+    } else if (json['watching'] case final Map legacy) {
+      for (final source in VideoWatchingStats.sources) {
+        final raw = legacy[source];
+        if (raw is List && raw.length == 2) {
+          final counter = {
+            'source': source,
+            'milliseconds': raw[0],
+            'plays': raw[1],
+          };
+          if (VideoWatchingStats.isCounter(counter)) {
+            data._addWatching(source, raw[0] as int, raw[1] as int);
+          }
+        }
+      }
     }
     if (json['channelSettings'] case final Map channels) {
       for (final entry in channels.entries) {
@@ -817,7 +906,12 @@ class VideoPlaybackData {
     final seek = json['seekSeconds'];
     data.gestureOptions = VideoGestureOptions.fromJson(json['gestureOptions']);
     if (seek is int) data.seekSeconds = math.max(1, math.min(60, seek));
+    final speed = json['defaultVideoSpeed'];
+    if (speed is num && speed.isFinite && speed >= .25 && speed <= 4) {
+      data.defaultVideoSpeed = speed.toDouble();
+    }
     data
+      ..audioPitchCorrection = json['audioPitchCorrection'] != false
       ..gestures = json['gestures'] != false
       ..strictDoubleTap = json['strictDoubleTap'] == true
       ..autoAdvance = json['autoAdvance'] != false
@@ -941,13 +1035,6 @@ class VideoPlaybackData {
   static String _configText(Object? value) =>
       value is String && value.length <= 32768 ? value : '';
 
-  static ({int milliseconds, int plays}) _readWatching(Object? raw) {
-    if (raw is! List || raw.length != 2) return _emptyWatching;
-    int count(Object? value) =>
-        value is int && value >= 0 && value <= (1 << 42) ? value : 0;
-    return (milliseconds: count(raw[0]), plays: count(raw[1]));
-  }
-
   Map<String, dynamic> toJson() => {
     'librarySort': librarySort.name,
     'channelSettings': {
@@ -955,10 +1042,8 @@ class VideoPlaybackData {
     },
     'watched': _watched.toList(),
     'watchedFiles': _watchedFiles.toList(),
-    'watching': {
-      'telegram': [_telegramWatching.milliseconds, _telegramWatching.plays],
-      'local': [_localWatching.milliseconds, _localWatching.plays],
-    },
+    VideoWatchingStats.key: watchingStats(),
+    'watchingOrigins': {..._watchingOrigins},
     'ambientMode': ambientMode,
     'snapshotSubtitles': snapshotSubtitles,
     'subtitleStyle': subtitleStyle,
@@ -977,6 +1062,8 @@ class VideoPlaybackData {
     'background': background,
     'autoPip': autoPip,
     'volumeBoost': volumeBoost,
+    'defaultVideoSpeed': defaultVideoSpeed,
+    'audioPitchCorrection': audioPitchCorrection,
     'autoSkip': autoSkip,
     'gpuNext': gpuNext,
     'matchRefreshRate': matchRefreshRate,
