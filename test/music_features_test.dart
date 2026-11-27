@@ -333,7 +333,8 @@ void main() {
       addTearDown(player.shutdown);
       await player.toggleFavorite(a);
       expect(player.settings.favoriteIds, {a.id});
-      expect(player.error, contains('could not be saved'));
+      expect(player.settingsSaveFailed, isTrue);
+      expect(player.error, isNull);
     },
   );
 
