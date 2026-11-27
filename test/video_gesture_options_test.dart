@@ -4,6 +4,32 @@ import 'package:auralis/video_playback_data.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('vertical swipes select levels by side and horizontal swipes seek', () {
+    final options = VideoGestureOptions();
+    VideoGesture? action({
+      bool horizontal = false,
+      bool left = false,
+      bool brightness = true,
+    }) => options.swipeAction(
+      horizontal: horizontal,
+      startsOnLeft: left,
+      supportsBrightness: brightness,
+    );
+
+    for (final left in [true, false]) {
+      expect(action(horizontal: true, left: left), VideoGesture.swipeSeek);
+    }
+    expect(action(left: true), VideoGesture.swipeBrightness);
+    expect(action(), VideoGesture.swipeVolume);
+    expect(action(left: true, brightness: false), isNull);
+    expect(action(brightness: false), VideoGesture.swipeVolume);
+    options.setEnabled(VideoGesture.swipeBrightness, false);
+    expect(action(left: true), isNull);
+    options.setEnabled(VideoGesture.swipeSeek, false);
+    expect(action(horizontal: true), isNull);
+    expect(action(), VideoGesture.swipeVolume);
+  });
+
   test('old settings preserve all legacy gesture defaults', () {
     final data = VideoPlaybackData.fromJson({});
     final options = data.gestureOptions;
