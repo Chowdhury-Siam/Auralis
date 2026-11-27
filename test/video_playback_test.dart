@@ -322,6 +322,7 @@ class _SkipVideoFixture {
     WidgetTester tester, {
     VideoSource? videoSource,
     List<VideoSource> next = const [],
+    Duration Function()? watchElapsed,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1280, 800);
@@ -343,6 +344,7 @@ class _SkipVideoFixture {
           proxy: proxy,
           onOpened: (_) {},
           createController: () => controller,
+          watchElapsed: watchElapsed,
         ),
       ),
     );
@@ -566,6 +568,52 @@ void main() {
       } finally {
         await fixture.close(tester);
       }
+    },
+  );
+
+  testWidgets(
+    'watching stats count playback time and exclude pauses and seeks',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      final data = fixture.settings.videoPlayback;
+      var elapsed = Duration.zero;
+
+      Future<void> position(int seconds, {int wallSeconds = 1}) async {
+        elapsed += Duration(seconds: wallSeconds);
+        await fixture.native.seek(Duration(seconds: seconds));
+        await tester.pump();
+      }
+
+      try {
+        await fixture.mount(tester, watchElapsed: () => elapsed);
+        await position(1);
+        await position(2);
+        await fixture.native.setRate(2);
+        await position(4);
+        await fixture.native.pause();
+        await position(4, wallSeconds: 3);
+        await fixture.native.play();
+        await tester.pump();
+        await position(6);
+        await position(8);
+        await position(40);
+        await position(42);
+        fixture.native.setBuffering(true);
+        await position(42, wallSeconds: 3);
+        fixture.native.setBuffering(false);
+        await position(44);
+        expect(data.watchTime, const Duration(seconds: 4));
+        expect(data.videoPlays, 1);
+        expect(data.watchedCount, 0);
+      } finally {
+        await fixture.close(tester);
+      }
+
+      final restored = VideoPlaybackData.fromJson(data.toJson());
+      expect(restored.watchTime, const Duration(seconds: 4));
+      expect(restored.videoPlays, 1);
+      restored.clearTelegram();
+      expect(restored.watchTime, const Duration(seconds: 4));
     },
   );
 
