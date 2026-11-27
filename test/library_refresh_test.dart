@@ -205,7 +205,7 @@ void main() {
       Future<void> refresh() async {
         await tester.pumpAndSettle();
         await tester.drag(
-          find.byKey(const PageStorageKey(('channels', false))),
+          find.byKey(const PageStorageKey('music-browse-grid')),
           const Offset(0, 320),
         );
         await tester.pump();
