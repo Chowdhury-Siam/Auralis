@@ -26,8 +26,14 @@ extension _VideoBrowse on _TelegramVideoViewState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_ready && showHeader && !_browseSearchOpen)
-          BrowseChannelsHeader(onSearch: _openBrowseSearch),
+        if (_ready && showHeader && !_browseSearchOpen) ...[
+          BrowseChannelsHeader(
+            mode: AppInterface.video,
+            channelCount: checking || channels.isEmpty ? null : channels.length,
+            onSearch: _openBrowseSearch,
+          ),
+          SizedBox(height: folders.isEmpty ? 4 : 8),
+        ],
         if (_browseSearchOpen)
           InlineSearchField(
             key: const ValueKey('video-browse-search'),
