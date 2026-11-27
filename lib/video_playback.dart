@@ -81,6 +81,7 @@ class VideoPlayback extends StatefulWidget {
     this.onClose,
     this.onRelease,
     this.createController,
+    this.watchElapsed,
   });
 
   final List<VideoSource> sources;
@@ -96,6 +97,8 @@ class VideoPlayback extends StatefulWidget {
   final ValueChanged<Future<void>>? onRelease;
   @visibleForTesting
   final VideoController Function()? createController;
+  @visibleForTesting
+  final Duration Function()? watchElapsed;
 
   @override
   State<VideoPlayback> createState() => _VideoPlaybackState();
@@ -151,6 +154,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
   VideoController? _video;
   AudioSession? _session;
   Timer? _checkpoint, _sleepTimer, _thermalTimer;
+  final _watchClock = Stopwatch()..start();
+  (Duration, Duration)? _watchSample;
+  bool _countedVideoPlay = false, _watchingDirty = false;
   Timer? _startupTimeout, _foregroundCheck;
   Future<void>? _lifecyclePause;
   bool _resumePlaying = false, _recovering = false, _openingShouldPlay = false;
@@ -511,6 +517,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     required bool play,
   }) async {
     _opening = _loading = true;
+    _watchSample = null;
     _openingShouldPlay = play;
     _acceptVideoParams = false;
     _trackGeneration++;
@@ -581,6 +588,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
             }
           }),
           player.stream.position.listen((position) {
+            _recordWatching(position);
             if (_acceptVideoParams &&
                 position > Duration.zero &&
                 _waitingForVideo) {
@@ -634,6 +642,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
           player.stream.completed.listen((completed) {
             if (completed && !_opening && _error == null && _canPlay) {
               _saveProgress();
+              _countedVideoPlay = false;
               _positionReady = false;
               _markWatched();
               if (!_repeatVideo) unawaited(_advanceOrResumeMusic());
@@ -641,7 +650,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
           }),
           player.stream.playing.listen((playing) {
             if (_closed) return;
+            _watchSample = null;
             unawaited(_updatePip());
+          }),
+          player.stream.buffering.listen((buffering) {
+            if (buffering) _watchSample = null;
           }),
         ]);
         await video.platform.future;
@@ -836,20 +849,63 @@ class _VideoPlaybackState extends State<VideoPlayback>
     widget.onWatched?.call();
   }
 
-  void _saveProgress() {
-    if (!_positionReady ||
-        _closed ||
-        _invalidated ||
+  void _recordWatching(Duration position) {
+    final state = _player!.state;
+    if (!_canPlay ||
         _opening ||
-        _error != null) {
+        _error != null ||
+        !state.playing ||
+        state.buffering ||
+        state.completed) {
+      _watchSample = null;
       return;
     }
-    final id = _source.id;
-    if (_hasHistoryRecord && !_data.history.containsKey(id)) return;
-    final old = _data.positions[id];
-    if (old == _position) return;
-    _data.remember(id, _position, _duration);
-    if (old != _data.positions[id]) _saveSettings();
+    final now = widget.watchElapsed?.call() ?? _watchClock.elapsed;
+    final previous = _watchSample;
+    _watchSample = (now, position);
+    if (previous == null || !state.rate.isFinite || state.rate <= 0) return;
+
+    final elapsed = now - previous.$1;
+    final advanced = position - previous.$2;
+    if (elapsed <= Duration.zero ||
+        elapsed > const Duration(seconds: 5) ||
+        advanced <= Duration.zero) {
+      return;
+    }
+    final playbackMilliseconds = advanced.inMicroseconds / (1000 * state.rate);
+    // Allow for position event jitter, and reject seek-sized jumps.
+    if (playbackMilliseconds > elapsed.inMilliseconds + 500) return;
+    final amount = math.min(
+      elapsed.inMilliseconds,
+      playbackMilliseconds.round(),
+    );
+    if (amount == 0) return;
+    _data.recordWatching(
+      _source,
+      Duration(milliseconds: amount),
+      newPlay: !_countedVideoPlay,
+    );
+    _countedVideoPlay = _watchingDirty = true;
+  }
+
+  void _saveProgress() {
+    var changed = _watchingDirty;
+    _watchingDirty = false;
+    if (_positionReady &&
+        !_closed &&
+        !_invalidated &&
+        !_opening &&
+        _error == null) {
+      final id = _source.id;
+      if (!_hasHistoryRecord || _data.history.containsKey(id)) {
+        final old = _data.positions[id];
+        if (old != _position) {
+          _data.remember(id, _position, _duration);
+          changed = changed || old != _data.positions[id];
+        }
+      }
+    }
+    if (changed) _saveSettings();
   }
 
   Future<void> _switchTo(int index) async {
@@ -869,6 +925,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     }
     _saveProgress();
     _index = index;
+    _countedVideoPlay = false;
     _usingOfflineVideo = false;
     _preloadCandidate = null;
     _shuffleNext = null;
@@ -972,6 +1029,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     final position = Duration(
       milliseconds: target.inMilliseconds.clamp(0, _duration.inMilliseconds),
     );
+    _watchSample = null;
     await _player!.seek(position);
   }
 
