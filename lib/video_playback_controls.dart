@@ -5,8 +5,8 @@ enum _DragMode { seek, volume, brightness, zoom }
 enum _BoostInput { pointer, space }
 
 enum _VideoLevel {
-  brightness('Brightness', Icons.brightness_6_rounded, Alignment.centerLeft),
-  volume('Volume', Icons.volume_up_rounded, Alignment.centerRight);
+  brightness('Brightness', Icons.brightness_6_rounded, Alignment.bottomRight),
+  volume('Volume', Icons.volume_up_rounded, Alignment.bottomLeft);
 
   const _VideoLevel(this.label, this.icon, this.alignment);
 
@@ -14,6 +14,8 @@ enum _VideoLevel {
   final IconData icon;
   final Alignment alignment;
 }
+
+typedef _LevelFeedback = ({_VideoLevel kind, double value, double max});
 
 class _VideoHud extends StatefulWidget {
   const _VideoHud(this.session, this.video);
@@ -54,7 +56,9 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   ].any(_gesture);
   final _subscriptions = <StreamSubscription<dynamic>>[];
   final _timelineChanges = ValueNotifier(0);
+  final _levelFeedback = ValueNotifier<_LevelFeedback?>(null);
   Timer? _hide, _feedbackTimer, _spaceHold, _introPromptTimer;
+  Timer? _levelHide;
   bool _spaceDown = false, _spaceBoosted = false;
   bool _visible = true, _exitArmed = false, _remaining = true;
   _BoostInput? _boostInput;
@@ -67,7 +71,6 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
   _DragMode? _drag;
   String? _feedback;
   IconData? _feedbackIcon;
-  ({_VideoLevel kind, double fraction})? _feedbackLevel;
   static const _playButtonSize = 64.0;
   static const _skipButtonSize = 48.0;
   static const _transportGap = 12.0;
@@ -105,7 +108,6 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
         if (_visible) _timelineChanges.value++;
       }),
       player.stream.rate.listen((_) => _refresh()),
-      player.stream.volume.listen((_) => _refresh()),
     ]);
     _updateSkipPrompt();
     _armHide();
@@ -162,6 +164,12 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       _scrub = null;
       _armHide();
     }
+    if ((_drag == _DragMode.brightness &&
+            !_gesture(VideoGesture.swipeBrightness)) ||
+        (_drag == _DragMode.volume && !_gesture(VideoGesture.swipeVolume))) {
+      _drag = null;
+      _dismissLevel();
+    }
     if (mounted) setState(() {});
   }
 
@@ -170,6 +178,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) {
       _cancelSpaceHold();
       _stopBoost(_BoostInput.pointer);
+      _dismissLevel();
     }
   }
 
@@ -181,11 +190,13 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     session._changes.removeListener(_refresh);
     _hide?.cancel();
     _feedbackTimer?.cancel();
+    _levelHide?.cancel();
     _introPromptTimer?.cancel();
     for (final subscription in _subscriptions) {
       unawaited(subscription.cancel());
     }
     _timelineChanges.dispose();
+    _levelFeedback.dispose();
     super.dispose();
   }
 
@@ -232,14 +243,10 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     }
   }
 
-  void _feedbackFor(
-    String text,
-    IconData icon, {
-    bool resetSeek = true,
-    ({_VideoLevel kind, double fraction})? level,
-  }) {
+  void _feedbackFor(String text, IconData icon, {bool resetSeek = true}) {
     _feedbackTimer?.cancel();
     if (!mounted) return;
+    _dismissLevel();
     if (resetSeek) {
       _lastSeekDirection = 0;
       _accumulated = 0;
@@ -247,14 +254,12 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     setState(() {
       _feedback = text;
       _feedbackIcon = icon;
-      _feedbackLevel = level;
     });
     _feedbackTimer = Timer(const Duration(milliseconds: 1200), () {
       if (!mounted) return;
       setState(() {
         _feedback = null;
         _feedbackIcon = null;
-        _feedbackLevel = null;
         _lastSeekDirection = 0;
         _accumulated = 0;
         _exitArmed = false;
@@ -262,14 +267,39 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     });
   }
 
-  void _feedbackForLevel(_VideoLevel kind, double value, {double max = 100}) {
-    _feedbackFor(
-      '${value.round()}%',
-      kind == _VideoLevel.volume && value == 0
-          ? Icons.volume_off_rounded
-          : kind.icon,
-      level: (kind: kind, fraction: value / max),
-    );
+  bool _feedbackForLevel(
+    _VideoLevel kind,
+    double value, {
+    double max = 100,
+    bool dragging = false,
+  }) {
+    _levelHide?.cancel();
+    _lastSeekDirection = 0;
+    _accumulated = 0;
+    if (_feedback != null) {
+      _feedbackTimer?.cancel();
+      setState(() {
+        _feedback = null;
+        _feedbackIcon = null;
+        _exitArmed = false;
+      });
+    }
+    final next = (kind: kind, value: value, max: max);
+    final changed = next != _levelFeedback.value;
+    _levelFeedback.value = next;
+    if (!dragging) _armLevelHide();
+    return changed;
+  }
+
+  void _armLevelHide() {
+    _levelHide?.cancel();
+    _levelHide = Timer(const Duration(milliseconds: 850), _dismissLevel);
+  }
+
+  void _dismissLevel() {
+    _levelHide?.cancel();
+    _levelHide = null;
+    _levelFeedback.value = null;
   }
 
   int _seekZone(double x, double width) =>
@@ -433,6 +463,10 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
           !_gesture(VideoGesture.panZoom)) {
         return;
       }
+      if (_drag != _DragMode.zoom) {
+        _scrub = null;
+        _dismissLevel();
+      }
       _drag = _DragMode.zoom;
     } else if (_startZoom > .02 &&
         _drag == null &&
@@ -441,22 +475,21 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     }
     if (_drag == null) {
       if (delta.distance < 7) return;
-      if (delta.dx.abs() >= delta.dy.abs()) {
-        if (!_gesture(VideoGesture.swipeSeek)) return;
-        _drag = _DragMode.seek;
-      } else {
-        final brightness =
-            Platform.isAndroid && _dragOrigin.dx < size.width / 2;
-        if (!_gesture(
-          brightness ? VideoGesture.swipeBrightness : VideoGesture.swipeVolume,
-        )) {
-          return;
-        }
-        _drag = brightness ? _DragMode.brightness : _DragMode.volume;
-        _gestureValue = brightness
-            ? (session._brightness ?? .5)
-            : player.state.volume / 100;
-      }
+      final horizontal = delta.dx.abs() >= delta.dy.abs();
+      _drag = switch (_gestureOptions.swipeAction(
+        horizontal: horizontal,
+        startsOnLeft: _dragOrigin.dx < size.width / 2,
+        supportsBrightness: session._supportsBrightnessGestures,
+      )) {
+        VideoGesture.swipeSeek => _DragMode.seek,
+        VideoGesture.swipeVolume => _DragMode.volume,
+        VideoGesture.swipeBrightness => _DragMode.brightness,
+        _ => null,
+      };
+      if (_drag == null) return;
+      _gestureValue = _drag == _DragMode.brightness
+          ? (session._brightness ?? .5)
+          : player.state.volume / 100;
     }
     switch (_drag!) {
       case _DragMode.seek:
@@ -479,28 +512,33 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
           Icons.swap_horiz_rounded,
         );
       case _DragMode.volume:
-        if (!_gesture(VideoGesture.swipeVolume)) return;
+        if (!_gesture(VideoGesture.swipeVolume) || session._opening) return;
         final max = session._data.volumeBoost ? 1.3 : 1.0;
-        final value =
-            (_gestureValue -
-                    delta.dy /
-                        size.height *
-                        1.5 *
-                        _gestureOptions.swipeSensitivity)
-                .clamp(0.0, max);
-        _feedbackForLevel(_VideoLevel.volume, value * 100, max: max * 100);
-        unawaited(_perform(() => session._setVideoVolume(value * 100)));
+        final value = (_gestureValue + _levelDragChange(delta, size)).clamp(
+          0.0,
+          max,
+        );
+        if (_feedbackForLevel(
+          _VideoLevel.volume,
+          value * 100,
+          max: max * 100,
+          dragging: true,
+        )) {
+          unawaited(_perform(() => session._setVideoVolume(value * 100)));
+        }
       case _DragMode.brightness:
-        if (!_gesture(VideoGesture.swipeBrightness)) return;
-        final value =
-            (_gestureValue -
-                    delta.dy /
-                        size.height *
-                        1.5 *
-                        _gestureOptions.swipeSensitivity)
-                .clamp(.01, 1.0);
-        _feedbackForLevel(_VideoLevel.brightness, value * 100);
-        unawaited(session._setBrightness(value));
+        if (!_gesture(VideoGesture.swipeBrightness) || session._opening) return;
+        final value = (_gestureValue + _levelDragChange(delta, size)).clamp(
+          .01,
+          1.0,
+        );
+        if (_feedbackForLevel(
+          _VideoLevel.brightness,
+          value * 100,
+          dragging: true,
+        )) {
+          unawaited(session._setBrightness(value));
+        }
       case _DragMode.zoom:
         final now = DateTime.now();
         if (_lastZoomUpdate != null &&
@@ -541,8 +579,14 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     }
   }
 
+  double _levelDragChange(Offset delta, Size size) =>
+      -delta.dy / size.height * 1.5 * _gestureOptions.swipeSensitivity;
+
   void _dragEnd(ScaleEndDetails _) {
     final target = _gesture(VideoGesture.swipeSeek) ? _scrub : null;
+    if (_drag == _DragMode.brightness || _drag == _DragMode.volume) {
+      _armLevelHide();
+    }
     _drag = null;
     _scrub = null;
     if (target != null) unawaited(_perform(() => session._seek(target)));
@@ -1070,16 +1114,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     );
   }
 
-  Widget _feedbackOverlay(String text, Size viewport, EdgeInsets insets) {
-    if (_feedbackLevel case final level?) {
-      return _levelIndicator(
-        text,
-        level.kind,
-        level.fraction,
-        viewport,
-        insets,
-      );
-    }
+  Widget _feedbackOverlay(String text, Size viewport) {
     return Center(
       child: Transform.translate(
         offset: Offset(0, -math.min(76.0, viewport.height / 4)),
@@ -1107,102 +1142,128 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     );
   }
 
-  Widget _levelIndicator(
-    String text,
-    _VideoLevel kind,
-    double fraction,
-    Size viewport,
-    EdgeInsets insets,
-  ) {
-    const transportWidth =
-        _playButtonSize + 2 * (_skipButtonSize + _transportGap);
-    final sideWidth =
-        (viewport.width - insets.horizontal - transportWidth) / 2 - 6;
-    if (sideWidth <= 0) return const SizedBox.shrink();
-    final accent = kind == _VideoLevel.brightness
-        ? colors.tertiary
-        : colors.primary;
+  Widget _levelOverlay(Size viewport, EdgeInsets insets) {
+    final top = math.max(64.0, MediaQuery.paddingOf(context).top + 54);
+    // The band above the central controls also leaves the drawer and skip
+    // prompt clear. Fit the meter into that band on short landscape screens.
+    final height = viewport.height / 2 - top - _playButtonSize / 2 - 6;
+    if (height < 28) return const SizedBox.shrink();
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 140);
     return Align(
-      alignment: kind.alignment,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: sideWidth),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Semantics(
-            label: kind.label,
-            value: text,
-            excludeSemantics: true,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerHigh.withValues(alpha: .96),
-                border: Border.all(
-                  color: colors.onSurface.withValues(alpha: .14),
-                ),
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black38,
-                    blurRadius: 16,
-                    offset: Offset(0, 4),
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: insets.left,
+          right: insets.right,
+          top: top,
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          height: height,
+          child: IgnorePointer(
+            child: RepaintBoundary(
+              child: ValueListenableBuilder<_LevelFeedback?>(
+                valueListenable: _levelFeedback,
+                builder: (context, level, _) => AnimatedSwitcher(
+                  duration: duration,
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  layoutBuilder: (current, previous) => Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      for (final child in previous)
+                        ExcludeSemantics(child: child),
+                      ?current,
+                    ],
                   ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: .16),
-                        shape: BoxShape.circle,
-                      ),
-                      child: SizedBox.square(
-                        dimension: 32,
-                        child: Icon(_feedbackIcon, size: 18, color: accent),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Directionality(
-                      textDirection: TextDirection.ltr,
-                      child: RotatedBox(
-                        quarterTurns: -1,
-                        child: SizedBox(
-                          width: 48,
-                          child: LinearProgressIndicator(
-                            value: fraction,
-                            minHeight: 5,
-                            borderRadius: BorderRadius.circular(3),
-                            color: accent,
-                            backgroundColor: accent.withValues(alpha: .18),
-                            stopIndicatorRadius: 0,
-                            trackGap: 0,
+                  child: level == null
+                      ? null
+                      : Align(
+                          key: ValueKey(level.kind),
+                          alignment: level.kind.alignment,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxHeight: height),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: _levelIndicator(level),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    SizedBox(
-                      width: 40,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          text,
-                          style: TextStyle(
-                            color: colors.onSurface,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            fontFeatures: const [
-                              ui.FontFeature.tabularFigures(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _levelIndicator(_LevelFeedback level) {
+    final kind = level.kind;
+    final value = '${level.value.round()}%';
+    final accent = kind == _VideoLevel.brightness
+        ? colors.tertiary
+        : colors.primary;
+    return Semantics(
+      label: kind.label,
+      value: value,
+      excludeSemantics: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHigh.withValues(alpha: .86),
+          border: Border.all(color: colors.onSurface.withValues(alpha: .13)),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                kind == _VideoLevel.volume && level.value == 0
+                    ? Icons.volume_off_rounded
+                    : kind.icon,
+                size: 18,
+                color: accent,
+              ),
+              const SizedBox(height: 7),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: RotatedBox(
+                  quarterTurns: -1,
+                  child: SizedBox(
+                    width: 44,
+                    child: LinearProgressIndicator(
+                      value: level.value / level.max,
+                      minHeight: 5,
+                      borderRadius: BorderRadius.circular(3),
+                      color: accent,
+                      backgroundColor: accent.withValues(alpha: .20),
+                      stopIndicatorRadius: 0,
+                      trackGap: 0,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                width: 32,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      color: colors.onSurface,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: const [ui.FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1414,13 +1475,10 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                           IgnorePointer(
                             child: Padding(
                               padding: insets,
-                              child: _feedbackOverlay(
-                                text,
-                                box.biggest,
-                                insets,
-                              ),
+                              child: _feedbackOverlay(text, box.biggest),
                             ),
                           ),
+                        _levelOverlay(box.biggest, insets),
                       ],
                     );
                   },
