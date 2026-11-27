@@ -1,6 +1,42 @@
 {
-  "current": "0.1.272",
+  "current": "0.1.277",
   "releases": [
+    {
+      "version": "0.1.277",
+      "changes": [
+        "Open video speed, audio, subtitle, and queue controls in bottom sheets. Use the side drawer for direct access to player tools.",
+        "Adjust playback speed in 0.05× steps, save a default speed, and control audio pitch correction.",
+        "Select external audio, adjust audio output, and switch the playing queue between list and grid views."
+      ]
+    },
+    {
+      "version": "0.1.276",
+      "changes": [
+        "Save video positions on pause, exit and episode changes, including videos already marked watched.",
+        "Reuse recent Telegram video ranges for faster resume, with automatic eviction and streaming fallback.",
+        "Preload the next episode in playback order and pause background transfers when the current player buffers."
+      ]
+    },
+    {
+      "version": "0.1.275",
+      "changes": [
+        "Match Watching stats to the Listening stats dashboard and show Telegram and on-device activity.",
+        "Use a more compact Browse header and a themed channel search button in both modes.",
+        "Recover settings writes from stale temporary files and clear save notices after a successful retry."
+      ]
+    },
+    {
+      "version": "0.1.274",
+      "changes": [
+        "Sync watch time and video play counts across devices signed in to the same Auralis account."
+      ]
+    },
+    {
+      "version": "0.1.273",
+      "changes": [
+        "Match Listening stats and Music Library’s Most played ranking by play count, with a listening-time ranking available in stats."
+      ]
+    },
     {
       "version": "0.1.272",
       "changes": [
