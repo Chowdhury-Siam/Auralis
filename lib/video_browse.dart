@@ -26,27 +26,8 @@ extension _VideoBrowse on _TelegramVideoViewState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_ready && showHeader) ...[
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  query.isEmpty ? 'Browse channels' : 'Matching channels',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ),
-              if (!_browseSearchOpen)
-                IconButton(
-                  tooltip: 'Search channels',
-                  icon: const Icon(Icons.search_rounded, size: 20),
-                  onPressed: _openBrowseSearch,
-                ),
-            ],
-          ),
-        ],
+        if (_ready && showHeader && !_browseSearchOpen)
+          BrowseChannelsHeader(onSearch: _openBrowseSearch),
         if (_browseSearchOpen)
           InlineSearchField(
             key: const ValueKey('video-browse-search'),
@@ -64,10 +45,18 @@ extension _VideoBrowse on _TelegramVideoViewState {
               }
             },
           ),
+        if (_ready && showHeader && query.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Matching channels',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+          ),
         if (_ready && showHeader && folders.isNotEmpty)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.only(top: 2, bottom: 8),
             child: Row(
               children: [
                 for (final folder in folders)
@@ -78,6 +67,7 @@ extension _VideoBrowse on _TelegramVideoViewState {
                       label: Text(folder.name),
                       selected: _browseFolderId == folder.id,
                       showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
                       onSelected: (selected) =>
                           _selectBrowseFolder(selected ? folder.id : null),
                     ),
