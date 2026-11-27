@@ -143,7 +143,7 @@ void main() {
 
       await tester.tap(find.byTooltip('Library').first);
       await tester.pumpAndSettle();
-      expect(find.text('Search your music'), findsOneWidget);
+      expect(find.byTooltip('Search Library'), findsOneWidget);
       checkRows();
       await tapVisible(actions);
       await tapVisible(find.byKey(const ValueKey('media-action-next')));
@@ -161,6 +161,8 @@ void main() {
       expect(find.text('Clear history'), findsNothing);
       expect(settings.recentIds, tracks.map((track) => track.id).toList());
       checkRows();
+      await tester.tap(find.byTooltip('Search Library'));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), tracks.first.title);
       await tester.pumpAndSettle();
       expect(
