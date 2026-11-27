@@ -203,9 +203,19 @@ void main() {
         expect(find.text('Continue watching'), findsOneWidget);
         expect(find.text('Local episode'), findsOneWidget);
         expect(find.text('Resume at 9:00'), findsOneWidget);
+        final progress = find.byKey(
+          const ValueKey('video-home-resume-progress'),
+        );
+        expect(tester.widget<LinearProgressIndicator>(progress).value, .9);
         expect(find.byTooltip('Open video files'), findsNothing);
         expect(find.byIcon(Icons.folder_open_rounded), findsNothing);
         expect(tester.takeException(), isNull);
+
+        final history = find.byTooltip('Watch history');
+        await tester.tap(history);
+        await tester.pumpAndSettle();
+        expect(find.text('Video history'), findsOneWidget);
+        expect(find.text('Local episode'), findsOneWidget);
       },
     );
   }
