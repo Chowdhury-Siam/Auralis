@@ -13,6 +13,7 @@ import 'discovery_widgets.dart';
 import 'app_navigation.dart';
 import 'app_motion.dart';
 import 'app_popups.dart';
+import 'app_theme.dart';
 import 'player.dart';
 import 'telegram/stream_proxy.dart';
 import 'telegram/telegram_service.dart';
@@ -880,21 +881,17 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     Key panelKey = const ValueKey(('video-library-panel', 0)),
   }) => LibraryContentPanel(panelKey: panelKey, loading: loading, body: list);
 
-  Widget _heading(String title, {Widget? action}) => Row(
-    children: [
-      Expanded(
-        child: Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge
-              ?.copyWith(fontWeight: FontWeight.w700),
-        ),
-      ),
-      ?action,
-    ],
-  );
+  void _openHomeHistory() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _tab = 2;
+      _libraryCollection = 1;
+    });
+  }
 
   void _openHomeChannel(MusicChat channel) {
     _showSearchChannel = false;
+    _libraryCollection = 0;
     if (_library?.channel.id != channel.id) unawaited(_browseChannel(channel));
     _selectTab(2);
   }
@@ -929,16 +926,17 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     ),
   );
 
-  Widget? _historyArtwork(VideoSource source) {
+  Widget? _historyArtwork(VideoSource source, {Widget? fallback}) {
     final reference = source.telegram;
     if (!_telegram.ready || reference == null) return null;
     final video = _library?.videos[reference.id] ?? reference;
     if (video.fileId != null || video.coverFileId != null) {
-      return _videoArtwork(video);
+      return _videoArtwork(video, fallback: fallback);
     }
     return FutureBuilder<Track?>(
       future: _telegram.videoArtworkTrack(video),
-      builder: (context, snapshot) => _videoArtwork(snapshot.data ?? video),
+      builder: (context, snapshot) =>
+          _videoArtwork(snapshot.data ?? video, fallback: fallback),
     );
   }
 
