@@ -96,9 +96,14 @@ class SyncController extends ChangeNotifier {
   bool get connected => _url != null;
   String get url => _url ?? '';
   SyncDocument get document => SyncDocument(settings.syncState);
-  bool _canSend(String key) =>
-      settings.syncState['videoActivitySupported'] == true ||
-      !SyncDocument.isVideoRecord(key);
+  bool _canSend(String key) {
+    if (SyncDocument.isWatchingRecord(key)) {
+      return settings.syncState['videoWatchingSupported'] == true;
+    }
+    return settings.syncState['videoActivitySupported'] == true ||
+        !SyncDocument.isVideoRecord(key);
+  }
+
   static String normalize(String value) {
     final uri = Uri.tryParse(value.trim().replaceFirst(RegExp(r'/+$'), ''));
     if (uri == null ||
@@ -232,7 +237,15 @@ class SyncController extends ChangeNotifier {
     request.followRedirects = false;
     request.headers.set('Authorization', 'Bearer $key');
     request.headers.contentType = ContentType.json;
-    request.add(utf8.encode(jsonEncode({...data, 'videoActivity': true})));
+    request.add(
+      utf8.encode(
+        jsonEncode({
+          ...data,
+          'videoActivity': true,
+          VideoWatchingStats.key: true,
+        }),
+      ),
+    );
     final response = await request.close().timeout(const Duration(seconds: 15));
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in response.timeout(const Duration(seconds: 15))) {
@@ -285,7 +298,10 @@ class SyncController extends ChangeNotifier {
   Future<bool> _mergeCloudCopy(int generation) async {
     await settings.save();
     final remote = <String, dynamic>{};
-    var cursor = 0, more = true, videoSupported = false;
+    var cursor = 0,
+        more = true,
+        videoSupported = false,
+        watchingSupported = false;
     while (more) {
       final page = await _request(_url!, _key!, {
         'cursor': cursor,
@@ -296,6 +312,7 @@ class SyncController extends ChangeNotifier {
       cursor = page['cursor'] as int;
       more = page['more'] as bool;
       videoSupported = page['videoActivity'] == true;
+      watchingSupported = page[VideoWatchingStats.key] == true;
     }
     _capture(settings.toJson());
     final merged = SyncDocument(detached(settings.syncState));
@@ -304,6 +321,7 @@ class SyncController extends ChangeNotifier {
     merged.state['cursor'] = cursor;
     merged.state['bootstrap'] = false;
     merged.state['videoActivitySupported'] = videoSupported;
+    merged.state['videoWatchingSupported'] = watchingSupported;
     final snapshot = merged.project(settings.toJson());
     DataBackup.validateSnapshot(snapshot);
     settings.syncState = merged.state;
@@ -343,8 +361,10 @@ class SyncController extends ChangeNotifier {
           'ops': sent,
         });
         if (_closed || generation != _generation || paused()) return;
-        if (result['videoActivity'] == true &&
-            doc.state['videoActivitySupported'] != true) {
+        if ((result['videoActivity'] == true &&
+                doc.state['videoActivitySupported'] != true) ||
+            (result[VideoWatchingStats.key] == true &&
+                doc.state['videoWatchingSupported'] != true)) {
           // Earlier clients advanced past revisions they could not read.
           if (!await _mergeCloudCopy(generation)) return;
           sentKeys.removeAll(sent.keys);
@@ -383,7 +403,7 @@ class SyncController extends ChangeNotifier {
             remaining.any((key) => _canSend(key) && !sentKeys.contains(key));
       }
       status = document.dirty.any((key) => !_canSend(key))
-          ? 'Update the sync Worker to share video activity.'
+          ? 'Update the sync Worker to share video activity and watching stats.'
           : 'Up to date across your devices.';
     } catch (failure) {
       if (!_closed && generation == _generation) {
