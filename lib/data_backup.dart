@@ -39,6 +39,7 @@ enum BackupSection {
   recent('Recently played', 'Recent music and Telegram video activity.', {
     'recentIds',
     TelegramVideoActivity.key,
+    VideoWatchingStats.key,
   }),
   listening('Listening stats', 'Listening time, play counts and rankings.', {
     'listening',
@@ -215,6 +216,18 @@ class DataBackup {
     }
     if (data.containsKey(TelegramVideoActivity.key)) {
       TelegramVideoActivity.validate(data[TelegramVideoActivity.key]);
+    }
+    if (data.containsKey(VideoWatchingStats.key)) {
+      final watching = data[VideoWatchingStats.key];
+      if (watching is! Map ||
+          watching.length > 50000 ||
+          watching.entries.any(
+            (entry) =>
+                !VideoWatchingStats.isId(entry.key) ||
+                !VideoWatchingStats.isCounter(entry.value),
+          )) {
+        throw const FormatException('Invalid watching statistics.');
+      }
     }
     if (!partial || BackupSection.preferences.isIn(data)) {
       _validatePreferences(data);
