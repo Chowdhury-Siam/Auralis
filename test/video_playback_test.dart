@@ -259,9 +259,9 @@ class _RecordingVideoProxy extends TelegramStreamProxy {
   }
 
   @override
-  Future<void> stop() {
+  Future<void> stop({bool keepPreload = false}) {
     onStop?.call();
-    return super.stop();
+    return super.stop(keepPreload: keepPreload);
   }
 }
 
@@ -323,6 +323,9 @@ class _SkipVideoFixture {
     VideoSource? videoSource,
     List<VideoSource> next = const [],
     Duration Function()? watchElapsed,
+    int selectionRevision = 0,
+    int? browsingChannelId,
+    List<Track>? libraryOrder,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1280, 800);
@@ -345,6 +348,9 @@ class _SkipVideoFixture {
           onOpened: (_) {},
           createController: () => controller,
           watchElapsed: watchElapsed,
+          selectionRevision: selectionRevision,
+          browsingChannelId: browsingChannelId,
+          libraryOrder: libraryOrder,
         ),
       ),
     );
@@ -430,6 +436,21 @@ void main() {
       await tester.tap(find.widgetWithText(ChoiceChip, '1.5×'));
       await tester.pumpAndSettle();
       expect(fixture.native.state.rate, 1.5);
+      await tester.tap(find.byTooltip('Increase speed'));
+      await tester.pumpAndSettle();
+      expect(fixture.native.state.rate, 1.55);
+      await tester.tap(find.text('Make default speed'));
+      await tester.pumpAndSettle();
+      final playback = fixture.settings.videoPlayback;
+      expect(
+        VideoPlaybackData.fromJson(playback.toJson()).defaultVideoSpeed,
+        1.55,
+      );
+      await tester.tap(find.text('Reset'));
+      await tester.pumpAndSettle();
+      expect(fixture.native.state.rate, 1);
+      await tester.tap(find.byTooltip('Close panel'));
+      await tester.pumpAndSettle();
 
       await tester.tap(speedButton);
       await tester.pumpAndSettle();
@@ -438,6 +459,53 @@ void main() {
       await fixture.close(tester);
     }
   });
+
+  testWidgets(
+    'the controls drawer and queue grid keep the same playback session',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      final next = VideoSource.file(
+        Uri.file('/movies/next.mp4'),
+        'Second episode',
+      );
+      try {
+        await fixture.mount(tester, next: [next]);
+
+        await tester.tap(find.byTooltip('Open controls drawer'));
+        await tester.pumpAndSettle();
+        expect(find.text('Controls drawer'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('video-controls-drawer')),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Playback speed').hitTestable());
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('video-speed-slider')),
+          findsOneWidget,
+        );
+        await tester.tap(find.byTooltip('Close panel'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byTooltip('Now playing queue'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ReorderableListView), findsOneWidget);
+        await tester.tap(find.byTooltip('Show queue as grid'));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('video-queue-grid')), findsOneWidget);
+        expect(find.text('Second episode'), findsOneWidget);
+        await tester.tap(find.byTooltip('Show queue as list'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ReorderableListView), findsOneWidget);
+        await tester.tap(find.text('Second episode'));
+        await tester.pumpAndSettle();
+        expect(fixture.native.opened.last.uri, '/movies/next.mp4');
+        expect(fixture.native.opened, hasLength(2));
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
 
   testWidgets(
     'stable video playback preloads only the immediate next episode',
@@ -473,6 +541,103 @@ void main() {
         await fixture.native.seek(const Duration(seconds: 3));
         await tester.pumpAndSettle();
         expect(fixture.proxy.preloads.last, (33, const Duration(minutes: 2)));
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+  );
+
+  testWidgets(
+    'manual episode selection reuses the controller and saves exact progress',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      final first = fixture.source;
+      final second = VideoSource.file(Uri.file('/movies/next.mp4'), 'Next');
+      const position = Duration(seconds: 108, milliseconds: 375);
+      try {
+        await fixture.mount(tester, next: [second]);
+        const watchedThreshold = Duration(seconds: 102);
+        await fixture.native.seek(watchedThreshold);
+        await tester.pump();
+        await fixture.native.seek(position);
+        await tester.pump();
+        expect(
+          fixture.settings.videoPlayback.positions[first.id],
+          watchedThreshold,
+        );
+        await tester.tap(find.byTooltip('Pause video'));
+        await tester.pumpAndSettle();
+        expect(fixture.settings.videoPlayback.positions[first.id], position);
+        expect(fixture.settings.videoPlayback.isWatched(first), isTrue);
+        await fixture.mount(
+          tester,
+          videoSource: second,
+          next: [first],
+          selectionRevision: 1,
+        );
+        expect(fixture.native.opened.length, 2);
+        await fixture.mount(
+          tester,
+          videoSource: first,
+          next: [second],
+          selectionRevision: 2,
+        );
+        expect(fixture.native.opened.length, 3);
+        expect(fixture.native.opened.last.start, position);
+      } finally {
+        await fixture.close(tester);
+      }
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'preload follows the updated Library order and cancels on channel changes',
+    (tester) async {
+      final fixture = _SkipVideoFixture();
+      fixture.telegram.state = 'authorizationStateReady';
+      VideoSource episode(int i) => VideoSource.telegram(
+        Track(
+          id: '-100:$i',
+          title: 'Episode $i',
+          artist: '',
+          source: 'Channel',
+          fileId: i,
+          size: 16000000,
+          duration: const Duration(minutes: 2),
+        ),
+      );
+      final one = episode(1), two = episode(2), three = episode(3);
+      try {
+        await fixture.mount(
+          tester,
+          videoSource: one,
+          next: [two, three],
+          browsingChannelId: -100,
+        );
+        await fixture.native.seek(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+        expect(fixture.proxy.isPreloading(2), isTrue);
+        await fixture.mount(
+          tester,
+          videoSource: one,
+          next: [two, three],
+          browsingChannelId: -100,
+          libraryOrder: [one.telegram!, three.telegram!, two.telegram!],
+        );
+        expect(fixture.proxy.isPreloading(2), isFalse);
+        expect(fixture.proxy.isPreloading(3), isTrue);
+        await fixture.mount(
+          tester,
+          videoSource: one,
+          next: [two, three],
+          browsingChannelId: -200,
+        );
+        expect(fixture.proxy.hasPreload, isFalse);
+        expect(fixture.native.opened, hasLength(1));
       } finally {
         await fixture.close(tester);
       }
@@ -2229,7 +2394,10 @@ void main() {
         expect(find.text('Chapters and bookmarks'), findsOneWidget);
         await tester.tap(find.text('Playback speed'));
         await tester.pumpAndSettle();
-        expect(find.text('Normal'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('video-speed-slider')),
+          findsOneWidget,
+        );
         expect(find.widgetWithText(ChoiceChip, '1×'), findsOneWidget);
         await tester.tap(find.byTooltip('Close panel'));
         await tester.pumpAndSettle();
