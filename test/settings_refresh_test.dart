@@ -283,7 +283,7 @@ void main() {
               source: 'Music',
             ),
             (day + 1) * 120000,
-            day + 1,
+            day == 0 ? 20 : day + 1,
             DateTime.now().subtract(Duration(days: day)),
           );
         }
@@ -324,9 +324,29 @@ void main() {
           isTrue,
         );
         await tapVisible(tester, find.text('Artists'));
-        expect(find.text('Auralis artist 9'), findsOneWidget);
+        final mostPlayedArtist = find.text('Auralis artist 0');
+        final longestArtist = find.text('Auralis artist 9');
+        expect(
+          tester.getTopLeft(mostPlayedArtist).dy,
+          lessThan(tester.getTopLeft(longestArtist).dy),
+        );
+        await tapVisible(tester, find.text('Rank by time'));
+        expect(
+          tester.getTopLeft(longestArtist).dy,
+          lessThan(tester.getTopLeft(mostPlayedArtist).dy),
+        );
         await tapVisible(tester, find.text('Tracks'));
-        expect(find.text('Evening waves 9'), findsOneWidget);
+        final mostPlayedTrack = find.text('Evening waves 0');
+        final longestTrack = find.text('Evening waves 9');
+        expect(
+          tester.getTopLeft(longestTrack).dy,
+          lessThan(tester.getTopLeft(mostPlayedTrack).dy),
+        );
+        await tapVisible(tester, find.text('Rank by plays'));
+        expect(
+          tester.getTopLeft(mostPlayedTrack).dy,
+          lessThan(tester.getTopLeft(longestTrack).dy),
+        );
         expect(jsonEncode(settings.listening.toJson()), before);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
