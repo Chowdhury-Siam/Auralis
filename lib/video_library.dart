@@ -105,7 +105,7 @@ Future<String?> showVideoItemSheet({
     context: context,
     title: source.title,
     subtitle: source.telegram?.source ?? 'On your device',
-    artwork: artwork ?? _VideoSourcePreview(source),
+    artwork: artwork ?? VideoSourcePreview(source),
     details: [
       if (source.telegram case final Track track)
         ...mediaItemDetails(track, video: true, videoDuration: duration)
