@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
-const currentSyncWorkerVersion = '0.1.228';
+const currentSyncWorkerVersion = '0.1.274';
 
 class SyncDeploymentConfig {
   SyncDeploymentConfig({
