@@ -5,6 +5,7 @@ import 'package:auralis/app.dart';
 import 'package:auralis/app_navigation.dart';
 import 'package:auralis/models.dart';
 import 'package:auralis/player.dart';
+import 'package:auralis/stats_view.dart';
 import 'package:auralis/telegram/stream_proxy.dart';
 import 'package:auralis/telegram/td_transport.dart';
 import 'package:auralis/telegram/telegram_service.dart';
@@ -606,8 +607,10 @@ void main() {
       final source = VideoSource.telegram(
         Track.fromVideoMessage(post(30, 'Feature.mp4'), channel.title)!,
       );
+      final localVideo = VideoSource.file(Uri.file('/movies/clip.mp4'), 'Clip');
       player.settings.videoPlayback
         ..recordWatching(source, const Duration(seconds: 75), newPlay: true)
+        ..recordWatching(localVideo, const Duration(seconds: 15), newPlay: true)
         ..setWatched(source, true);
       final dataSync = find.text('Data & sync');
       await tester.ensureVisible(dataSync);
@@ -617,9 +620,12 @@ void main() {
       expect(find.text('Backup & Restore'), findsOneWidget);
       await tester.tap(find.text('Watching stats'));
       await tester.pumpAndSettle();
-      expect(find.text('1m 15s'), findsOneWidget);
-      expect(find.text('Video plays on this device'), findsOneWidget);
+      expect(find.byType(StatsMetricCard), findsNWidgets(3));
+      expect(find.text('1m 30s'), findsOneWidget);
+      expect(find.text('Video plays'), findsOneWidget);
       expect(find.text('Videos marked watched'), findsOneWidget);
+      expect(find.text('1m 15s · 1 play'), findsOneWidget);
+      expect(find.text('15s · 1 play'), findsOneWidget);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       await tester.binding.handlePopRoute();
