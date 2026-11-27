@@ -1,12 +1,18 @@
 import {AccountStore,equal,profilePage} from './accounts.mjs';
 import {TursoHttpError,TursoStore} from './turso.mjs';
 const MAX_BODY = 2 * 1024 * 1024;
-const VERSION = '0.1.228';
-function withCapabilities(output, videoActivity) {
-  if (videoActivity === true) return {...output, videoActivity: true};
-  const records = Object.fromEntries(Object.entries(output.records).filter(([key]) =>
-    !['videoRecent', 'videoWatched'].includes(JSON.parse(key)[0])));
-  return {...output, records};
+const VERSION = '0.1.274';
+function withCapabilities(output, data) {
+  const video = data.videoActivity === true, watching = data.videoWatching === true;
+  const records = video && watching ? output.records :
+    Object.fromEntries(Object.entries(output.records).filter(([key]) => {
+      const kind = JSON.parse(key)[0];
+      if (kind === 'videoStats') return watching;
+      if (kind === 'videoRecent' || kind === 'videoWatched') return video;
+      return true;
+    }));
+  return {...output, records, ...(video ? {videoActivity: true} : {}),
+    ...(watching ? {videoWatching: true} : {})};
 }
 export function validate(key, record) {
   let parts;
@@ -33,6 +39,12 @@ export function validate(key, record) {
         throw new Error('Invalid recently opened video');
       }
       break;
+    case 'videoStats':
+      if (parts.length !== 2 || !/^[a-f0-9]{32}$/.test(parts[1]) ||
+          !v || Object.keys(v).length !== 3 || !['telegram','local'].includes(v.source) ||
+          !integer(v.milliseconds) || v.milliseconds > 2 ** 42 ||
+          !integer(v.plays) || v.plays > 2 ** 42) throw new Error('Invalid watching counter');
+      break;
     case 'channel': if (parts.length !== 2 || !/^-?\d{1,16}$/.test(parts[1]) || (v !== null && (typeof v !== 'string' || v.length > 1000))) throw new Error('Invalid channel'); break;
     case 'pref':
       if (parts.length !== 2 || !({librarySort:['newest','oldest','title','artist','duration','mostPlayed'],repeatMode:['off','all','one']}[parts[1]] ?? []).includes(v)) throw new Error('Invalid preference'); break;
@@ -53,7 +65,7 @@ export function merge(key, old, next) {
   if (!old) return next;
   const wins = next.clock > old.clock || (next.clock === old.clock && next.device > old.device);
   let result = wins ? next : old;
-  if (['stats','day'].includes(JSON.parse(key)[0])) result = {...result, value:{...result.value,
+  if (['stats','day','videoStats'].includes(JSON.parse(key)[0])) result = {...result, value:{...result.value,
     milliseconds:Math.max(old.value.milliseconds,next.value.milliseconds), plays:Math.max(old.value.plays,next.value.plays)}};
   return result;
 }
@@ -114,7 +126,7 @@ export class AuralisRoom {
           stage='sync';
           const {changed,output}=await this.turso.sync(data,merge);
           if(changed) this.broadcast();
-          return json(withCapabilities(output, data.videoActivity));
+          return json(withCapabilities(output, data));
         });
         this.queue=task.catch(()=>{});
         try {
@@ -144,7 +156,7 @@ export class AuralisRoom {
         return {cursor,more:cursor<revision,records:Object.fromEntries(rows.map(r => [r.key,JSON.parse(r.value)]))};
       });
       if (changed) this.broadcast();
-      return json(withCapabilities(output, data.videoActivity));
+      return json(withCapabilities(output, data));
     } catch (error) { return json({error:error instanceof Error ? error.message : 'Invalid sync request'},400); }
   }
   broadcast() {for (const ws of this.state.getWebSockets()) {try {const auth=ws.deserializeAttachment?.();if(auth?.expires && auth.expires<=Date.now()/1000){ws.close(1008,'Sign in again');continue;}ws.send('changed');} catch { /* Polling retries disconnected peers. */ }}}
