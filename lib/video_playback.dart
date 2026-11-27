@@ -7,7 +7,7 @@ import 'dart:ui' as ui;
 
 import 'package:audio_session/audio_session.dart';
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart' as mpv;
@@ -213,8 +213,6 @@ class _VideoPlaybackState extends State<VideoPlayback>
   List<VideoSkipSegment> _chapterSegments = const [];
   int _chapterReadGeneration = 0;
   _VideoFit _fit = _VideoFit.fit;
-  _Upscale _upscale = _Upscale.off;
-  _ShaderQuality _quality = _ShaderQuality.balanced;
   late _Ambient _ambient = _Ambient.values.firstWhere(
     (mode) => mode.name == _data.ambientMode,
     orElse: () => _Ambient.off,
@@ -610,8 +608,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
             if (_log.length >= 80) _log.removeAt(0);
             _log.add('${entry.prefix}: $text');
           }),
-          player.stream.width.listen((_) => unawaited(_updateUpscaling())),
-          player.stream.height.listen((_) => unawaited(_updateUpscaling())),
+          player.stream.width.listen((_) => unawaited(_updateHdrProcessing())),
+          player.stream.height.listen((_) => unawaited(_updateHdrProcessing())),
           player.stream.tracks.listen((_) {
             if (_acceptVideoParams && _canPlay) {
               unawaited(_preferVideoTracks());
@@ -649,7 +647,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
             }
             if (position > Duration.zero && !_opening && !_positionReady) {
               _positionReady = true;
-              if (_data.hdrProfile != _activeHdr) unawaited(_updateUpscaling());
+              if (_data.hdrProfile != _activeHdr) {
+                unawaited(_updateHdrProcessing());
+              }
               unawaited(_updateRefreshRate());
             }
             if (!_reachedWatchedThreshold &&
@@ -1322,8 +1322,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
     await _player!.setVolume(volume);
   }
 
+  bool get _supportsBrightnessGestures =>
+      defaultTargetPlatform == TargetPlatform.android;
+
   Future<void> _setBrightness(double value) async {
-    if (!_canPlay || _opening || !Platform.isAndroid) return;
+    if (!_canPlay || _opening || !_supportsBrightnessGestures) return;
     final level = value.clamp(.01, 1.0);
     if (_source.channelId == null) _localBrightness = level;
     _rememberChannelSettings((settings) => settings.brightness = level);
