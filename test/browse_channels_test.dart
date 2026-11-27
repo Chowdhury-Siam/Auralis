@@ -108,12 +108,14 @@ void main() {
       expect(find.text(files.title), findsOneWidget);
       expect(find.text(excluded.title), findsNothing);
       expect(find.text(empty.title), findsNothing);
+      expect(find.text('2 ${mode.name} channels'), findsOneWidget);
       expect(find.byType(GridView), findsOneWidget);
       expect(find.byTooltip('Show list'), findsNothing);
       expect(find.byTooltip('Show grid'), findsNothing);
 
       await tester.tap(find.byTooltip('Search channels'));
       await tester.pumpAndSettle();
+      expect(find.text('2 ${mode.name} channels'), findsNothing);
       await tester.enterText(find.byType(TextField), excluded.title);
       await tester.pumpAndSettle();
       expect(find.text('No matching channels'), findsOneWidget);
@@ -124,6 +126,7 @@ void main() {
       await tester.drag(find.byType(GridView), const Offset(0, 350));
       await tester.pumpAndSettle();
       expect(find.text(empty.title), findsOneWidget);
+      expect(find.text('3 ${mode.name} channels'), findsOneWidget);
       emptyHasMedia = false;
       await tester.drag(find.byType(GridView), const Offset(0, 350));
       await tester.pumpAndSettle();
