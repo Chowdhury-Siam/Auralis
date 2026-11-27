@@ -15,9 +15,12 @@ preference; automatic updates use the existing deployment-permission rules.
 ## Video
 
 Video settings → Player settings → Customize each gesture contains independent
-switches for surface taps, side/center double-taps, horizontal seeking, vertical
-volume/Android brightness, pinch zoom, zoomed-video panning, pointer speed hold,
+switches for surface taps, side/center double-taps, horizontal seeking,
+volume and Android brightness adjustments, pinch zoom, zoomed-video panning, pointer speed hold,
 mouse hover, keyboard shortcuts, desktop Space hold, and the time-label tap.
+Swipe vertically on the left for Android brightness or on the right for volume.
+The meter appears on the opposite side. Swipe up to increase the level and down
+to decrease it. Horizontal swipes seek.
 Keyboard/hover switches remain available on Android for external input devices.
 The existing touch master switch and lock still apply. Back, unlock and ordinary
 buttons are not disabled by the keyboard/surface switches. A small Show controls
