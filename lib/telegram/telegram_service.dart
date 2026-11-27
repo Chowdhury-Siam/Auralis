@@ -22,6 +22,7 @@ import '../storage.dart';
 import 'td_transport.dart';
 import 'embedded_cover.dart';
 import 'phone_login.dart';
+import 'video_stream_cache.dart';
 
 typedef _Cover = ({Uint8List bytes, int shortEdge});
 
@@ -41,6 +42,9 @@ class TelegramService extends ChangeNotifier {
        _transport = transport ?? (createTransport ?? TdTransport.new)();
   final Directory directory;
   final SecretVault vault;
+  late final videoStreamCache = VideoStreamCache(
+    File(p.join(directory.path, 'video-resume.cache')),
+  );
   late final offline = OfflineMedia(
     Directory(p.join(directory.path, 'offline')),
   )..addListener(notifyListeners);
@@ -78,6 +82,7 @@ class TelegramService extends ChangeNotifier {
   TdTransport get transport => _transport;
   // Resolve the current client even when the playback proxy keeps this tear-off.
   Future<Json> request(Json json) async {
+    final client = transport;
     final preloading = json['@type'] == 'downloadFile' && json['priority'] == 2;
     if (preloading ||
         json['@type'] == 'downloadFile' && json['priority'] == 32) {
@@ -86,11 +91,16 @@ class TelegramService extends ChangeNotifier {
       await _storageCleanup;
       await _audioDeletes[json['file_id']];
       if (preloading &&
-          (!ready || _offlineFiles.containsKey(json['file_id']))) {
+          (!ready ||
+              !isPreloading(json['file_id'] as int) ||
+              _offlineFiles.containsKey(json['file_id']))) {
         return const {};
       }
     }
-    return _transport.request(json);
+    if (!identical(client, transport)) {
+      throw StateError('The Telegram session changed.');
+    }
+    return client.request(json);
   }
 
   StreamSubscription<Json>? _subscription;
@@ -204,7 +214,7 @@ class TelegramService extends ChangeNotifier {
       'chat_limit': 0,
     }, timeout: const Duration(seconds: 5));
     final type = _playbackCacheType(video);
-    var bytes = 0;
+    var bytes = video ? await videoStreamCache.bytes : 0;
     for (final chat
         in (result['by_chat'] as List? ?? const []).whereType<Json>()) {
       for (final item
@@ -229,9 +239,27 @@ class TelegramService extends ChangeNotifier {
         'Playback cache in use or the Telegram session changed.',
       );
     }
-    await (_storageCleanup = _optimizeMedia([
-      {'@type': _playbackCacheType(video)},
-    ]).then<void>((_) {}).whenComplete(() => _storageCleanup = null));
+    await (_storageCleanup = () async {
+      if (video) await videoStreamCache.clear(removeAbandoned: true);
+      await _optimizeMedia([
+        {'@type': _playbackCacheType(video)},
+      ]);
+    }().whenComplete(() => _storageCleanup = null));
+  }
+
+  Future<void> cancelVideoPreload(int fileId) async {
+    if (!ready ||
+        !isPreloading(fileId) ||
+        isStreaming(fileId) ||
+        _metadataUsers.containsKey(fileId) ||
+        _offlineFiles.containsKey(fileId)) {
+      return;
+    }
+    await transport.request({
+      '@type': 'cancelDownloadFile',
+      'file_id': fileId,
+      'only_if_pending': false,
+    });
   }
 
   /// Releases a temporary Telegram file after its last playback or metadata read.
@@ -1280,6 +1308,9 @@ class TelegramService extends ChangeNotifier {
       state = 'disconnected';
     }
     if (!ready) {
+      if (state == 'authorizationStateLoggingOut' || state == 'disconnected') {
+        unawaited(videoStreamCache.clear());
+      }
       _clearChannelMediaCounts();
       clearImageCache();
       if (state == 'authorizationStateLoggingOut' ||
@@ -1876,6 +1907,7 @@ class TelegramService extends ChangeNotifier {
     _clearChatFolders();
     _clearChannelMediaCounts();
     clearImageCache();
+    await videoStreamCache.clear();
     _secrets = {..._secrets}
       ..remove('apiId')
       ..remove('apiHash');
@@ -1931,6 +1963,7 @@ class TelegramService extends ChangeNotifier {
     _clearChannelMediaCounts();
     clearImageCache();
     await _subscription?.cancel();
+    await videoStreamCache.clear();
     try {
       await transport.close();
     } finally {
