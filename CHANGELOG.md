@@ -1,5 +1,32 @@
 # Auralis changes
 
+## 0.1.283
+
+- Swipe vertically on the left for Android brightness and on the right for volume. The compact meter appears on the opposite side and fades after release.
+- Use horizontal swipes for seeking.
+
+## 0.1.282
+
+- On Android, swipe right for brightness on the left or swipe left for volume on the right.
+
+## 0.1.281
+
+- Reuse cached Telegram video ranges after reopening Auralis for faster resume playback.
+
+## 0.1.280
+
+- Redesign Video Home with a cinematic featured video, playback progress, and artwork shelves for recently opened videos and channels.
+- Open watch history directly from Video Home.
+
+## 0.1.279
+
+- Remove Anime4K from video playback and drop its bundled shaders.
+
+## 0.1.278
+
+- Browse Music and Video channels with redesigned headers that show channel counts.
+- Show the series poster in Video Library when an episode thumbnail is unavailable.
+
 ## 0.1.277
 
 - Open video speed, audio, subtitle, and queue controls in bottom sheets. Use the side drawer for direct access to player tools.
