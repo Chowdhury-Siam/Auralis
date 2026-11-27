@@ -175,11 +175,6 @@ void main() {
         expect(bytes, coverPng);
         final context = tester.element(find.byType(MaterialApp));
         await precacheImage(
-          ResizeImage(FileImage(File(photoPath)), width: 96),
-          context,
-        );
-        if (!context.mounted) return;
-        await precacheImage(
           ResizeImage(MemoryImage(bytes!), width: 96),
           context,
         );
@@ -223,12 +218,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(channelSearch, findsNothing);
       expect(find.text('Channel -1'), findsOneWidget);
-      await tester.tap(find.byTooltip('Show list'));
-      await tester.pump();
-      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-      await tester.pumpAndSettle();
       expect(telegram.channels.map((c) => c.photoFileId), [90, 90]);
-      expect(find.byType(Image), findsNWidgets(2));
+      expect(find.byType(DiscoveryTile), findsNWidgets(2));
       await tester.tap(find.text('Channel -1'));
       await tester.pumpAndSettle();
       expect(find.text('1 track'), findsNWidgets(2));
@@ -252,7 +243,7 @@ void main() {
           td.requests.where((r) => r['@type'] == 'loadChats').length;
       final chatsBeforeRefresh = chatRefreshes();
       await tester.drag(
-        find.byKey(const PageStorageKey(('channels', true))),
+        find.byKey(const PageStorageKey('music-browse-grid')),
         const Offset(0, 320),
       );
       await pumpUntil(
@@ -323,7 +314,9 @@ void main() {
         find.widgetWithText(PopupMenuItem<LibrarySort>, 'Title (A–Z)'),
       );
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField).first, 'Channel -2');
+      await tester.tap(find.byTooltip('Search Library'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Channel -2');
       await tester.pumpAndSettle();
       expect(find.byTooltip('Track actions for Song -1'), findsNothing);
       expect(find.byTooltip('Track actions for Song -2'), findsOneWidget);
@@ -430,6 +423,8 @@ void main() {
         await tester.tap(find.byTooltip('Library').first);
         await tester.pumpAndSettle();
       }
+      await tester.tap(find.byTooltip('Search Library'));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Song -2');
       await tester.pumpAndSettle();
       await tester.runAsync(() async {
