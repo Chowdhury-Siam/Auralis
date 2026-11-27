@@ -44,6 +44,7 @@ class TelegramService extends ChangeNotifier {
   final SecretVault vault;
   late final videoStreamCache = VideoStreamCache(
     File(p.join(directory.path, 'video-resume.cache')),
+    namespace: () => _secrets['databaseKey']?.toString() ?? '',
   );
   late final offline = OfflineMedia(
     Directory(p.join(directory.path, 'offline')),
@@ -240,7 +241,7 @@ class TelegramService extends ChangeNotifier {
       );
     }
     await (_storageCleanup = () async {
-      if (video) await videoStreamCache.clear(removeAbandoned: true);
+      if (video) await videoStreamCache.clear();
       await _optimizeMedia([
         {'@type': _playbackCacheType(video)},
       ]);
@@ -1308,7 +1309,7 @@ class TelegramService extends ChangeNotifier {
       state = 'disconnected';
     }
     if (!ready) {
-      if (state == 'authorizationStateLoggingOut' || state == 'disconnected') {
+      if (state == 'authorizationStateLoggingOut') {
         unawaited(videoStreamCache.clear());
       }
       _clearChannelMediaCounts();
@@ -1829,6 +1830,7 @@ class TelegramService extends ChangeNotifier {
       if (credentialRecoveryRequired) await vault.resetProtection();
       await vault.write(checked.credentials);
       await restoreData();
+      await videoStreamCache.clear();
       safeToRestart = true;
       _channels.clear();
       _clearChannelMediaCounts();
@@ -1868,6 +1870,7 @@ class TelegramService extends ChangeNotifier {
       );
     }
     await shutdown();
+    await videoStreamCache.clear();
     await directory.create(recursive: true);
     final recovery = await directory.createTemp('unreadable-session-');
     final database = Directory(p.join(directory.path, 'database'));
@@ -1963,7 +1966,7 @@ class TelegramService extends ChangeNotifier {
     _clearChannelMediaCounts();
     clearImageCache();
     await _subscription?.cancel();
-    await videoStreamCache.clear();
+    await videoStreamCache.close();
     try {
       await transport.close();
     } finally {
