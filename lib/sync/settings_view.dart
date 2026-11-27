@@ -770,7 +770,7 @@ class _SyncAccountPageState extends State<SyncAccountPage> {
       ),
       const SizedBox(height: 12),
       Text(
-        'Favorites, playlists, listening history, channels and shared preferences sync across your devices. Music files, volume and playback stay on this device.',
+        'Favorites, playlists, listening history, watching stats, channels and shared preferences sync across your devices. Media files, volume and active playback stay on this device.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: colors.onSurfaceVariant,
         ),
