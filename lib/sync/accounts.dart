@@ -5,6 +5,7 @@ const _sharedFields = [
   'playlists',
   'recentIds',
   TelegramVideoActivity.key,
+  VideoWatchingStats.key,
   'selectedChannels',
   'listening',
   'librarySort',
@@ -183,7 +184,11 @@ extension AccountSync on SyncController {
     'favoriteIds': <String>[],
     'playlists': <String, dynamic>{},
     'recentIds': <String>[],
-    TelegramVideoActivity.key: {'recent': <String, dynamic>{}, 'watched': <String>[]},
+    TelegramVideoActivity.key: {
+      'recent': <String, dynamic>{},
+      'watched': <String>[],
+    },
+    VideoWatchingStats.key: <String, dynamic>{},
     'selectedChannels': <dynamic>[],
     'listening': {'tracks': <String, dynamic>{}, 'days': <String, dynamic>{}},
     'librarySort': AppSettings.defaultLibrarySort.name,
@@ -192,7 +197,9 @@ extension AccountSync on SyncController {
   void _applyLibrary(Map<String, dynamic> source) {
     final data = settings.toJson();
     for (final key in _sharedFields) {
-      if (source.containsKey(key) || key == TelegramVideoActivity.key) {
+      if (source.containsKey(key) ||
+          key == TelegramVideoActivity.key ||
+          key == VideoWatchingStats.key) {
         data[key] = source[key] ?? _emptyLibrary()[key];
       }
     }
