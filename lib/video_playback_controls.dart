@@ -630,6 +630,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
     Future<void> Function()? action, {
     double size = 44,
     bool selected = false,
+    String? value,
     VoidCallback? onLongPress,
   }) {
     final bg = selected
@@ -638,24 +639,50 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
         ? Colors.transparent
         : colors.surfaceContainerHigh.withValues(alpha: .74);
     final fg = selected ? colors.onPrimaryContainer : colors.onSurface;
+    final border = BorderSide(color: fg.withValues(alpha: .13));
     return Tooltip(
       message: label,
       child: Material(
         color: bg,
-        shape: CircleBorder(side: BorderSide(color: fg.withValues(alpha: .13))),
+        shape: value == null
+            ? CircleBorder(side: border)
+            : StadiumBorder(side: border),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          customBorder: const CircleBorder(),
+          customBorder: value == null
+              ? const CircleBorder()
+              : const StadiumBorder(),
           onTap: action == null ? null : () => unawaited(_perform(action)),
           onLongPress: onLongPress,
-          child: SizedBox.square(
-            dimension: size,
-            child: Icon(
-              icon,
-              size: size >= 60 ? 32 : 21,
-              color: action == null ? fg.withValues(alpha: .35) : fg,
-            ),
-          ),
+          child: value == null
+              ? SizedBox.square(
+                  dimension: size,
+                  child: Icon(
+                    icon,
+                    size: size >= 60 ? 32 : 21,
+                    color: action == null ? fg.withValues(alpha: .35) : fg,
+                  ),
+                )
+              : SizedBox(
+                  height: size,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 4,
+                      children: [
+                        Icon(icon, size: 18, color: fg),
+                        Text(
+                          value,
+                          style: TextStyle(
+                            color: fg,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
         ),
       ),
     );
@@ -829,7 +856,10 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
       control.label,
       Icons.speed_rounded,
       () => player.setRate(player.state.rate == 2.0 ? 1.0 : 2.0),
-      selected: player.state.rate == 2.0,
+      selected: player.state.rate != 1.0,
+      value: player.state.rate == 1.0
+          ? null
+          : '${_videoSpeedLabel(player.state.rate)}×',
       onLongPress: () =>
           unawaited(_perform(() => session._speedPanel(context))),
     ),
@@ -956,7 +986,7 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
         ? 0.0
         : (player.state.buffer.inMilliseconds / length).clamp(0.0, 1.0);
     final shownTime = _remaining && position < duration
-        ? '−${clockText(duration - position)}'
+        ? '−${clockText(Duration(milliseconds: ((duration - position).inMilliseconds / player.state.rate).round()))}'
         : clockText(duration);
     final marks = [
       for (final point in session._chapters) (point.position, false),
@@ -1042,7 +1072,13 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
 
   Widget _feedbackOverlay(String text, Size viewport, EdgeInsets insets) {
     if (_feedbackLevel case final level?) {
-      return _levelIndicator(text, level.kind, level.fraction, viewport, insets);
+      return _levelIndicator(
+        text,
+        level.kind,
+        level.fraction,
+        viewport,
+        insets,
+      );
     }
     return Center(
       child: Transform.translate(
@@ -1251,6 +1287,18 @@ class _VideoHudState extends State<_VideoHud> with WidgetsBindingObserver {
                     ),
                   ),
                   Center(child: _transport()),
+                  SafeArea(
+                    minimum: EdgeInsets.symmetric(horizontal: horizontalInset),
+                    child: Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: _button(
+                        'Open controls drawer',
+                        Icons.chevron_left_rounded,
+                        () => session._controlsDrawer(context, widget.video),
+                        size: 42,
+                      ),
+                    ),
+                  ),
                   SafeArea(
                     minimum: EdgeInsets.fromLTRB(
                       horizontalInset,
