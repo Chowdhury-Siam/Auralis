@@ -75,6 +75,9 @@ class VideoPlayback extends StatefulWidget {
     this.onWatched,
     this.minimized = false,
     this.miniBottomInset = 0,
+    this.browsingChannelId,
+    this.selectionRevision = 0,
+    this.libraryOrder,
     this.onBack,
     this.onMinimize,
     this.onExpand,
@@ -93,6 +96,9 @@ class VideoPlayback extends StatefulWidget {
   final VoidCallback? onWatched;
   final bool minimized;
   final double miniBottomInset;
+  final int? browsingChannelId;
+  final int selectionRevision;
+  final List<Track>? libraryOrder;
   final VoidCallback? onBack, onMinimize, onExpand, onClose;
   final ValueChanged<Future<void>>? onRelease;
   @visibleForTesting
@@ -146,7 +152,14 @@ class _VideoPlaybackState extends State<VideoPlayback>
   late int _index = widget.initialIndex;
   int? _shuffleNext;
   String? _preloadCandidate;
+  int _preloadGeneration = 0;
+  bool _preloadBrowsingBlocked = false, _refreshedReference = false;
   bool _usingOfflineVideo = false;
+  bool _queueGrid = false;
+  String _audioChannels = 'auto-safe';
+  final _activeAudioFilters = <String>{};
+  // Keep Android's content URI descriptor alive while mpv can read the track.
+  final _externalAudio = <mpv.Media>[];
   VideoSource get _source => _queue[_index];
   VideoPlaybackData get _data => widget.music.settings.videoPlayback;
 
@@ -315,8 +328,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   void _authorizationChanged() {
     if (widget.telegram.ready) return;
-    unawaited(widget.proxy.preload(null));
-    _preloadCandidate = null;
+    _cancelNextPreload();
     if (_source.telegram == null ||
         _usingOfflineVideo ||
         _invalidated ||
@@ -346,6 +358,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
       _startupTimeout?.cancel();
       _flushChannelSettings();
       _saveProgress();
+      unawaited(widget.proxy.pausePreload(true));
       _resumePlaying =
           _player?.state.playing == true || (_opening && _openingShouldPlay);
       _interruptedPosition = _position > Duration.zero ? _position : null;
@@ -451,7 +464,11 @@ class _VideoPlaybackState extends State<VideoPlayback>
     }
   }
 
-  Future<void> _retry({Duration? position, bool? play}) async {
+  Future<void> _retry({
+    Duration? position,
+    bool? play,
+    bool refreshReference = false,
+  }) async {
     if (!_canPlay || _recovering) return;
     _recovering = true;
     _changed();
@@ -461,7 +478,13 @@ class _VideoPlaybackState extends State<VideoPlayback>
       if (_source.telegram != null) await widget.proxy.interrupt();
       await _openingTask?.timeout(const Duration(seconds: 12));
       if (_canPlay && !_appInBackground) {
-        unawaited(_open(position: position, play: play));
+        unawaited(
+          _open(
+            position: position,
+            play: play,
+            refreshReference: refreshReference,
+          ),
+        );
       }
     } catch (_) {
       _setError('Could not reopen the video. Try again.');
@@ -471,6 +494,15 @@ class _VideoPlaybackState extends State<VideoPlayback>
     }
   }
 
+  void _refreshExpiredReference(Track track) {
+    if (!_canPlay || _source.telegram?.fileId != track.fileId) return;
+    final play = _opening ? _openingShouldPlay : _player?.state.playing;
+    _setError('Telegram could not load the video.');
+    if (_refreshedReference || _appInBackground) return;
+    _refreshedReference = true;
+    unawaited(_retry(play: play, refreshReference: true));
+  }
+
   void _setError(String message) {
     if (!_canPlay || _error != null) return;
     _saveProgress();
@@ -478,6 +510,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     _waitingForVideo = false;
     _error = message;
     _loading = false;
+    unawaited(widget.proxy.pausePreload(true));
     setState(() {});
     _changed();
   }
@@ -501,13 +534,19 @@ class _VideoPlaybackState extends State<VideoPlayback>
     );
   }
 
-  Future<void> _open({bool resume = true, Duration? position, bool? play}) {
+  Future<void> _open({
+    bool resume = true,
+    Duration? position,
+    bool? play,
+    bool refreshReference = false,
+  }) {
     if (_opening || !_canPlay) return Future<void>.value();
     _foregroundCheck?.cancel();
     return _openingTask = _openVideo(
       resume: resume,
       position: position,
       play: play ?? _data.autoplay,
+      refreshReference: refreshReference,
     );
   }
 
@@ -515,13 +554,19 @@ class _VideoPlaybackState extends State<VideoPlayback>
     required bool resume,
     required Duration? position,
     required bool play,
+    required bool refreshReference,
   }) async {
     _opening = _loading = true;
     _watchSample = null;
     _openingShouldPlay = play;
     _acceptVideoParams = false;
     _trackGeneration++;
+    _preloadGeneration++;
     _preloadCandidate = null;
+    final fileId = _source.telegram?.fileId;
+    if (fileId == null || !widget.proxy.isPreloading(fileId)) {
+      unawaited(widget.proxy.preload(null));
+    }
     _automaticAudio = _automaticSubtitles = true;
     _positionReady = false;
     _reachedWatchedThreshold = false;
@@ -555,6 +600,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
               _setError('Telegram could not load the video.');
             }
           }),
+          widget.proxy.expiredReferences.listen(_refreshExpiredReference),
           player.stream.log.listen((entry) {
             // The backend can log local paths, URL credentials and Telegram capability URLs.
             final text = entry.text.replaceAll(
@@ -651,10 +697,16 @@ class _VideoPlaybackState extends State<VideoPlayback>
           player.stream.playing.listen((playing) {
             if (_closed) return;
             _watchSample = null;
+            if (!playing && !_opening && !player.state.completed) {
+              _saveProgress();
+              unawaited(widget.proxy.pausePreload(true));
+            }
             unawaited(_updatePip());
           }),
           player.stream.buffering.listen((buffering) {
-            if (buffering) _watchSample = null;
+            if (!buffering) return;
+            _watchSample = null;
+            if (!_opening) unawaited(widget.proxy.pausePreload(true));
           }),
         ]);
         await video.platform.future;
@@ -662,6 +714,12 @@ class _VideoPlaybackState extends State<VideoPlayback>
         await _native.setProperty('network-timeout', '60');
         await _native.setProperty('alang', 'ja,jpn,jp,japan,japanese');
         await _native.setProperty('slang', 'en,eng,english');
+        if (!_data.audioPitchCorrection) {
+          await _native.setProperty('audio-pitch-correction', 'no');
+        }
+        if (_data.defaultVideoSpeed != 1) {
+          await player.setRate(_data.defaultVideoSpeed);
+        }
         await _applySavedConfigurations();
         _defaultVolume = _player!.state.volume;
         try {
@@ -677,7 +735,9 @@ class _VideoPlaybackState extends State<VideoPlayback>
           await _setOption(entry.key, entry.value);
         }
       } else {
+        widget.proxy.endVideoReads();
         await _player!.stop();
+        _externalAudio.clear();
         if (_cropped) {
           await _native.command(['vf', 'remove', '@auralis-crop']);
           _cropped = false;
@@ -713,7 +773,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
         throw const FormatException('The offline copy is unavailable.');
       }
       if (source.telegram case final Track reference
-          when offline == null && reference.fileId == null) {
+          when offline == null &&
+              (reference.fileId == null || refreshReference)) {
         final restored = await Future.any([
           widget.telegram.restoreVideo(reference),
           _closing.future,
@@ -925,6 +986,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     }
     _saveProgress();
     _index = index;
+    _refreshedReference = false;
     _countedVideoPlay = false;
     _usingOfflineVideo = false;
     _preloadCandidate = null;
@@ -945,58 +1007,69 @@ class _VideoPlaybackState extends State<VideoPlayback>
 
   void _queueChanged() {
     _shuffleNext = null;
-    _preloadCandidate = null;
     _updateNextPreload();
     _changed();
   }
 
+  void _cancelNextPreload() {
+    _preloadGeneration++;
+    _preloadCandidate = null;
+    unawaited(widget.proxy.preload(null));
+  }
+
   void _updateNextPreload() {
-    if (!_canPlay ||
-        _opening ||
-        _error != null ||
-        !widget.telegram.ready ||
-        _player?.state.playing != true ||
-        _player!.state.buffering) {
-      return;
-    }
+    if (!_canPlay || _opening || _error != null) return;
     final next = _nextIndex;
-    final reference = next < _queue.length ? _queue[next].telegram : null;
+    final reference =
+        !_preloadBrowsingBlocked &&
+            widget.telegram.ready &&
+            next < _queue.length
+        ? _queue[next].telegram
+        : null;
     final candidate =
         reference != null &&
+            reference.id != _source.telegram?.id &&
+            (reference.fileId == null ||
+                reference.fileId != _source.telegram?.fileId) &&
             !widget.telegram.offline.contains(reference.id, video: true) &&
             !widget.telegram.offline.saving(reference.id, video: true)
         ? reference
         : null;
-    if (candidate == null) {
-      _preloadCandidate = null;
-      unawaited(widget.proxy.preload(null));
+    if (candidate?.id != _preloadCandidate) _cancelNextPreload();
+    if (candidate == null ||
+        _appInBackground ||
+        _player?.state.playing != true ||
+        _player!.state.buffering ||
+        _position <= Duration.zero) {
       return;
     }
+    unawaited(widget.proxy.pausePreload(false));
     if (_preloadCandidate == candidate.id) return;
     _preloadCandidate = candidate.id;
-    final generation = _trackGeneration;
-    unawaited(_preloadNextVideo(candidate, generation));
+    unawaited(_preloadNextVideo(candidate, ++_preloadGeneration));
   }
 
   Future<void> _preloadNextVideo(Track reference, int generation) async {
-    bool current() =>
-        _canPlay &&
-        widget.telegram.ready &&
-        generation == _trackGeneration &&
-        _preloadCandidate == reference.id;
     try {
       final track = reference.fileId == null
           ? await widget.telegram.restoreVideo(reference)
           : reference;
-      if (track == null || !current()) return;
+      if (track == null ||
+          !_canPlay ||
+          !widget.telegram.ready ||
+          generation != _preloadGeneration ||
+          _preloadCandidate != reference.id ||
+          widget.telegram.offline.contains(reference.id, video: true) ||
+          widget.telegram.offline.saving(reference.id, video: true)) {
+        return;
+      }
       final source = VideoSource.telegram(track);
-      final duration = _data.durationOf(source);
-      if (duration <= Duration.zero) return;
       final next = _nextIndex;
-      if (_queue[next].id == source.id) _queue[next] = source;
-      await widget.proxy.preload(track, duration: duration);
+      if (next >= _queue.length || _queue[next].id != source.id) return;
+      _queue[next] = source;
+      await widget.proxy.preload(track, duration: _data.durationOf(source));
     } catch (_) {
-      // The next video still opens normally when preloading is unavailable.
+      // The next video can still open through the foreground reader.
     }
   }
 
@@ -1031,6 +1104,8 @@ class _VideoPlaybackState extends State<VideoPlayback>
     );
     _watchSample = null;
     await _player!.seek(position);
+    _positionReady = true;
+    if (_player?.state.playing == false) _saveProgress();
   }
 
   Future<void> _togglePlayback() async {
@@ -1039,6 +1114,7 @@ class _VideoPlaybackState extends State<VideoPlayback>
     final player = _player!;
     if (player.state.playing) {
       await player.pause();
+      _saveProgress();
       return;
     }
     if (player.state.completed) {
@@ -1118,12 +1194,75 @@ class _VideoPlaybackState extends State<VideoPlayback>
   @override
   void didUpdateWidget(covariant VideoPlayback oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.selectionRevision != oldWidget.selectionRevision) {
+      final sources = widget.sources, index = widget.initialIndex;
+      unawaited(Future<void>.microtask(() => _selectVideo(sources, index)));
+    } else if (widget.browsingChannelId != oldWidget.browsingChannelId ||
+        !identical(widget.libraryOrder, oldWidget.libraryOrder)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_canPlay) return;
+        if (widget.browsingChannelId != oldWidget.browsingChannelId) {
+          _preloadBrowsingBlocked =
+              widget.browsingChannelId?.toString() != _source.channelId;
+          if (_preloadBrowsingBlocked) _cancelNextPreload();
+        }
+        if (!identical(widget.libraryOrder, oldWidget.libraryOrder)) {
+          _applyLibraryOrder();
+        }
+        _updateNextPreload();
+      });
+    }
     if (widget.minimized != oldWidget.minimized) {
       if (!_closed) unawaited(_setVideoImmersive(!widget.minimized));
       unawaited(_applyOrientation());
       unawaited(_updatePip());
       unawaited(_updateRefreshRate());
     }
+  }
+
+  Future<void> _selectVideo(List<VideoSource> sources, int index) async {
+    while (_opening && !_closed) {
+      await _openingTask;
+    }
+    if (_closed || !mounted || !identical(widget.sources, sources)) return;
+    final current = _source;
+    final selected = sources[index];
+    final same =
+        current.id == selected.id &&
+        (current.telegram?.fileId == selected.telegram?.fileId ||
+            selected.telegram?.fileId == null);
+    if (!same || _invalidated) {
+      _saveProgress();
+      _positionReady = false;
+      _refreshedReference = _invalidated = false;
+      _countedVideoPlay = _usingOfflineVideo = false;
+    }
+    _queue
+      ..clear()
+      ..addAll(sources);
+    _index = index;
+    if (same) _queue[index] = current;
+    _preloadBrowsingBlocked = false;
+    _shuffleNext = null;
+    if (same && _error == null) {
+      _updateNextPreload();
+      _changed();
+    } else {
+      await _open(refreshReference: same && _refreshedReference);
+    }
+  }
+
+  void _applyLibraryOrder() {
+    final order = widget.libraryOrder;
+    if (order == null || _queue.length < 2) return;
+    final ranks = {for (var i = 0; i < order.length; i++) order[i].id: i};
+    if (_queue.any((entry) => !ranks.containsKey(entry.telegram?.id))) return;
+    final current = _source;
+    _queue.sort(
+      (a, b) => ranks[a.telegram!.id]!.compareTo(ranks[b.telegram!.id]!),
+    );
+    _index = _queue.indexOf(current);
+    _queueChanged();
   }
 
   void _rememberChannelSettings(void Function(VideoChannelSettings) edit) {
@@ -1255,8 +1394,12 @@ class _VideoPlaybackState extends State<VideoPlayback>
     await _releaseStep(() async {
       await _player?.dispose();
     }, 'release the decoder');
+    _externalAudio.clear();
     // The decoder may still be reading the proxy while it stops.
-    await _releaseStep(playback.proxy.stop, 'close the Telegram video stream');
+    await _releaseStep(
+      () => playback.proxy.stop(keepPreload: detachSurface && _error == null),
+      'close the Telegram video stream',
+    );
     if (_scripts case final Directory scripts) {
       await _releaseStep(() async {
         await scripts.delete(recursive: true);
