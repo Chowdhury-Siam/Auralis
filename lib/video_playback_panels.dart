@@ -3,6 +3,11 @@ part of 'video_playback.dart';
 typedef _PanelAction = Future<void> Function();
 typedef _VideoChoice<T> = ({T value, String label, bool selected});
 
+String _videoSpeedLabel(double rate) => rate
+    .toStringAsFixed(2)
+    .replaceFirst(RegExp(r'0+$'), '')
+    .replaceFirst(RegExp(r'\.$'), '');
+
 extension _PlaybackPanels on _VideoPlaybackState {
   Future<T?> _choose<T>(
     BuildContext context,
@@ -41,14 +46,25 @@ extension _PlaybackPanels on _VideoPlaybackState {
     String autoHint = 'Use the default track',
   }) {
     if (id == 'auto') {
-      return _VideoOption(value, 'Automatic', Icons.auto_awesome_rounded,
-          detail: autoHint, selected: selected);
+      return _VideoOption(
+        value,
+        'Automatic',
+        Icons.auto_awesome_rounded,
+        detail: autoHint,
+        selected: selected,
+      );
     }
     if (id == 'no') {
-      return _VideoOption(value, 'Off', Icons.block_rounded,
-          detail: offHint, selected: selected);
+      return _VideoOption(
+        value,
+        'Off',
+        Icons.block_rounded,
+        detail: offHint,
+        selected: selected,
+      );
     }
-    final tag = language?.trim().toLowerCase().split(RegExp('[-_]')).first ?? '';
+    final tag =
+        language?.trim().toLowerCase().split(RegExp('[-_]')).first ?? '';
     final languageName = switch (tag) {
       'en' || 'eng' || 'english' => 'English',
       'ja' || 'jp' || 'jpn' || 'jap' || 'japan' || 'japanese' => 'Japanese',
@@ -70,10 +86,18 @@ extension _PlaybackPanels on _VideoPlaybackState {
       _ => tag.toUpperCase(),
     };
     final name = title?.trim();
-    final label = name != null && name.isNotEmpty ? name : languageName ?? 'Track $id';
-    return _VideoOption(value, label, icon,
-        detail: languageName?.toLowerCase() == label.toLowerCase() ? null : languageName,
-        selected: selected);
+    final label = name != null && name.isNotEmpty
+        ? name
+        : languageName ?? 'Track $id';
+    return _VideoOption(
+      value,
+      label,
+      icon,
+      detail: languageName?.toLowerCase() == label.toLowerCase()
+          ? null
+          : languageName,
+      selected: selected,
+    );
   }
 
   Widget _trackChoices<T>(
@@ -81,7 +105,8 @@ extension _PlaybackPanels on _VideoPlaybackState {
     ValueChanged<T> select,
   ) {
     bool isMode(_VideoOption<T> option) =>
-        option.icon == Icons.auto_awesome_rounded || option.icon == Icons.block_rounded;
+        option.icon == Icons.auto_awesome_rounded ||
+        option.icon == Icons.block_rounded;
     final tracks = options.where((option) => !isMode(option));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -102,40 +127,132 @@ extension _PlaybackPanels on _VideoPlaybackState {
 
   Future<void> _speedPanel(BuildContext context) async {
     final player = _player!;
-    final rate = await showAuralisDialog<double>(
+    var rate = player.state.rate.clamp(.25, 4.0);
+    await _showPlaybackSheet<void>(
       context: context,
-      builder: (dialog) => _VideoPanel(
-        title: 'Playback speed',
-        detail: 'Choose how fast the video plays.',
-        icon: Icons.speed_rounded,
-        width: 420,
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final (label, speeds) in const [
-              ('Slower', [.25, .5, .75]),
-              ('Normal', [1.0]),
-              ('Faster', [1.25, 1.5, 1.75, 2.0, 2.5, 3.0]),
-            ]) ...[
-              _VideoSectionLabel(label),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  for (final speed in speeds)
-                    ChoiceChip(
-                      label: Text('${speed % 1 == 0 ? speed.toInt() : speed}×'),
-                      selected: speed == player.state.rate,
-                      onSelected: (_) => Navigator.pop(dialog, speed),
+      builder: (dialog) => StatefulBuilder(
+        builder: (context, update) {
+          void apply(double next) {
+            final value = ((next.clamp(.25, 4.0) * 20).round()) / 20;
+            update(() => rate = value);
+            if (_canPlay) {
+              unawaited(
+                player.setRate(value).catchError((Object _) {
+                  _notice('Playback speed could not be changed.');
+                }),
+              );
+            }
+          }
+
+          return _VideoPanel(
+            title: 'Playback speed',
+            icon: Icons.speed_rounded,
+            width: 520,
+            embedded: true,
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '${_videoSpeedLabel(rate)}×',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                Row(
+                  children: [
+                    IconButton.filledTonal(
+                      onPressed: rate <= .25 ? null : () => apply(rate - .05),
+                      tooltip: 'Decrease speed',
+                      icon: const Icon(Icons.remove_rounded),
                     ),
-                ],
+                    Expanded(
+                      child: Slider(
+                        key: const ValueKey('video-speed-slider'),
+                        min: .25,
+                        max: 4,
+                        divisions: 75,
+                        value: rate,
+                        semanticFormatterCallback: (value) =>
+                            '${_videoSpeedLabel(value)}×',
+                        onChanged: (value) => update(() => rate = value),
+                        onChangeEnd: apply,
+                      ),
+                    ),
+                    IconButton.filledTonal(
+                      onPressed: rate >= 4 ? null : () => apply(rate + .05),
+                      tooltip: 'Increase speed',
+                      icon: const Icon(Icons.add_rounded),
+                    ),
+                  ],
+                ),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    spacing: 6,
+                    children: [
+                      for (final speed in const [
+                        .25,
+                        .5,
+                        .75,
+                        1.0,
+                        1.25,
+                        1.5,
+                        1.75,
+                        2.0,
+                        2.5,
+                        3.0,
+                        4.0,
+                      ])
+                        ChoiceChip(
+                          label: Text('${_videoSpeedLabel(speed)}×'),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          labelPadding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                          ),
+                          showCheckmark: false,
+                          selected: speed == rate,
+                          onSelected: (_) => apply(speed),
+                        ),
+                    ],
+                  ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Audio pitch correction'),
+                  value: _data.audioPitchCorrection,
+                  onChanged: (enabled) async {
+                    if (!_canPlay) return;
+                    try {
+                      await _native.setProperty(
+                        'audio-pitch-correction',
+                        enabled ? 'yes' : 'no',
+                      );
+                      _data.audioPitchCorrection = enabled;
+                      _saveSettings();
+                      if (context.mounted) update(() {});
+                    } catch (_) {
+                      _notice('Pitch correction could not be changed.');
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => apply(1), child: const Text('Reset')),
+              FilledButton.tonal(
+                onPressed: rate == _data.defaultVideoSpeed
+                    ? null
+                    : () {
+                        update(() => _data.defaultVideoSpeed = rate);
+                        _saveSettings();
+                      },
+                child: const Text('Make default speed'),
               ),
             ],
-          ],
-        ),
+          );
+        },
       ),
     );
-    if (_canPlay && rate != null) await player.setRate(rate);
   }
 
   Future<void> _decoderPanel(BuildContext context) async {
@@ -148,9 +265,24 @@ extension _PlaybackPanels on _VideoPlaybackState {
         content: Column(
           children: [
             for (final (id, label, detail, icon) in const [
-              ('auto-safe', 'Automatic', 'Recommended. Uses hardware when supported.', Icons.auto_awesome_rounded),
-              ('auto-copy', 'Hardware copy-back', 'Try this if automatic mode has display issues.', Icons.layers_outlined),
-              ('no', 'Software', 'Uses the CPU. Can help with hardware decoding issues.', Icons.memory_rounded),
+              (
+                'auto-safe',
+                'Automatic',
+                'Recommended. Uses hardware when supported.',
+                Icons.auto_awesome_rounded,
+              ),
+              (
+                'auto-copy',
+                'Hardware copy-back',
+                'Try this if automatic mode has display issues.',
+                Icons.layers_outlined,
+              ),
+              (
+                'no',
+                'Software',
+                'Uses the CPU. Can help with hardware decoding issues.',
+                Icons.memory_rounded,
+              ),
             ])
               _VideoMenuRow(
                 label: label,
@@ -172,38 +304,160 @@ extension _PlaybackPanels on _VideoPlaybackState {
 
   Future<void> _audioPanel(BuildContext context) async {
     final player = _player!;
-    Future<void> audioControls() => _sliderPanel(context, 'Audio controls', const [
-      ('audio-delay', 'Delay (seconds)', -5, 5, 0),
-      ('balance', 'Left / right balance', -1, 1, 0),
-    ]);
-    final selected = await showAuralisDialog<_PanelAction>(
+    Future<void> audioControls() =>
+        _sliderPanel(context, 'Audio controls', const [
+          ('audio-delay', 'Delay (seconds)', -5, 5, 0),
+          ('balance', 'Left / right balance', -1, 1, 0),
+        ]);
+    final selected = await _showPlaybackSheet<_PanelAction>(
       context: context,
-      builder: (dialog) => _VideoPanel(
-        title: 'Audio tracks',
-        detail: _source.channelId == null
-            ? 'Choose the soundtrack for this video.'
-            : 'Your soundtrack choice is saved for this channel.',
-        icon: Icons.headphones_rounded,
-        content: _trackChoices<_PanelAction>([
-          for (final track in player.state.tracks.audio)
-            _trackOption<_PanelAction>(
-               () => _selectAudioTrack(track), track.id, track.title, track.language,
-              icon: Icons.audiotrack_rounded,
-              selected: track.id == player.state.track.audio.id,
-               offHint: 'Mute the soundtrack',
-               autoHint: 'Prefer Japanese when available',
-            ),
-        ], (action) => Navigator.pop(dialog, action)),
-        actions: [
-          TextButton.icon(
-            onPressed: () => Navigator.pop(dialog, audioControls),
-            icon: const Icon(Icons.tune_rounded),
-            label: const Text('Delay and balance'),
+      builder: (dialog) => StatefulBuilder(
+        builder: (context, update) => _VideoPanel(
+          title: 'Audio tracks',
+          icon: Icons.headphones_rounded,
+          embedded: true,
+          width: 520,
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _VideoMenuRow(
+                label: 'Add external audio',
+                icon: Icons.add_rounded,
+                onTap: () => Navigator.pop(dialog, _audioFile),
+              ),
+              _trackChoices<_PanelAction>([
+                for (final track in player.state.tracks.audio)
+                  _trackOption<_PanelAction>(
+                    () => _selectAudioTrack(track),
+                    track.id,
+                    track.title,
+                    track.language,
+                    icon: Icons.audiotrack_rounded,
+                    selected: track.id == player.state.track.audio.id,
+                    offHint: 'Mute the soundtrack',
+                    autoHint: 'Prefer Japanese when available',
+                  ),
+              ], (action) => Navigator.pop(dialog, action)),
+              const _VideoSectionLabel('Audio channels'),
+              Wrap(
+                spacing: 6,
+                children: [
+                  for (final (value, label) in const [
+                    ('auto', 'Auto'),
+                    ('auto-safe', 'Auto safe'),
+                    ('mono', 'Mono'),
+                    ('stereo', 'Stereo'),
+                  ])
+                    ChoiceChip(
+                      label: Text(label),
+                      selected: value == _audioChannels,
+                      onSelected: (_) async {
+                        if (!_canPlay || value == _audioChannels) return;
+                        try {
+                          await _native.setProperty('audio-channels', value);
+                          _audioChannels = value;
+                          if (context.mounted) update(() {});
+                        } catch (_) {
+                          _notice('This audio channel layout is unavailable.');
+                        }
+                      },
+                    ),
+                ],
+              ),
+              const _VideoSectionLabel('Audio processing'),
+              for (final (id, label, filter) in const [
+                (
+                  'normalize',
+                  'Volume normalization',
+                  'lavfi=[dynaudnorm=f=100:g=5]',
+                ),
+                (
+                  'compress',
+                  'Dynamic range compression',
+                  'lavfi=[acompressor]',
+                ),
+              ])
+                SwitchListTile(
+                  dense: true,
+                  title: Text(label),
+                  value: _activeAudioFilters.contains(id),
+                  onChanged: (enabled) async {
+                    if (!_canPlay) return;
+                    try {
+                      final name = '@auralis-$id';
+                      await _native.command([
+                        'af',
+                        enabled ? 'add' : 'remove',
+                        enabled ? '$name:$filter' : name,
+                      ]);
+                      if (enabled) {
+                        _activeAudioFilters.add(id);
+                      } else {
+                        _activeAudioFilters.remove(id);
+                      }
+                      if (context.mounted) update(() {});
+                    } catch (_) {
+                      _notice('This audio filter is unavailable.');
+                    }
+                  },
+                ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton.icon(
+              onPressed: () => Navigator.pop(dialog, audioControls),
+              icon: const Icon(Icons.tune_rounded),
+              label: const Text('Delay and balance'),
+            ),
+          ],
+        ),
       ),
     );
     if (_canPlay && context.mounted && selected != null) await selected();
+  }
+
+  Future<void> _audioFile() async {
+    final generation = _trackGeneration;
+    String? uri;
+    var title = 'External audio';
+    if (Platform.isAndroid) {
+      const platform = MethodChannel('app.auralis/platform');
+      uri = await _withFilePicker(
+        () =>
+            platform.invokeMethod<String>('openDocument', {'mime': 'audio/*'}),
+      );
+    } else {
+      final file = await _withFilePicker(
+        () => openFile(
+          acceptedTypeGroups: const [
+            XTypeGroup(
+              label: 'Audio',
+              extensions: [
+                'aac',
+                'ac3',
+                'flac',
+                'm4a',
+                'mp3',
+                'ogg',
+                'opus',
+                'wav',
+              ],
+            ),
+          ],
+        ),
+      );
+      uri = file == null ? null : File(file.path).uri.toString();
+      title = file?.name ?? title;
+    }
+    if (!_canPlay ||
+        _opening ||
+        generation != _trackGeneration ||
+        uri == null) {
+      return;
+    }
+    final media = mpv.Media(uri);
+    _externalAudio.add(media);
+    await _selectAudioTrack(mpv.AudioTrack.uri(media.uri, title: title));
   }
 
   Future<void> _subtitleFile() async {
@@ -249,7 +503,7 @@ extension _PlaybackPanels on _VideoPlaybackState {
     final player = _player!;
     final playerContext = context;
     var showOptions = false;
-    final selected = await showAuralisDialog<_PanelAction>(
+    final selected = await _showPlaybackSheet<_PanelAction>(
       context: context,
       builder: (dialog) => StatefulBuilder(
         builder: (context, update) {
@@ -262,45 +516,76 @@ extension _PlaybackPanels on _VideoPlaybackState {
                 ? 'Choose a subtitle track for this video.'
                 : 'Your subtitle track choice is saved for this channel.',
             icon: Icons.subtitles_outlined,
-            onBack: showOptions ? () => update(() => showOptions = false) : null,
+            embedded: true,
+            width: 520,
+            onBack: showOptions
+                ? () => update(() => showOptions = false)
+                : null,
             content: showOptions
                 ? Column(
                     children: [
                       _VideoOption<_PanelAction>(
                         () => _secondarySubtitlePanel(playerContext),
-                        'Secondary subtitles', Icons.closed_caption_outlined,
-                        detail: 'Show a second track alongside the main subtitles.',
-                      ).row(select),
-                      _VideoOption<_PanelAction>(
-                        _subtitleFile, 'Open subtitle file', Icons.upload_file_outlined,
+                        'Secondary subtitles',
+                        Icons.closed_caption_outlined,
+                        detail:
+                            'Show a second track alongside the main subtitles.',
                       ).row(select),
                       _VideoOption<_PanelAction>(
                         () => _findWyzieSubtitles(playerContext),
-                        'Search subtitles with Wyzie', Icons.search_rounded,
+                        'Search subtitles with Wyzie',
+                        Icons.search_rounded,
                       ).row(select),
                       _VideoOption<_PanelAction>(
                         () => _subtitleStylePanel(playerContext),
-                        'Style, position and delay', Icons.text_fields_rounded,
+                        'Style, position and delay',
+                        Icons.text_fields_rounded,
                       ).row(select),
                     ],
                   )
-                : _trackChoices<_PanelAction>([
-                    for (final track in player.state.tracks.subtitle)
-                      _trackOption<_PanelAction>(
-                         () => _selectSubtitleTrack(track), track.id, track.title, track.language,
-                        icon: Icons.subtitles_outlined,
-                        selected: track.id == player.state.track.subtitle.id,
-                         offHint: 'Hide subtitles',
-                         autoHint: 'Prefer English when available',
+                : Column(
+                    children: [
+                      _VideoMenuRow(
+                        label: 'Add external subtitles',
+                        icon: Icons.add_rounded,
+                        onTap: () => select(_subtitleFile),
                       ),
-                  ], select),
+                      _trackChoices<_PanelAction>([
+                        for (final track in player.state.tracks.subtitle)
+                          _trackOption<_PanelAction>(
+                            () => _selectSubtitleTrack(track),
+                            track.id,
+                            track.title,
+                            track.language,
+                            icon: Icons.subtitles_outlined,
+                            selected:
+                                track.id == player.state.track.subtitle.id,
+                            offHint: 'Hide subtitles',
+                            autoHint: 'Prefer English when available',
+                          ),
+                      ], select),
+                    ],
+                  ),
             actions: [
-              if (!showOptions)
+              if (!showOptions) ...[
+                IconButton(
+                  onPressed: () =>
+                      select(() => _findWyzieSubtitles(playerContext)),
+                  tooltip: 'Search subtitles with Wyzie',
+                  icon: const Icon(Icons.search_rounded),
+                ),
+                IconButton(
+                  onPressed: () =>
+                      select(() => _subtitleStylePanel(playerContext)),
+                  tooltip: 'Style, position and delay',
+                  icon: const Icon(Icons.palette_outlined),
+                ),
                 TextButton.icon(
                   onPressed: () => update(() => showOptions = true),
                   icon: const Icon(Icons.tune_rounded),
                   label: const Text('Subtitle options'),
                 ),
+              ],
             ],
           );
         },
@@ -318,16 +603,27 @@ extension _PlaybackPanels on _VideoPlaybackState {
         detail: 'Choose a second track to display.',
         icon: Icons.closed_caption_outlined,
         content: _trackChoices<String>([
-          _trackOption('no', 'no', null, null,
-              icon: Icons.subtitles_outlined,
-              selected: _secondarySubtitle == 'no',
-              offHint: 'Hide the second track'),
+          _trackOption(
+            'no',
+            'no',
+            null,
+            null,
+            icon: Icons.subtitles_outlined,
+            selected: _secondarySubtitle == 'no',
+            offHint: 'Hide the second track',
+          ),
           for (final track in player.state.tracks.subtitle)
-            if (int.tryParse(track.id) != null && track.id != player.state.track.subtitle.id)
-              _trackOption(track.id, track.id, track.title, track.language,
-                  icon: Icons.subtitles_outlined,
-                  selected: track.id == _secondarySubtitle,
-                  offHint: 'Hide the second track'),
+            if (int.tryParse(track.id) != null &&
+                track.id != player.state.track.subtitle.id)
+              _trackOption(
+                track.id,
+                track.id,
+                track.title,
+                track.language,
+                icon: Icons.subtitles_outlined,
+                selected: track.id == _secondarySubtitle,
+                offHint: 'Hide the second track',
+              ),
         ], (id) => Navigator.pop(dialog, id)),
       ),
     );
@@ -453,174 +749,176 @@ extension _PlaybackPanels on _VideoPlaybackState {
     }
   }
 
-  Widget _queueItemActions(BuildContext dialog, VideoSource entry) => IconButton.filledTonal(
-    tooltip: 'Video actions for ${entry.title}',
-    icon: const Icon(Icons.more_vert_rounded, size: 20),
-    onPressed: () async {
-      final action = await showVideoItemSheet(context: dialog, source: entry, data: _data,
-        playNext: entry.id != _source.id,
-        telegram: widget.telegram,
-        removeLabel: entry.id == _source.id ? null : 'Remove from queue');
-      if (!_canPlay || !dialog.mounted || action == null) return;
-      final index = _queue.indexWhere((source) => source.id == entry.id);
-      if (index < 0) return;
-      switch (action) {
-        case 'play': Navigator.pop(dialog, _queue[index]);
-        case 'watched':
-          _data.setWatched(entry, !_data.isWatched(entry));
-          _saveSettings();
-          widget.onWatched?.call();
-          _changed();
-        case 'next' || 'remove':
-          if (entry.id == _source.id) return;
-          final current = _source;
-          final selected = _queue.removeAt(index);
-          _index = _queue.indexOf(current);
-          if (action == 'next') _queue.insert(_index + 1, selected);
-          _queueChanged();
-      }
-    },
-  );
+  Widget _queueItemActions(BuildContext dialog, VideoSource entry) =>
+      IconButton.filledTonal(
+        tooltip: 'Video actions for ${entry.title}',
+        icon: const Icon(Icons.more_vert_rounded, size: 20),
+        onPressed: () async {
+          final action = await showVideoItemSheet(
+            context: dialog,
+            source: entry,
+            data: _data,
+            playNext: entry.id != _source.id,
+            telegram: widget.telegram,
+            removeLabel: entry.id == _source.id ? null : 'Remove from queue',
+          );
+          if (!_canPlay || !dialog.mounted || action == null) return;
+          final index = _queue.indexWhere((source) => source.id == entry.id);
+          if (index < 0) return;
+          switch (action) {
+            case 'play':
+              Navigator.pop(dialog, _queue[index]);
+            case 'watched':
+              _data.setWatched(entry, !_data.isWatched(entry));
+              _saveSettings();
+              widget.onWatched?.call();
+              _changed();
+            case 'next' || 'remove':
+              if (entry.id == _source.id) return;
+              final current = _source;
+              final selected = _queue.removeAt(index);
+              _index = _queue.indexOf(current);
+              if (action == 'next') _queue.insert(_index + 1, selected);
+              _queueChanged();
+          }
+        },
+      );
 
   Future<void> _queuePanel(BuildContext context) async {
-    final source = await showAuralisDialog<VideoSource>(
+    final source = await _showPlaybackSheet<VideoSource>(
       context: context,
       builder: (dialog) => ListenableBuilder(
         listenable: _changes,
         builder: (context, _) => _VideoPanel(
           title: 'Queue',
-          detail: '${_index + 1} of ${_queue.length}',
-          width: 480,
+          detail: '${_queue.length} ${_queue.length == 1 ? 'video' : 'videos'}',
+          width: 560,
+          embedded: true,
           maxHeight: 480,
           scrollable: false,
-          content: ReorderableListView.builder(
-            physics: const ClampingScrollPhysics(),
-            shrinkWrap: true,
-            primary: false,
-            padding: EdgeInsets.zero,
-            buildDefaultDragHandles: false,
-            itemCount: _queue.length,
-            onReorderItem: (oldIndex, newIndex) {
-              final current = _source;
-              _queue.insert(newIndex, _queue.removeAt(oldIndex));
-              _index = _queue.indexOf(current);
-              _queueChanged();
-            },
-            itemBuilder: (context, index) {
-              final theme = Theme.of(context);
-              final colors = theme.colorScheme;
-              final entry = _queue[index];
-              final current = index == _index;
-              final time = entry.duration > Duration.zero
-                  ? clockText(entry.duration)
-                  : null;
-              return Padding(
-                key: ValueKey(entry.id),
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Material(
-                  color: current
-                      ? Color.alphaBlend(
-                          colors.primary.withValues(alpha: .16),
-                          colors.surfaceContainer,
-                        )
-                      : colors.surfaceContainer,
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
-                  child: ListTile(
-                    dense: true,
-                    minTileHeight: 50,
-                    minVerticalPadding: 4,
-                    minLeadingWidth: 28,
-                    horizontalTitleGap: 8,
-                    contentPadding: const EdgeInsetsDirectional.only(
-                      start: 8,
-                      end: 2,
-                    ),
-                    selected: current,
-                    selectedColor: colors.primary,
-                    leading: SizedBox(
-                      width: 28,
-                      child: Center(
-                        child: current
-                            ? Semantics(
-                                label: 'Current video',
-                                child: Icon(
-                                  Icons.equalizer_rounded,
-                                  size: 18,
-                                  color: colors.primary,
-                                ),
+          content: _queueGrid
+              ? _queueGridView(dialog)
+              : ReorderableListView.builder(
+                  physics: const ClampingScrollPhysics(),
+                  shrinkWrap: true,
+                  primary: false,
+                  padding: EdgeInsets.zero,
+                  buildDefaultDragHandles: false,
+                  itemCount: _queue.length,
+                  onReorderItem: (oldIndex, newIndex) {
+                    final current = _source;
+                    _queue.insert(newIndex, _queue.removeAt(oldIndex));
+                    _index = _queue.indexOf(current);
+                    _queueChanged();
+                  },
+                  itemBuilder: (context, index) {
+                    final theme = Theme.of(context);
+                    final colors = theme.colorScheme;
+                    final entry = _queue[index];
+                    final current = index == _index;
+                    final info = _queueVideoDetails(entry);
+                    return Padding(
+                      key: ValueKey(entry.id),
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Material(
+                        color: current
+                            ? Color.alphaBlend(
+                                colors.primary.withValues(alpha: .16),
+                                colors.surfaceContainer,
                               )
-                            : Text(
-                                '${index + 1}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: colors.onSurfaceVariant,
+                            : colors.surfaceContainer,
+                        borderRadius: BorderRadius.circular(12),
+                        clipBehavior: Clip.antiAlias,
+                        child: ListTile(
+                          dense: true,
+                          minTileHeight: 50,
+                          minVerticalPadding: 4,
+                          minLeadingWidth: 28,
+                          horizontalTitleGap: 8,
+                          contentPadding: const EdgeInsetsDirectional.only(
+                            start: 8,
+                            end: 2,
+                          ),
+                          selected: current,
+                          selectedColor: colors.primary,
+                          leading: SizedBox(
+                            width: 66,
+                            height: 38,
+                            child: _queuePreview(entry, index),
+                          ),
+                          title: Text(
+                            entry.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: current
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: colors.onSurface,
+                            ),
+                          ),
+                          subtitle: info.isEmpty
+                              ? null
+                              : Text(
+                                  info,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                                ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _queueItemActions(dialog, entry),
+                              if (!current)
+                                IconButton(
+                                  tooltip: 'Remove from queue',
+                                  onPressed: () {
+                                    final currentEntry = _source;
+                                    _queue.remove(entry);
+                                    _index = _queue.indexOf(currentEntry);
+                                    _queueChanged();
+                                  },
+                                  icon: Icon(
+                                    Icons.remove_circle_outline_rounded,
+                                    size: 18,
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                                ),
+                              ReorderableDragStartListener(
+                                index: index,
+                                child: Tooltip(
+                                  message: 'Drag to reorder',
+                                  child: SizedBox.square(
+                                    dimension: 44,
+                                    child: Icon(
+                                      Icons.drag_indicator_rounded,
+                                      size: 20,
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                                  ),
                                 ),
                               ),
-                      ),
-                    ),
-                    title: Text(
-                      entry.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: current ? FontWeight.w700 : FontWeight.w500,
-                        color: colors.onSurface,
-                      ),
-                    ),
-                    subtitle: time == null
-                        ? null
-                        : Text(
-                            time,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colors.onSurfaceVariant,
-                            ),
+                            ],
                           ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _queueItemActions(dialog, entry),
-                        if (!current)
-                          IconButton(
-                            tooltip: 'Remove from queue',
-                            onPressed: () {
-                              final currentEntry = _source;
-                              _queue.remove(entry);
-                              _index = _queue.indexOf(currentEntry);
-                              _queueChanged();
-                            },
-                            icon: Icon(
-                              Icons.remove_circle_outline_rounded,
-                              size: 18,
-                              color: colors.onSurfaceVariant,
-                            ),
-                          ),
-                        ReorderableDragStartListener(
-                          index: index,
-                          child: Tooltip(
-                            message: 'Drag to reorder',
-                            child: SizedBox.square(
-                              dimension: 44,
-                              child: Icon(
-                                Icons.drag_indicator_rounded,
-                                size: 20,
-                                color: colors.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
+                          onTap: () => Navigator.pop(dialog, entry),
                         ),
-                      ],
-                    ),
-                    onTap: () => Navigator.pop(dialog, entry),
-                  ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
           actions: [
+            IconButton(
+              tooltip: _queueGrid ? 'Show queue as list' : 'Show queue as grid',
+              icon: Icon(
+                _queueGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
+              ),
+              onPressed: () {
+                _queueGrid = !_queueGrid;
+                _changed();
+              },
+            ),
             FilterChip(
               selected: _shuffle,
               showCheckmark: false,
@@ -640,6 +938,121 @@ extension _PlaybackPanels on _VideoPlaybackState {
     );
     if (_canPlay && source != null) await _switchTo(_queue.indexOf(source));
   }
+
+  String _queueVideoDetails(VideoSource entry) {
+    final time = _data.durationOf(entry);
+    final width = entry.telegram?.videoWidth;
+    final height = entry.telegram?.videoHeight;
+    return [
+      if (time > Duration.zero) clockText(time),
+      if (width != null && height != null) '$width×$height',
+    ].join(' · ');
+  }
+
+  Widget _queuePreview(VideoSource entry, int index) {
+    final current = index == _index;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          VideoSourcePreview(entry),
+          PositionedDirectional(
+            top: 4,
+            start: 4,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: .68),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                child: current
+                    ? const Icon(
+                        Icons.equalizer_rounded,
+                        size: 14,
+                        color: Colors.white,
+                        semanticLabel: 'Current video',
+                      )
+                    : Text(
+                        '${index + 1}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _queueGridView(BuildContext dialog) => GridView.builder(
+    key: const ValueKey('video-queue-grid'),
+    shrinkWrap: true,
+    primary: false,
+    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: 190,
+      mainAxisExtent: 144,
+      crossAxisSpacing: 8,
+      mainAxisSpacing: 8,
+    ),
+    itemCount: _queue.length,
+    itemBuilder: (context, index) {
+      final entry = _queue[index];
+      final details = _queueVideoDetails(entry);
+      final colors = Theme.of(context).colorScheme;
+      return Material(
+        color: index == _index
+            ? colors.secondaryContainer
+            : colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => Navigator.pop(dialog, entry),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: _queuePreview(entry, index)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsetsDirectional.only(start: 4),
+                        child: Text(
+                          entry.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    _queueItemActions(dialog, entry),
+                  ],
+                ),
+                if (details.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(
+                      start: 4,
+                      bottom: 3,
+                    ),
+                    child: Text(
+                      details,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
 
   Future<void> _chaptersPanel(BuildContext context) async {
     if (_chapters.isEmpty) await _readChapters();
@@ -693,9 +1106,8 @@ extension _PlaybackPanels on _VideoPlaybackState {
                       children: [
                         IconButton(
                           tooltip: 'Rename bookmark',
-                          onPressed: () => unawaited(
-                            _editBookmark(dialog, existing: point),
-                          ),
+                          onPressed: () =>
+                              unawaited(_editBookmark(dialog, existing: point)),
                           icon: const Icon(Icons.edit_outlined, size: 18),
                         ),
                         IconButton(
@@ -829,8 +1241,8 @@ extension _PlaybackPanels on _VideoPlaybackState {
       await storeVideoSnapshot(bytes, filename);
       _notice(
         Platform.isAndroid
-          ? 'Snapshot saved to Download/Snapshots.'
-          : 'Snapshot saved to Snapshots in Downloads.',
+            ? 'Snapshot saved to Download/Snapshots.'
+            : 'Snapshot saved to Snapshots in Downloads.',
       );
     } on PlatformException catch (error) {
       _notice(error.message ?? 'Could not save the video frame.');
@@ -985,14 +1397,25 @@ extension _PlaybackPanels on _VideoPlaybackState {
                     for (final (label, value) in snapshot.data!)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(child: Text(label, style: Theme.of(context).textTheme.bodySmall)),
+                            Expanded(
+                              child: Text(
+                                label,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
                             const SizedBox(width: 16),
-                            Flexible(child: SelectableText(value,
-                              textAlign: TextAlign.end,
-                              style: Theme.of(context).textTheme.bodyMedium)),
-                          ]),
+                            Flexible(
+                              child: SelectableText(
+                                value,
+                                textAlign: TextAlign.end,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 ),
@@ -1078,7 +1501,8 @@ extension _PlaybackPanels on _VideoPlaybackState {
           return VideoSettingsDialog(
             title: 'mpv console',
             icon: Icons.terminal_rounded,
-            description: 'Run a JSON command for this player. Recent logs appear below.',
+            description:
+                'Run a JSON command for this player. Recent logs appear below.',
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -1092,7 +1516,9 @@ extension _PlaybackPanels on _VideoPlaybackState {
                     hintText: '["show-text", "Ready"]',
                     labelText: 'Command',
                     filled: true,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     errorText: error,
                   ),
                 ),
@@ -1104,9 +1530,11 @@ extension _PlaybackPanels on _VideoPlaybackState {
                     for (final entry in _log.reversed.take(16))
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: SelectableText(entry,
+                        child: SelectableText(
+                          entry,
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(fontFamily: 'monospace', height: 1.5)),
+                              ?.copyWith(fontFamily: 'monospace', height: 1.5),
+                        ),
                       ),
                   ],
                 ),
@@ -1141,63 +1569,276 @@ extension _PlaybackPanels on _VideoPlaybackState {
     }
   }
 
-  Future<void> _morePanel(BuildContext context, VideoState video) async {
-    final playerContext = context;
-    final groups = <_VideoMenuGroup>[
-      _VideoMenuGroup('Playback', 'Speed, queue, chapters and repeat', Icons.play_circle_outline_rounded, [
-        _VideoOption(() => _speedPanel(context), 'Playback speed', Icons.speed_rounded),
-        _VideoOption(() => _queuePanel(context), 'Now playing queue', Icons.queue_play_next_rounded),
-        _VideoOption(() => _chaptersPanel(context), 'Chapters and bookmarks', Icons.bookmarks_outlined),
-        _VideoOption(() => _skipSegmentsPanel(context), 'Skip segments', Icons.fast_forward_rounded),
-        _VideoOption(() async {
-          _repeatVideo = !_repeatVideo;
-          await _setOption('loop-file', _repeatVideo ? 'inf' : 'no');
-        }, 'Repeat video', Icons.repeat_one_rounded, selected: _repeatVideo),
-        _VideoOption(() => _sleepPanel(context), 'Sleep timer', Icons.timer_outlined, selected: _sleepAt != null),
-        _VideoOption(() => _open(resume: false), 'Restart video', Icons.restart_alt_rounded),
-      ]),
-      _VideoMenuGroup('Audio & subtitles', 'Soundtrack, captions and timing', Icons.headphones_rounded, [
-        _VideoOption(() => _audioPanel(context), 'Audio tracks', Icons.audiotrack_rounded),
-        _VideoOption(() => _subtitlesPanel(context), 'Subtitles', Icons.subtitles_outlined),
-      ]),
-      _VideoMenuGroup('Picture & display', 'Size, lighting and picture processing', Icons.aspect_ratio_rounded, [
-        _VideoOption(() => _zoomPanel(context, video), 'Video size and zoom', Icons.zoom_in_rounded),
+  List<_VideoMenuGroup> _videoControlGroups(
+    BuildContext context,
+    VideoState video,
+  ) => <_VideoMenuGroup>[
+    _VideoMenuGroup(
+      'Playback',
+      'Speed, queue, chapters and repeat',
+      Icons.play_circle_outline_rounded,
+      [
+        _VideoOption(
+          () => _speedPanel(context),
+          'Playback speed',
+          Icons.speed_rounded,
+        ),
+        _VideoOption(
+          () => _queuePanel(context),
+          'Now playing queue',
+          Icons.queue_play_next_rounded,
+        ),
+        _VideoOption(
+          () => _chaptersPanel(context),
+          'Chapters and bookmarks',
+          Icons.bookmarks_outlined,
+        ),
+        _VideoOption(
+          () => _skipSegmentsPanel(context),
+          'Skip segments',
+          Icons.fast_forward_rounded,
+        ),
+        _VideoOption(
+          () async {
+            _repeatVideo = !_repeatVideo;
+            await _setOption('loop-file', _repeatVideo ? 'inf' : 'no');
+          },
+          'Repeat video',
+          Icons.repeat_one_rounded,
+          selected: _repeatVideo,
+        ),
+        _VideoOption(
+          () => _sleepPanel(context),
+          'Sleep timer',
+          Icons.timer_outlined,
+          selected: _sleepAt != null,
+        ),
+        _VideoOption(
+          () => _open(resume: false),
+          'Restart video',
+          Icons.restart_alt_rounded,
+        ),
+      ],
+    ),
+    _VideoMenuGroup(
+      'Audio & subtitles',
+      'Soundtrack, captions and timing',
+      Icons.headphones_rounded,
+      [
+        _VideoOption(
+          () => _audioPanel(context),
+          'Audio tracks',
+          Icons.audiotrack_rounded,
+        ),
+        _VideoOption(
+          () => _subtitlesPanel(context),
+          'Subtitles',
+          Icons.subtitles_outlined,
+        ),
+      ],
+    ),
+    _VideoMenuGroup(
+      'Picture & display',
+      'Size, lighting and picture processing',
+      Icons.aspect_ratio_rounded,
+      [
+        _VideoOption(
+          () => _zoomPanel(context, video),
+          'Video size and zoom',
+          Icons.zoom_in_rounded,
+        ),
         if (Platform.isAndroid) ...[
-          _VideoOption(_pictureInPicture, 'Picture in picture', Icons.picture_in_picture_alt_outlined),
+          _VideoOption(
+            _pictureInPicture,
+            'Picture in picture',
+            Icons.picture_in_picture_alt_outlined,
+          ),
           _VideoOption(
             () => _orientationPanel(context),
-            'Orientation', Icons.screen_rotation_rounded,
+            'Orientation',
+            Icons.screen_rotation_rounded,
           ),
         ],
-        _VideoOption(() => _ambientPanel(context), 'Ambient lighting', Icons.light_mode_outlined, selected: _ambient != _Ambient.off),
-        _VideoOption(() => _upscalePanel(context), 'Anime4K', Icons.auto_awesome_rounded, selected: _upscale != _Upscale.off),
-        _VideoOption(() => _hdrPanel(context), 'HDR processing', Icons.hdr_on_rounded, selected: _activeHdr != VideoHdrProfile.off),
-        _VideoOption(() => _toneMappingPanel(context), 'HDR tone mapping', Icons.tonality_rounded),
-        _VideoOption(_toggleTransform, 'Mirror horizontally', Icons.flip_rounded, selected: _mirror),
-        _VideoOption(() => _toggleTransform(horizontal: false), 'Flip vertically', Icons.swap_vert_rounded, selected: _flip),
-        _VideoOption(() => _videoFilterPanel(context), 'Video processing', Icons.tune_rounded),
+        _VideoOption(
+          () => _ambientPanel(context),
+          'Ambient lighting',
+          Icons.light_mode_outlined,
+          selected: _ambient != _Ambient.off,
+        ),
+        _VideoOption(
+          () => _upscalePanel(context),
+          'Anime4K',
+          Icons.auto_awesome_rounded,
+          selected: _upscale != _Upscale.off,
+        ),
+        _VideoOption(
+          () => _hdrPanel(context),
+          'HDR processing',
+          Icons.hdr_on_rounded,
+          selected: _activeHdr != VideoHdrProfile.off,
+        ),
+        _VideoOption(
+          () => _toneMappingPanel(context),
+          'HDR tone mapping',
+          Icons.tonality_rounded,
+        ),
+        _VideoOption(
+          _toggleTransform,
+          'Mirror horizontally',
+          Icons.flip_rounded,
+          selected: _mirror,
+        ),
+        _VideoOption(
+          () => _toggleTransform(horizontal: false),
+          'Flip vertically',
+          Icons.swap_vert_rounded,
+          selected: _flip,
+        ),
+        _VideoOption(
+          () => _videoFilterPanel(context),
+          'Video processing',
+          Icons.tune_rounded,
+        ),
         _VideoOption(
           _detectBlackBars,
-          _cropped ? 'Restore original video frame' : 'Detect and crop black bars',
+          _cropped
+              ? 'Restore original video frame'
+              : 'Detect and crop black bars',
           Icons.crop_rounded,
           selected: _cropped,
         ),
-      ]),
-      _VideoMenuGroup('Capture & edit', 'Snapshots, frame stepping and clips', Icons.photo_camera_outlined, [
-        _VideoOption(_saveFrame, 'Save video frame', Icons.photo_camera_outlined),
-        _VideoOption(() => _framePanel(context), 'Frame navigation', Icons.movie_outlined),
-      ]),
+      ],
+    ),
+    _VideoMenuGroup(
+      'Capture & edit',
+      'Snapshots, frame stepping and clips',
+      Icons.photo_camera_outlined,
+      [
+        _VideoOption(
+          _saveFrame,
+          'Save video frame',
+          Icons.photo_camera_outlined,
+        ),
+        _VideoOption(
+          () => _framePanel(context),
+          'Frame navigation',
+          Icons.movie_outlined,
+        ),
+      ],
+    ),
+  ];
+  Future<void> _controlsDrawer(BuildContext context, VideoState video) async {
+    final controls = [
+      _VideoOption<_PanelAction>(
+        () => _decoderPanel(context),
+        'Video decoder',
+        Icons.memory_rounded,
+      ),
+      _VideoOption<_PanelAction>(
+        () => _infoPanel(context),
+        'Playback information',
+        Icons.monitor_heart_outlined,
+      ),
+      for (final group in _videoControlGroups(context, video)) ...group.items,
     ];
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    final action = await showGeneralDialog<_PanelAction>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black38,
+      transitionDuration: reducedMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 210),
+      transitionBuilder: (context, animation, _, child) => SlideTransition(
+        position: animation.drive(
+          Tween(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).chain(CurveTween(curve: Curves.easeOutCubic)),
+        ),
+        textDirection: Directionality.of(context),
+        child: child,
+      ),
+      pageBuilder: (dialog, _, _) => SafeArea(
+        minimum: const EdgeInsets.all(8),
+        child: Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: _VideoPanel(
+            title: 'Controls drawer',
+            width: 396,
+            maxHeight: MediaQuery.sizeOf(dialog).height - 16,
+            embedded: true,
+            scrollable: false,
+            content: GridView.builder(
+              key: const ValueKey('video-controls-drawer'),
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              primary: false,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 128,
+                mainAxisExtent: 86,
+                mainAxisSpacing: 6,
+                crossAxisSpacing: 6,
+              ),
+              itemCount: controls.length,
+              itemBuilder: (context, index) {
+                final item = controls[index];
+                final colors = Theme.of(context).colorScheme;
+                final selected = item.selected == true;
+                return Material(
+                  color: selected
+                      ? colors.primaryContainer
+                      : colors.surfaceContainer,
+                  borderRadius: BorderRadius.circular(12),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => Navigator.pop(dialog, item.value),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(item.icon, size: 20),
+                          const SizedBox(height: 5),
+                          Text(
+                            item.label,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    if (_canPlay && context.mounted && action != null) {
+      await action();
+      _changed();
+    }
+  }
+
+  Future<void> _morePanel(BuildContext context, VideoState video) async {
+    final playerContext = context;
+    final groups = _videoControlGroups(context, video);
     final fullscreen = isFullscreen(context);
     _VideoMenuGroup? page;
-    final action = await showAuralisDialog<_PanelAction>(
+    final action = await _showPlaybackSheet<_PanelAction>(
       context: context,
       builder: (dialog) => StatefulBuilder(
         builder: (context, update) {
           final group = page;
           void select(_PanelAction action) => Navigator.pop(dialog, action);
           return _VideoPanel(
-            title: group?.title ?? 'Player controls',
+            title: group?.title ?? 'More',
+            embedded: true,
             icon: group?.icon ?? Icons.tune_rounded,
             detail: group?.detail,
             width: 540,
@@ -1217,14 +1858,23 @@ extension _PlaybackPanels on _VideoPlaybackState {
                             if (fullscreen) await exitFullscreen(playerContext);
                             if (_canPlay) minimize();
                           }),
-                          icon: const Icon(Icons.picture_in_picture_alt_outlined),
+                          icon: const Icon(
+                            Icons.picture_in_picture_alt_outlined,
+                          ),
                           label: const Text('Minimize video'),
                         ),
                       if (_desktopVideo)
                         OutlinedButton.icon(
-                          onPressed: () => select(() => toggleFullscreen(playerContext)),
-                          icon: Icon(fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded),
-                          label: Text(fullscreen ? 'Exit fullscreen' : 'Fullscreen'),
+                          onPressed: () =>
+                              select(() => toggleFullscreen(playerContext)),
+                          icon: Icon(
+                            fullscreen
+                                ? Icons.fullscreen_exit_rounded
+                                : Icons.fullscreen_rounded,
+                          ),
+                          label: Text(
+                            fullscreen ? 'Exit fullscreen' : 'Fullscreen',
+                          ),
                         ),
                       if (widget.onClose case final VoidCallback close)
                         TextButton.icon(
@@ -1234,6 +1884,33 @@ extension _PlaybackPanels on _VideoPlaybackState {
                           }),
                           icon: const Icon(Icons.close_rounded),
                           label: const Text('Close video'),
+                        ),
+                    ],
+                  ),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final (label, icon, open) in [
+                        (
+                          'Sleep timer',
+                          Icons.timer_outlined,
+                          () => _sleepPanel(context),
+                        ),
+                        (
+                          'Video processing',
+                          Icons.tune_rounded,
+                          () => _videoFilterPanel(context),
+                        ),
+                        (
+                          'Playback information',
+                          Icons.monitor_heart_outlined,
+                          () => _infoPanel(context),
+                        ),
+                      ])
+                        ActionChip(
+                          avatar: Icon(icon, size: 16),
+                          label: Text(label),
+                          onPressed: () => select(open),
                         ),
                     ],
                   ),
