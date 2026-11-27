@@ -117,7 +117,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   static const _collections = [LocalMediaView.videos, LocalMediaView.history];
   bool _openingPlayer = false, _videoMinimized = false;
   List<VideoSource>? _playbackSources;
-  int _playbackIndex = 0;
+  int _playbackIndex = 0, _playbackSelection = 0;
+  List<Track>? _playbackLibraryOrder;
   Future<void> _playbackRelease = Future<void>.value();
   Future<void>? _closingPlayer;
 
@@ -142,6 +143,8 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     _proxy = TelegramStreamProxy(
       _telegram.request,
       releaseAudio: _telegram.releaseAudio,
+      videoCache: _telegram.videoStreamCache,
+      cancelPreload: _telegram.cancelVideoPreload,
     );
     _previousStreaming = _telegram.isStreaming;
     _previousPreloading = _telegram.isPreloading;
@@ -234,6 +237,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     final settings = widget.music.settings;
     if (settings.hiddenVideoChannelIds.contains(channel.id)) {
       return Future<void>.value();
+    }
+    if (_library != null && _library!.channel.id != channel.id) {
+      unawaited(_proxy.preload(null));
     }
     final results = _VideoResults(channel);
     unawaited(widget.channelMetadata?.identify(channel.id, channel.title));
@@ -474,7 +480,18 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
     }
     _openingPlayer = true;
     try {
-      if (_playbackSources != null) await _closePlayer();
+      if (_closingPlayer case final closing?) await closing;
+      if (!mounted || !_available(videos[index])) return;
+      if (_playbackSources != null) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        setState(() {
+          _playbackSources = videos;
+          _playbackIndex = index;
+          _playbackSelection++;
+          _videoMinimized = false;
+        });
+        return;
+      }
       if (!mounted) return;
       await WidgetsBinding.instance.endOfFrame;
       await _playbackRelease;
@@ -612,7 +629,10 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
   Future<void> _setVideoSort(LibrarySort sort) async {
     final settings = widget.music.settings;
     if (!mounted || sort == settings.videoPlayback.librarySort) return;
-    setState(() => settings.videoPlayback.librarySort = sort);
+    setState(() {
+      settings.videoPlayback.librarySort = sort;
+      _playbackLibraryOrder = _library?.sortedVideos(settings.videoPlayback);
+    });
     widget.music.refreshSettings();
     try {
       await settings.save();
@@ -634,7 +654,7 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           size.width < 1180 ? 16 : 30,
-          _tab == 2
+          _tab == 2 || (_tab == 1 && (!_showSearchChannel || _library == null))
               ? 6
               : size.height < 560
               ? 12
@@ -735,6 +755,9 @@ class _TelegramVideoViewState extends State<TelegramVideoView> {
             },
             minimized: _videoMinimized,
             miniBottomInset: wide ? 0 : 80,
+            browsingChannelId: _library?.channel.id,
+            selectionRevision: _playbackSelection,
+            libraryOrder: _playbackLibraryOrder,
             onBack: () {
               if (settings.videoPlayback.background) {
                 _minimizePlayer();
