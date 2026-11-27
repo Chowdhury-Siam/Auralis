@@ -1666,12 +1666,6 @@ extension _PlaybackPanels on _VideoPlaybackState {
           selected: _ambient != _Ambient.off,
         ),
         _VideoOption(
-          () => _upscalePanel(context),
-          'Anime4K',
-          Icons.auto_awesome_rounded,
-          selected: _upscale != _Upscale.off,
-        ),
-        _VideoOption(
           () => _hdrPanel(context),
           'HDR processing',
           Icons.hdr_on_rounded,
