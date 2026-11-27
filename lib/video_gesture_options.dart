@@ -3,8 +3,8 @@ enum VideoGesture {
   seekDoubleTap('Double-tap sides to seek'),
   pauseDoubleTap('Double-tap center to play or pause'),
   swipeSeek('Swipe horizontally to seek'),
-  swipeVolume('Swipe vertically for volume'),
-  swipeBrightness('Swipe vertically for brightness'),
+  swipeVolume('Swipe vertically on the right for volume'),
+  swipeBrightness('Swipe vertically on the left for brightness'),
   pinchZoom('Pinch to zoom'),
   panZoom('Drag to pan a zoomed video'),
   holdSpeed('Long-press for temporary speed'),
@@ -29,6 +29,20 @@ class VideoGestureOptions {
   bool enabled(VideoGesture gesture) => !disabled.contains(gesture);
   void setEnabled(VideoGesture gesture, bool value) =>
       value ? disabled.remove(gesture) : disabled.add(gesture);
+
+  VideoGesture? swipeAction({
+    required bool horizontal,
+    required bool startsOnLeft,
+    required bool supportsBrightness,
+  }) {
+    if (!horizontal && startsOnLeft && !supportsBrightness) return null;
+    final action = horizontal
+        ? VideoGesture.swipeSeek
+        : startsOnLeft
+        ? VideoGesture.swipeBrightness
+        : VideoGesture.swipeVolume;
+    return enabled(action) ? action : null;
+  }
 
   static VideoGestureOptions fromJson(Object? value) {
     final result = VideoGestureOptions();
